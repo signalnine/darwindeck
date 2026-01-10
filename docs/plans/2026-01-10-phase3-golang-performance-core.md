@@ -88,12 +88,35 @@ class OpCode(IntEnum):
     CHECK_CARD_SUIT = 2
     CHECK_LOCATION_SIZE = 3
     CHECK_SEQUENCE = 4
+    # Optional extensions: set/collection detection
+    CHECK_HAS_SET_OF_N = 5
+    CHECK_HAS_RUN_OF_N = 6
+    CHECK_HAS_MATCHING_PAIR = 7
+    # Optional extensions: betting conditions
+    CHECK_CHIP_COUNT = 8
+    CHECK_POT_SIZE = 9
+    CHECK_CURRENT_BET = 10
+    CHECK_CAN_AFFORD = 11
     # Actions (20-39)
     DRAW_CARDS = 20
     PLAY_CARD = 21
     DISCARD_CARD = 22
     SKIP_TURN = 23
     REVERSE_ORDER = 24
+    # Optional extensions: opponent interaction
+    DRAW_FROM_OPPONENT = 25
+    DISCARD_PAIRS = 26
+    # Optional extensions: betting actions
+    BET = 27
+    CALL = 28
+    RAISE = 29
+    FOLD = 30
+    CHECK = 31
+    ALL_IN = 32
+    # Optional extensions: bluffing actions
+    CLAIM = 33
+    CHALLENGE = 34
+    REVEAL = 35
     # Control flow (40-49)
     AND = 40
     OR = 41
@@ -193,6 +216,11 @@ class BytecodeCompiler:
                 result += self._compile_play_phase(phase)
             elif isinstance(phase, DiscardPhase):
                 result += self._compile_discard_phase(phase)
+            # Optional extensions
+            elif isinstance(phase, BettingPhase):
+                result += self._compile_betting_phase(phase)
+            elif isinstance(phase, ClaimPhase):
+                result += self._compile_claim_phase(phase)
 
         return result
 
@@ -241,6 +269,34 @@ class BytecodeCompiler:
 
         return struct.pack("!BBiB", phase_type, target, count, mandatory)
 
+    # Optional extension methods
+    def _compile_betting_phase(self, phase: BettingPhase) -> bytes:
+        phase_type = 4  # BettingPhase
+        min_bet = phase.min_bet
+        max_bet = phase.max_bet if phase.max_bet else -1  # -1 for unlimited
+        allow_check = 1 if phase.allow_check else 0
+        allow_raise = 1 if phase.allow_raise else 0
+        allow_fold = 1 if phase.allow_fold else 0
+        raise_increment = phase.raise_increment if phase.raise_increment else -1
+        max_raises = phase.max_raises if phase.max_raises else -1
+
+        return struct.pack("!BiiiBBBii", phase_type, min_bet, max_bet,
+                          allow_check, allow_raise, allow_fold,
+                          raise_increment, max_raises)
+
+    def _compile_claim_phase(self, phase: ClaimPhase) -> bytes:
+        phase_type = 5  # ClaimPhase
+        claim_type_count = len(phase.claim_types)
+        can_lie = 1 if phase.can_lie else 0
+        challenge_penalty = phase.challenge_penalty
+        lie_penalty = phase.lie_penalty
+
+        result = struct.pack("!BBBii", phase_type, claim_type_count, can_lie,
+                           challenge_penalty, lie_penalty)
+
+        # Encode claim types as strings (simplified - just count for now)
+        return result
+
     def _compile_win_conditions(self, conditions: List[WinCondition]) -> bytes:
         result = struct.pack("!i", len(conditions))
 
@@ -273,6 +329,14 @@ class BytecodeCompiler:
             ConditionType.CARD_MATCHES_SUIT: OpCode.CHECK_CARD_SUIT,
             ConditionType.LOCATION_SIZE: OpCode.CHECK_LOCATION_SIZE,
             ConditionType.SEQUENCE_ADJACENT: OpCode.CHECK_SEQUENCE,
+            # Optional extensions
+            ConditionType.HAS_SET_OF_N: OpCode.CHECK_HAS_SET_OF_N,
+            ConditionType.HAS_RUN_OF_N: OpCode.CHECK_HAS_RUN_OF_N,
+            ConditionType.HAS_MATCHING_PAIR: OpCode.CHECK_HAS_MATCHING_PAIR,
+            ConditionType.CHIP_COUNT: OpCode.CHECK_CHIP_COUNT,
+            ConditionType.POT_SIZE: OpCode.CHECK_POT_SIZE,
+            ConditionType.CURRENT_BET: OpCode.CHECK_CURRENT_BET,
+            ConditionType.CAN_AFFORD: OpCode.CHECK_CAN_AFFORD,
         }
         return mapping.get(cond_type, 0)
 
@@ -293,6 +357,9 @@ class BytecodeCompiler:
             Location.HAND: 1,
             Location.DISCARD: 2,
             Location.TABLEAU: 3,
+            # Optional extensions
+            Location.OPPONENT_HAND: 4,
+            Location.OPPONENT_DISCARD: 5,
         }
         return mapping.get(loc, 0)
 
@@ -690,6 +757,9 @@ const (
 	LocationHand
 	LocationDiscard
 	LocationTableau
+	// Optional extensions
+	LocationOpponentHand
+	LocationOpponentDiscard
 )
 
 // PlayerState is mutable for performance
@@ -697,6 +767,10 @@ type PlayerState struct {
 	Hand   []Card
 	Score  int32
 	Active bool // Still in the game (not folded/eliminated)
+	// Optional extensions for betting games
+	Chips      int32 // Chip/token count for betting games
+	CurrentBet int32 // Current bet in this round
+	HasFolded  bool  // Folded this round
 }
 
 // GameState is mutable and pooled
@@ -708,6 +782,9 @@ type GameState struct {
 	CurrentPlayer uint8
 	TurnNumber    uint32
 	WinnerID      int8 // -1 = no winner yet, 0/1 = player ID
+	// Optional extensions for betting games
+	Pot        int32 // Current pot size
+	CurrentBet int32 // Highest bet in current round
 }
 
 // StatePool manages GameState memory
@@ -739,10 +816,16 @@ func (s *GameState) Reset() {
 	s.Players[0].Hand = s.Players[0].Hand[:0]
 	s.Players[0].Score = 0
 	s.Players[0].Active = true
+	s.Players[0].Chips = 0
+	s.Players[0].CurrentBet = 0
+	s.Players[0].HasFolded = false
 
 	s.Players[1].Hand = s.Players[1].Hand[:0]
 	s.Players[1].Score = 0
 	s.Players[1].Active = true
+	s.Players[1].Chips = 0
+	s.Players[1].CurrentBet = 0
+	s.Players[1].HasFolded = false
 
 	s.Deck = s.Deck[:0]
 	s.Discard = s.Discard[:0]
@@ -750,6 +833,8 @@ func (s *GameState) Reset() {
 	s.CurrentPlayer = 0
 	s.TurnNumber = 0
 	s.WinnerID = -1
+	s.Pot = 0
+	s.CurrentBet = 0
 }
 
 // Clone creates a deep copy for MCTS tree search
@@ -759,10 +844,16 @@ func (s *GameState) Clone() *GameState {
 	clone.Players[0].Hand = append(clone.Players[0].Hand, s.Players[0].Hand...)
 	clone.Players[0].Score = s.Players[0].Score
 	clone.Players[0].Active = s.Players[0].Active
+	clone.Players[0].Chips = s.Players[0].Chips
+	clone.Players[0].CurrentBet = s.Players[0].CurrentBet
+	clone.Players[0].HasFolded = s.Players[0].HasFolded
 
 	clone.Players[1].Hand = append(clone.Players[1].Hand, s.Players[1].Hand...)
 	clone.Players[1].Score = s.Players[1].Score
 	clone.Players[1].Active = s.Players[1].Active
+	clone.Players[1].Chips = s.Players[1].Chips
+	clone.Players[1].CurrentBet = s.Players[1].CurrentBet
+	clone.Players[1].HasFolded = s.Players[1].HasFolded
 
 	clone.Deck = append(clone.Deck, s.Deck...)
 	clone.Discard = append(clone.Discard, s.Discard...)
@@ -776,6 +867,8 @@ func (s *GameState) Clone() *GameState {
 	clone.CurrentPlayer = s.CurrentPlayer
 	clone.TurnNumber = s.TurnNumber
 	clone.WinnerID = s.WinnerID
+	clone.Pot = s.Pot
+	clone.CurrentBet = s.CurrentBet
 
 	return clone
 }
@@ -797,6 +890,14 @@ func (s *GameState) DrawCard(playerID uint8, source Location) bool {
 		srcPile = &s.Deck
 	case LocationDiscard:
 		srcPile = &s.Discard
+	case LocationOpponentHand:
+		// Optional extension: draw from opponent's hand
+		opponentID := 1 - playerID
+		srcPile = &s.Players[opponentID].Hand
+	case LocationOpponentDiscard:
+		// Optional extension: draw from opponent's discard (not standard)
+		// Would need per-player discard piles
+		return false
 	default:
 		return false
 	}
@@ -986,6 +1087,15 @@ const (
 	OpCheckCardSuit OpCode = 2
 	OpCheckLocationSize OpCode = 3
 	OpCheckSequence OpCode = 4
+	// Optional extensions: set/collection detection
+	OpCheckHasSetOfN OpCode = 5
+	OpCheckHasRunOfN OpCode = 6
+	OpCheckHasMatchingPair OpCode = 7
+	// Optional extensions: betting conditions
+	OpCheckChipCount OpCode = 8
+	OpCheckPotSize OpCode = 9
+	OpCheckCurrentBet OpCode = 10
+	OpCheckCanAfford OpCode = 11
 
 	// Actions
 	OpDrawCards OpCode = 20
@@ -993,6 +1103,20 @@ const (
 	OpDiscardCard OpCode = 22
 	OpSkipTurn OpCode = 23
 	OpReverseOrder OpCode = 24
+	// Optional extensions: opponent interaction
+	OpDrawFromOpponent OpCode = 25
+	OpDiscardPairs OpCode = 26
+	// Optional extensions: betting actions
+	OpBet OpCode = 27
+	OpCall OpCode = 28
+	OpRaise OpCode = 29
+	OpFold OpCode = 30
+	OpCheck OpCode = 31
+	OpAllIn OpCode = 32
+	// Optional extensions: bluffing actions
+	OpClaim OpCode = 33
+	OpChallenge OpCode = 34
+	OpReveal OpCode = 35
 
 	// Control flow
 	OpAnd OpCode = 40
@@ -1107,6 +1231,10 @@ func (g *Genome) parseTurnStructure() error {
 			phaseLen += conditionLen
 		case 3: // DiscardPhase
 			phaseLen = 6 // target:1 + count:4 + mandatory:1
+		case 4: // BettingPhase (optional extension)
+			phaseLen = 21 // min_bet:4 + max_bet:4 + allow_check:1 + allow_raise:1 + allow_fold:1 + raise_increment:4 + max_raises:4
+		case 5: // ClaimPhase (optional extension)
+			phaseLen = 10 // claim_type_count:1 + can_lie:1 + challenge_penalty:4 + lie_penalty:4
 		}
 
 		phaseData := make([]byte, phaseLen)
@@ -1200,6 +1328,34 @@ func EvaluateCondition(state *GameState, playerID uint8, conditionBytes []byte) 
 		}
 		return false
 
+	// Optional extensions: set/collection detection
+	case OpCheckHasSetOfN:
+		// TODO: Implement set detection (N cards of same rank)
+		return false
+
+	case OpCheckHasRunOfN:
+		// TODO: Implement run detection (N cards in sequence, same suit)
+		return false
+
+	case OpCheckHasMatchingPair:
+		// TODO: Implement pair detection
+		return false
+
+	// Optional extensions: betting conditions
+	case OpCheckChipCount:
+		actual = state.Players[playerID].Chips
+
+	case OpCheckPotSize:
+		actual = state.Pot
+
+	case OpCheckCurrentBet:
+		actual = state.CurrentBet
+
+	case OpCheckCanAfford:
+		actual = state.Players[playerID].Chips
+		// Check if player can afford the value
+		return actual >= value
+
 	default:
 		return false
 	}
@@ -1271,6 +1427,9 @@ func GenerateLegalMoves(state *GameState, genome *Genome) []LegalMove {
 				canDraw = len(state.Deck) > 0
 			case LocationDiscard:
 				canDraw = len(state.Discard) > 0
+			case LocationOpponentHand:
+				opponentID := 1 - currentPlayer
+				canDraw = len(state.Players[opponentID].Hand) > 0
 			}
 
 			if canDraw || mandatory {
@@ -1311,6 +1470,24 @@ func GenerateLegalMoves(state *GameState, genome *Genome) []LegalMove {
 					})
 				}
 			}
+
+		case 4: // BettingPhase (optional extension)
+			// Generate betting moves (bet, call, raise, fold, check)
+			// TODO: Implement betting move generation
+			moves = append(moves, LegalMove{
+				PhaseIndex: phaseIdx,
+				CardIndex:  -1,  // No card for betting
+				TargetLoc:  LocationHand,  // Placeholder
+			})
+
+		case 5: // ClaimPhase (optional extension)
+			// Generate claim moves
+			// TODO: Implement claim move generation
+			moves = append(moves, LegalMove{
+				PhaseIndex: phaseIdx,
+				CardIndex:  -1,
+				TargetLoc:  LocationHand,  // Placeholder
+			})
 		}
 	}
 
@@ -2408,6 +2585,60 @@ go get github.com/google/flatbuffers/go
 - **Task 10 (Documentation):** 10 minutes
 
 **Recommended execution:** Parallel session (same as Phase 1 & 2)
+
+---
+
+## Schema Extensions Incorporated
+
+This plan has been updated to support the optional schema extensions added on 2026-01-10:
+
+### Opponent Interaction Extensions
+- **Python OpCodes:** `DRAW_FROM_OPPONENT` (25), `DISCARD_PAIRS` (26)
+- **Go Locations:** `LocationOpponentHand` (4), `LocationOpponentDiscard` (5)
+- **Example Games:** Old Maid (draw from opponent), I Doubt It (challenge mechanics)
+
+### Set/Collection Detection Extensions
+- **Python OpCodes:** `CHECK_HAS_SET_OF_N` (5), `CHECK_HAS_RUN_OF_N` (6), `CHECK_HAS_MATCHING_PAIR` (7)
+- **Example Games:** Go Fish (books of 4), Old Maid (matching pairs), Gin Rummy (runs)
+- **Note:** Full implementation deferred - TODOs added in condition evaluation
+
+### Betting/Wagering Extensions
+- **Python OpCodes:** `BET` (27), `CALL` (28), `RAISE` (29), `FOLD` (30), `CHECK` (31), `ALL_IN` (32)
+- **Conditions:** `CHECK_CHIP_COUNT` (8), `CHECK_POT_SIZE` (9), `CHECK_CURRENT_BET` (10), `CHECK_CAN_AFFORD` (11)
+- **Go State Fields:** `PlayerState.Chips`, `PlayerState.CurrentBet`, `PlayerState.HasFolded`, `GameState.Pot`, `GameState.CurrentBet`
+- **Phase Types:** `BettingPhase` (type 4) with min/max bets, raise limits
+- **Example Games:** Betting War
+
+### Bluffing/Challenge Extensions
+- **Python OpCodes:** `CLAIM` (33), `CHALLENGE` (34), `REVEAL` (35)
+- **Phase Types:** `ClaimPhase` (type 5) with claim types, penalties
+- **Example Games:** I Doubt It, Cheat, BS
+
+### Implementation Status
+- ✅ **Bytecode opcodes defined** (Python and Go)
+- ✅ **Location enum extended** (Python and Go)
+- ✅ **GameState extended** (chip tracking, betting fields)
+- ✅ **Phase parsing updated** (BettingPhase, ClaimPhase bytecode lengths)
+- ✅ **Condition evaluation** (chip/pot conditions implemented, set/run detection marked as TODO)
+- ✅ **Move generation** (opponent hand drawing, betting/claim phases as placeholders)
+- ⚠️ **Set/run/pair detection** - Marked as TODO, can be implemented later
+- ⚠️ **Full betting logic** - Placeholders added, full implementation can come later
+- ⚠️ **Claim/challenge logic** - Placeholders added, full implementation can come later
+
+### Backward Compatibility
+All extensions are **backward-compatible**:
+- Games without extensions still work (War, Crazy 8s)
+- Extended opcodes only executed if genome uses them
+- Default values for chip tracking (0 chips = no betting)
+- Phase types 4 and 5 only parsed if present
+
+### Golden Test Updates Recommended
+Consider adding golden test cases for:
+1. **Old Maid** - Tests opponent hand drawing, pair detection
+2. **Betting War** - Tests chip tracking, betting phase, pot management
+3. **I Doubt It** - Tests claim phase, challenge mechanics
+
+These can be added in Task 7 if desired, or deferred to Phase 4.
 
 ---
 
