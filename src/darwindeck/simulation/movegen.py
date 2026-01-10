@@ -2,8 +2,8 @@
 
 from dataclasses import dataclass
 from typing import List, Optional
-from cards_evolve.genome.schema import GameGenome, PlayPhase, Location
-from cards_evolve.simulation.state import GameState, Card, PlayerState
+from darwindeck.genome.schema import GameGenome, PlayPhase, Location
+from darwindeck.simulation.state import GameState, Card, PlayerState
 
 
 # Rank value mapping for card comparison

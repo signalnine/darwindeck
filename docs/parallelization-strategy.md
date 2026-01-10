@@ -385,7 +385,7 @@ func worker(wg *sync.WaitGroup, jobs <-chan int, results chan<- *GameResult, byt
 ### Phase 4: Python Multiprocessing
 
 ```python
-# File: src/cards_evolve/evolution/fitness.py
+# File: src/darwindeck/evolution/fitness.py
 from multiprocessing import Pool
 import os
 

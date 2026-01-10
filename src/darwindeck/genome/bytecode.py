@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import List, Union
 import struct
 
-from cards_evolve.genome.schema import (
+from darwindeck.genome.schema import (
     GameGenome,
     SetupRules,
     TurnStructure,
@@ -13,7 +13,7 @@ from cards_evolve.genome.schema import (
     WinCondition,
     Location,
 )
-from cards_evolve.genome.conditions import Condition, ConditionType, Operator, CompoundCondition, ConditionOrCompound
+from darwindeck.genome.conditions import Condition, ConditionType, Operator, CompoundCondition, ConditionOrCompound
 
 
 class OpCode(IntEnum):

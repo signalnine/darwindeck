@@ -1,9 +1,9 @@
 """Tests for genome interpreter."""
 
 import pytest
-from cards_evolve.simulation.interpreter import GenomeInterpreter, GameLogic
-from cards_evolve.genome.examples import create_war_genome
-from cards_evolve.simulation.state import GameState
+from darwindeck.simulation.interpreter import GenomeInterpreter, GameLogic
+from darwindeck.genome.examples import create_war_genome
+from darwindeck.simulation.state import GameState
 
 
 def test_interpreter_creates_game_logic() -> None:

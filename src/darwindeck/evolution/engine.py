@@ -7,15 +7,15 @@ import logging
 import os
 from typing import List, Optional, Callable
 from dataclasses import dataclass
-from cards_evolve.evolution.population import Population, Individual
-from cards_evolve.evolution.operators import (
+from darwindeck.evolution.population import Population, Individual
+from darwindeck.evolution.operators import (
     MutationPipeline,
     CrossoverOperator,
     create_default_pipeline
 )
-from cards_evolve.evolution.seeding import create_seed_population
-from cards_evolve.evolution.parallel_fitness import ParallelFitnessEvaluator
-from cards_evolve.evolution.fitness import FitnessEvaluator
+from darwindeck.evolution.seeding import create_seed_population
+from darwindeck.evolution.parallel_fitness import ParallelFitnessEvaluator
+from darwindeck.evolution.fitness_full import FitnessEvaluator
 
 logger = logging.getLogger(__name__)
 

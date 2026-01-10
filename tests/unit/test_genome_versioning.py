@@ -1,8 +1,8 @@
 """Tests for genome schema versioning."""
 
 import pytest
-from cards_evolve.genome.versioning import SchemaVersion, validate_schema_version
-from cards_evolve.genome.examples import create_war_genome
+from darwindeck.genome.versioning import SchemaVersion, validate_schema_version
+from darwindeck.genome.examples import create_war_genome
 from dataclasses import replace
 
 

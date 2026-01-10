@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from typing import Optional
-from cards_evolve.genome.schema import Rank, Suit
+from darwindeck.genome.schema import Rank, Suit
 
 
 @dataclass(frozen=True)

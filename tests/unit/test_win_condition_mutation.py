@@ -1,8 +1,8 @@
 """Test win condition mutation operator."""
 
 import pytest
-from cards_evolve.evolution.operators import ModifyWinConditionMutation, create_default_pipeline
-from cards_evolve.genome.schema import GameGenome, WinCondition, SetupRules, TurnStructure
+from darwindeck.evolution.operators import ModifyWinConditionMutation, create_default_pipeline
+from darwindeck.genome.schema import GameGenome, WinCondition, SetupRules, TurnStructure
 
 
 def create_test_genome(win_conditions: list) -> GameGenome:
@@ -133,7 +133,7 @@ def test_pipeline_application():
     genome = create_test_genome([WinCondition(type="empty_hand", threshold=None)])
 
     # Create pipeline with 100% probability for testing
-    from cards_evolve.evolution.operators import MutationPipeline
+    from darwindeck.evolution.operators import MutationPipeline
     pipeline = MutationPipeline([ModifyWinConditionMutation(probability=1.0)])
 
     mutated = pipeline.apply(genome)

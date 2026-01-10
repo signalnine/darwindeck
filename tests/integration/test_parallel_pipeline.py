@@ -18,22 +18,22 @@ import flatbuffers
 from dataclasses import replace
 from typing import List
 
-from cards_evolve.genome.schema import GameGenome
-from cards_evolve.genome.examples import create_war_genome
-from cards_evolve.genome.bytecode import BytecodeCompiler
-from cards_evolve.evolution.parallel_fitness import ParallelFitnessEvaluator
-from cards_evolve.evolution.fitness_full import FitnessEvaluator, SimulationResults
+from darwindeck.genome.schema import GameGenome
+from darwindeck.genome.examples import create_war_genome
+from darwindeck.genome.bytecode import BytecodeCompiler
+from darwindeck.evolution.parallel_fitness import ParallelFitnessEvaluator
+from darwindeck.evolution.fitness_full import FitnessEvaluator, SimulationResults
 
 # Check if Go simulator is available
 GO_SIMULATOR_AVAILABLE = False
 GO_SIMULATOR_ERROR = "Unknown error"
 try:
-    from cards_evolve.bindings.cgo_bridge import simulate_batch
-    from cards_evolve.bindings.cardsim.BatchRequest import BatchRequest
-    from cards_evolve.bindings.cardsim.BatchResponse import BatchResponse
-    from cards_evolve.bindings.cardsim.SimulationRequest import SimulationRequest
+    from darwindeck.bindings.cgo_bridge import simulate_batch
+    from darwindeck.bindings.cardsim.BatchRequest import BatchRequest
+    from darwindeck.bindings.cardsim.BatchResponse import BatchResponse
+    from darwindeck.bindings.cardsim.SimulationRequest import SimulationRequest
     # Import module-level functions directly from SimulationRequest module
-    from cards_evolve.bindings.cardsim.SimulationRequest import (
+    from darwindeck.bindings.cardsim.SimulationRequest import (
         SimulationRequestStart,
         SimulationRequestAddGenomeBytecode,
         SimulationRequestAddNumGames,
@@ -43,7 +43,7 @@ try:
         SimulationRequestEnd,
     )
     # Import module-level functions directly from BatchRequest module
-    from cards_evolve.bindings.cardsim.BatchRequest import (
+    from darwindeck.bindings.cardsim.BatchRequest import (
         BatchRequestStart,
         BatchRequestStartRequestsVector,
         BatchRequestAddBatchId,
@@ -304,7 +304,7 @@ class TestParallelPipelineWithoutGoSimulator:
         evaluator = FitnessEvaluator()
 
         # Import the mock function to test it directly
-        from cards_evolve.evolution.parallel_fitness import _create_mock_results
+        from darwindeck.evolution.parallel_fitness import _create_mock_results
 
         # Create mock results
         results = _create_mock_results(genome, num_games=50)

@@ -2,9 +2,9 @@
 
 import pytest
 from hypothesis import given, strategies as st
-from cards_evolve.simulation.engine import GameEngine
-from cards_evolve.simulation.players import RandomPlayer
-from cards_evolve.genome.examples import create_war_genome
+from darwindeck.simulation.engine import GameEngine
+from darwindeck.simulation.players import RandomPlayer
+from darwindeck.genome.examples import create_war_genome
 
 
 @given(seed=st.integers(min_value=0, max_value=10000))

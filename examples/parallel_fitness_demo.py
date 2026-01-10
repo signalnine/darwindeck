@@ -11,10 +11,10 @@ Usage:
 
 import time
 from typing import List
-from cards_evolve.genome.schema import GameGenome
-from cards_evolve.genome.examples import create_war_genome, get_seed_genomes
-from cards_evolve.evolution.fitness_full import FitnessEvaluator, FitnessMetrics
-from cards_evolve.evolution.parallel_fitness import ParallelFitnessEvaluator
+from darwindeck.genome.schema import GameGenome
+from darwindeck.genome.examples import create_war_genome, get_seed_genomes
+from darwindeck.evolution.fitness_full import FitnessEvaluator, FitnessMetrics
+from darwindeck.evolution.parallel_fitness import ParallelFitnessEvaluator
 
 
 def create_evaluator() -> FitnessEvaluator:

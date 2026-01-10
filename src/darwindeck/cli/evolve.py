@@ -6,7 +6,7 @@ import argparse
 import logging
 import sys
 from pathlib import Path
-from cards_evolve.evolution.engine import EvolutionEngine, EvolutionConfig
+from darwindeck.evolution.engine import EvolutionEngine, EvolutionConfig
 
 
 def setup_logging(verbose: bool = False) -> None:

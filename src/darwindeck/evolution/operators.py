@@ -6,11 +6,11 @@ import random
 from abc import ABC, abstractmethod
 from typing import List, Optional
 from dataclasses import replace
-from cards_evolve.genome.schema import (
+from darwindeck.genome.schema import (
     GameGenome, WinCondition, SetupRules, TurnStructure,
     PlayPhase, DrawPhase, DiscardPhase, Location
 )
-from cards_evolve.genome.conditions import Condition, ConditionType, Operator
+from darwindeck.genome.conditions import Condition, ConditionType, Operator
 
 
 class MutationOperator(ABC):

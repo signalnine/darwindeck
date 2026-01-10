@@ -1,7 +1,7 @@
 """Schema versioning for genome compatibility."""
 
 from typing import Set
-from cards_evolve.genome.schema import GameGenome
+from darwindeck.genome.schema import GameGenome
 
 
 class SchemaVersion:

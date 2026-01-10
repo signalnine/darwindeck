@@ -4,14 +4,14 @@ import pytest
 import time
 from typing import List
 
-from cards_evolve.genome.schema import GameGenome
-from cards_evolve.genome.examples import create_war_genome, create_crazy_eights_genome
-from cards_evolve.evolution.fitness_full import (
+from darwindeck.genome.schema import GameGenome
+from darwindeck.genome.examples import create_war_genome, create_crazy_eights_genome
+from darwindeck.evolution.fitness_full import (
     FitnessEvaluator,
     FitnessMetrics,
     SimulationResults
 )
-from cards_evolve.evolution.parallel_fitness import ParallelFitnessEvaluator
+from darwindeck.evolution.parallel_fitness import ParallelFitnessEvaluator
 
 
 def create_test_evaluator() -> FitnessEvaluator:

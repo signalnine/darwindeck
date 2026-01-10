@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from typing import List
-from cards_evolve.simulation.engine import GameResult
+from darwindeck.simulation.engine import GameResult
 
 
 @dataclass(frozen=True)

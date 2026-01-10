@@ -17,8 +17,8 @@ Both levels use automatic CPU detection and require no manual configuration.
 The parallel simulator is **automatically used** when you call the Go simulation through the CGo bridge:
 
 ```python
-from cards_evolve.bindings.cgo_bridge import simulate_batch
-from cards_evolve.genome.bytecode import BytecodeCompiler
+from darwindeck.bindings.cgo_bridge import simulate_batch
+from darwindeck.genome.bytecode import BytecodeCompiler
 
 # Compile genome to bytecode
 compiler = BytecodeCompiler()
@@ -75,8 +75,8 @@ func main() {
 Use `ParallelFitnessEvaluator` to evaluate multiple genomes in parallel:
 
 ```python
-from cards_evolve.evolution.parallel_fitness import ParallelFitnessEvaluator
-from cards_evolve.evolution.fitness_full import FitnessEvaluator
+from darwindeck.evolution.parallel_fitness import ParallelFitnessEvaluator
+from darwindeck.evolution.fitness_full import FitnessEvaluator
 
 # Create parallel evaluator with auto-detected CPU count
 evaluator = ParallelFitnessEvaluator(
@@ -119,10 +119,10 @@ evaluator = ParallelFitnessEvaluator(
 Example integration with evolutionary algorithm:
 
 ```python
-from cards_evolve.evolution.parallel_fitness import ParallelFitnessEvaluator
-from cards_evolve.evolution.fitness_full import FitnessEvaluator
-from cards_evolve.evolution.selection import tournament_selection
-from cards_evolve.evolution.mutation import mutate_genome
+from darwindeck.evolution.parallel_fitness import ParallelFitnessEvaluator
+from darwindeck.evolution.fitness_full import FitnessEvaluator
+from darwindeck.evolution.selection import tournament_selection
+from darwindeck.evolution.mutation import mutate_genome
 
 # Initialize parallel evaluator
 parallel_eval = ParallelFitnessEvaluator(

@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import List
 import random
-from cards_evolve.genome.schema import GameGenome
+from darwindeck.genome.schema import GameGenome
 
 
 # Diversity threshold for warning

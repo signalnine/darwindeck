@@ -26,7 +26,7 @@ python3 -c "import os; print(f'CPU cores: {os.cpu_count()}')"  # Should show 4
 
 # Verify existing codebase structure
 ls src/gosim/engine/types.go  # Should exist from Phase 3
-ls src/cards_evolve/genome/examples.py  # Should exist
+ls src/darwindeck/genome/examples.py  # Should exist
 ```
 
 ---
@@ -457,7 +457,7 @@ git commit -m "test(gosim): add comprehensive parallel benchmarks
 ## Task 3: Python Multiprocessing Wrapper (Phase 4)
 
 **Files:**
-- Create: `src/cards_evolve/evolution/parallel_fitness.py`
+- Create: `src/darwindeck/evolution/parallel_fitness.py`
 - Create: `tests/evolution/test_parallel_fitness.py`
 
 **Estimated Time:** 35 minutes
@@ -469,8 +469,8 @@ git commit -m "test(gosim): add comprehensive parallel benchmarks
 ```python
 import pytest
 import os
-from cards_evolve.evolution.parallel_fitness import ParallelFitnessEvaluator
-from cards_evolve.genome.examples import create_war_genome, create_crazy_eights_genome
+from darwindeck.evolution.parallel_fitness import ParallelFitnessEvaluator
+from darwindeck.genome.examples import create_war_genome, create_crazy_eights_genome
 
 # Mock Go simulator for testing
 class MockGoSimulator:
@@ -528,11 +528,11 @@ def test_parallel_is_faster_than_serial():
 pytest tests/evolution/test_parallel_fitness.py -v
 ```
 
-**Expected:** FAIL - "No module named 'cards_evolve.evolution.parallel_fitness'"
+**Expected:** FAIL - "No module named 'darwindeck.evolution.parallel_fitness'"
 
 ### Step 2: Implement parallel fitness evaluator
 
-**File:** `src/cards_evolve/evolution/parallel_fitness.py`
+**File:** `src/darwindeck/evolution/parallel_fitness.py`
 
 ```python
 """Parallel fitness evaluation using multiprocessing."""
@@ -542,8 +542,8 @@ import os
 from typing import List
 from dataclasses import dataclass
 
-from cards_evolve.genome.schema import GameGenome
-from cards_evolve.genome.bytecode import BytecodeCompiler
+from darwindeck.genome.schema import GameGenome
+from darwindeck.genome.bytecode import BytecodeCompiler
 
 
 @dataclass
@@ -676,7 +676,7 @@ pytest tests/evolution/test_parallel_fitness.py -v -k "not slow"
 ### Step 4: Commit parallel fitness evaluator
 
 ```bash
-git add src/cards_evolve/evolution/parallel_fitness.py tests/evolution/test_parallel_fitness.py
+git add src/darwindeck/evolution/parallel_fitness.py tests/evolution/test_parallel_fitness.py
 git commit -m "feat(evolution): add parallel fitness evaluator
 
 - ParallelFitnessEvaluator using multiprocessing.Pool
@@ -709,8 +709,8 @@ Tests:
 
 import pytest
 import time
-from cards_evolve.genome.examples import get_seed_genomes
-from cards_evolve.evolution.parallel_fitness import ParallelFitnessEvaluator
+from darwindeck.genome.examples import get_seed_genomes
+from darwindeck.evolution.parallel_fitness import ParallelFitnessEvaluator
 
 @pytest.mark.integration
 @pytest.mark.slow
@@ -1015,7 +1015,7 @@ go tool pprof cpu.prof
 pytest tests/evolution/test_parallel_fitness.py -v -k "processes"
 
 # Check for import/pickle errors
-python3 -c "from cards_evolve.evolution.parallel_fitness import *"
+python3 -c "from darwindeck.evolution.parallel_fitness import *"
 ```
 
 ---

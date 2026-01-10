@@ -3,7 +3,7 @@
 import random
 from abc import ABC, abstractmethod
 from typing import List, Optional
-from cards_evolve.simulation.state import GameState
+from darwindeck.simulation.state import GameState
 
 
 class AIPlayer(ABC):

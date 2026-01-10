@@ -1,10 +1,10 @@
 """Tests for degenerate game detection."""
 
 import pytest
-from cards_evolve.simulation.validation import DegenGameDetector
-from cards_evolve.simulation.engine import GameEngine, GameResult
-from cards_evolve.simulation.players import RandomPlayer
-from cards_evolve.genome.examples import create_war_genome
+from darwindeck.simulation.validation import DegenGameDetector
+from darwindeck.simulation.engine import GameEngine, GameResult
+from darwindeck.simulation.players import RandomPlayer
+from darwindeck.genome.examples import create_war_genome
 
 
 def test_war_is_not_too_short() -> None:
@@ -25,7 +25,7 @@ def test_war_is_not_too_short() -> None:
 def test_short_game_detected() -> None:
     """Test games that end too quickly are detected."""
     # Create fake results with very short games
-    from cards_evolve.simulation.state import GameState, PlayerState
+    from darwindeck.simulation.state import GameState, PlayerState
 
     fake_result = GameResult(
         winner=0,

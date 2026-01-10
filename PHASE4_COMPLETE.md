@@ -16,7 +16,7 @@ Phase 4 implemented the complete evolutionary loop for generating novel card gam
 
 ### Task 1: Expand Mutation Operators ✅
 
-**File:** `src/cards_evolve/evolution/operators.py`
+**File:** `src/darwindeck/evolution/operators.py`
 
 Implemented 7 mutation operators:
 
@@ -55,7 +55,7 @@ Implemented 7 mutation operators:
 
 ### Task 2: Implement Crossover Operator ✅
 
-**File:** `src/cards_evolve/evolution/operators.py`
+**File:** `src/darwindeck/evolution/operators.py`
 
 **CrossoverOperator:**
 - Single-point crossover on turn structure phases
@@ -68,7 +68,7 @@ Implemented 7 mutation operators:
 
 ### Task 3: Create Population Seeding System ✅
 
-**File:** `src/cards_evolve/evolution/seeding.py`
+**File:** `src/darwindeck/evolution/seeding.py`
 
 **Features:**
 - 70% known games (War, Hearts) replicated
@@ -85,7 +85,7 @@ Implemented 7 mutation operators:
 
 ### Task 4: Build Evolution Engine ✅
 
-**File:** `src/cards_evolve/evolution/engine.py`
+**File:** `src/darwindeck/evolution/engine.py`
 
 **EvolutionEngine Class:**
 
@@ -131,9 +131,9 @@ for generation in range(max_generations):
 
 ### Task 5: Create CLI Entry Point ✅
 
-**File:** `src/cards_evolve/cli/evolve.py`
+**File:** `src/darwindeck/cli/evolve.py`
 
-**Command:** `python -m cards_evolve.cli.evolve [options]`
+**Command:** `python -m darwindeck.cli.evolve [options]`
 
 **Options:**
 - `--population-size/-p` - Population size (default: 100)
@@ -177,10 +177,10 @@ for generation in range(max_generations):
 
 ## Files Created (6)
 
-1. `src/cards_evolve/evolution/operators.py` - Mutation and crossover operators (569 lines)
-2. `src/cards_evolve/evolution/seeding.py` - Population seeding (103 lines)
-3. `src/cards_evolve/evolution/engine.py` - Evolution engine (326 lines)
-4. `src/cards_evolve/cli/evolve.py` - CLI entry point (150 lines)
+1. `src/darwindeck/evolution/operators.py` - Mutation and crossover operators (569 lines)
+2. `src/darwindeck/evolution/seeding.py` - Population seeding (103 lines)
+3. `src/darwindeck/evolution/engine.py` - Evolution engine (326 lines)
+4. `src/darwindeck/cli/evolve.py` - CLI entry point (150 lines)
 5. `tests/integration/test_evolution_pipeline.py` - Integration tests (210 lines)
 6. `PHASE4_COMPLETE.md` - This document
 
@@ -188,9 +188,9 @@ for generation in range(max_generations):
 
 ## Files Modified (3)
 
-1. `src/cards_evolve/genome/schema.py` - Added DrawPhase and DiscardPhase classes
-2. `src/cards_evolve/genome/conditions.py` - Added `from __future__ import annotations`
-3. `src/cards_evolve/genome/examples.py` - Fixed imports (removed non-existent classes)
+1. `src/darwindeck/genome/schema.py` - Added DrawPhase and DiscardPhase classes
+2. `src/darwindeck/genome/conditions.py` - Added `from __future__ import annotations`
+3. `src/darwindeck/genome/examples.py` - Fixed imports (removed non-existent classes)
 
 ---
 
@@ -232,17 +232,17 @@ for generation in range(max_generations):
 
 **Quick Test (5 individuals, 3 generations):**
 ```bash
-python -m cards_evolve.cli.evolve -p 5 -g 3 --random-seed 42
+python -m darwindeck.cli.evolve -p 5 -g 3 --random-seed 42
 ```
 
 **Full Evolution Run (default params):**
 ```bash
-python -m cards_evolve.cli.evolve
+python -m darwindeck.cli.evolve
 ```
 
 **Custom Configuration:**
 ```bash
-python -m cards_evolve.cli.evolve \
+python -m darwindeck.cli.evolve \
   --population-size 200 \
   --generations 150 \
   --elitism-rate 0.15 \
@@ -305,10 +305,10 @@ All tests passing in `tests/integration/test_evolution_pipeline.py`
 
 ```bash
 # Test CLI help
-python -m cards_evolve.cli.evolve --help
+python -m darwindeck.cli.evolve --help
 
 # Test minimal run
-python -m cards_evolve.cli.evolve -p 5 -g 2 --random-seed 42
+python -m darwindeck.cli.evolve -p 5 -g 2 --random-seed 42
 
 # Verified:
 ✅ Population seeding (70/30 split)

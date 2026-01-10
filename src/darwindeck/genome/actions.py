@@ -3,8 +3,8 @@
 from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
-from cards_evolve.genome.schema import Location
-from cards_evolve.genome.conditions import ConditionOrCompound
+from darwindeck.genome.schema import Location
+from darwindeck.genome.conditions import ConditionOrCompound
 
 
 class ActionType(Enum):

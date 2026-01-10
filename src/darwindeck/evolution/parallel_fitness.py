@@ -13,8 +13,8 @@ from multiprocessing import Pool, cpu_count
 from typing import List, Optional, Callable, Tuple
 from dataclasses import dataclass
 
-from cards_evolve.genome.schema import GameGenome
-from cards_evolve.evolution.fitness_full import FitnessMetrics, FitnessEvaluator, SimulationResults
+from darwindeck.genome.schema import GameGenome
+from darwindeck.evolution.fitness_full import FitnessMetrics, FitnessEvaluator, SimulationResults
 
 
 @dataclass

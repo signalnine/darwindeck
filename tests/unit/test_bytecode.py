@@ -1,8 +1,8 @@
 """Tests for genome bytecode compiler."""
 
 import pytest
-from cards_evolve.genome.bytecode import BytecodeCompiler, BytecodeHeader, OpCode
-from cards_evolve.genome.examples import create_war_genome
+from darwindeck.genome.bytecode import BytecodeCompiler, BytecodeHeader, OpCode
+from darwindeck.genome.examples import create_war_genome
 
 
 def test_header_serialization() -> None:

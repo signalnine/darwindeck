@@ -14,17 +14,17 @@
 **Changes Made:**
 
 1. **Termination Guarantees** ✅
-   - `src/cards_evolve/genome/schema.py`: Added `max_turns` and `min_turns` to GameGenome
+   - `src/darwindeck/genome/schema.py`: Added `max_turns` and `min_turns` to GameGenome
 
 2. **Player Targeting** ✅
-   - `src/cards_evolve/genome/schema.py`: Added `TargetSelector` enum (NEXT_PLAYER, PREV_PLAYER, etc.)
+   - `src/darwindeck/genome/schema.py`: Added `TargetSelector` enum (NEXT_PLAYER, PREV_PLAYER, etc.)
 
 3. **Wildcard Support** ✅
-   - `src/cards_evolve/genome/schema.py`: Added `wild_cards` to SetupRules
-   - `src/cards_evolve/genome/conditions.py`: Added `MATCHES_OR_WILD` condition
+   - `src/darwindeck/genome/schema.py`: Added `wild_cards` to SetupRules
+   - `src/darwindeck/genome/conditions.py`: Added `MATCHES_OR_WILD` condition
 
 4. **Visibility** ✅
-   - `src/cards_evolve/genome/schema.py`: Added `Visibility` enum and visibility fields to SetupRules
+   - `src/darwindeck/genome/schema.py`: Added `Visibility` enum and visibility fields to SetupRules
 
 **Status:** ✅ All features implemented and tested
 
@@ -35,19 +35,19 @@
 **Changes Made:**
 
 1. **ActionTypes** ✅
-   - `src/cards_evolve/genome/actions.py`: Added LEAD_CARD, FOLLOW_SUIT, PLAY_TRUMP, COLLECT_TRICK, SCORE_TRICK
+   - `src/darwindeck/genome/actions.py`: Added LEAD_CARD, FOLLOW_SUIT, PLAY_TRUMP, COLLECT_TRICK, SCORE_TRICK
 
 2. **ConditionTypes** ✅
-   - `src/cards_evolve/genome/conditions.py`: Added MUST_FOLLOW_SUIT, HAS_TRUMP, SUIT_BROKEN, IS_TRICK_WINNER, TRICK_CONTAINS_CARD
+   - `src/darwindeck/genome/conditions.py`: Added MUST_FOLLOW_SUIT, HAS_TRUMP, SUIT_BROKEN, IS_TRICK_WINNER, TRICK_CONTAINS_CARD
 
 3. **TrickPhase** ✅
-   - `src/cards_evolve/genome/schema.py`: Added TrickPhase class with lead_suit_required, trump_suit, high_card_wins, breaking_suit
+   - `src/darwindeck/genome/schema.py`: Added TrickPhase class with lead_suit_required, trump_suit, high_card_wins, breaking_suit
 
 4. **TurnStructure Updates** ✅
-   - `src/cards_evolve/genome/schema.py`: Added `is_trick_based` and `tricks_per_hand` fields
+   - `src/darwindeck/genome/schema.py`: Added `is_trick_based` and `tricks_per_hand` fields
 
 5. **SetupRules Updates** ✅
-   - `src/cards_evolve/genome/schema.py`: Added `trump_suit`, `rotate_trump`, `random_trump` for trick-taking games
+   - `src/darwindeck/genome/schema.py`: Added `trump_suit`, `rotate_trump`, `random_trump` for trick-taking games
 
 **Status:** ✅ All trick-taking types defined
 
@@ -58,7 +58,7 @@
 **Changes Made:**
 
 1. **Hearts Genome** ✅
-   - `src/cards_evolve/genome/examples.py`: Added `create_hearts_genome()` function
+   - `src/darwindeck/genome/examples.py`: Added `create_hearts_genome()` function
    - 4 players, 13 cards each
    - Trick-based with must-follow-suit
    - Hearts breaking suit
@@ -182,7 +182,7 @@ Update `src/gosim/engine/conditions.go` to implement:
 
 **What's Needed:**
 
-Update `src/cards_evolve/simulation/movegen.py` to add condition evaluation functions:
+Update `src/darwindeck/simulation/movegen.py` to add condition evaluation functions:
 
 1. **has_set_of_n()**
 2. **has_run_of_n()**
@@ -190,7 +190,7 @@ Update `src/cards_evolve/simulation/movegen.py` to add condition evaluation func
 
 Similar algorithms to Go implementation but using Python idioms.
 
-**Files:** `src/cards_evolve/simulation/movegen.py`
+**Files:** `src/darwindeck/simulation/movegen.py`
 
 **Testing:** Test with Old Maid and Go Fish genomes
 
@@ -210,7 +210,7 @@ Similar algorithms to Go implementation but using Python idioms.
 
 **What's Needed:**
 
-Create `src/cards_evolve/evolution/fitness.py` with:
+Create `src/darwindeck/evolution/fitness.py` with:
 
 1. **Session Length as Constraint**
    - Games outside 3-20 min range get fitness=0.0
@@ -225,7 +225,7 @@ Create `src/cards_evolve/evolution/fitness.py` with:
    - skill_vs_luck
    - (session_length tracked but not averaged)
 
-**Files:** `src/cards_evolve/evolution/fitness.py`
+**Files:** `src/darwindeck/evolution/fitness.py`
 
 **Estimate:** 20 minutes
 
@@ -235,7 +235,7 @@ Create `src/cards_evolve/evolution/fitness.py` with:
 
 **What's Needed:**
 
-Create `src/cards_evolve/evolution/population.py` with:
+Create `src/darwindeck/evolution/population.py` with:
 
 1. **genome_distance()** function
    - Hamming distance on structural features
@@ -248,7 +248,7 @@ Create `src/cards_evolve/evolution/population.py` with:
 3. **check_diversity_crisis()** method
    - Flag if diversity < 0.1
 
-**Files:** `src/cards_evolve/evolution/population.py`
+**Files:** `src/darwindeck/evolution/population.py`
 
 **Estimate:** 20 minutes
 
@@ -258,7 +258,7 @@ Create `src/cards_evolve/evolution/population.py` with:
 
 **What's Needed:**
 
-Create `src/cards_evolve/evolution/operators.py` with:
+Create `src/darwindeck/evolution/operators.py` with:
 
 1. **ModifyWinConditionMutation** class
    - Change type (empty_hand, high_score, first_to_score, capture_all)
@@ -268,7 +268,7 @@ Create `src/cards_evolve/evolution/operators.py` with:
 2. **Update mutation pipeline**
    - Add to default pipeline with 10% probability
 
-**Files:** `src/cards_evolve/evolution/operators.py`
+**Files:** `src/darwindeck/evolution/operators.py`
 
 **Estimate:** 20 minutes
 
@@ -341,20 +341,20 @@ Create `src/cards_evolve/evolution/operators.py` with:
    - Phase 3.5 summary document created
 
 ### Files Created (5)
-- `src/cards_evolve/evolution/fitness_full.py`
-- `src/cards_evolve/evolution/population.py`
-- `src/cards_evolve/evolution/operators.py`
+- `src/darwindeck/evolution/fitness_full.py`
+- `src/darwindeck/evolution/population.py`
+- `src/darwindeck/evolution/operators.py`
 - `tests/unit/test_win_condition_mutation.py`
 - `docs/reviews/2026-01-10-phase3.5-summary.md`
 
 ### Files Modified (8)
-- `src/cards_evolve/genome/schema.py`
-- `src/cards_evolve/genome/actions.py`
-- `src/cards_evolve/genome/conditions.py`
-- `src/cards_evolve/genome/examples.py`
+- `src/darwindeck/genome/schema.py`
+- `src/darwindeck/genome/actions.py`
+- `src/darwindeck/genome/conditions.py`
+- `src/darwindeck/genome/examples.py`
 - `src/gosim/engine/types.go`
 - `src/gosim/engine/conditions.go`
-- `src/cards_evolve/simulation/movegen.py`
+- `src/darwindeck/simulation/movegen.py`
 - `docs/genome-schema-examples.md`
 
 ### Test Results

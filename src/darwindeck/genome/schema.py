@@ -7,7 +7,7 @@ from typing import List, Optional, Union, TYPE_CHECKING
 from dataclasses import dataclass, field
 
 if TYPE_CHECKING:
-    from cards_evolve.genome.conditions import ConditionOrCompound
+    from darwindeck.genome.conditions import ConditionOrCompound
 
 
 class Rank(Enum):

@@ -1,9 +1,9 @@
 """Tests for game simulation engine."""
 
 import pytest
-from cards_evolve.simulation.engine import GameEngine, GameResult
-from cards_evolve.simulation.players import RandomPlayer
-from cards_evolve.genome.examples import create_war_genome
+from darwindeck.simulation.engine import GameEngine, GameResult
+from darwindeck.simulation.players import RandomPlayer
+from darwindeck.genome.examples import create_war_genome
 
 
 def test_game_engine_simulates_war() -> None:
