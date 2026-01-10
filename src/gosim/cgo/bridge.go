@@ -9,17 +9,20 @@ import (
 
 	flatbuffers "github.com/google/flatbuffers/go"
 	"github.com/signalnine/cards-evolve/gosim/bindings/cardsim"
+	"github.com/signalnine/cards-evolve/gosim/engine"
+	"github.com/signalnine/cards-evolve/gosim/simulation"
 )
 
-// AggStats holds aggregated simulation results (stub for now)
+// AggStats holds aggregated simulation results
 type AggStats struct {
-	TotalGames   uint32
-	Player0Wins  uint32
-	Player1Wins  uint32
-	Draws        uint32
-	AvgTurns     float32
-	MedianTurns  uint32
-	Errors       uint32
+	TotalGames    uint32
+	Player0Wins   uint32
+	Player1Wins   uint32
+	Draws         uint32
+	AvgTurns      float32
+	MedianTurns   uint32
+	AvgDurationNs uint64
+	Errors        uint32
 }
 
 //export SimulateBatch
@@ -41,16 +44,36 @@ func SimulateBatch(requestPtr unsafe.Pointer, requestLen C.int) *C.char {
 			continue
 		}
 
-		// TODO: Run actual simulations (Task 8)
-		// For now, return stub stats
+		// Parse genome bytecode
+		genomeBytecode := req.GenomeBytecodeBytes()
+		genome, err := engine.ParseGenome(genomeBytecode)
+		if err != nil {
+			// Return error stats
+			stats := &AggStats{
+				TotalGames: req.NumGames(),
+				Errors:     req.NumGames(),
+			}
+			resultOffsets[i] = serializeStats(builder, stats)
+			continue
+		}
+
+		// Run batch simulation
+		aiType := simulation.AIPlayerType(req.AiPlayerType())
+		mctsIter := int(req.MctsIterations())
+		seed := req.RandomSeed()
+
+		simStats := simulation.RunBatch(genome, int(req.NumGames()), aiType, mctsIter, seed)
+
+		// Convert to AggStats
 		stats := &AggStats{
-			TotalGames:  req.NumGames(),
-			Player0Wins: req.NumGames() / 2,
-			Player1Wins: req.NumGames() / 2,
-			Draws:       0,
-			AvgTurns:    50.0,
-			MedianTurns: 50,
-			Errors:      0,
+			TotalGames:    simStats.TotalGames,
+			Player0Wins:   simStats.Player0Wins,
+			Player1Wins:   simStats.Player1Wins,
+			Draws:         simStats.Draws,
+			AvgTurns:      simStats.AvgTurns,
+			MedianTurns:   simStats.MedianTurns,
+			AvgDurationNs: simStats.AvgDurationNs,
+			Errors:        simStats.Errors,
 		}
 
 		// Serialize result
@@ -89,6 +112,7 @@ func serializeStats(builder *flatbuffers.Builder, stats *AggStats) flatbuffers.U
 	cardsim.AggregatedStatsAddDraws(builder, stats.Draws)
 	cardsim.AggregatedStatsAddAvgTurns(builder, stats.AvgTurns)
 	cardsim.AggregatedStatsAddMedianTurns(builder, stats.MedianTurns)
+	cardsim.AggregatedStatsAddAvgDurationNs(builder, stats.AvgDurationNs)
 	cardsim.AggregatedStatsAddErrors(builder, stats.Errors)
 	return cardsim.AggregatedStatsEnd(builder)
 }
