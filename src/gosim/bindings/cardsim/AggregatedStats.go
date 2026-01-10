@@ -122,8 +122,68 @@ func (rcv *AggregatedStats) MutateErrors(n uint32) bool {
 	return rcv._tab.MutateUint32Slot(18, n)
 }
 
+func (rcv *AggregatedStats) TotalDecisions() uint64 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(20))
+	if o != 0 {
+		return rcv._tab.GetUint64(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *AggregatedStats) MutateTotalDecisions(n uint64) bool {
+	return rcv._tab.MutateUint64Slot(20, n)
+}
+
+func (rcv *AggregatedStats) TotalValidMoves() uint64 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(22))
+	if o != 0 {
+		return rcv._tab.GetUint64(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *AggregatedStats) MutateTotalValidMoves(n uint64) bool {
+	return rcv._tab.MutateUint64Slot(22, n)
+}
+
+func (rcv *AggregatedStats) ForcedDecisions() uint64 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(24))
+	if o != 0 {
+		return rcv._tab.GetUint64(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *AggregatedStats) MutateForcedDecisions(n uint64) bool {
+	return rcv._tab.MutateUint64Slot(24, n)
+}
+
+func (rcv *AggregatedStats) TotalInteractions() uint64 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(26))
+	if o != 0 {
+		return rcv._tab.GetUint64(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *AggregatedStats) MutateTotalInteractions(n uint64) bool {
+	return rcv._tab.MutateUint64Slot(26, n)
+}
+
+func (rcv *AggregatedStats) TotalActions() uint64 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(28))
+	if o != 0 {
+		return rcv._tab.GetUint64(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *AggregatedStats) MutateTotalActions(n uint64) bool {
+	return rcv._tab.MutateUint64Slot(28, n)
+}
+
 func AggregatedStatsStart(builder *flatbuffers.Builder) {
-	builder.StartObject(8)
+	builder.StartObject(13)
 }
 func AggregatedStatsAddTotalGames(builder *flatbuffers.Builder, totalGames uint32) {
 	builder.PrependUint32Slot(0, totalGames, 0)
@@ -148,6 +208,21 @@ func AggregatedStatsAddAvgDurationNs(builder *flatbuffers.Builder, avgDurationNs
 }
 func AggregatedStatsAddErrors(builder *flatbuffers.Builder, errors uint32) {
 	builder.PrependUint32Slot(7, errors, 0)
+}
+func AggregatedStatsAddTotalDecisions(builder *flatbuffers.Builder, totalDecisions uint64) {
+	builder.PrependUint64Slot(8, totalDecisions, 0)
+}
+func AggregatedStatsAddTotalValidMoves(builder *flatbuffers.Builder, totalValidMoves uint64) {
+	builder.PrependUint64Slot(9, totalValidMoves, 0)
+}
+func AggregatedStatsAddForcedDecisions(builder *flatbuffers.Builder, forcedDecisions uint64) {
+	builder.PrependUint64Slot(10, forcedDecisions, 0)
+}
+func AggregatedStatsAddTotalInteractions(builder *flatbuffers.Builder, totalInteractions uint64) {
+	builder.PrependUint64Slot(11, totalInteractions, 0)
+}
+func AggregatedStatsAddTotalActions(builder *flatbuffers.Builder, totalActions uint64) {
+	builder.PrependUint64Slot(12, totalActions, 0)
 }
 func AggregatedStatsEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
