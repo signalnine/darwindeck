@@ -310,36 +310,44 @@ class ConditionalTransferAction(Action):
 
 ## Recommendations
 
-### 1. Add to Phase 3 Implementation
+### 1. ✅ IMPLEMENTED - Schema Extensions Added
 
-Extend schema with commonly needed features:
+The following extensions have been added to the genome schema (see `docs/genome-schema-examples.md`):
 
+**A. Opponent Interaction ✅**
 ```python
-# A. Opponent interaction
-class Location(Enum):
-    DECK = "deck"
-    HAND = "hand"
-    DISCARD = "discard"
-    TABLEAU = "tableau"
-    OPPONENT_HAND = "opponent_hand"  # NEW
-    OPPONENT_DISCARD = "opponent_discard"  # NEW (for games like Speed)
-
-# B. Set/sequence detection (for Gin Rummy, Go Fish books)
-class ConditionType(Enum):
-    # ... existing ...
-    HAS_SET_OF_N = "has_set_of_n"  # N cards of same rank
-    HAS_RUN_OF_N = "has_run_of_n"  # N cards in sequence, same suit
-
-# C. Setup actions
-@dataclass
-class SetupRules:
-    cards_per_player: int
-    initial_deck: str = "standard_52"
-    initial_discard_count: int = 0
-    initial_tableau: Optional[TableauConfig] = None
-    starting_player: str = "random"
-    post_deal_actions: List[Action] = field(default_factory=list)  # NEW
+Location.OPPONENT_HAND       # Draw from opponent (Old Maid, I Doubt It)
+Location.OPPONENT_DISCARD    # Access opponent's discard
 ```
+
+**B. Set/Sequence Detection ✅**
+```python
+ConditionType.HAS_SET_OF_N      # N cards of same rank (Go Fish books)
+ConditionType.HAS_RUN_OF_N      # Sequential cards (Gin Rummy runs)
+ConditionType.HAS_MATCHING_PAIR # Pairs by property (Old Maid)
+```
+
+**C. Setup Actions ✅**
+```python
+SetupRules.post_deal_actions    # Actions after deal
+DiscardPhase.matching_condition # Constrain to matching sets
+```
+
+**D. Betting/Wagering ✅**
+```python
+ResourceRules                # Chip tracking
+BettingPhase                # Betting rounds
+ActionType.BET/CALL/RAISE/FOLD/CHECK/ALL_IN
+ConditionType.CHIP_COUNT/POT_SIZE/CURRENT_BET/CAN_AFFORD
+```
+
+**E. Bluffing/Challenges ✅**
+```python
+ClaimPhase                  # Making claims
+ActionType.CLAIM/CHALLENGE/REVEAL
+```
+
+All extensions are **optionally enabled** and **backward-compatible**.
 
 ### 2. Defer to Phase 4+
 

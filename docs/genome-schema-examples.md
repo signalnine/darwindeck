@@ -63,6 +63,11 @@ class ConditionType(Enum):
     HAS_SET_OF_N = "has_set_of_n"  # N cards of same rank (Go Fish books, Old Maid pairs)
     HAS_RUN_OF_N = "has_run_of_n"  # N cards in sequence, same suit (Gin Rummy runs)
     HAS_MATCHING_PAIR = "has_matching_pair"  # Two cards with matching property (Old Maid)
+    # Optional extensions for betting mechanics
+    CHIP_COUNT = "chip_count"  # Compare player's chip count
+    POT_SIZE = "pot_size"  # Compare pot size
+    CURRENT_BET = "current_bet"  # Compare current bet amount
+    CAN_AFFORD = "can_afford"  # Player has enough chips for action
 
 class Operator(Enum):
     EQ = "=="
@@ -85,6 +90,17 @@ class ActionType(Enum):
     # Optional extensions for opponent interaction
     DRAW_FROM_OPPONENT = "draw_from_opponent"  # Old Maid, I Doubt It
     DISCARD_PAIRS = "discard_pairs"  # Old Maid initial pairing
+    # Optional extensions for betting mechanics
+    BET = "bet"  # Place chips in pot
+    CALL = "call"  # Match current bet
+    RAISE = "raise"  # Increase current bet
+    FOLD = "fold"  # Drop out of current round
+    CHECK = "check"  # Pass without betting (if no bet to call)
+    ALL_IN = "all_in"  # Bet all remaining chips
+    # Optional extensions for bluffing/challenge mechanics
+    CLAIM = "claim"  # Make a claim about cards (can be false)
+    CHALLENGE = "challenge"  # Challenge opponent's claim
+    REVEAL = "reveal"  # Show cards to verify claim
 ```
 
 ### Condition System
@@ -123,6 +139,14 @@ class Action:
 
 ```python
 @dataclass
+class ResourceRules:
+    """Chip/token tracking - optional extension for betting games."""
+    starting_chips: int
+    min_bet: int = 1
+    ante: int = 0  # Forced bet before each hand
+    blinds: Optional[tuple[int, int]] = None  # (small_blind, big_blind) for poker-style
+
+@dataclass
 class SetupRules:
     """Initial game configuration."""
     cards_per_player: int
@@ -132,6 +156,8 @@ class SetupRules:
     starting_player: str = "random"  # or "youngest", "dealer_left"
     # Optional extension: actions to run after initial deal
     post_deal_actions: List[Action] = field(default_factory=list)  # For Old Maid pairing, etc.
+    # Optional extension: chip/resource tracking
+    resources: Optional[ResourceRules] = None  # For betting games
 
 @dataclass
 class DrawPhase:
@@ -161,9 +187,28 @@ class DiscardPhase:
     matching_condition: Optional[Condition] = None  # For Old Maid pairs, matching sets, etc.
 
 @dataclass
+class BettingPhase:
+    """Betting round - optional extension for wagering games."""
+    min_bet: int = 1
+    max_bet: Optional[int] = None  # None = no limit
+    allow_check: bool = True  # Can pass if no bet to call
+    allow_raise: bool = True
+    allow_fold: bool = True
+    raise_increment: Optional[int] = None  # Fixed raise amount, or None for any amount
+    max_raises: Optional[int] = None  # Limit raises per round, or None for unlimited
+
+@dataclass
+class ClaimPhase:
+    """Bluffing/claim round - optional extension for games with hidden claims."""
+    claim_types: List[str]  # e.g., ["rank", "suit", "count"]
+    can_lie: bool = True  # Whether false claims are allowed
+    challenge_penalty: int = 0  # Penalty for failed challenge (chips or cards)
+    lie_penalty: int = 0  # Penalty if caught lying
+
+@dataclass
 class TurnStructure:
     """Ordered phases within a turn."""
-    phases: List[Union[DrawPhase, PlayPhase, DiscardPhase]]
+    phases: List[Union[DrawPhase, PlayPhase, DiscardPhase, BettingPhase, ClaimPhase]]
 
 @dataclass
 class SpecialEffect:
@@ -587,6 +632,210 @@ go_fish = GameGenome(
 
 ---
 
+## Example 6: Betting War (Using Betting Extensions)
+
+**Demonstrates:** Simple betting mechanics, chip tracking, all-in
+
+```python
+betting_war = GameGenome(
+    schema_version="1.0",
+    genome_id="betting-war",
+    generation=0,
+
+    setup=SetupRules(
+        cards_per_player=26,  # Split deck evenly
+        initial_discard_count=0,
+        # NEW: Chip tracking
+        resources=ResourceRules(
+            starting_chips=100,
+            min_bet=1,
+            ante=1  # Each player antes 1 chip per round
+        )
+    ),
+
+    turn_structure=TurnStructure(phases=[
+        # Phase 1: Betting round
+        BettingPhase(
+            min_bet=1,
+            max_bet=10,  # Limited betting
+            allow_check=False,  # Must bet
+            allow_raise=True,
+            allow_fold=True,
+            raise_increment=1,  # Raise by 1 chip increments
+            max_raises=3  # Max 3 raises per round
+        ),
+
+        # Phase 2: Play card
+        PlayPhase(
+            target=Location.TABLEAU,
+            valid_play_condition=Condition(
+                type=ConditionType.HAND_SIZE,
+                operator=Operator.GT,
+                value=0
+            ),
+            min_cards=1,
+            max_cards=1,
+            mandatory=True,
+            pass_if_unable=False
+        )
+    ]),
+
+    special_effects=[
+        # Higher card wins the pot
+        SpecialEffect(
+            trigger_card=Rank.ACE,  # Any card triggers comparison
+            trigger_condition=Condition(
+                type=ConditionType.LOCATION_SIZE,
+                reference="tableau",
+                operator=Operator.EQ,
+                value=2  # Both players played
+            ),
+            actions=[
+                Action(
+                    type=ActionType.ADD_SCORE,
+                    # Winner determined by card comparison (handled by engine)
+                    # Winner gets the pot
+                )
+            ]
+        )
+    ],
+
+    win_conditions=[
+        WinCondition(
+            type="high_score",  # Most chips wins
+            threshold=0  # When opponent has 0 chips
+        )
+    ],
+
+    scoring_rules=[],
+    max_turns=100,
+    player_count=2
+)
+```
+
+**Extension Usage:**
+- ✅ `ResourceRules` - chip tracking
+- ✅ `BettingPhase` - betting round with limits
+- ✅ `ante` - forced bet each round
+- ✅ Chip-based win condition
+
+**Game Flow:**
+1. Each player antes 1 chip
+2. Betting round (can bet 1-10 chips, raise up to 3 times, or fold)
+3. Both players reveal top card
+4. Higher card wins the pot
+5. Continue until one player runs out of chips
+
+---
+
+## Example 7: I Doubt It / Cheat (Using Bluffing Extensions)
+
+**Demonstrates:** Claims, challenges, lying mechanics
+
+```python
+i_doubt_it = GameGenome(
+    schema_version="1.0",
+    genome_id="i-doubt-it",
+    generation=0,
+
+    setup=SetupRules(
+        cards_per_player=26,  # 2 players, split deck
+        initial_discard_count=0
+    ),
+
+    turn_structure=TurnStructure(phases=[
+        # Phase 1: Play cards face-down and make claim
+        PlayPhase(
+            target=Location.DISCARD,
+            valid_play_condition=Condition(
+                type=ConditionType.HAND_SIZE,
+                operator=Operator.GT,
+                value=0
+            ),
+            min_cards=1,
+            max_cards=4,  # Can play 1-4 cards
+            mandatory=True
+        ),
+
+        # Phase 2: Make claim about cards played
+        ClaimPhase(
+            claim_types=["rank"],  # Claim which rank was played
+            can_lie=True,  # Can lie about cards
+            challenge_penalty=0,  # Handled by transfer actions
+            lie_penalty=0  # Handled by transfer actions
+        )
+    ]),
+
+    special_effects=[
+        SpecialEffect(
+            # When opponent challenges
+            trigger_card=Rank.ACE,  # Triggered by CHALLENGE action
+            actions=[
+                Action(
+                    type=ActionType.REVEAL,
+                    source=Location.DISCARD,
+                    # Reveal last played cards
+                ),
+                # If claim was TRUE:
+                Action(
+                    type=ActionType.TRANSFER_CARDS,
+                    source=Location.DISCARD,
+                    target=Location.OPPONENT_HAND,  # Challenger takes pile
+                    condition=Condition(
+                        type=ConditionType.CARD_MATCHES_RANK,
+                        reference="claimed_rank"
+                    )
+                ),
+                # If claim was FALSE (lied):
+                Action(
+                    type=ActionType.TRANSFER_CARDS,
+                    source=Location.DISCARD,
+                    target=Location.HAND,  # Liar takes pile
+                    condition=Condition(
+                        type=ConditionType.CARD_MATCHES_RANK,
+                        operator=Operator.NE,
+                        reference="claimed_rank"
+                    )
+                )
+            ]
+        )
+    ],
+
+    win_conditions=[
+        WinCondition(
+            type="empty_hand"  # First to get rid of all cards wins
+        )
+    ],
+
+    scoring_rules=[],
+    max_turns=200,
+    player_count=2
+)
+```
+
+**Extension Usage:**
+- ✅ `ClaimPhase` - make claims about cards
+- ✅ `CLAIM` action - player makes claim (can lie)
+- ✅ `CHALLENGE` action - opponent challenges claim
+- ✅ `REVEAL` action - show cards to resolve challenge
+- ✅ Conditional transfers based on claim truthfulness
+
+**Game Flow:**
+1. Player plays 1-4 cards face-down to discard pile
+2. Player claims a rank (e.g., "three Aces")
+3. Opponent can challenge or accept
+4. If challenged, cards are revealed:
+   - If claim TRUE: challenger takes the pile
+   - If claim FALSE: liar takes the pile
+5. Continue until one player empties their hand
+
+**Simplifications:**
+- Claims limited to rank only (not "three cards" count verification)
+- Automatic claim system (actual game has sequential rank requirements)
+- No rank progression tracking
+
+---
+
 ## Optional Extensions Summary
 
 ### When to Use Extensions
@@ -601,21 +850,56 @@ go_fish = GameGenome(
 - Pairing/matching games (Old Maid, Concentration)
 - Set collection (Go Fish, Authors, Happy Families)
 - More complex trick-taking (Gin Rummy, Canasta basics)
-- ~80-85% of simple card games
+- Betting/wagering games (simplified poker, betting variants)
+- Bluffing games (I Doubt It, Cheat, BS)
+- ~85-90% of simple card games
 
 ### Extension Reference
+
+#### Opponent Interaction Extensions
 
 | Extension | Type | Use Case | Example Game |
 |-----------|------|----------|--------------|
 | `OPPONENT_HAND` | Location | Drawing from opponent | Old Maid, I Doubt It |
 | `OPPONENT_DISCARD` | Location | Accessing opponent's discard | Speed variants |
-| `HAS_SET_OF_N` | Condition | Detecting N cards of same rank | Go Fish books, Old Maid pairs |
+| `DRAW_FROM_OPPONENT` | Action | Opponent interaction action | Old Maid turn |
+| `post_deal_actions` | Setup | Actions after initial deal | Old Maid initial pairing |
+
+#### Set/Collection Extensions
+
+| Extension | Type | Use Case | Example Game |
+|-----------|------|----------|--------------|
+| `HAS_SET_OF_N` | Condition | Detecting N cards of same rank | Go Fish books |
 | `HAS_RUN_OF_N` | Condition | Detecting sequential cards | Gin Rummy runs |
 | `HAS_MATCHING_PAIR` | Condition | Detecting pairs by property | Old Maid (rank+color) |
-| `DRAW_FROM_OPPONENT` | Action | Opponent interaction action | Old Maid turn |
 | `DISCARD_PAIRS` | Action | Specialized pairing action | Old Maid setup |
-| `post_deal_actions` | Setup | Actions after initial deal | Old Maid initial pairing |
 | `matching_condition` | DiscardPhase | Constrain discards to matching sets | Old Maid pairs |
+
+#### Betting/Wagering Extensions
+
+| Extension | Type | Use Case | Example Game |
+|-----------|------|----------|--------------|
+| `ResourceRules` | Setup | Chip/token tracking | Betting War, Poker |
+| `BettingPhase` | Phase | Betting rounds | Betting War, Poker |
+| `BET` | Action | Place chips in pot | Any betting game |
+| `CALL` | Action | Match current bet | Poker-style games |
+| `RAISE` | Action | Increase bet | Poker-style games |
+| `FOLD` | Action | Drop out of round | Poker-style games |
+| `CHECK` | Action | Pass without betting | Poker-style games |
+| `ALL_IN` | Action | Bet all chips | Poker-style games |
+| `CHIP_COUNT` | Condition | Check chip amounts | Betting games |
+| `POT_SIZE` | Condition | Check pot size | Betting games |
+| `CURRENT_BET` | Condition | Check bet amount | Betting games |
+| `CAN_AFFORD` | Condition | Check affordability | Betting games |
+
+#### Bluffing/Challenge Extensions
+
+| Extension | Type | Use Case | Example Game |
+|-----------|------|----------|--------------|
+| `ClaimPhase` | Phase | Making claims about cards | I Doubt It, Cheat |
+| `CLAIM` | Action | Make claim (can lie) | I Doubt It, BS |
+| `CHALLENGE` | Action | Challenge opponent's claim | I Doubt It, BS |
+| `REVEAL` | Action | Show cards to verify | I Doubt It, BS |
 
 ### Backward Compatibility
 
@@ -704,6 +988,11 @@ class PlayPhase:
 
 **Conclusion:** Path A (Enhanced Dataclasses) is validated. The schema can express:
 - **60-70% of simple card games** with base schema (shedding, trick-taking, capture)
-- **80-85% of simple card games** with optional extensions (pairing, set collection, opponent interaction)
+- **85-90% of simple card games** with optional extensions including:
+  - Pairing and set collection (Old Maid, Go Fish)
+  - Opponent interaction (drawing from opponent's hand)
+  - Simple betting mechanics (chip tracking, betting rounds)
+  - Bluffing and challenges (I Doubt It, Cheat)
 - Extensions are backward-compatible and optionally enabled
 - Evolution can discover extension patterns gradually
+- Remaining 10-15%: Complex betting (full poker), real-time games (Slapjack), games requiring arbitrary player input

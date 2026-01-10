@@ -34,6 +34,26 @@ Phase 1 showed only 2.9x speedup, indicating significant overhead. Phase 3 must 
 
 ---
 
+## Prerequisites
+
+Before starting Task 1, verify external dependencies:
+
+```bash
+# Check if flatc is available
+which flatc || echo "Need to install flatbuffers-compiler"
+
+# If not installed:
+# Ubuntu/Debian: sudo apt-get install flatbuffers-compiler
+# macOS: brew install flatbuffers
+
+# Verify Go flatbuffers library will be available
+go get github.com/google/flatbuffers/go
+```
+
+**IMPORTANT:** If flatc is not available, install it before proceeding with Task 2.
+
+---
+
 ## Task Breakdown
 
 ### Task 1: Genome Bytecode Compiler (Python)
@@ -44,7 +64,7 @@ Phase 1 showed only 2.9x speedup, indicating significant overhead. Phase 3 must 
 
 #### Step 1.1: Create bytecode schema (5 min)
 
-**File:** `src/cards_playtest/genome/bytecode.py`
+**File:** `src/cards_evolve/genome/bytecode.py`
 
 ```python
 from enum import IntEnum
@@ -301,8 +321,8 @@ uv run pytest tests/genome/test_bytecode.py -v
 
 ```python
 import pytest
-from cards_playtest.genome.bytecode import BytecodeCompiler, BytecodeHeader, OpCode
-from cards_playtest.genome.schema import GameGenome, SetupRules, TurnStructure, PlayPhase, WinCondition, Condition, ConditionType, Operator, Location
+from cards_evolve.genome.bytecode import BytecodeCompiler, BytecodeHeader, OpCode
+from cards_evolve.genome.schema import GameGenome, SetupRules, TurnStructure, PlayPhase, WinCondition, Condition, ConditionType, Operator, Location
 
 def test_header_serialization():
     """Test header round-trip."""
@@ -327,8 +347,9 @@ def test_header_serialization():
 
 def test_compile_war_genome():
     """Test compiling War genome to bytecode."""
-    from tests.fixtures.war_genome import war  # From Phase 2
+    from cards_evolve.genome.examples import create_war_genome
 
+    war = create_war_genome()
     compiler = BytecodeCompiler()
     bytecode = compiler.compile_genome(war)
 
@@ -438,7 +459,7 @@ sudo apt-get install flatbuffers-compiler  # or brew install flatbuffers on macO
 
 **Generate Python bindings:**
 ```bash
-flatc --python -o src/cards_playtest/bindings schema/simulation.fbs
+flatc --python -o src/cards_evolve/bindings schema/simulation.fbs
 ```
 
 **Generate Go bindings:**
@@ -449,7 +470,7 @@ flatc --go -o internal/bindings schema/simulation.fbs
 **Test:**
 ```bash
 # Verify generated files exist
-ls src/cards_playtest/bindings/cardsim/
+ls src/cards_evolve/bindings/cardsim/
 ls internal/bindings/cardsim/
 ```
 
@@ -483,8 +504,8 @@ import "C"
 import (
 	"unsafe"
 	"github.com/google/flatbuffers/go"
-	"cards-playtest/internal/bindings/cardsim"
-	"cards-playtest/internal/engine"
+	"github.com/signalnine/cards-evolve/internal/bindings/cardsim"
+	"github.com/signalnine/cards-evolve/internal/engine"
 )
 
 //export SimulateBatch
@@ -578,14 +599,14 @@ ls libcardsim.so  # Should exist
 
 #### Step 3.3: Create Python wrapper (5 min)
 
-**File:** `src/cards_playtest/bindings/cgo_bridge.py`
+**File:** `src/cards_evolve/bindings/cgo_bridge.py`
 
 ```python
 import ctypes
 from pathlib import Path
 from typing import List
 import flatbuffers
-from cards_playtest.bindings.cardsim import BatchRequest, BatchResponse
+from cards_evolve.bindings.cardsim import BatchRequest, BatchResponse
 
 # Load shared library
 LIB_PATH = Path(__file__).parent.parent.parent.parent / "libcardsim.so"
@@ -1343,7 +1364,7 @@ package mcts
 import (
 	"math"
 	"sync"
-	"cards-playtest/internal/engine"
+	"github.com/signalnine/cards-evolve/internal/engine"
 )
 
 // Node represents MCTS tree node
@@ -1441,7 +1462,7 @@ package mcts
 
 import (
 	"math/rand"
-	"cards-playtest/internal/engine"
+	"github.com/signalnine/cards-evolve/internal/engine"
 )
 
 const ExplorationParam = 1.41 // sqrt(2)
@@ -1586,7 +1607,7 @@ package mcts
 import (
 	"math/rand"
 	"testing"
-	"cards-playtest/internal/engine"
+	"github.com/signalnine/cards-evolve/internal/engine"
 )
 
 func TestNodePooling(t *testing.T) {
@@ -1683,18 +1704,20 @@ Implement MCTS with memory pooling
 import json
 import random
 from pathlib import Path
-from cards_playtest.genome.schema import GameGenome, SetupRules, TurnStructure, PlayPhase, WinCondition, Condition, ConditionType, Location, Operator
-from cards_playtest.genome.bytecode import BytecodeCompiler
-from cards_playtest.engine.game_state import GameState
-from cards_playtest.engine.interpreter import GenomeInterpreter
+from cards_evolve.genome.schema import GameGenome, SetupRules, TurnStructure, PlayPhase, WinCondition, Condition, ConditionType, Location, Operator
+from cards_evolve.genome.bytecode import BytecodeCompiler
+from cards_evolve.simulation.state import GameState
+from cards_evolve.simulation.interpreter import GameLogic
 
 GOLDEN_DIR = Path(__file__).parent / "data"
 GOLDEN_DIR.mkdir(exist_ok=True)
 
 def generate_war_golden():
     """Create golden file for War game."""
-    # Load War genome (from Phase 2 fixtures)
-    from tests.fixtures.war_genome import war
+    # Load War genome from Phase 2
+    from cards_evolve.genome.examples import create_war_genome
+
+    war = create_war_genome()
 
     # Compile to bytecode
     compiler = BytecodeCompiler()
@@ -1705,9 +1728,8 @@ def generate_war_golden():
         f.write(bytecode)
 
     # Run deterministic simulation
-    random.seed(42)
-    interpreter = GenomeInterpreter(war)
-    state = GameState.create_initial_state(war)
+    logic = GameLogic(war)
+    state = logic.create_initial_state(seed=42)
 
     # Record game trace
     trace = {
@@ -1717,26 +1739,19 @@ def generate_war_golden():
     }
 
     for turn in range(50):  # Run 50 turns
-        moves = interpreter.generate_legal_moves(state)
-        if not moves:
-            break
-
-        # Pick deterministic move (first one)
-        move = moves[0]
-        state = interpreter.apply_move(state, move)
-
-        # Record turn state
+        # For War, there are no moves - it's automatic play
+        # This will need to be adapted when we implement the interpreter
+        # For now, just record initial state
         trace["turns"].append({
             "turn": turn,
-            "current_player": state.current_player,
+            "active_player": state.active_player,
             "hand_sizes": [len(p.hand) for p in state.players],
             "deck_size": len(state.deck),
             "discard_size": len(state.discard),
-            "winner": state.winner_id if hasattr(state, 'winner_id') else None
         })
 
-        if state.winner_id is not None:
-            break
+        # TODO: Implement actual game simulation here
+        break  # For now, just record initial state
 
     # Save trace
     with open(GOLDEN_DIR / "war_trace.json", "w") as f:
@@ -1744,22 +1759,8 @@ def generate_war_golden():
 
     print(f"Generated War golden files: {len(trace['turns'])} turns")
 
-def generate_crazy_eights_golden():
-    """Create golden file for Crazy 8s."""
-    from tests.fixtures.crazy_eights_genome import crazy_eights
-
-    compiler = BytecodeCompiler()
-    bytecode = compiler.compile_genome(crazy_eights)
-
-    with open(GOLDEN_DIR / "crazy_eights_genome.bin", "wb") as f:
-        f.write(bytecode)
-
-    # Similar trace generation as War
-    # ... (omitted for brevity)
-
 if __name__ == "__main__":
     generate_war_golden()
-    generate_crazy_eights_golden()
     print("Golden files generated successfully!")
 ```
 
@@ -1903,7 +1904,7 @@ package engine
 
 import (
 	"math/rand"
-	"cards-playtest/internal/mcts"
+	"github.com/signalnine/cards-evolve/internal/mcts"
 )
 
 // AggStats holds aggregated simulation results
@@ -2059,7 +2060,7 @@ func checkWinConditions(state *GameState, genome *Genome) int8 {
 
 ```go
 // ... (previous imports)
-import "cards-playtest/internal/engine"
+import "github.com/signalnine/cards-evolve/internal/engine"
 
 //export SimulateBatch
 func SimulateBatch(requestPtr unsafe.Pointer, requestLen C.int) *C.char {
@@ -2120,11 +2121,11 @@ Add batch simulation engine with AI player support
 ```python
 """Benchmark Python vs Go batch simulation."""
 import time
-from cards_playtest.genome.bytecode import BytecodeCompiler
-from cards_playtest.bindings.cgo_bridge import simulate_batch
+from cards_evolve.genome.bytecode import BytecodeCompiler
+from cards_evolve.bindings.cgo_bridge import simulate_batch
 from tests.fixtures.war_genome import war
 import flatbuffers
-from cards_playtest.bindings.cardsim import SimulationRequest, BatchRequest
+from cards_evolve.bindings.cardsim import SimulationRequest, BatchRequest
 
 def benchmark_go_batch():
     """Benchmark Go batch simulation."""
@@ -2274,7 +2275,7 @@ Add performance benchmarks and achieve 15x speedup
 ### CGo Interface
 
 ```python
-from cards_playtest.bindings.cgo_bridge import simulate_batch
+from cards_evolve.bindings.cgo_bridge import simulate_batch
 
 # Python creates Flatbuffers request
 response = simulate_batch(batch_request_builder)
