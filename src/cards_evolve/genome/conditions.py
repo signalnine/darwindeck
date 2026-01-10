@@ -19,6 +19,14 @@ class ConditionType(Enum):
     SCORE_COMPARE = "score_compare"
     SEQUENCE_ADJACENT = "sequence_adjacent"
 
+    # NEW: Wildcard matching
+    MATCHES_OR_WILD = "matches_or_wild"  # Card matches rank/suit OR is wild
+
+    # NEW: Pattern matching (for set collection games)
+    HAS_SET_OF_N = "has_set_of_n"  # N cards of same rank
+    HAS_RUN_OF_N = "has_run_of_n"  # N cards in sequence
+    HAS_MATCHING_PAIR = "has_matching_pair"  # Two cards with matching property
+
 
 class Operator(Enum):
     """Comparison operators."""

@@ -42,6 +42,30 @@ class Location(Enum):
     HAND = "hand"
     DISCARD = "discard"
     TABLEAU = "tableau"
+    # Optional extensions for opponent interaction
+    OPPONENT_HAND = "opponent_hand"
+    OPPONENT_DISCARD = "opponent_discard"
+
+
+class TargetSelector(Enum):
+    """Target selection for opponent-directed actions."""
+
+    NEXT_PLAYER = "next_player"          # Clockwise
+    PREV_PLAYER = "prev_player"          # Counter-clockwise
+    PLAYER_CHOICE = "player_choice"      # Active player chooses target
+    RANDOM_OPPONENT = "random_opponent"  # Random selection
+    ALL_OPPONENTS = "all_opponents"      # Broadcast to all
+    LEFT_OPPONENT = "left_opponent"      # Physical left (3+ players)
+    RIGHT_OPPONENT = "right_opponent"    # Physical right (3+ players)
+
+
+class Visibility(Enum):
+    """Card visibility state."""
+
+    FACE_DOWN = "face_down"    # No one can see
+    FACE_UP = "face_up"        # Everyone can see
+    OWNER_ONLY = "owner_only"  # Only owning player can see
+    REVEALED = "revealed"      # Temporarily shown to all
 
 
 @dataclass(frozen=True)
@@ -51,6 +75,17 @@ class SetupRules:
     cards_per_player: int
     initial_deck: str = "standard_52"
     initial_discard_count: int = 0
+    # NEW: Wildcard support
+    wild_cards: tuple[Rank, ...] = ()
+    # NEW: Visibility defaults
+    hand_visibility: Visibility = Visibility.OWNER_ONLY
+    deck_visibility: Visibility = Visibility.FACE_DOWN
+    discard_visibility: Visibility = Visibility.FACE_UP
+
+    def __post_init__(self):
+        """Convert lists to tuples for immutability."""
+        if isinstance(self.wild_cards, list):
+            object.__setattr__(self, "wild_cards", tuple(self.wild_cards))
 
 
 @dataclass(frozen=True)
@@ -95,5 +130,7 @@ class GameGenome:
     special_effects: list  # type: ignore
     win_conditions: list[WinCondition]
     scoring_rules: list  # type: ignore
-    max_turns: int = 100
+    max_turns: int = 100  # NEW: Termination guarantee (range: min_turns to 10000)
     player_count: int = 2
+    # NEW: Validation constraints
+    min_turns: int = 10  # Games ending too quickly are boring
