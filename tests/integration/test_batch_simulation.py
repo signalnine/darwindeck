@@ -6,11 +6,21 @@ import flatbuffers
 from darwindeck.genome.bytecode import BytecodeCompiler
 from darwindeck.genome.examples import create_war_genome
 from darwindeck.bindings.cgo_bridge import simulate_batch
-from darwindeck.bindings.cardsim import (
-    BatchRequest,
-    BatchResponse,
-    SimulationRequest,
-    AggregatedStats,
+from darwindeck.bindings.cardsim.SimulationRequest import (
+    SimulationRequestStart,
+    SimulationRequestAddGenomeBytecode,
+    SimulationRequestAddNumGames,
+    SimulationRequestAddAiPlayerType,
+    SimulationRequestAddMctsIterations,
+    SimulationRequestAddRandomSeed,
+    SimulationRequestEnd,
+)
+from darwindeck.bindings.cardsim.BatchRequest import (
+    BatchRequestStart,
+    BatchRequestAddBatchId,
+    BatchRequestAddRequests,
+    BatchRequestStartRequestsVector,
+    BatchRequestEnd,
 )
 
 
@@ -31,24 +41,24 @@ class TestBatchSimulation:
         genome_offset = builder.CreateByteVector(bytecode)
 
         # Build SimulationRequest
-        SimulationRequest.Start(builder)
-        SimulationRequest.AddGenomeBytecode(builder, genome_offset)
-        SimulationRequest.AddNumGames(builder, 10)
-        SimulationRequest.AddAiPlayerType(builder, 0)  # Random AI
-        SimulationRequest.AddMctsIterations(builder, 0)  # Not used for random
-        SimulationRequest.AddRandomSeed(builder, 42)
-        req_offset = SimulationRequest.End(builder)
+        SimulationRequestStart(builder)
+        SimulationRequestAddGenomeBytecode(builder, genome_offset)
+        SimulationRequestAddNumGames(builder, 10)
+        SimulationRequestAddAiPlayerType(builder, 0)  # Random AI
+        SimulationRequestAddMctsIterations(builder, 0)  # Not used for random
+        SimulationRequestAddRandomSeed(builder, 42)
+        req_offset = SimulationRequestEnd(builder)
 
         # Build requests vector
-        BatchRequest.StartRequestsVector(builder, 1)
+        BatchRequestStartRequestsVector(builder, 1)
         builder.PrependUOffsetTRelative(req_offset)
         requests_offset = builder.EndVector()
 
         # Build BatchRequest
-        BatchRequest.Start(builder)
-        BatchRequest.AddBatchId(builder, 1)
-        BatchRequest.AddRequests(builder, requests_offset)
-        batch_offset = BatchRequest.End(builder)
+        BatchRequestStart(builder)
+        BatchRequestAddBatchId(builder, 1)
+        BatchRequestAddRequests(builder, requests_offset)
+        batch_offset = BatchRequestEnd(builder)
 
         builder.Finish(batch_offset)
         request_bytes = bytes(builder.Output())
@@ -82,22 +92,22 @@ class TestBatchSimulation:
             builder = flatbuffers.Builder(2048)
             genome_offset = builder.CreateByteVector(bytecode)
 
-            SimulationRequest.Start(builder)
-            SimulationRequest.AddGenomeBytecode(builder, genome_offset)
-            SimulationRequest.AddNumGames(builder, 5)
-            SimulationRequest.AddAiPlayerType(builder, 0)
-            SimulationRequest.AddMctsIterations(builder, 0)
-            SimulationRequest.AddRandomSeed(builder, seed)
-            req_offset = SimulationRequest.End(builder)
+            SimulationRequestStart(builder)
+            SimulationRequestAddGenomeBytecode(builder, genome_offset)
+            SimulationRequestAddNumGames(builder, 5)
+            SimulationRequestAddAiPlayerType(builder, 0)
+            SimulationRequestAddMctsIterations(builder, 0)
+            SimulationRequestAddRandomSeed(builder, seed)
+            req_offset = SimulationRequestEnd(builder)
 
-            BatchRequest.StartRequestsVector(builder, 1)
+            BatchRequestStartRequestsVector(builder, 1)
             builder.PrependUOffsetTRelative(req_offset)
             requests_offset = builder.EndVector()
 
-            BatchRequest.Start(builder)
-            BatchRequest.AddBatchId(builder, 1)
-            BatchRequest.AddRequests(builder, requests_offset)
-            batch_offset = BatchRequest.End(builder)
+            BatchRequestStart(builder)
+            BatchRequestAddBatchId(builder, 1)
+            BatchRequestAddRequests(builder, requests_offset)
+            batch_offset = BatchRequestEnd(builder)
 
             builder.Finish(batch_offset)
             return simulate_batch(bytes(builder.Output()))
@@ -124,22 +134,22 @@ class TestBatchSimulation:
         genome_offset = builder.CreateByteVector(bytecode)
 
         # MCTS-100 AI
-        SimulationRequest.Start(builder)
-        SimulationRequest.AddGenomeBytecode(builder, genome_offset)
-        SimulationRequest.AddNumGames(builder, 50)
-        SimulationRequest.AddAiPlayerType(builder, 2)  # MCTS-100
-        SimulationRequest.AddMctsIterations(builder, 100)
-        SimulationRequest.AddRandomSeed(builder, 999)
-        req_offset = SimulationRequest.End(builder)
+        SimulationRequestStart(builder)
+        SimulationRequestAddGenomeBytecode(builder, genome_offset)
+        SimulationRequestAddNumGames(builder, 50)
+        SimulationRequestAddAiPlayerType(builder, 2)  # MCTS-100
+        SimulationRequestAddMctsIterations(builder, 100)
+        SimulationRequestAddRandomSeed(builder, 999)
+        req_offset = SimulationRequestEnd(builder)
 
-        BatchRequest.StartRequestsVector(builder, 1)
+        BatchRequestStartRequestsVector(builder, 1)
         builder.PrependUOffsetTRelative(req_offset)
         requests_offset = builder.EndVector()
 
-        BatchRequest.Start(builder)
-        BatchRequest.AddBatchId(builder, 1)
-        BatchRequest.AddRequests(builder, requests_offset)
-        batch_offset = BatchRequest.End(builder)
+        BatchRequestStart(builder)
+        BatchRequestAddBatchId(builder, 1)
+        BatchRequestAddRequests(builder, requests_offset)
+        batch_offset = BatchRequestEnd(builder)
 
         builder.Finish(batch_offset)
         response = simulate_batch(bytes(builder.Output()))
@@ -163,25 +173,25 @@ class TestBatchSimulation:
         # Create 3 different requests with different seeds
         req_offsets = []
         for seed in [100, 200, 300]:
-            SimulationRequest.Start(builder)
-            SimulationRequest.AddGenomeBytecode(builder, genome_offset)
-            SimulationRequest.AddNumGames(builder, 5)
-            SimulationRequest.AddAiPlayerType(builder, 0)
-            SimulationRequest.AddMctsIterations(builder, 0)
-            SimulationRequest.AddRandomSeed(builder, seed)
-            req_offsets.append(SimulationRequest.End(builder))
+            SimulationRequestStart(builder)
+            SimulationRequestAddGenomeBytecode(builder, genome_offset)
+            SimulationRequestAddNumGames(builder, 5)
+            SimulationRequestAddAiPlayerType(builder, 0)
+            SimulationRequestAddMctsIterations(builder, 0)
+            SimulationRequestAddRandomSeed(builder, seed)
+            req_offsets.append(SimulationRequestEnd(builder))
 
         # Build requests vector
-        BatchRequest.StartRequestsVector(builder, 3)
+        BatchRequestStartRequestsVector(builder, 3)
         for offset in reversed(req_offsets):
             builder.PrependUOffsetTRelative(offset)
         requests_offset = builder.EndVector()
 
         # Build BatchRequest
-        BatchRequest.Start(builder)
-        BatchRequest.AddBatchId(builder, 123)
-        BatchRequest.AddRequests(builder, requests_offset)
-        batch_offset = BatchRequest.End(builder)
+        BatchRequestStart(builder)
+        BatchRequestAddBatchId(builder, 123)
+        BatchRequestAddRequests(builder, requests_offset)
+        batch_offset = BatchRequestEnd(builder)
 
         builder.Finish(batch_offset)
         response = simulate_batch(bytes(builder.Output()))
@@ -194,3 +204,66 @@ class TestBatchSimulation:
             result = response.Results(i)
             assert result.TotalGames() == 5
             assert result.Errors() == 0
+
+    def test_phase1_metrics_returned(self):
+        """Verify Phase 1 instrumentation metrics are returned."""
+        genome = create_war_genome()
+        compiler = BytecodeCompiler()
+        bytecode = compiler.compile_genome(genome)
+
+        builder = flatbuffers.Builder(2048)
+        genome_offset = builder.CreateByteVector(bytecode)
+
+        SimulationRequestStart(builder)
+        SimulationRequestAddGenomeBytecode(builder, genome_offset)
+        SimulationRequestAddNumGames(builder, 20)
+        SimulationRequestAddAiPlayerType(builder, 0)  # Random AI
+        SimulationRequestAddMctsIterations(builder, 0)
+        SimulationRequestAddRandomSeed(builder, 42)
+        req_offset = SimulationRequestEnd(builder)
+
+        BatchRequestStartRequestsVector(builder, 1)
+        builder.PrependUOffsetTRelative(req_offset)
+        requests_offset = builder.EndVector()
+
+        BatchRequestStart(builder)
+        BatchRequestAddBatchId(builder, 1)
+        BatchRequestAddRequests(builder, requests_offset)
+        batch_offset = BatchRequestEnd(builder)
+
+        builder.Finish(batch_offset)
+        response = simulate_batch(bytes(builder.Output()))
+
+        result = response.Results(0)
+
+        # Verify Phase 1 instrumentation metrics are non-zero
+        assert result.TotalDecisions() > 0, "Should have decision points"
+        assert result.TotalValidMoves() > 0, "Should have valid moves summed"
+        assert result.TotalActions() > 0, "Should have actions taken"
+
+        # War game should have many forced decisions (1 move per turn)
+        # since each player just plays top card
+        assert result.ForcedDecisions() > 0, "War should have forced decisions"
+
+        # War game has interactions (playing to tableau triggers battles)
+        assert result.TotalInteractions() > 0, "War should have interactions"
+
+        # Sanity check: valid moves >= decisions (at least 1 move per decision)
+        assert result.TotalValidMoves() >= result.TotalDecisions()
+
+        # Sanity check: forced decisions <= total decisions
+        assert result.ForcedDecisions() <= result.TotalDecisions()
+
+        # Sanity check: interactions <= actions
+        assert result.TotalInteractions() <= result.TotalActions()
+
+        # Print metrics for debugging
+        print(f"\nPhase 1 Metrics (20 games):")
+        print(f"  TotalDecisions: {result.TotalDecisions()}")
+        print(f"  TotalValidMoves: {result.TotalValidMoves()}")
+        print(f"  ForcedDecisions: {result.ForcedDecisions()}")
+        print(f"  TotalInteractions: {result.TotalInteractions()}")
+        print(f"  TotalActions: {result.TotalActions()}")
+        print(f"  Avg valid moves per decision: {result.TotalValidMoves() / result.TotalDecisions():.2f}")
+        print(f"  Forced ratio: {result.ForcedDecisions() / result.TotalDecisions():.2%}")
+        print(f"  Interaction ratio: {result.TotalInteractions() / result.TotalActions():.2%}")

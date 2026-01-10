@@ -20,12 +20,22 @@ const (
 	MCTS2000AI  AIPlayerType = 5
 )
 
+// GameMetrics holds Phase 1 instrumentation counters
+type GameMetrics struct {
+	TotalDecisions    uint64 // Decision points (when player chooses move)
+	TotalValidMoves   uint64 // Sum of valid moves at each decision
+	ForcedDecisions   uint64 // Decisions with only 1 valid move
+	TotalInteractions uint64 // Actions affecting opponent state
+	TotalActions      uint64 // Total actions taken
+}
+
 // GameResult holds the outcome of a single game
 type GameResult struct {
 	WinnerID       int8
 	TurnCount      uint32
 	DurationNs     uint64
 	Error          string
+	Metrics        GameMetrics // Phase 1 instrumentation
 }
 
 // AggregatedStats summarizes multiple game results
@@ -38,6 +48,13 @@ type AggregatedStats struct {
 	MedianTurns   uint32
 	AvgDurationNs uint64
 	Errors        uint32
+
+	// Phase 1 instrumentation: aggregated across all games
+	TotalDecisions    uint64
+	TotalValidMoves   uint64
+	ForcedDecisions   uint64
+	TotalInteractions uint64
+	TotalActions      uint64
 }
 
 // RunBatch simulates multiple games with the same genome and AI configuration
@@ -58,6 +75,7 @@ func RunBatch(genome *engine.Genome, numGames int, aiType AIPlayerType, mctsIter
 // RunSingleGame plays one complete game to termination
 func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations int, seed uint64) GameResult {
 	start := time.Now()
+	var metrics GameMetrics
 
 	// Initialize game state
 	state := engine.GetState()
@@ -84,6 +102,7 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 				WinnerID:   winner,
 				TurnCount:  state.TurnNumber,
 				DurationNs: uint64(time.Since(start).Nanoseconds()),
+				Metrics:    metrics,
 			}
 		}
 
@@ -96,7 +115,15 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 				TurnCount:  state.TurnNumber,
 				DurationNs: uint64(time.Since(start).Nanoseconds()),
 				Error:      "no legal moves",
+				Metrics:    metrics,
 			}
+		}
+
+		// Phase 1 instrumentation: decision counting
+		metrics.TotalDecisions++
+		metrics.TotalValidMoves += uint64(len(moves))
+		if len(moves) == 1 {
+			metrics.ForcedDecisions++
 		}
 
 		// Select and apply move based on AI type
@@ -124,7 +151,14 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 				TurnCount:  state.TurnNumber,
 				DurationNs: uint64(time.Since(start).Nanoseconds()),
 				Error:      "AI returned nil move",
+				Metrics:    metrics,
 			}
+		}
+
+		// Phase 1 instrumentation: action and interaction counting
+		metrics.TotalActions++
+		if isInteraction(state, move, genome) {
+			metrics.TotalInteractions++
 		}
 
 		engine.ApplyMove(state, move, genome)
@@ -135,7 +169,40 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 		WinnerID:   -1,
 		TurnCount:  state.TurnNumber,
 		DurationNs: uint64(time.Since(start).Nanoseconds()),
+		Metrics:    metrics,
 	}
+}
+
+// isInteraction determines if a move affects the opponent's state
+func isInteraction(state *engine.GameState, move *engine.LegalMove, genome *engine.Genome) bool {
+	if move.PhaseIndex >= len(genome.TurnPhases) {
+		return false
+	}
+
+	phase := genome.TurnPhases[move.PhaseIndex]
+
+	switch phase.PhaseType {
+	case 1: // DrawPhase
+		// Drawing from opponent's hand is an interaction
+		if move.TargetLoc == engine.LocationOpponentHand {
+			return true
+		}
+	case 2: // PlayPhase
+		// Playing to tableau triggers War battle resolution which affects opponent
+		if move.TargetLoc == engine.LocationTableau {
+			return true
+		}
+		// Playing to opponent's locations is an interaction
+		if move.TargetLoc == engine.LocationOpponentHand ||
+			move.TargetLoc == engine.LocationOpponentDiscard {
+			return true
+		}
+	case 3: // DiscardPhase
+		// Regular discard doesn't affect opponent
+		return false
+	}
+
+	return false
 }
 
 // setupDeck creates and shuffles a standard 52-card deck
@@ -215,6 +282,13 @@ func aggregateResults(results []GameResult) AggregatedStats {
 
 		turnCounts = append(turnCounts, result.TurnCount)
 		totalDuration += result.DurationNs
+
+		// Phase 1 instrumentation: aggregate metrics from each game
+		stats.TotalDecisions += result.Metrics.TotalDecisions
+		stats.TotalValidMoves += result.Metrics.TotalValidMoves
+		stats.ForcedDecisions += result.Metrics.ForcedDecisions
+		stats.TotalInteractions += result.Metrics.TotalInteractions
+		stats.TotalActions += result.Metrics.TotalActions
 	}
 
 	// Calculate averages

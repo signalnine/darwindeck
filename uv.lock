@@ -49,42 +49,6 @@ wheels = [
 ]
 
 [[package]]
-name = "cards-evolve"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "click" },
-    { name = "flatbuffers" },
-    { name = "numpy" },
-    { name = "pydantic" },
-    { name = "pyyaml" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "black" },
-    { name = "hypothesis" },
-    { name = "mypy" },
-    { name = "pytest" },
-    { name = "pytest-cov" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "black", marker = "extra == 'dev'", specifier = ">=23.12" },
-    { name = "click", specifier = ">=8.1" },
-    { name = "flatbuffers", specifier = ">=23.5" },
-    { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.92" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.8" },
-    { name = "numpy", specifier = ">=1.26" },
-    { name = "pydantic", specifier = ">=2.5" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.4" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.1" },
-    { name = "pyyaml", specifier = ">=6.0" },
-]
-provides-extras = ["dev"]
-
-[[package]]
 name = "click"
 version = "8.3.1"
 source = { registry = "https://pypi.org/simple" }
@@ -196,6 +160,42 @@ wheels = [
 toml = [
     { name = "tomli", marker = "python_full_version <= '3.11'" },
 ]
+
+[[package]]
+name = "darwindeck"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "click" },
+    { name = "flatbuffers" },
+    { name = "numpy" },
+    { name = "pydantic" },
+    { name = "pyyaml" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "black" },
+    { name = "hypothesis" },
+    { name = "mypy" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "black", marker = "extra == 'dev'", specifier = ">=23.12" },
+    { name = "click", specifier = ">=8.1" },
+    { name = "flatbuffers", specifier = ">=23.5" },
+    { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.92" },
+    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.8" },
+    { name = "numpy", specifier = ">=1.26" },
+    { name = "pydantic", specifier = ">=2.5" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.4" },
+    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.1" },
+    { name = "pyyaml", specifier = ">=6.0" },
+]
+provides-extras = ["dev"]
 
 [[package]]
 name = "flatbuffers"

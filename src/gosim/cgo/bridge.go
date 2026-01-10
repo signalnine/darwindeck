@@ -24,6 +24,13 @@ type AggStats struct {
 	MedianTurns   uint32
 	AvgDurationNs uint64
 	Errors        uint32
+
+	// Phase 1 instrumentation: aggregated across all games
+	TotalDecisions    uint64
+	TotalValidMoves   uint64
+	ForcedDecisions   uint64
+	TotalInteractions uint64
+	TotalActions      uint64
 }
 
 //export SimulateBatch
@@ -67,14 +74,19 @@ func SimulateBatch(requestPtr unsafe.Pointer, requestLen C.int, responseLen *C.i
 
 		// Convert to AggStats
 		stats := &AggStats{
-			TotalGames:    simStats.TotalGames,
-			Player0Wins:   simStats.Player0Wins,
-			Player1Wins:   simStats.Player1Wins,
-			Draws:         simStats.Draws,
-			AvgTurns:      simStats.AvgTurns,
-			MedianTurns:   simStats.MedianTurns,
-			AvgDurationNs: simStats.AvgDurationNs,
-			Errors:        simStats.Errors,
+			TotalGames:        simStats.TotalGames,
+			Player0Wins:       simStats.Player0Wins,
+			Player1Wins:       simStats.Player1Wins,
+			Draws:             simStats.Draws,
+			AvgTurns:          simStats.AvgTurns,
+			MedianTurns:       simStats.MedianTurns,
+			AvgDurationNs:     simStats.AvgDurationNs,
+			Errors:            simStats.Errors,
+			TotalDecisions:    simStats.TotalDecisions,
+			TotalValidMoves:   simStats.TotalValidMoves,
+			ForcedDecisions:   simStats.ForcedDecisions,
+			TotalInteractions: simStats.TotalInteractions,
+			TotalActions:      simStats.TotalActions,
 		}
 
 		// Serialize result
@@ -127,6 +139,12 @@ func serializeStats(builder *flatbuffers.Builder, stats *AggStats) flatbuffers.U
 	cardsim.AggregatedStatsAddMedianTurns(builder, stats.MedianTurns)
 	cardsim.AggregatedStatsAddAvgDurationNs(builder, stats.AvgDurationNs)
 	cardsim.AggregatedStatsAddErrors(builder, stats.Errors)
+	// Phase 1 instrumentation fields
+	cardsim.AggregatedStatsAddTotalDecisions(builder, stats.TotalDecisions)
+	cardsim.AggregatedStatsAddTotalValidMoves(builder, stats.TotalValidMoves)
+	cardsim.AggregatedStatsAddForcedDecisions(builder, stats.ForcedDecisions)
+	cardsim.AggregatedStatsAddTotalInteractions(builder, stats.TotalInteractions)
+	cardsim.AggregatedStatsAddTotalActions(builder, stats.TotalActions)
 	return cardsim.AggregatedStatsEnd(builder)
 }
 
