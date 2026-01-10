@@ -60,7 +60,7 @@ This will:
 POPULATION=1000 GENERATIONS=200 ./scripts/run-evolution.sh
 
 # Or run directly with more control
-poetry run python -m cards_evolve.cli.evolve \
+poetry run python -m darwindeck.cli.evolve \
     --population-size 500 \
     --generations 100 \
     --output-dir output/my-run \
@@ -165,8 +165,8 @@ Each file contains:
 
 Check that FitnessEvaluator is working:
 ```python
-from cards_evolve.evolution.fitness import FitnessEvaluator
-from cards_evolve.genome.examples import create_war_genome
+from darwindeck.evolution.fitness import FitnessEvaluator
+from darwindeck.genome.examples import create_war_genome
 
 evaluator = FitnessEvaluator()
 result = evaluator.evaluate(create_war_genome())
@@ -228,7 +228,7 @@ No need to re-run setup unless dependencies changed.
 ### Custom Fitness Evaluator
 
 ```python
-from cards_evolve.evolution.engine import EvolutionEngine, EvolutionConfig
+from darwindeck.evolution.engine import EvolutionEngine, EvolutionConfig
 
 def my_fitness_evaluator(individual):
     # Custom fitness logic

@@ -1,8 +1,8 @@
 """Tests for immutable game state."""
 
 import pytest
-from cards_evolve.simulation.state import GameState, PlayerState, Card
-from cards_evolve.genome.schema import Rank, Suit
+from darwindeck.simulation.state import GameState, PlayerState, Card
+from darwindeck.genome.schema import Rank, Suit
 
 
 def test_card_immutability() -> None:

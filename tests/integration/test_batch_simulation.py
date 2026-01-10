@@ -3,10 +3,10 @@
 import pytest
 import flatbuffers
 
-from cards_evolve.genome.bytecode import BytecodeCompiler
-from cards_evolve.genome.examples import create_war_genome
-from cards_evolve.bindings.cgo_bridge import simulate_batch
-from cards_evolve.bindings.cardsim import (
+from darwindeck.genome.bytecode import BytecodeCompiler
+from darwindeck.genome.examples import create_war_genome
+from darwindeck.bindings.cgo_bridge import simulate_batch
+from darwindeck.bindings.cardsim import (
     BatchRequest,
     BatchResponse,
     SimulationRequest,

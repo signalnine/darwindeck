@@ -22,8 +22,8 @@
 
 **Files:**
 - Create: `pyproject.toml`
-- Create: `src/cards_evolve/__init__.py`
-- Create: `src/cards_evolve/genome/__init__.py`
+- Create: `src/darwindeck/__init__.py`
+- Create: `src/darwindeck/genome/__init__.py`
 - Create: `tests/__init__.py`
 - Create: `.gitignore`
 
@@ -38,7 +38,7 @@ version = "0.1.0"
 description = "Evolutionary card game system"
 authors = ["Your Name <you@example.com>"]
 readme = "README.md"
-packages = [{include = "cards_evolve", from = "src"}]
+packages = [{include = "darwindeck", from = "src"}]
 
 [tool.poetry.dependencies]
 python = "^3.11"
@@ -77,10 +77,10 @@ disallow_untyped_defs = true
 **Step 2: Create package structure**
 
 ```bash
-mkdir -p src/cards_evolve/genome
-mkdir -p src/cards_evolve/simulation
-mkdir -p src/cards_evolve/evolution
-mkdir -p src/cards_evolve/cli
+mkdir -p src/darwindeck/genome
+mkdir -p src/darwindeck/simulation
+mkdir -p src/darwindeck/evolution
+mkdir -p src/darwindeck/cli
 mkdir -p tests/unit
 mkdir -p tests/integration
 mkdir -p docs/plans
@@ -88,14 +88,14 @@ mkdir -p docs/plans
 
 **Step 3: Create __init__.py files**
 
-Create `src/cards_evolve/__init__.py`:
+Create `src/darwindeck/__init__.py`:
 ```python
 """Evolutionary card game system."""
 
 __version__ = "0.1.0"
 ```
 
-Create `src/cards_evolve/genome/__init__.py`:
+Create `src/darwindeck/genome/__init__.py`:
 ```python
 """Game genome representation and manipulation."""
 ```
@@ -173,7 +173,7 @@ Expected: Dependencies installed successfully
 
 Run:
 ```bash
-poetry run python -c "import cards_evolve; print(cards_evolve.__version__)"
+poetry run python -c "import darwindeck; print(darwindeck.__version__)"
 ```
 
 Expected: `0.1.0`
@@ -195,7 +195,7 @@ git commit -m "feat: initialize Python project structure
 ## Task 2: Basic Genome Schema
 
 **Files:**
-- Create: `src/cards_evolve/genome/schema.py`
+- Create: `src/darwindeck/genome/schema.py`
 - Create: `tests/unit/test_genome_schema.py`
 
 **Step 1: Write failing test for Rank enum**
@@ -206,7 +206,7 @@ Create `tests/unit/test_genome_schema.py`:
 """Tests for genome schema types."""
 
 import pytest
-from cards_evolve.genome.schema import Rank, Suit, GameGenome
+from darwindeck.genome.schema import Rank, Suit, GameGenome
 
 
 def test_rank_enum_has_all_ranks() -> None:
@@ -233,11 +233,11 @@ Run:
 poetry run pytest tests/unit/test_genome_schema.py -v
 ```
 
-Expected: ImportError - module 'cards_evolve.genome.schema' not found
+Expected: ImportError - module 'darwindeck.genome.schema' not found
 
 **Step 3: Write minimal implementation**
 
-Create `src/cards_evolve/genome/schema.py`:
+Create `src/darwindeck/genome/schema.py`:
 
 ```python
 """Core genome schema types and enumerations."""
@@ -304,7 +304,7 @@ Expected: 2 passed
 **Step 5: Commit**
 
 ```bash
-git add src/cards_evolve/genome/schema.py tests/unit/test_genome_schema.py
+git add src/darwindeck/genome/schema.py tests/unit/test_genome_schema.py
 git commit -m "feat: add basic genome schema enums
 
 - Add Rank enum with 13 card ranks
@@ -491,7 +491,7 @@ git commit -m "feat: initialize Golang module with card types
 ## Task 4: Python War Game Implementation
 
 **Files:**
-- Create: `src/cards_evolve/simulation/war.py`
+- Create: `src/darwindeck/simulation/war.py`
 - Create: `tests/unit/test_war_simulation.py`
 
 **Step 1: Write failing test for War game**
@@ -502,7 +502,7 @@ Create `tests/unit/test_war_simulation.py`:
 """Tests for War game simulation."""
 
 import pytest
-from cards_evolve.simulation.war import WarGame, play_war_game
+from darwindeck.simulation.war import WarGame, play_war_game
 
 
 def test_war_game_initialization() -> None:
@@ -544,7 +544,7 @@ Expected: ImportError
 
 **Step 3: Write minimal implementation**
 
-Create `src/cards_evolve/simulation/war.py`:
+Create `src/darwindeck/simulation/war.py`:
 
 ```python
 """War game simulation (Python baseline)."""
@@ -638,7 +638,7 @@ Expected: 3 passed
 **Step 5: Commit**
 
 ```bash
-git add src/cards_evolve/simulation/war.py tests/unit/test_war_simulation.py
+git add src/darwindeck/simulation/war.py tests/unit/test_war_simulation.py
 git commit -m "feat: implement War game in Python
 
 - Add WarGame class with battle mechanics
@@ -873,7 +873,7 @@ Create `benchmarks/compare_war.py`:
 import time
 import subprocess
 import statistics
-from cards_evolve.simulation.war import play_war_game
+from darwindeck.simulation.war import play_war_game
 
 
 def benchmark_python_war(iterations: int = 100) -> float:
@@ -1119,7 +1119,7 @@ git commit -m "docs: document Python-Go interface decision
 ## Task 8: Schema Versioning
 
 **Files:**
-- Create: `src/cards_evolve/genome/versioning.py`
+- Create: `src/darwindeck/genome/versioning.py`
 - Create: `tests/unit/test_genome_versioning.py`
 
 **Step 1: Write failing test for schema validation**
@@ -1130,8 +1130,8 @@ Create `tests/unit/test_genome_versioning.py`:
 """Tests for genome schema versioning."""
 
 import pytest
-from cards_evolve.genome.versioning import SchemaVersion, validate_schema_version
-from cards_evolve.genome.schema import GameGenome
+from darwindeck.genome.versioning import SchemaVersion, validate_schema_version
+from darwindeck.genome.schema import GameGenome
 
 
 def test_current_schema_version() -> None:
@@ -1166,13 +1166,13 @@ Expected: ImportError
 
 **Step 3: Write implementation**
 
-Create `src/cards_evolve/genome/versioning.py`:
+Create `src/darwindeck/genome/versioning.py`:
 
 ```python
 """Schema versioning for genome compatibility."""
 
 from typing import Set
-from cards_evolve.genome.schema import GameGenome
+from darwindeck.genome.schema import GameGenome
 
 
 class SchemaVersion:
@@ -1210,7 +1210,7 @@ Expected: 3 passed
 **Step 5: Commit**
 
 ```bash
-git add src/cards_evolve/genome/versioning.py tests/unit/test_genome_versioning.py
+git add src/darwindeck/genome/versioning.py tests/unit/test_genome_versioning.py
 git commit -m "feat: add genome schema versioning
 
 - Add SchemaVersion class with CURRENT and COMPATIBLE versions

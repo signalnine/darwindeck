@@ -1,8 +1,8 @@
 """Degenerate game detection (conservative initial approach)."""
 
 from typing import List
-from cards_evolve.genome.schema import GameGenome
-from cards_evolve.simulation.engine import GameResult
+from darwindeck.genome.schema import GameGenome
+from darwindeck.simulation.engine import GameResult
 
 
 class DegenGameDetector:

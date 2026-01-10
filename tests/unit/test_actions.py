@@ -1,7 +1,7 @@
 """Tests for three-tier action model."""
 
 import pytest
-from cards_evolve.genome.actions import (
+from darwindeck.genome.actions import (
     ActionType,
     PrimitiveAction,
     ConcreteAction,

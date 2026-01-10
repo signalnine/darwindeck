@@ -2,10 +2,10 @@
 
 from dataclasses import dataclass, field
 from typing import List
-from cards_evolve.genome.schema import GameGenome
-from cards_evolve.simulation.state import GameState
-from cards_evolve.simulation.interpreter import GenomeInterpreter
-from cards_evolve.simulation.players import AIPlayer
+from darwindeck.genome.schema import GameGenome
+from darwindeck.simulation.state import GameState
+from darwindeck.simulation.interpreter import GenomeInterpreter
+from darwindeck.simulation.players import AIPlayer
 
 
 @dataclass(frozen=True)
@@ -40,7 +40,7 @@ class GameEngine:
         seed: int
     ) -> GameResult:
         """Simulate a complete game using genome interpreter."""
-        from cards_evolve.simulation.movegen import (
+        from darwindeck.simulation.movegen import (
             generate_legal_moves,
             apply_move,
             check_win_conditions

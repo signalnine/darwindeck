@@ -32,7 +32,7 @@ This is comparing apples (optimized direct code) to oranges (generic genome inte
 ## What Was Accomplished
 
 ### 1. Bytecode Compilation System
-**File:** `src/cards_evolve/genome/bytecode.py`
+**File:** `src/darwindeck/genome/bytecode.py`
 
 Converts Python `GameGenome` objects to flat binary bytecode:
 - 36-byte header (metadata)
@@ -52,13 +52,13 @@ Zero-copy binary serialization:
 - AggregatedStats (wins, losses, avg turns, duration)
 
 **Generated bindings:**
-- Python: `src/cards_evolve/bindings/cardsim/`
+- Python: `src/darwindeck/bindings/cardsim/`
 - Go: `src/gosim/bindings/cardsim/`
 
 ### 3. CGo Bridge
 **Files:**
 - `src/gosim/cgo/bridge.go`
-- `src/cards_evolve/bindings/cgo_bridge.py`
+- `src/darwindeck/bindings/cgo_bridge.py`
 
 C foreign function interface for Python ↔ Go:
 - `SimulateBatch()`: Main entry point, returns unsafe.Pointer
@@ -153,7 +153,7 @@ The benchmark compares two fundamentally different implementations:
 | **Move Generation** | Hardcoded logic | Phase-based rule system |
 | **Card Comparison** | Direct rank comparison | Genome-driven conditions |
 | **Overhead** | Minimal (optimized for War) | Full interpreter stack |
-| **Source** | `src/cards_evolve/simulation/engine.py` (lines 74-122: "Simplified War simulation") | `src/gosim/engine/` (complete genome system) |
+| **Source** | `src/darwindeck/simulation/engine.py` (lines 74-122: "Simplified War simulation") | `src/gosim/engine/` (complete genome system) |
 
 The Python `engine.py` even has a comment: `# Simplified War simulation (proper logic comes later)`
 
@@ -229,8 +229,8 @@ The overhead is dominated by move generation and phase execution, which are nece
 ### New Files Created
 
 ```
-src/cards_evolve/genome/bytecode.py         - Bytecode compiler
-src/cards_evolve/bindings/cgo_bridge.py     - Python CGo wrapper
+src/darwindeck/genome/bytecode.py         - Bytecode compiler
+src/darwindeck/bindings/cgo_bridge.py     - Python CGo wrapper
 src/gosim/schemas/cardsim.fbs               - Flatbuffers schema
 src/gosim/cgo/bridge.go                     - CGo entry points
 src/gosim/engine/bytecode.go                - Bytecode parser
@@ -255,7 +255,7 @@ WAR_SIMULATION_FIX_SUMMARY.md               - War battle fix documentation
 ### Generated Files (by flatc)
 
 ```
-src/cards_evolve/bindings/cardsim/*.py      - Python Flatbuffers bindings
+src/darwindeck/bindings/cardsim/*.py      - Python Flatbuffers bindings
 src/gosim/bindings/cardsim/*.go             - Go Flatbuffers bindings
 ```
 

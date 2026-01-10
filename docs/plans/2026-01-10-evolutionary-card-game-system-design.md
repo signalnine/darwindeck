@@ -760,7 +760,7 @@ cards-evolve/
 
   src/
     # Python orchestration layer
-    cards_evolve/
+    darwindeck/
       __init__.py
 
       # Genome layer

@@ -1,7 +1,7 @@
 """Example game genomes for testing."""
 
 from typing import List
-from cards_evolve.genome.schema import (
+from darwindeck.genome.schema import (
     GameGenome,
     SetupRules,
     TurnStructure,
@@ -14,7 +14,7 @@ from cards_evolve.genome.schema import (
     Suit,
     Rank,
 )
-from cards_evolve.genome.conditions import Condition, ConditionType, Operator, CompoundCondition
+from darwindeck.genome.conditions import Condition, ConditionType, Operator, CompoundCondition
 
 
 def create_war_genome() -> GameGenome:

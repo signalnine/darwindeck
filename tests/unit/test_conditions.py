@@ -1,13 +1,13 @@
 """Tests for genome condition system."""
 
 import pytest
-from cards_evolve.genome.conditions import (
+from darwindeck.genome.conditions import (
     Condition,
     ConditionType,
     Operator,
     CompoundCondition,
 )
-from cards_evolve.genome.schema import Rank, Suit
+from darwindeck.genome.schema import Rank, Suit
 
 
 def test_simple_condition_creation() -> None:

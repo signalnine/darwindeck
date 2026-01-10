@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from typing import Dict, Optional
-from cards_evolve.genome.schema import GameGenome
+from darwindeck.genome.schema import GameGenome
 
 
 @dataclass(frozen=True)

@@ -1,10 +1,10 @@
 """Tests for fitness evaluation metrics."""
 
 import pytest
-from cards_evolve.evolution.fitness import CheapFitnessMetrics, calculate_cheap_metrics
-from cards_evolve.simulation.engine import GameEngine, GameResult
-from cards_evolve.simulation.players import RandomPlayer
-from cards_evolve.genome.examples import create_war_genome
+from darwindeck.evolution.fitness import CheapFitnessMetrics, calculate_cheap_metrics
+from darwindeck.simulation.engine import GameEngine, GameResult
+from darwindeck.simulation.players import RandomPlayer
+from darwindeck.genome.examples import create_war_genome
 
 
 def test_calculate_game_length() -> None:

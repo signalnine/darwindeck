@@ -3,7 +3,7 @@
 import ctypes
 from pathlib import Path
 import flatbuffers
-from cards_evolve.bindings.cardsim import BatchResponse
+from darwindeck.bindings.cardsim import BatchResponse
 
 # Load shared library
 LIB_PATH = Path(__file__).parent.parent.parent.parent / "libcardsim.so"

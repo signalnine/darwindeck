@@ -1,7 +1,7 @@
 """Tests for genome schema types."""
 
 import pytest
-from cards_evolve.genome.schema import Rank, Suit, GameGenome
+from darwindeck.genome.schema import Rank, Suit, GameGenome
 
 
 def test_rank_enum_has_all_ranks() -> None:

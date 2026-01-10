@@ -1,7 +1,7 @@
 """Tests for War game simulation."""
 
 import pytest
-from cards_evolve.simulation.war import WarGame, play_war_game
+from darwindeck.simulation.war import WarGame, play_war_game
 
 
 def test_war_game_initialization() -> None:

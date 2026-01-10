@@ -28,7 +28,7 @@
 ## Task 1: Enhanced Condition System
 
 **Files:**
-- Create: `src/cards_evolve/genome/conditions.py`
+- Create: `src/darwindeck/genome/conditions.py`
 - Create: `tests/unit/test_conditions.py`
 
 **Step 1: Write failing test for Condition types**
@@ -39,13 +39,13 @@ Create `tests/unit/test_conditions.py`:
 """Tests for genome condition system."""
 
 import pytest
-from cards_evolve.genome.conditions import (
+from darwindeck.genome.conditions import (
     Condition,
     ConditionType,
     Operator,
     CompoundCondition,
 )
-from cards_evolve.genome.schema import Rank, Suit
+from darwindeck.genome.schema import Rank, Suit
 
 
 def test_simple_condition_creation() -> None:
@@ -93,7 +93,7 @@ Expected: ImportError - module not found
 
 **Step 3: Write minimal implementation**
 
-Create `src/cards_evolve/genome/conditions.py`:
+Create `src/darwindeck/genome/conditions.py`:
 
 ```python
 """Condition system for composable game logic predicates."""
@@ -172,7 +172,7 @@ Expected: 3 passed
 **Step 5: Commit**
 
 ```bash
-git add src/cards_evolve/genome/conditions.py tests/unit/test_conditions.py
+git add src/darwindeck/genome/conditions.py tests/unit/test_conditions.py
 git commit -m "feat: add composable condition system
 
 - Add ConditionType enum with game predicates
@@ -187,7 +187,7 @@ git commit -m "feat: add composable condition system
 ## Task 2: Action System (Three-Tier Model)
 
 **Files:**
-- Create: `src/cards_evolve/genome/actions.py`
+- Create: `src/darwindeck/genome/actions.py`
 - Create: `tests/unit/test_actions.py`
 
 **Step 1: Write failing test for action types**
@@ -198,7 +198,7 @@ Create `tests/unit/test_actions.py`:
 """Tests for three-tier action model."""
 
 import pytest
-from cards_evolve.genome.actions import (
+from darwindeck.genome.actions import (
     ActionType,
     PrimitiveAction,
     ConcreteAction,
@@ -251,7 +251,7 @@ Expected: ImportError
 
 **Step 3: Write implementation**
 
-Create `src/cards_evolve/genome/actions.py`:
+Create `src/darwindeck/genome/actions.py`:
 
 ```python
 """Three-tier action model for game moves."""
@@ -259,8 +259,8 @@ Create `src/cards_evolve/genome/actions.py`:
 from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
-from cards_evolve.genome.schema import Location
-from cards_evolve.genome.conditions import ConditionOrCompound
+from darwindeck.genome.schema import Location
+from darwindeck.genome.conditions import ConditionOrCompound
 
 
 class ActionType(Enum):
@@ -316,7 +316,7 @@ Expected: 3 passed
 **Step 5: Commit**
 
 ```bash
-git add src/cards_evolve/genome/actions.py tests/unit/test_actions.py
+git add src/darwindeck/genome/actions.py tests/unit/test_actions.py
 git commit -m "feat: add three-tier action model
 
 - Add ActionType enum with player actions
@@ -331,7 +331,7 @@ git commit -m "feat: add three-tier action model
 ## Task 3: Immutable GameState
 
 **Files:**
-- Create: `src/cards_evolve/simulation/state.py`
+- Create: `src/darwindeck/simulation/state.py`
 - Create: `tests/unit/test_game_state.py`
 
 **Step 1: Write failing test for GameState immutability**
@@ -342,8 +342,8 @@ Create `tests/unit/test_game_state.py`:
 """Tests for immutable game state."""
 
 import pytest
-from cards_evolve.simulation.state import GameState, PlayerState, Card
-from cards_evolve.genome.schema import Rank, Suit
+from darwindeck.simulation.state import GameState, PlayerState, Card
+from darwindeck.genome.schema import Rank, Suit
 
 
 def test_card_immutability() -> None:
@@ -410,14 +410,14 @@ Expected: ImportError
 
 **Step 3: Write implementation**
 
-Create `src/cards_evolve/simulation/state.py`:
+Create `src/darwindeck/simulation/state.py`:
 
 ```python
 """Immutable game state representation."""
 
 from dataclasses import dataclass
 from typing import Optional
-from cards_evolve.genome.schema import Rank, Suit
+from darwindeck.genome.schema import Rank, Suit
 
 
 @dataclass(frozen=True)
@@ -487,7 +487,7 @@ Expected: 4 passed
 **Step 5: Commit**
 
 ```bash
-git add src/cards_evolve/simulation/state.py tests/unit/test_game_state.py
+git add src/darwindeck/simulation/state.py tests/unit/test_game_state.py
 git commit -m "feat: add immutable game state
 
 - Add Card dataclass (frozen)
@@ -503,7 +503,7 @@ git commit -m "feat: add immutable game state
 ## Task 4: War Genome Definition
 
 **Files:**
-- Create: `src/cards_evolve/genome/examples.py`
+- Create: `src/darwindeck/genome/examples.py`
 - Create: `tests/unit/test_war_genome.py`
 
 **Step 1: Write failing test for War genome**
@@ -514,8 +514,8 @@ Create `tests/unit/test_war_genome.py`:
 """Tests for War game genome definition."""
 
 import pytest
-from cards_evolve.genome.examples import create_war_genome
-from cards_evolve.genome.schema import GameGenome
+from darwindeck.genome.examples import create_war_genome
+from darwindeck.genome.schema import GameGenome
 
 
 def test_war_genome_structure() -> None:
@@ -561,12 +561,12 @@ Expected: ImportError
 
 **Step 3: Write implementation**
 
-Create `src/cards_evolve/genome/examples.py`:
+Create `src/darwindeck/genome/examples.py`:
 
 ```python
 """Example game genomes for testing."""
 
-from cards_evolve.genome.schema import (
+from darwindeck.genome.schema import (
     GameGenome,
     SetupRules,
     TurnStructure,
@@ -574,7 +574,7 @@ from cards_evolve.genome.schema import (
     WinCondition,
     Location,
 )
-from cards_evolve.genome.conditions import Condition, ConditionType, Operator
+from darwindeck.genome.conditions import Condition, ConditionType, Operator
 
 
 def create_war_genome() -> GameGenome:
@@ -626,7 +626,7 @@ def create_war_genome() -> GameGenome:
 
 **Step 4: Update schema.py to add missing types**
 
-Modify `src/cards_evolve/genome/schema.py`:
+Modify `src/darwindeck/genome/schema.py`:
 
 ```python
 # Add these dataclasses to schema.py:
@@ -699,7 +699,7 @@ Expected: 4 passed
 **Step 6: Commit**
 
 ```bash
-git add src/cards_evolve/genome/examples.py tests/unit/test_war_genome.py src/cards_evolve/genome/schema.py
+git add src/darwindeck/genome/examples.py tests/unit/test_war_genome.py src/darwindeck/genome/schema.py
 git commit -m "feat: add War game genome definition
 
 - Create create_war_genome factory function
@@ -714,7 +714,7 @@ git commit -m "feat: add War game genome definition
 ## Task 5: GenomeInterpreter (Interpreter Pattern)
 
 **Files:**
-- Create: `src/cards_evolve/simulation/interpreter.py`
+- Create: `src/darwindeck/simulation/interpreter.py`
 - Create: `tests/unit/test_interpreter.py`
 
 **Step 1: Write failing test for interpreter**
@@ -725,9 +725,9 @@ Create `tests/unit/test_interpreter.py`:
 """Tests for genome interpreter."""
 
 import pytest
-from cards_evolve.simulation.interpreter import GenomeInterpreter, GameLogic
-from cards_evolve.genome.examples import create_war_genome
-from cards_evolve.simulation.state import GameState
+from darwindeck.simulation.interpreter import GenomeInterpreter, GameLogic
+from darwindeck.genome.examples import create_war_genome
+from darwindeck.simulation.state import GameState
 
 
 def test_interpreter_creates_game_logic() -> None:
@@ -778,15 +778,15 @@ Expected: ImportError
 
 **Step 3: Write minimal implementation**
 
-Create `src/cards_evolve/simulation/interpreter.py`:
+Create `src/darwindeck/simulation/interpreter.py`:
 
 ```python
 """Genome interpreter - converts structured data to executable logic."""
 
 import random
 from typing import List
-from cards_evolve.genome.schema import GameGenome, Rank, Suit
-from cards_evolve.simulation.state import GameState, PlayerState, Card
+from darwindeck.genome.schema import GameGenome, Rank, Suit
+from darwindeck.simulation.state import GameState, PlayerState, Card
 
 
 class GameLogic:
@@ -859,7 +859,7 @@ Expected: 3 passed
 **Step 5: Commit**
 
 ```bash
-git add src/cards_evolve/simulation/interpreter.py tests/unit/test_interpreter.py
+git add src/darwindeck/simulation/interpreter.py tests/unit/test_interpreter.py
 git commit -m "feat: add genome interpreter (interpreter pattern)
 
 - Add GameLogic class (executable from genome)
@@ -875,8 +875,8 @@ git commit -m "feat: add genome interpreter (interpreter pattern)
 ## Task 6: Basic GameEngine with RandomPlayer
 
 **Files:**
-- Create: `src/cards_evolve/simulation/engine.py`
-- Create: `src/cards_evolve/simulation/players.py`
+- Create: `src/darwindeck/simulation/engine.py`
+- Create: `src/darwindeck/simulation/players.py`
 - Create: `tests/unit/test_engine.py`
 
 **Step 1: Write failing test for RandomPlayer**
@@ -887,9 +887,9 @@ Create `tests/unit/test_engine.py`:
 """Tests for game simulation engine."""
 
 import pytest
-from cards_evolve.simulation.engine import GameEngine, GameResult
-from cards_evolve.simulation.players import RandomPlayer
-from cards_evolve.genome.examples import create_war_genome
+from darwindeck.simulation.engine import GameEngine, GameResult
+from darwindeck.simulation.players import RandomPlayer
+from darwindeck.genome.examples import create_war_genome
 
 
 def test_game_engine_simulates_war() -> None:
@@ -942,7 +942,7 @@ Expected: ImportError
 
 **Step 3: Write implementation**
 
-Create `src/cards_evolve/simulation/players.py`:
+Create `src/darwindeck/simulation/players.py`:
 
 ```python
 """AI player implementations."""
@@ -950,7 +950,7 @@ Create `src/cards_evolve/simulation/players.py`:
 import random
 from abc import ABC, abstractmethod
 from typing import List
-from cards_evolve.simulation.state import GameState
+from darwindeck.simulation.state import GameState
 
 
 class AIPlayer(ABC):
@@ -983,17 +983,17 @@ class RandomPlayer(AIPlayer):
         return self.rng.choice(legal_actions)
 ```
 
-Create `src/cards_evolve/simulation/engine.py`:
+Create `src/darwindeck/simulation/engine.py`:
 
 ```python
 """Game simulation engine."""
 
 from dataclasses import dataclass, field
 from typing import List
-from cards_evolve.genome.schema import GameGenome
-from cards_evolve.simulation.state import GameState
-from cards_evolve.simulation.interpreter import GenomeInterpreter
-from cards_evolve.simulation.players import AIPlayer
+from darwindeck.genome.schema import GameGenome
+from darwindeck.simulation.state import GameState
+from darwindeck.simulation.interpreter import GenomeInterpreter
+from darwindeck.simulation.players import AIPlayer
 
 
 @dataclass(frozen=True)
@@ -1088,7 +1088,7 @@ class GameEngine:
 
 **Step 4: Add copy_with to PlayerState**
 
-Modify `src/cards_evolve/simulation/state.py`:
+Modify `src/darwindeck/simulation/state.py`:
 
 ```python
 # Add to PlayerState class:
@@ -1116,7 +1116,7 @@ Expected: 3 passed
 **Step 6: Commit**
 
 ```bash
-git add src/cards_evolve/simulation/engine.py src/cards_evolve/simulation/players.py tests/unit/test_engine.py src/cards_evolve/simulation/state.py
+git add src/darwindeck/simulation/engine.py src/darwindeck/simulation/players.py tests/unit/test_engine.py src/darwindeck/simulation/state.py
 git commit -m "feat: add game engine with RandomPlayer
 
 - Add AIPlayer abstract base class
@@ -1144,9 +1144,9 @@ Create `tests/property/test_interpreter_properties.py`:
 
 import pytest
 from hypothesis import given, strategies as st
-from cards_evolve.simulation.engine import GameEngine
-from cards_evolve.simulation.players import RandomPlayer
-from cards_evolve.genome.examples import create_war_genome
+from darwindeck.simulation.engine import GameEngine
+from darwindeck.simulation.players import RandomPlayer
+from darwindeck.genome.examples import create_war_genome
 
 
 @given(seed=st.integers(min_value=0, max_value=10000))
@@ -1198,7 +1198,7 @@ def test_game_terminates_property(seed: int) -> None:
 
 **Step 2: Add Optional import**
 
-Update `src/cards_evolve/simulation/players.py`:
+Update `src/darwindeck/simulation/players.py`:
 
 ```python
 from typing import List, Optional  # Add Optional
@@ -1216,7 +1216,7 @@ Expected: 3 passed (with multiple examples per test)
 **Step 4: Commit**
 
 ```bash
-git add tests/property/test_interpreter_properties.py src/cards_evolve/simulation/players.py
+git add tests/property/test_interpreter_properties.py src/darwindeck/simulation/players.py
 git commit -m "test: add property-based tests with Hypothesis
 
 - Add determinism property (same seed → same outcome)
@@ -1231,7 +1231,7 @@ git commit -m "test: add property-based tests with Hypothesis
 ## Task 8: Cheap Fitness Metrics
 
 **Files:**
-- Create: `src/cards_evolve/evolution/fitness.py`
+- Create: `src/darwindeck/evolution/fitness.py`
 - Create: `tests/unit/test_fitness.py`
 
 **Step 1: Write failing test for cheap metrics**
@@ -1242,10 +1242,10 @@ Create `tests/unit/test_fitness.py`:
 """Tests for fitness evaluation metrics."""
 
 import pytest
-from cards_evolve.evolution.fitness import CheapFitnessMetrics, calculate_cheap_metrics
-from cards_evolve.simulation.engine import GameEngine, GameResult
-from cards_evolve.simulation.players import RandomPlayer
-from cards_evolve.genome.examples import create_war_genome
+from darwindeck.evolution.fitness import CheapFitnessMetrics, calculate_cheap_metrics
+from darwindeck.simulation.engine import GameEngine, GameResult
+from darwindeck.simulation.players import RandomPlayer
+from darwindeck.genome.examples import create_war_genome
 
 
 def test_calculate_game_length() -> None:
@@ -1298,14 +1298,14 @@ Expected: ImportError
 
 **Step 3: Write implementation**
 
-Create `src/cards_evolve/evolution/fitness.py`:
+Create `src/darwindeck/evolution/fitness.py`:
 
 ```python
 """Fitness evaluation metrics (two-phase approach from consensus)."""
 
 from dataclasses import dataclass
 from typing import List
-from cards_evolve.simulation.engine import GameResult
+from darwindeck.simulation.engine import GameResult
 
 
 @dataclass(frozen=True)
@@ -1369,7 +1369,7 @@ Expected: 3 passed
 **Step 5: Commit**
 
 ```bash
-git add src/cards_evolve/evolution/fitness.py tests/unit/test_fitness.py
+git add src/darwindeck/evolution/fitness.py tests/unit/test_fitness.py
 git commit -m "feat: add cheap fitness metrics (Phase 1)
 
 - Add CheapFitnessMetrics dataclass
@@ -1385,7 +1385,7 @@ git commit -m "feat: add cheap fitness metrics (Phase 1)
 ## Task 9: Degenerate Game Detection
 
 **Files:**
-- Create: `src/cards_evolve/simulation/validation.py`
+- Create: `src/darwindeck/simulation/validation.py`
 - Create: `tests/unit/test_degenerate_detection.py`
 
 **Step 1: Write failing test for degenerate detection**
@@ -1396,10 +1396,10 @@ Create `tests/unit/test_degenerate_detection.py`:
 """Tests for degenerate game detection."""
 
 import pytest
-from cards_evolve.simulation.validation import DegenGameDetector
-from cards_evolve.simulation.engine import GameEngine, GameResult
-from cards_evolve.simulation.players import RandomPlayer
-from cards_evolve.genome.examples import create_war_genome
+from darwindeck.simulation.validation import DegenGameDetector
+from darwindeck.simulation.engine import GameEngine, GameResult
+from darwindeck.simulation.players import RandomPlayer
+from darwindeck.genome.examples import create_war_genome
 
 
 def test_war_is_not_too_short() -> None:
@@ -1420,7 +1420,7 @@ def test_war_is_not_too_short() -> None:
 def test_short_game_detected() -> None:
     """Test games that end too quickly are detected."""
     # Create fake results with very short games
-    from cards_evolve.simulation.state import GameState, PlayerState
+    from darwindeck.simulation.state import GameState, PlayerState
 
     fake_result = GameResult(
         winner=0,
@@ -1455,14 +1455,14 @@ Expected: ImportError
 
 **Step 3: Write implementation**
 
-Create `src/cards_evolve/simulation/validation.py`:
+Create `src/darwindeck/simulation/validation.py`:
 
 ```python
 """Degenerate game detection (conservative initial approach)."""
 
 from typing import List
-from cards_evolve.genome.schema import GameGenome
-from cards_evolve.simulation.engine import GameResult
+from darwindeck.genome.schema import GameGenome
+from darwindeck.simulation.engine import GameResult
 
 
 class DegenGameDetector:
@@ -1516,7 +1516,7 @@ Expected: 2 passed
 **Step 5: Commit**
 
 ```bash
-git add src/cards_evolve/simulation/validation.py tests/unit/test_degenerate_detection.py
+git add src/darwindeck/simulation/validation.py tests/unit/test_degenerate_detection.py
 git commit -m "feat: add degenerate game detection
 
 - Add DegenGameDetector class

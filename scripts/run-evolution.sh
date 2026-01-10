@@ -30,7 +30,7 @@ echo "🚀 Starting evolution..."
 export PYTHONUNBUFFERED=1
 export EVOLUTION_WORKERS=$WORKERS
 
-poetry run python -m cards_evolve.cli.evolve \
+poetry run python -m darwindeck.cli.evolve \
     --population-size $POPULATION \
     --generations $GENERATIONS \
     --output-dir "$OUTPUT_DIR" \

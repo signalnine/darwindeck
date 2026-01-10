@@ -5,7 +5,7 @@
 **Goal:** Implement high-performance Golang simulation core with CGo interface, achieving 10-50x speedup over pure Python
 
 **Plan Updates:**
-- Fixed all `cards_playtest` → `cards_evolve` references
+- Fixed all `cards_playtest` → `darwindeck` references
 - Updated Go module paths to use existing `src/gosim/` structure
 - Fixed test fixture references to use `create_war_genome()` from Phase 2
 - Added prerequisites section for flatbuffers installation
@@ -72,7 +72,7 @@ go get github.com/google/flatbuffers/go
 
 #### Step 1.1: Create bytecode schema (5 min)
 
-**File:** `src/cards_evolve/genome/bytecode.py`
+**File:** `src/darwindeck/genome/bytecode.py`
 
 ```python
 from enum import IntEnum
@@ -396,8 +396,8 @@ uv run pytest tests/genome/test_bytecode.py -v
 
 ```python
 import pytest
-from cards_evolve.genome.bytecode import BytecodeCompiler, BytecodeHeader, OpCode
-from cards_evolve.genome.schema import GameGenome, SetupRules, TurnStructure, PlayPhase, WinCondition, Condition, ConditionType, Operator, Location
+from darwindeck.genome.bytecode import BytecodeCompiler, BytecodeHeader, OpCode
+from darwindeck.genome.schema import GameGenome, SetupRules, TurnStructure, PlayPhase, WinCondition, Condition, ConditionType, Operator, Location
 
 def test_header_serialization():
     """Test header round-trip."""
@@ -422,7 +422,7 @@ def test_header_serialization():
 
 def test_compile_war_genome():
     """Test compiling War genome to bytecode."""
-    from cards_evolve.genome.examples import create_war_genome
+    from darwindeck.genome.examples import create_war_genome
 
     war = create_war_genome()
     compiler = BytecodeCompiler()
@@ -534,8 +534,8 @@ sudo apt-get install flatbuffers-compiler  # or brew install flatbuffers on macO
 
 **Generate Python bindings:**
 ```bash
-mkdir -p src/cards_evolve/bindings
-flatc --python -o src/cards_evolve/bindings schema/simulation.fbs
+mkdir -p src/darwindeck/bindings
+flatc --python -o src/darwindeck/bindings schema/simulation.fbs
 ```
 
 **Generate Go bindings:**
@@ -547,7 +547,7 @@ flatc --go -o src/gosim/bindings schema/simulation.fbs
 **Test:**
 ```bash
 # Verify generated files exist
-ls src/cards_evolve/bindings/cardsim/
+ls src/darwindeck/bindings/cardsim/
 ls src/gosim/bindings/cardsim/
 ```
 
@@ -676,14 +676,14 @@ ls libcardsim.so  # Should exist
 
 #### Step 3.3: Create Python wrapper (5 min)
 
-**File:** `src/cards_evolve/bindings/cgo_bridge.py`
+**File:** `src/darwindeck/bindings/cgo_bridge.py`
 
 ```python
 import ctypes
 from pathlib import Path
 from typing import List
 import flatbuffers
-from cards_evolve.bindings.cardsim import BatchRequest, BatchResponse
+from darwindeck.bindings.cardsim import BatchRequest, BatchResponse
 
 # Load shared library
 LIB_PATH = Path(__file__).parent.parent.parent.parent / "libcardsim.so"
@@ -1867,10 +1867,10 @@ Implement MCTS with memory pooling
 import json
 import random
 from pathlib import Path
-from cards_evolve.genome.schema import GameGenome, SetupRules, TurnStructure, PlayPhase, WinCondition, Condition, ConditionType, Location, Operator
-from cards_evolve.genome.bytecode import BytecodeCompiler
-from cards_evolve.simulation.state import GameState
-from cards_evolve.simulation.interpreter import GameLogic
+from darwindeck.genome.schema import GameGenome, SetupRules, TurnStructure, PlayPhase, WinCondition, Condition, ConditionType, Location, Operator
+from darwindeck.genome.bytecode import BytecodeCompiler
+from darwindeck.simulation.state import GameState
+from darwindeck.simulation.interpreter import GameLogic
 
 GOLDEN_DIR = Path(__file__).parent / "data"
 GOLDEN_DIR.mkdir(exist_ok=True)
@@ -1878,7 +1878,7 @@ GOLDEN_DIR.mkdir(exist_ok=True)
 def generate_war_golden():
     """Create golden file for War game."""
     # Load War genome from Phase 2
-    from cards_evolve.genome.examples import create_war_genome
+    from darwindeck.genome.examples import create_war_genome
 
     war = create_war_genome()
 
@@ -2489,11 +2489,11 @@ Add batch simulation engine with AI player support
 ```python
 """Benchmark Python vs Go batch simulation."""
 import time
-from cards_evolve.genome.bytecode import BytecodeCompiler
-from cards_evolve.bindings.cgo_bridge import simulate_batch
+from darwindeck.genome.bytecode import BytecodeCompiler
+from darwindeck.bindings.cgo_bridge import simulate_batch
 from tests.fixtures.war_genome import war
 import flatbuffers
-from cards_evolve.bindings.cardsim import SimulationRequest, BatchRequest
+from darwindeck.bindings.cardsim import SimulationRequest, BatchRequest
 
 def benchmark_go_batch():
     """Benchmark Go batch simulation."""
@@ -2643,7 +2643,7 @@ Add performance benchmarks and achieve 15x speedup
 ### CGo Interface
 
 ```python
-from cards_evolve.bindings.cgo_bridge import simulate_batch
+from darwindeck.bindings.cgo_bridge import simulate_batch
 
 # Python creates Flatbuffers request
 response = simulate_batch(batch_request_builder)

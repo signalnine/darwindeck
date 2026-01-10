@@ -29,7 +29,7 @@ Phase 3 successfully achieved the 10-50x speedup target by implementing:
 
 ### Why This Was Invalid
 
-The Python baseline (`src/cards_evolve/simulation/engine.py`) had a comment:
+The Python baseline (`src/darwindeck/simulation/engine.py`) had a comment:
 ```python
 # Simplified War simulation (proper logic comes later)
 ```
@@ -47,7 +47,7 @@ This is like comparing a sports car (optimized for one thing) to a truck (built 
 ### Python Genome-Based Implementation
 
 **New Files Created:**
-- `src/cards_evolve/simulation/movegen.py` - Move generation and War battle logic
+- `src/darwindeck/simulation/movegen.py` - Move generation and War battle logic
 - `benchmarks/benchmark_python_genome.py` - Python genome benchmark
 - `benchmarks/compare_genome_implementations.py` - Fair comparison
 
@@ -167,7 +167,7 @@ Estimated breakdown:
 ### New Python Files
 
 ```
-src/cards_evolve/simulation/movegen.py          - Move generation + War logic
+src/darwindeck/simulation/movegen.py          - Move generation + War logic
 benchmarks/benchmark_python_genome.py            - Python genome benchmark
 benchmarks/compare_genome_implementations.py     - Fair comparison script
 ```
@@ -175,8 +175,8 @@ benchmarks/compare_genome_implementations.py     - Fair comparison script
 ### Modified Python Files
 
 ```
-src/cards_evolve/simulation/engine.py           - Use genome interpreter (was stub)
-src/cards_evolve/simulation/interpreter.py      - Initialize tableau for games
+src/darwindeck/simulation/engine.py           - Use genome interpreter (was stub)
+src/darwindeck/simulation/interpreter.py      - Initialize tableau for games
 ```
 
 **Total Python code added:** ~250 lines
@@ -295,11 +295,11 @@ The 39.4x speedup is close to the geometric mean of the 10-50x target range. Thi
 
 ### Python Simulation
 
-- `src/cards_evolve/simulation/engine.py` - Game engine (now uses genome interpreter)
-- `src/cards_evolve/simulation/movegen.py` - **NEW:** Move generation + War logic
-- `src/cards_evolve/simulation/interpreter.py` - Genome interpreter (updated)
-- `src/cards_evolve/simulation/state.py` - Immutable game state
-- `src/cards_evolve/simulation/players.py` - AI players (not used in benchmark)
+- `src/darwindeck/simulation/engine.py` - Game engine (now uses genome interpreter)
+- `src/darwindeck/simulation/movegen.py` - **NEW:** Move generation + War logic
+- `src/darwindeck/simulation/interpreter.py` - Genome interpreter (updated)
+- `src/darwindeck/simulation/state.py` - Immutable game state
+- `src/darwindeck/simulation/players.py` - AI players (not used in benchmark)
 
 ### Go Simulation
 

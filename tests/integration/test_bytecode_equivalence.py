@@ -5,8 +5,8 @@ executed by the Go engine, validating the entire pipeline.
 """
 
 import pytest
-from cards_evolve.genome.bytecode import BytecodeCompiler
-from cards_evolve.genome.examples import create_war_genome
+from darwindeck.genome.bytecode import BytecodeCompiler
+from darwindeck.genome.examples import create_war_genome
 
 
 def compile_genome(genome):
@@ -106,8 +106,8 @@ class TestBytecodeEquivalence:
 
         This test requires CGo bindings to be built.
         """
-        from cards_evolve.bindings.cgo_bridge import simulate_batch
-        from cards_evolve.bindings.cardsim import (
+        from darwindeck.bindings.cgo_bridge import simulate_batch
+        from darwindeck.bindings.cardsim import (
             AggregatedStats,
             BatchRequest,
             SimulationRequest,

@@ -62,14 +62,14 @@ Phase 4 implements the evolutionary loop that generates novel card games by:
 
 #### Step 1.1: Define mutation types (10 min)
 
-**File:** `src/cards_evolve/evolution/operators.py`
+**File:** `src/darwindeck/evolution/operators.py`
 
 ```python
 """Genetic operators for GameGenome evolution."""
 from dataclasses import replace
 from typing import List, Callable
 import random
-from cards_evolve.genome.schema import (
+from darwindeck.genome.schema import (
     GameGenome, SetupRules, TurnStructure, PlayPhase, DrawPhase, DiscardPhase,
     Condition, ConditionType, Operator, Location, Rank, WinCondition, ScoringRule,
     SpecialEffect, Action, ActionType
@@ -380,7 +380,7 @@ def mutate_genome(genome: GameGenome, mutation_rate: float = 1.0) -> GameGenome:
 
 #### Step 1.2: Implement crossover (10 min)
 
-**File:** `src/cards_evolve/evolution/operators.py` (continued)
+**File:** `src/darwindeck/evolution/operators.py` (continued)
 
 ```python
 def crossover_genomes(parent1: GameGenome, parent2: GameGenome) -> tuple[GameGenome, GameGenome]:
@@ -432,12 +432,12 @@ def crossover_genomes(parent1: GameGenome, parent2: GameGenome) -> tuple[GameGen
 
 ```python
 import pytest
-from cards_evolve.evolution.operators import (
+from darwindeck.evolution.operators import (
     mutate_genome, crossover_genomes,
     TweakParameterMutation, SwapPhaseOrderMutation,
     AddPhaseMutation, RemovePhaseMutation
 )
-from cards_evolve.genome.examples import create_war_genome
+from darwindeck.genome.examples import create_war_genome
 
 
 def test_tweak_parameter_mutation():
@@ -460,7 +460,7 @@ def test_swap_phase_order_mutation():
     war = create_war_genome()
 
     # Add second phase so we can swap
-    from cards_evolve.genome.schema import DrawPhase, Location
+    from darwindeck.genome.schema import DrawPhase, Location
     phases = list(war.turn_structure.phases)
     phases.append(DrawPhase(source=Location.DECK, count=1, mandatory=True))
 
@@ -491,7 +491,7 @@ def test_remove_phase_mutation():
     war = create_war_genome()
 
     # Add second phase so we can remove one
-    from cards_evolve.genome.schema import DrawPhase, Location
+    from darwindeck.genome.schema import DrawPhase, Location
     from dataclasses import replace
     phases = list(war.turn_structure.phases)
     phases.append(DrawPhase(source=Location.DECK, count=1, mandatory=True))
@@ -515,7 +515,7 @@ def test_mutate_genome_increments_generation():
 
 def test_crossover_creates_valid_offspring():
     """Test crossover produces two children."""
-    from cards_evolve.genome.examples import create_crazy_eights_genome
+    from darwindeck.genome.examples import create_crazy_eights_genome
 
     war = create_war_genome()
     crazy8 = create_crazy_eights_genome()
@@ -583,7 +583,7 @@ Testing:
 
 #### Step 2.1: Define fitness metrics (15 min)
 
-**File:** `src/cards_evolve/evolution/fitness.py`
+**File:** `src/darwindeck/evolution/fitness.py`
 
 ```python
 """Fitness evaluation for game genomes."""
@@ -591,9 +591,9 @@ from dataclasses import dataclass
 from typing import List, Dict
 import hashlib
 import json
-from cards_evolve.genome.schema import GameGenome
-from cards_evolve.genome.bytecode import BytecodeCompiler
-from cards_evolve.bindings.cgo_bridge import simulate_batch
+from darwindeck.genome.schema import GameGenome
+from darwindeck.genome.bytecode import BytecodeCompiler
+from darwindeck.bindings.cgo_bridge import simulate_batch
 import flatbuffers
 
 
@@ -868,11 +868,11 @@ class FitnessEvaluator:
 
 #### Step 2.2: Add validation system (15 min)
 
-**File:** `src/cards_evolve/validation/schema_check.py`
+**File:** `src/darwindeck/validation/schema_check.py`
 
 ```python
 """Schema validation for game genomes."""
-from cards_evolve.genome.schema import GameGenome, PlayPhase, DrawPhase, DiscardPhase
+from darwindeck.genome.schema import GameGenome, PlayPhase, DrawPhase, DiscardPhase
 
 
 def validate_genome(genome: GameGenome) -> tuple[bool, str]:
@@ -961,12 +961,12 @@ def validate_and_repair(genome: GameGenome) -> GameGenome:
 
     # Add default win condition if missing
     if not repaired.win_conditions:
-        from cards_evolve.genome.schema import WinCondition
+        from darwindeck.genome.schema import WinCondition
         repaired = replace(repaired, win_conditions=[WinCondition(type="empty_hand")])
 
     # Add default phase if missing
     if not repaired.turn_structure.phases:
-        from cards_evolve.genome.schema import PlayPhase, Condition, ConditionType, Operator, Location
+        from darwindeck.genome.schema import PlayPhase, Condition, ConditionType, Operator, Location
         default_phase = PlayPhase(
             target=Location.DISCARD,
             valid_play_condition=Condition(
@@ -990,9 +990,9 @@ def validate_and_repair(genome: GameGenome) -> GameGenome:
 
 ```python
 import pytest
-from cards_evolve.evolution.fitness import FitnessEvaluator, FitnessCache, FitnessMetrics
-from cards_evolve.validation.schema_check import validate_genome, validate_and_repair
-from cards_evolve.genome.examples import create_war_genome
+from darwindeck.evolution.fitness import FitnessEvaluator, FitnessCache, FitnessMetrics
+from darwindeck.validation.schema_check import validate_genome, validate_and_repair
+from darwindeck.genome.examples import create_war_genome
 
 
 def test_fitness_cache():
@@ -1157,15 +1157,15 @@ Testing:
 
 #### Step 3.1: Population class (15 min)
 
-**File:** `src/cards_evolve/evolution/population.py`
+**File:** `src/darwindeck/evolution/population.py`
 
 ```python
 """Population management for genetic algorithm."""
 from dataclasses import dataclass
 from typing import List, Tuple
 import random
-from cards_evolve.genome.schema import GameGenome
-from cards_evolve.evolution.fitness import FitnessMetrics, FitnessEvaluator
+from darwindeck.genome.schema import GameGenome
+from darwindeck.evolution.fitness import FitnessMetrics, FitnessEvaluator
 
 
 @dataclass
@@ -1337,7 +1337,7 @@ def genome_distance(g1: GameGenome, g2: GameGenome) -> float:
         Returns:
             New population
         """
-        from cards_evolve.evolution.operators import mutate_genome
+        from darwindeck.evolution.operators import mutate_genome
 
         individuals = []
 
@@ -1399,7 +1399,7 @@ def select_parents(population: Population,
 
 #### Step 3.2: Seed population generation (10 min)
 
-**File:** `src/cards_evolve/genome/examples.py` (extend)
+**File:** `src/darwindeck/genome/examples.py` (extend)
 
 ```python
 # Add to existing examples.py
@@ -1469,11 +1469,11 @@ def get_seed_genomes() -> List[GameGenome]:
 
 ```python
 import pytest
-from cards_evolve.evolution.population import (
+from darwindeck.evolution.population import (
     Population, Individual, tournament_selection, select_parents
 )
-from cards_evolve.evolution.fitness import FitnessEvaluator, FitnessMetrics
-from cards_evolve.genome.examples import get_seed_genomes
+from darwindeck.evolution.fitness import FitnessEvaluator, FitnessMetrics
+from darwindeck.genome.examples import get_seed_genomes
 
 
 def test_create_initial_population():
@@ -1624,18 +1624,18 @@ Testing:
 
 #### Step 4.1: Main evolution loop (20 min)
 
-**File:** `src/cards_evolve/evolution/engine.py`
+**File:** `src/darwindeck/evolution/engine.py`
 
 ```python
 """Evolution engine orchestrating genetic algorithm."""
 from typing import List, Callable
 import time
 from dataclasses import dataclass
-from cards_evolve.genome.schema import GameGenome
-from cards_evolve.evolution.population import Population, Individual, select_parents
-from cards_evolve.evolution.operators import mutate_genome, crossover_genomes
-from cards_evolve.evolution.fitness import FitnessEvaluator
-from cards_evolve.validation.schema_check import validate_and_repair
+from darwindeck.genome.schema import GameGenome
+from darwindeck.evolution.population import Population, Individual, select_parents
+from darwindeck.evolution.operators import mutate_genome, crossover_genomes
+from darwindeck.evolution.fitness import FitnessEvaluator
+from darwindeck.validation.schema_check import validate_and_repair
 
 
 @dataclass
@@ -1842,17 +1842,17 @@ import random
 
 #### Step 4.2: CLI entry point (10 min)
 
-**File:** `src/cards_evolve/cli/evolve.py`
+**File:** `src/darwindeck/cli/evolve.py`
 
 ```python
 """CLI entry point for evolution."""
 import argparse
 from pathlib import Path
 import json
-from cards_evolve.evolution.engine import EvolutionEngine, EvolutionConfig
-from cards_evolve.evolution.fitness import FitnessEvaluator
-from cards_evolve.genome.examples import get_seed_genomes
-from cards_evolve.genome.bytecode import BytecodeCompiler
+from darwindeck.evolution.engine import EvolutionEngine, EvolutionConfig
+from darwindeck.evolution.fitness import FitnessEvaluator
+from darwindeck.genome.examples import get_seed_genomes
+from darwindeck.genome.bytecode import BytecodeCompiler
 
 
 def save_best_genome(genome, output_path: Path):
@@ -1927,7 +1927,7 @@ if __name__ == '__main__':
 **Test:**
 ```bash
 # Dry run with small population
-uv run python -m cards_evolve.cli.evolve --population 10 --generations 5
+uv run python -m darwindeck.cli.evolve --population 10 --generations 5
 ```
 
 **Expected:** Evolution runs for 5 generations, saves best genome
@@ -1952,7 +1952,7 @@ Breeding strategy:
 4. Mutation: apply mutation pipeline (100% rate, individual operators have lower rates)
 5. Repair: validate and fix invalid genomes
 
-CLI (cards_evolve.cli.evolve):
+CLI (darwindeck.cli.evolve):
 - Configurable population size, generations, rates
 - Saves best genome as bytecode
 - Exports evolution history as JSON
@@ -1980,9 +1980,9 @@ Testing:
 ```python
 """Integration test for full evolution loop."""
 import pytest
-from cards_evolve.evolution.engine import EvolutionEngine, EvolutionConfig
-from cards_evolve.evolution.fitness import FitnessEvaluator
-from cards_evolve.genome.examples import get_seed_genomes
+from darwindeck.evolution.engine import EvolutionEngine, EvolutionConfig
+from darwindeck.evolution.fitness import FitnessEvaluator
+from darwindeck.genome.examples import get_seed_genomes
 
 
 def test_evolution_loop_small_scale():
@@ -2082,9 +2082,9 @@ def test_diversity_metric():
 ```python
 """Property-based testing for genome evolution."""
 from hypothesis import given, strategies as st, settings
-from cards_evolve.evolution.operators import mutate_genome
-from cards_evolve.validation.schema_check import validate_genome, validate_and_repair
-from cards_evolve.genome.examples import create_war_genome
+from darwindeck.evolution.operators import mutate_genome
+from darwindeck.validation.schema_check import validate_genome, validate_and_repair
+from darwindeck.genome.examples import create_war_genome
 
 
 @given(mutation_rate=st.floats(min_value=0.0, max_value=2.0))

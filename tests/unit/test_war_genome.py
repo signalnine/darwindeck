@@ -1,8 +1,8 @@
 """Tests for War game genome definition."""
 
 import pytest
-from cards_evolve.genome.examples import create_war_genome
-from cards_evolve.genome.schema import GameGenome
+from darwindeck.genome.examples import create_war_genome
+from darwindeck.genome.schema import GameGenome
 
 
 def test_war_genome_structure() -> None:

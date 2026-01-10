@@ -1,11 +1,11 @@
 """Integration tests for evolution pipeline (Phase 4)."""
 
 import pytest
-from cards_evolve.evolution.engine import EvolutionEngine, EvolutionConfig
-from cards_evolve.evolution.population import Individual
-from cards_evolve.evolution.seeding import create_seed_population
-from cards_evolve.evolution.operators import create_default_pipeline, CrossoverOperator
-from cards_evolve.genome.examples import create_war_genome, create_hearts_genome
+from darwindeck.evolution.engine import EvolutionEngine, EvolutionConfig
+from darwindeck.evolution.population import Individual
+from darwindeck.evolution.seeding import create_seed_population
+from darwindeck.evolution.operators import create_default_pipeline, CrossoverOperator
+from darwindeck.genome.examples import create_war_genome, create_hearts_genome
 
 
 def test_seed_population_creation():

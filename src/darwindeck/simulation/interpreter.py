@@ -2,8 +2,8 @@
 
 import random
 from typing import List
-from cards_evolve.genome.schema import GameGenome, Rank, Suit, Location
-from cards_evolve.simulation.state import GameState, PlayerState, Card
+from darwindeck.genome.schema import GameGenome, Rank, Suit, Location
+from darwindeck.simulation.state import GameState, PlayerState, Card
 
 
 class GameLogic:

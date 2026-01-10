@@ -23,7 +23,7 @@ With Phase 3 now complete and validated, should we implement the deferred items 
 
 ### What Was Implemented
 
-**File:** `src/cards_evolve/genome/schema.py`
+**File:** `src/darwindeck/genome/schema.py`
 
 ✅ **Termination Guarantees**
 ```python

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is an evolutionary computation system that uses genetic algorithms and Monte Carlo simulations to evolve novel card games playable with a standard 52-card deck. The system optimizes for configurable parameters like complexity, session length, skill/luck ratio, and player count.
+**DarwinDeck** is an evolutionary computation system that uses genetic algorithms and Monte Carlo simulations to evolve novel card games playable with a standard 52-card deck. The system optimizes for configurable parameters like complexity, session length, skill/luck ratio, and player count.
 
 ## Core Architecture Concepts
 
@@ -42,7 +42,7 @@ The system implements **two-level parallelization** to maximize throughput on mu
 - **Memory overhead:** < 0.5% (negligible)
 
 ### Python-Level Parallelization (Phase 4)
-- **Implementation:** Process pool in `src/cards_evolve/evolution/parallel_fitness.py`
+- **Implementation:** Process pool in `src/darwindeck/evolution/parallel_fitness.py`
 - **Performance:** ~4x speedup on 4-core systems for population evaluation
 - **Usage:** Use `ParallelFitnessEvaluator` for evaluating multiple genomes
 - **Process-safe:** Each worker gets isolated Go simulator instance
@@ -116,7 +116,7 @@ When implementing, follow this sequence:
 **Implementation Status:** Core architecture complete, simulation logic in progress
 
 **Components Implemented:**
-1. **Bytecode Compiler** (`src/cards_evolve/genome/bytecode.py`)
+1. **Bytecode Compiler** (`src/darwindeck/genome/bytecode.py`)
    - Compiles GameGenome to 36-byte header + phase data
    - OpCodes for conditions (0-19), actions (20-39), control flow (40-49), operators (50-55)
    - War genome compiles to 77 bytes
@@ -127,7 +127,7 @@ When implementing, follow this sequence:
    - BatchRequest/BatchResponse for bulk simulation
    - Supports Random/Greedy/MCTS AI types (100/500/1000/2000 iterations)
 
-3. **CGo Bridge** (`src/gosim/cgo/bridge.go`, `src/cards_evolve/bindings/cgo_bridge.py`)
+3. **CGo Bridge** (`src/gosim/cgo/bridge.go`, `src/darwindeck/bindings/cgo_bridge.py`)
    - `libcardsim.so` shared library (1.8MB)
    - `SimulateBatch` entry point for batch processing
    - Memory management via `FreeCString`
@@ -179,7 +179,7 @@ When implementing, follow this sequence:
 
 **Implementation Details:**
 - Both use genome interpreter stack (move generation, phase execution, battle resolution)
-- Python: `src/cards_evolve/simulation/movegen.py` - immutable state with `copy_with()`
+- Python: `src/darwindeck/simulation/movegen.py` - immutable state with `copy_with()`
 - Go: `src/gosim/engine/movegen.go` - mutable state with `sync.Pool`
 - MCTS search: ~3ms per 100 iterations
 
@@ -253,7 +253,7 @@ uv run mypy src/
 ```
 cards-evolve/
 ├── src/
-│   ├── cards_evolve/          # Python package
+│   ├── darwindeck/          # Python package
 │   │   ├── genome/            # Game genome representation
 │   │   ├── simulation/        # Game simulation engines
 │   │   ├── evolution/         # Genetic algorithm

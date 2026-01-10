@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import random
 from typing import List
-from cards_evolve.genome.schema import GameGenome
-from cards_evolve.genome.examples import (
+from darwindeck.genome.schema import GameGenome
+from darwindeck.genome.examples import (
     create_war_genome,
     create_hearts_genome
 )
-from cards_evolve.evolution.operators import create_default_pipeline
-from cards_evolve.evolution.population import Individual
+from darwindeck.evolution.operators import create_default_pipeline
+from darwindeck.evolution.population import Individual
 
 
 def create_seed_population(
