@@ -1,0 +1,71 @@
+goos: linux
+goarch: amd64
+pkg: github.com/signalnine/cards-evolve/gosim/simulation
+cpu: Intel(R) N100
+BenchmarkParallel_Batch10-4              	     308	   3423848 ns/op	10137615 B/op	   17726 allocs/op
+BenchmarkParallel_Batch10-4              	     344	   3567786 ns/op	10216007 B/op	   17845 allocs/op
+BenchmarkParallel_Batch10-4              	     350	   3732823 ns/op	10285457 B/op	   17977 allocs/op
+BenchmarkParallel_Batch10-4              	     387	   3521870 ns/op	10234900 B/op	   17850 allocs/op
+BenchmarkParallel_Batch10-4              	     352	   3447228 ns/op	10255347 B/op	   17920 allocs/op
+BenchmarkParallel_Batch100-4             	      50	  30411656 ns/op	96843660 B/op	  168598 allocs/op
+BenchmarkParallel_Batch100-4             	      40	  29977384 ns/op	97188978 B/op	  169205 allocs/op
+BenchmarkParallel_Batch100-4             	      37	  28112653 ns/op	97038260 B/op	  169099 allocs/op
+BenchmarkParallel_Batch100-4             	      43	  30284801 ns/op	97110431 B/op	  169294 allocs/op
+BenchmarkParallel_Batch100-4             	      32	  32478819 ns/op	96373407 B/op	  167680 allocs/op
+BenchmarkParallel_Batch1000-4            	       4	 308021500 ns/op	1005947950 B/op	 1756514 allocs/op
+BenchmarkParallel_Batch1000-4            	       4	 333770268 ns/op	1007107306 B/op	 1758293 allocs/op
+BenchmarkParallel_Batch1000-4            	       4	 294957037 ns/op	1009749436 B/op	 1762944 allocs/op
+BenchmarkParallel_Batch1000-4            	       4	 335005054 ns/op	994857516 B/op	 1737563 allocs/op
+BenchmarkParallel_Batch1000-4            	       4	 318163274 ns/op	1008648612 B/op	 1762840 allocs/op
+BenchmarkParallel_Batch10000-4           	       1	3999549705 ns/op	10114184808 B/op	17676226 allocs/op
+BenchmarkParallel_Batch10000-4           	       1	4084721053 ns/op	10236179976 B/op	17894949 allocs/op
+BenchmarkParallel_Batch10000-4           	       1	3855177401 ns/op	10139840608 B/op	17704361 allocs/op
+BenchmarkParallel_Batch10000-4           	       1	3830455928 ns/op	10145631216 B/op	17738865 allocs/op
+BenchmarkParallel_Batch10000-4           	       1	3808245852 ns/op	10114999400 B/op	17676597 allocs/op
+BenchmarkParallel_AIRandom_Batch1000-4   	       4	 318269924 ns/op	1003735604 B/op	 1753425 allocs/op
+BenchmarkParallel_AIRandom_Batch1000-4   	       4	 293429823 ns/op	1007214830 B/op	 1757593 allocs/op
+BenchmarkParallel_AIRandom_Batch1000-4   	       3	 342592917 ns/op	1011993706 B/op	 1767522 allocs/op
+BenchmarkParallel_AIRandom_Batch1000-4   	       4	 313068058 ns/op	1012972146 B/op	 1767183 allocs/op
+BenchmarkParallel_AIRandom_Batch1000-4   	       4	 343099356 ns/op	1013565640 B/op	 1768526 allocs/op
+BenchmarkParallel_AIGreedy_Batch1000-4   	      48	  28044120 ns/op	80435214 B/op	  132381 allocs/op
+BenchmarkParallel_AIGreedy_Batch1000-4   	      40	  28940553 ns/op	80435797 B/op	  132383 allocs/op
+BenchmarkParallel_AIGreedy_Batch1000-4   	      45	  26847323 ns/op	80436209 B/op	  132389 allocs/op
+BenchmarkParallel_AIGreedy_Batch1000-4   	      38	  27326392 ns/op	80436182 B/op	  132389 allocs/op
+BenchmarkParallel_AIGreedy_Batch1000-4   	      39	  27989893 ns/op	80436325 B/op	  132392 allocs/op
+BenchmarkParallel_1Worker_Batch1000-4    	       4	 289537116 ns/op	1005780176 B/op	 1757400 allocs/op
+BenchmarkParallel_1Worker_Batch1000-4    	       4	 329376543 ns/op	1010325652 B/op	 1763862 allocs/op
+BenchmarkParallel_1Worker_Batch1000-4    	       3	 344018789 ns/op	1005193514 B/op	 1758431 allocs/op
+BenchmarkParallel_1Worker_Batch1000-4    	       4	 320299020 ns/op	1010787466 B/op	 1767654 allocs/op
+BenchmarkParallel_1Worker_Batch1000-4    	       4	 299976848 ns/op	999651396 B/op	 1747350 allocs/op
+BenchmarkParallel_2Workers_Batch1000-4   	       4	 296041273 ns/op	1010336070 B/op	 1765082 allocs/op
+BenchmarkParallel_2Workers_Batch1000-4   	       3	 345654366 ns/op	999296912 B/op	 1745872 allocs/op
+BenchmarkParallel_2Workers_Batch1000-4   	       4	 313000778 ns/op	1003611678 B/op	 1753182 allocs/op
+BenchmarkParallel_2Workers_Batch1000-4   	       4	 328116448 ns/op	1002398872 B/op	 1753052 allocs/op
+BenchmarkParallel_2Workers_Batch1000-4   	       4	 315397239 ns/op	1002039476 B/op	 1750278 allocs/op
+BenchmarkParallel_4Workers_Batch1000-4   	       4	 331120273 ns/op	1013819312 B/op	 1773112 allocs/op
+BenchmarkParallel_4Workers_Batch1000-4   	       3	 376250411 ns/op	1013300234 B/op	 1769842 allocs/op
+BenchmarkParallel_4Workers_Batch1000-4   	       4	 299542055 ns/op	997601868 B/op	 1743391 allocs/op
+BenchmarkParallel_4Workers_Batch1000-4   	       4	 314875996 ns/op	1004702170 B/op	 1753931 allocs/op
+BenchmarkParallel_4Workers_Batch1000-4   	       3	 333789218 ns/op	1001959349 B/op	 1748489 allocs/op
+BenchmarkParallel_8Workers_Batch1000-4   	       4	 316021120 ns/op	1005927028 B/op	 1757615 allocs/op
+BenchmarkParallel_8Workers_Batch1000-4   	       3	 333354599 ns/op	1020819234 B/op	 1784575 allocs/op
+BenchmarkParallel_8Workers_Batch1000-4   	       3	 340960069 ns/op	1008016728 B/op	 1764270 allocs/op
+BenchmarkParallel_8Workers_Batch1000-4   	       4	 308854291 ns/op	1008819400 B/op	 1762114 allocs/op
+BenchmarkParallel_8Workers_Batch1000-4   	       4	 352954312 ns/op	1001575414 B/op	 1751582 allocs/op
+BenchmarkParallel_Batch50-4              	      66	  15790259 ns/op	48046216 B/op	   83680 allocs/op
+BenchmarkParallel_Batch50-4              	      66	  16329821 ns/op	48600930 B/op	   84634 allocs/op
+BenchmarkParallel_Batch50-4              	      85	  15118435 ns/op	48148142 B/op	   83816 allocs/op
+BenchmarkParallel_Batch50-4              	      74	  14636163 ns/op	47718860 B/op	   83103 allocs/op
+BenchmarkParallel_Batch50-4              	      86	  15158707 ns/op	47454211 B/op	   82466 allocs/op
+BenchmarkParallel_Batch500-4             	       8	 169831260 ns/op	504187633 B/op	  879882 allocs/op
+BenchmarkParallel_Batch500-4             	       6	 167851978 ns/op	506067877 B/op	  885773 allocs/op
+BenchmarkParallel_Batch500-4             	       7	 161901689 ns/op	507832118 B/op	  887939 allocs/op
+BenchmarkParallel_Batch500-4             	       6	 166829679 ns/op	505863928 B/op	  882930 allocs/op
+BenchmarkParallel_Batch500-4             	       7	 164039243 ns/op	499822217 B/op	  872447 allocs/op
+BenchmarkParallel_Batch5000-4            	       1	1616949623 ns/op	5045832672 B/op	 8830780 allocs/op
+BenchmarkParallel_Batch5000-4            	       1	1725575378 ns/op	5086342456 B/op	 8885069 allocs/op
+BenchmarkParallel_Batch5000-4            	       1	1690645854 ns/op	5056243752 B/op	 8841849 allocs/op
+BenchmarkParallel_Batch5000-4            	       1	1786232096 ns/op	5069615544 B/op	 8865375 allocs/op
+BenchmarkParallel_Batch5000-4            	       1	1675870739 ns/op	5073786432 B/op	 8862762 allocs/op
+PASS
+ok  	github.com/signalnine/cards-evolve/gosim/simulation	134.216s
