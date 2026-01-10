@@ -1,0 +1,4 @@
+# file: /home/gabe/cards-playtest/src/cards_evolve/genome/schema.py
+# hypothesis_version: 6.150.0
+
+[100, '10', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'C', 'ConditionOrCompound', 'D', 'H', 'J', 'K', 'Phase', 'Q', 'S', 'deck', 'discard', 'hand', 'phases', 'standard_52', 'tableau']

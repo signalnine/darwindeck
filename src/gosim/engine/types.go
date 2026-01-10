@@ -29,9 +29,19 @@ type PlayerState struct {
 	Score  int32
 	Active bool // Still in the game (not folded/eliminated)
 	// Optional extensions for betting games
-	Chips      int32 // Chip/token count for betting games
-	CurrentBet int32 // Current bet in this round
+	Chips      int64 // Chip/token count for betting games (int64 for precision)
+	CurrentBet int64 // Current bet in this round (int64 for precision)
 	HasFolded  bool  // Folded this round
+}
+
+// Claim represents a bluffing claim for games like I Doubt It, Cheat, BS
+type Claim struct {
+	ClaimerID    uint8   // Who made the claim
+	ClaimedRank  uint8   // Claimed rank (0-12 for A-K)
+	ClaimedCount uint8   // Number of cards claimed
+	CardsPlayed  []Card  // Actual cards played (for verification)
+	Challenged   bool    // Has this claim been challenged?
+	ChallengerID uint8   // Who challenged (if Challenged=true)
 }
 
 // GameState is mutable and pooled
@@ -44,8 +54,10 @@ type GameState struct {
 	TurnNumber    uint32
 	WinnerID      int8 // -1 = no winner yet, 0/1 = player ID
 	// Optional extensions for betting games
-	Pot        int32 // Current pot size
-	CurrentBet int32 // Highest bet in current round
+	Pot        int64 // Current pot size (int64 for precision)
+	CurrentBet int64 // Highest bet in current round (int64 for precision)
+	// Optional extensions for bluffing games
+	CurrentClaim *Claim // nil if no active claim
 }
 
 // StatePool manages GameState memory
@@ -96,6 +108,7 @@ func (s *GameState) Reset() {
 	s.WinnerID = -1
 	s.Pot = 0
 	s.CurrentBet = 0
+	s.CurrentClaim = nil
 }
 
 // Clone creates a deep copy for MCTS tree search
@@ -130,6 +143,18 @@ func (s *GameState) Clone() *GameState {
 	clone.WinnerID = s.WinnerID
 	clone.Pot = s.Pot
 	clone.CurrentBet = s.CurrentBet
+
+	// Clone claim if present
+	if s.CurrentClaim != nil {
+		clone.CurrentClaim = &Claim{
+			ClaimerID:    s.CurrentClaim.ClaimerID,
+			ClaimedRank:  s.CurrentClaim.ClaimedRank,
+			ClaimedCount: s.CurrentClaim.ClaimedCount,
+			CardsPlayed:  append([]Card{}, s.CurrentClaim.CardsPlayed...),
+			Challenged:   s.CurrentClaim.Challenged,
+			ChallengerID: s.CurrentClaim.ChallengerID,
+		}
+	}
 
 	return clone
 }

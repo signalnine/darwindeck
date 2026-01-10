@@ -2,6 +2,7 @@ package main
 
 /*
 #include <stdlib.h>
+#include <string.h>
 */
 import "C"
 import (
@@ -26,7 +27,7 @@ type AggStats struct {
 }
 
 //export SimulateBatch
-func SimulateBatch(requestPtr unsafe.Pointer, requestLen C.int) *C.char {
+func SimulateBatch(requestPtr unsafe.Pointer, requestLen C.int, responseLen *C.int) unsafe.Pointer {
 	// Parse Flatbuffers request
 	requestBytes := C.GoBytes(requestPtr, requestLen)
 	batchRequest := cardsim.GetRootAsBatchRequest(requestBytes, 0)
@@ -94,14 +95,26 @@ func SimulateBatch(requestPtr unsafe.Pointer, requestLen C.int) *C.char {
 
 	builder.Finish(response)
 
-	// Return as C string (caller must free)
+	// Get response bytes
 	responseBytes := builder.FinishedBytes()
-	return C.CString(string(responseBytes))
+	*responseLen = C.int(len(responseBytes))
+
+	// Allocate C memory for response (caller must free)
+	cBytes := C.malloc(C.size_t(len(responseBytes)))
+	if cBytes == nil {
+		*responseLen = 0
+		return nil
+	}
+
+	// Copy Go bytes to C memory
+	C.memcpy(cBytes, unsafe.Pointer(&responseBytes[0]), C.size_t(len(responseBytes)))
+
+	return cBytes
 }
 
-//export FreeCString
-func FreeCString(s *C.char) {
-	C.free(unsafe.Pointer(s))
+//export FreeResponse
+func FreeResponse(ptr unsafe.Pointer) {
+	C.free(ptr)
 }
 
 func serializeStats(builder *flatbuffers.Builder, stats *AggStats) flatbuffers.UOffsetT {

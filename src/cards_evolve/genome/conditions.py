@@ -1,5 +1,7 @@
 """Condition system for composable game logic predicates."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from enum import Enum
 from typing import Optional, Union, List, Literal
@@ -26,6 +28,13 @@ class ConditionType(Enum):
     HAS_SET_OF_N = "has_set_of_n"  # N cards of same rank
     HAS_RUN_OF_N = "has_run_of_n"  # N cards in sequence
     HAS_MATCHING_PAIR = "has_matching_pair"  # Two cards with matching property
+
+    # NEW: Trick-taking conditions
+    MUST_FOLLOW_SUIT = "must_follow_suit"          # Player has card matching lead suit
+    HAS_TRUMP = "has_trump"                        # Player has trump cards
+    SUIT_BROKEN = "suit_broken"                    # Breaking suit has been played
+    IS_TRICK_WINNER = "is_trick_winner"            # Player won current trick
+    TRICK_CONTAINS_CARD = "trick_contains_card"    # Specific card in current trick
 
 
 class Operator(Enum):

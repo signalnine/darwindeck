@@ -2,33 +2,10 @@
 
 from dataclasses import dataclass, field
 from typing import List
-from cards_evolve.genome.schema import GameGenome, Rank
-from cards_evolve.simulation.state import GameState, Card
+from cards_evolve.genome.schema import GameGenome
+from cards_evolve.simulation.state import GameState
 from cards_evolve.simulation.interpreter import GenomeInterpreter
 from cards_evolve.simulation.players import AIPlayer
-
-
-# Rank value mapping for card comparison
-RANK_VALUES = {
-    Rank.TWO: 2,
-    Rank.THREE: 3,
-    Rank.FOUR: 4,
-    Rank.FIVE: 5,
-    Rank.SIX: 6,
-    Rank.SEVEN: 7,
-    Rank.EIGHT: 8,
-    Rank.NINE: 9,
-    Rank.TEN: 10,
-    Rank.JACK: 11,
-    Rank.QUEEN: 12,
-    Rank.KING: 13,
-    Rank.ACE: 14,  # Ace high in War
-}
-
-
-def get_rank_value(card: Card) -> int:
-    """Get numeric value for card rank."""
-    return RANK_VALUES[card.rank]
 
 
 @dataclass(frozen=True)
@@ -62,58 +39,55 @@ class GameEngine:
         players: List[AIPlayer],
         seed: int
     ) -> GameResult:
-        """Simulate a complete game.
+        """Simulate a complete game using genome interpreter."""
+        from cards_evolve.simulation.movegen import (
+            generate_legal_moves,
+            apply_move,
+            check_win_conditions
+        )
+        import random
 
-        For War (simplified): just play until someone runs out.
-        """
         logic = self.interpreter.to_executable(genome)
         state = logic.create_initial_state(seed)
 
+        # Create RNG for move selection
+        rng = random.Random(seed + 1000)  # Offset to avoid correlation with shuffle
+
         history: List[GameState] = [state]
+        winner = None
 
-        # Simplified War simulation (proper logic comes later)
+        # Game loop with genome-based move generation
         while state.turn < genome.max_turns:
-            # War: compare top cards
-            if len(state.players[0].hand) == 0:
-                winner = 1
-                break
-            if len(state.players[1].hand) == 0:
-                winner = 0
+            # Check win conditions
+            winner = check_win_conditions(state, genome)
+            if winner is not None:
                 break
 
-            p0_card = state.players[0].hand[0]
-            p1_card = state.players[1].hand[0]
+            # Generate legal moves
+            legal_moves = generate_legal_moves(state, genome)
 
-            # Compare ranks using numeric values (FIX for string comparison bug)
-            p0_hand = state.players[0].hand[1:]
-            p1_hand = state.players[1].hand[1:]
+            # Check for no legal moves
+            if not legal_moves:
+                # Game is stuck - determine winner by hand size
+                hand_sizes = [len(p.hand) for p in state.players]
+                max_size = max(hand_sizes)
+                winner = hand_sizes.index(max_size)
+                break
 
-            if get_rank_value(p0_card) > get_rank_value(p1_card):
-                # Player 0 wins
-                p0_hand = p0_hand + (p0_card, p1_card)
-            elif get_rank_value(p1_card) > get_rank_value(p0_card):
-                # Player 1 wins
-                p1_hand = p1_hand + (p1_card, p0_card)
-            else:
-                # Tie - simplified: return cards to bottom
-                p0_hand = p0_hand + (p0_card,)
-                p1_hand = p1_hand + (p1_card,)
+            # Choose move (for now, random selection)
+            # TODO: Use AI players for move selection
+            move_idx = rng.randint(0, len(legal_moves) - 1)
+            move = legal_moves[move_idx]
 
-            # Create next state
-            from cards_evolve.simulation.state import PlayerState
-            new_players = (
-                PlayerState(player_id=0, hand=p0_hand, score=0),
-                PlayerState(player_id=1, hand=p1_hand, score=0),
-            )
-            state = state.copy_with(
-                players=new_players,
-                turn=state.turn + 1
-            )
+            # Apply move
+            state = apply_move(state, move, genome)
             history.append(state)
 
-        else:
-            # Max turns reached
-            winner = 0 if len(state.players[0].hand) > len(state.players[1].hand) else 1
+        # If no winner after max turns, determine by hand size or score
+        if winner is None:
+            hand_sizes = [len(p.hand) for p in state.players]
+            max_size = max(hand_sizes)
+            winner = hand_sizes.index(max_size)
 
         return GameResult(
             winner=winner,
