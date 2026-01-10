@@ -2052,11 +2052,13 @@ Add golden test suite for Python↔Go equivalence
 
 ---
 
-### Task 8: Batch Processing Engine
+### Task 8: Batch Processing Engine with Parallelization
 
-**Goal:** Implement high-level batch runner for CGo interface
+**Goal:** Implement high-level batch runner for CGo interface with goroutine worker pool
 
-**Time Estimate:** 20 minutes
+**Time Estimate:** 35 minutes (20 min serial + 15 min parallel worker pool)
+
+**Performance Target:** 4x speedup on 4-core system via parallel execution
 
 #### Step 8.1: Create batch runner (15 min)
 
@@ -2226,7 +2228,195 @@ func CheckWinConditions(state *GameState, genome *Genome) int8 {
 }
 ```
 
-#### Step 8.2: Update CGo bridge to use batch runner (5 min)
+#### Step 8.2: Add parallel worker pool (15 min)
+
+**File:** `gosim/engine/parallel.go` (NEW)
+
+```go
+package engine
+
+import (
+	"runtime"
+	"sync"
+)
+
+// GameJob represents a single simulation job
+type GameJob struct {
+	GameIdx int
+	Seed    uint64
+}
+
+// GameResult holds result from one simulation
+type GameResult struct {
+	WinnerID   int8
+	TurnCount  uint32
+	HasError   bool
+}
+
+// RunBatchParallel executes batch simulations using worker pool
+// Achieves ~4x speedup on 4-core systems
+func RunBatchParallel(bytecode []byte, numGames int, aiType AIPlayerType, mctsIterations int, seed uint64) *AggStats {
+	// Parse genome once (shared across workers)
+	genome, err := ParseGenome(bytecode)
+	if err != nil {
+		return &AggStats{Errors: uint32(numGames)}
+	}
+
+	// Set up worker pool
+	numWorkers := runtime.NumCPU()  // Use all available cores
+	runtime.GOMAXPROCS(numWorkers)  // Ensure Go uses all cores
+
+	jobs := make(chan GameJob, numGames)
+	results := make(chan GameResult, numGames)
+
+	// Start workers
+	var wg sync.WaitGroup
+	for w := 0; w < numWorkers; w++ {
+		wg.Add(1)
+		go worker(&wg, jobs, results, bytecode, genome, aiType, mctsIterations)
+	}
+
+	// Queue all jobs
+	for gameIdx := 0; gameIdx < numGames; gameIdx++ {
+		jobs <- GameJob{
+			GameIdx: gameIdx,
+			Seed:    seed + uint64(gameIdx),
+		}
+	}
+	close(jobs)
+
+	// Wait for all workers to finish
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	// Aggregate results
+	stats := &AggStats{}
+	turnCounts := make([]uint32, 0, numGames)
+
+	for result := range results {
+		stats.TotalGames++
+
+		if result.HasError {
+			stats.Errors++
+			continue
+		}
+
+		switch result.WinnerID {
+		case 0:
+			stats.Player0Wins++
+		case 1:
+			stats.Player1Wins++
+		case -2:
+			stats.Draws++
+		}
+
+		turnCounts = append(turnCounts, result.TurnCount)
+	}
+
+	// Calculate statistics
+	if stats.TotalGames > 0 {
+		totalTurns := uint32(0)
+		for _, turns := range turnCounts {
+			totalTurns += turns
+		}
+		stats.AvgTurns = float32(totalTurns) / float32(stats.TotalGames)
+
+		if len(turnCounts) > 0 {
+			stats.MedianTurns = turnCounts[len(turnCounts)/2]
+		}
+	}
+
+	return stats
+}
+
+// worker runs simulations from job channel
+func worker(wg *sync.WaitGroup, jobs <-chan GameJob, results chan<- GameResult, bytecode []byte, genome *Genome, aiType AIPlayerType, mctsIter int) {
+	defer wg.Done()
+
+	// Get pooled state (thread-local, no sharing)
+	state := GetState()
+	defer PutState(state)
+
+	for job := range jobs {
+		result := runSingleGame(state, genome, aiType, mctsIter, job.Seed)
+		results <- result
+	}
+}
+
+// runSingleGame executes one simulation
+func runSingleGame(state *GameState, genome *Genome, aiType AIPlayerType, mctsIter int, seed uint64) GameResult {
+	// Reset state
+	state.Reset()
+
+	// Initialize deck
+	state.Deck = make([]Card, 52)
+	for i := 0; i < 52; i++ {
+		state.Deck[i] = Card{Rank: uint8(i % 13), Suit: uint8(i / 13)}
+	}
+	state.ShuffleDeck(seed)
+
+	// Deal cards
+	cardsPerPlayer := 26 // TODO: Parse from genome
+	for i := 0; i < cardsPerPlayer; i++ {
+		state.DrawCard(0, LocationDeck)
+		state.DrawCard(1, LocationDeck)
+	}
+
+	// Play game
+	maxTurns := int(genome.Header.MaxTurns)
+	for state.WinnerID < 0 && int(state.TurnNumber) < maxTurns {
+		moves := GenerateLegalMoves(state, genome)
+		if len(moves) == 0 {
+			return GameResult{WinnerID: -2, TurnCount: state.TurnNumber, HasError: false}  // Draw
+		}
+
+		var chosenMove *LegalMove
+		switch aiType {
+		case AIRandom:
+			chosenMove = &moves[len(moves)%len(moves)]  // Simplified
+		case AIGreedy:
+			chosenMove = chooseGreedyMove(state, moves)
+		case AIMCTSWeak, AIMCTSMedium, AIMCTSStrong:
+			chosenMove = chooseMCTSMove(state, genome, moves, mctsIter)
+		}
+
+		if chosenMove == nil {
+			return GameResult{WinnerID: -1, TurnCount: state.TurnNumber, HasError: true}
+		}
+
+		ApplyMove(state, chosenMove)
+		state.WinnerID = CheckWinConditions(state, genome)
+		state.TurnNumber++
+	}
+
+	return GameResult{
+		WinnerID:  state.WinnerID,
+		TurnCount: state.TurnNumber,
+		HasError:  false,
+	}
+}
+```
+
+**Performance Notes:**
+- `runtime.NumCPU()` auto-detects available cores (4 on this system)
+- Each worker has its own `GameState` from pool (no contention)
+- Channels are buffered to avoid blocking
+- Near-linear scaling expected (3.5-4x on 4 cores)
+
+**Commit:**
+```
+Add parallel worker pool for batch simulations
+
+- RunBatchParallel: worker pool pattern with goroutines
+- Auto-detects CPU cores (runtime.NumCPU())
+- Thread-local GameState from sync.Pool
+- Expected 4x speedup on 4-core systems
+- Lock-free (each worker has own state)
+```
+
+#### Step 8.3: Update CGo bridge to use parallel runner (5 min)
 
 **File:** `src/gosim/cgo/bridge.go` (update)
 
@@ -2257,8 +2447,8 @@ func SimulateBatch(requestPtr unsafe.Pointer, requestLen C.int) *C.char {
 		mctsIter := int(req.MctsIterations())
 		seed := req.RandomSeed()
 
-		// Run batch simulation
-		stats := engine.RunBatchSimulation(bytecode, numGames, aiType, mctsIter, seed)
+		// Run batch simulation (parallel worker pool)
+		stats := engine.RunBatchParallel(bytecode, numGames, aiType, mctsIter, seed)
 
 		// Serialize result
 		resultOffsets[i] = serializeStats(builder, stats)
@@ -2282,9 +2472,15 @@ Add batch simulation engine with AI player support
 
 ### Task 9: Performance Benchmarking
 
-**Goal:** Verify 10-50x speedup target is achievable
+**Goal:** Verify 40x speedup target is achievable (10x from Go + 4x from parallelization)
 
 **Time Estimate:** 20 minutes
+
+**Expected Performance:**
+- Python baseline: 70 μs/game (from Phase 1)
+- Go serial: 7 μs/game (10x speedup)
+- Go parallel (4 cores): 1.75 μs/game (40x speedup)
+- Throughput: 571,000 games/second on 4-core system
 
 #### Step 9.1: Create Python benchmark (5 min)
 
