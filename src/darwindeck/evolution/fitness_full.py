@@ -15,6 +15,13 @@ class SimulationResults:
     avg_turns: float
     errors: int
 
+    # Phase 1 instrumentation (optional, defaults to 0 for backward compatibility)
+    total_decisions: int = 0
+    total_valid_moves: int = 0
+    forced_decisions: int = 0
+    total_interactions: int = 0
+    total_actions: int = 0
+
 
 @dataclass(frozen=True)
 class FitnessMetrics:
@@ -100,20 +107,32 @@ class FitnessEvaluator:
                         use_mcts: bool) -> FitnessMetrics:
         """Compute fitness metrics from simulation results."""
 
-        # 1. Decision density - improved heuristic
-        # Consider: number of phases, optional vs mandatory, conditions
-        optional_phases = sum(1 for p in genome.turn_structure.phases
-                            if hasattr(p, 'mandatory') and not p.mandatory)
-        phase_count = len(genome.turn_structure.phases)
-        has_conditions = sum(1 for p in genome.turn_structure.phases
-                           if hasattr(p, 'condition') and p.condition is not None)
+        # 1. Decision density - use real data if available, else heuristic
+        if hasattr(results, 'total_decisions') and results.total_decisions > 0:
+            # Real instrumentation available (Phase 1)
+            avg_valid_moves = results.total_valid_moves / results.total_decisions
+            forced_ratio = results.forced_decisions / results.total_decisions
 
-        # Score based on: phases (cap at 6), optional phases, and conditions
-        decision_density = min(1.0, (
-            min(1.0, phase_count / 6.0) * 0.5 +  # More phases = more decisions
-            min(1.0, optional_phases / 3.0) * 0.3 +  # Optional phases = choices
-            min(1.0, has_conditions / 3.0) * 0.2  # Conditions = situational decisions
-        ))
+            # Score: High when many moves available, low when forced
+            # avg_valid_moves: 1 = forced, 2-3 = some choice, 4+ = rich decisions
+            # Cap at 6 valid moves as "perfect"
+            decision_density = min(1.0, (
+                min(1.0, (avg_valid_moves - 1) / 5.0) * 0.7 +  # Reward choice
+                (1.0 - forced_ratio) * 0.3  # Penalty for forced moves
+            ))
+        else:
+            # Fallback to heuristic (current implementation)
+            optional_phases = sum(1 for p in genome.turn_structure.phases
+                                if hasattr(p, 'mandatory') and not p.mandatory)
+            phase_count = len(genome.turn_structure.phases)
+            has_conditions = sum(1 for p in genome.turn_structure.phases
+                               if hasattr(p, 'condition') and p.condition is not None)
+
+            decision_density = min(1.0, (
+                min(1.0, phase_count / 6.0) * 0.5 +
+                min(1.0, optional_phases / 3.0) * 0.3 +
+                min(1.0, has_conditions / 3.0) * 0.2
+            ))
 
         # 2. Comeback potential (how balanced is the game?)
         win_rate_p0 = results.player0_wins / results.total_games if results.total_games > 0 else 0.5
@@ -127,17 +146,26 @@ class FitnessEvaluator:
         length_bonus = min(1.0, max(0.0, (results.avg_turns - 20) / 50.0))
         tension_curve = min(1.0, turn_score * 0.6 + length_bonus * 0.4)
 
-        # 4. Interaction frequency - improved heuristic
-        # Consider: special effects, trick-based play, multiple players
-        special_effects_score = min(1.0, len(genome.special_effects) / 3.0)
-        trick_based_score = 0.3 if genome.turn_structure.is_trick_based else 0.0
-        multi_phase_score = min(0.4, len(genome.turn_structure.phases) / 10.0)
+        # 4. Interaction frequency - use real data if available, else heuristic
+        if hasattr(results, 'total_actions') and results.total_actions > 0:
+            # Real instrumentation available (Phase 1)
+            interaction_ratio = results.total_interactions / results.total_actions
 
-        interaction_frequency = min(1.0,
-            special_effects_score * 0.4 +
-            trick_based_score +
-            multi_phase_score
-        )
+            # Score: Direct ratio of interactions to actions
+            # 0.0 = no interaction (solitaire), 0.5 = half actions interactive,
+            # 1.0 = all actions affect opponents (very interactive)
+            interaction_frequency = min(1.0, interaction_ratio)
+        else:
+            # Fallback to heuristic (current implementation)
+            special_effects_score = min(1.0, len(genome.special_effects) / 3.0)
+            trick_based_score = 0.3 if genome.turn_structure.is_trick_based else 0.0
+            multi_phase_score = min(0.4, len(genome.turn_structure.phases) / 10.0)
+
+            interaction_frequency = min(1.0,
+                special_effects_score * 0.4 +
+                trick_based_score +
+                multi_phase_score
+            )
 
         # 5. Rules complexity - separated into mechanical vs gameplay complexity
         # Mechanical complexity (simpler = better): phase count, mandatory steps

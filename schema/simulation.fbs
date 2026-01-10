@@ -35,6 +35,16 @@ table AggregatedStats {
   median_turns: uint32;
   avg_duration_ns: uint64;
   errors: uint32;              // Count of failed simulations
+
+  // Phase 1 instrumentation: Real gameplay metrics (v2.0)
+  // Decision density metrics
+  total_decisions: uint64;       // Total decision points across all games
+  total_valid_moves: uint64;     // Sum of valid moves at each decision point
+  forced_decisions: uint64;      // Decisions with only 1 valid move
+
+  // Interaction frequency metrics
+  total_interactions: uint64;    // Actions affecting opponent state
+  total_actions: uint64;         // Total actions taken
 }
 
 // Batch response
