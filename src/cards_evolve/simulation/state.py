@@ -24,6 +24,16 @@ class PlayerState:
     hand: tuple[Card, ...]
     score: int
 
+    def copy_with(self, **changes) -> "PlayerState":  # type: ignore
+        """Create new PlayerState with changes."""
+        current = {
+            "player_id": self.player_id,
+            "hand": self.hand,
+            "score": self.score,
+        }
+        current.update(changes)
+        return PlayerState(**current)
+
 
 @dataclass(frozen=True)
 class GameState:
