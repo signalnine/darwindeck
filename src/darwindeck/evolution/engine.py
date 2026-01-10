@@ -29,8 +29,8 @@ class EvolutionConfig:
     elitism_rate: float = 0.1  # Top 10% preserved
     crossover_rate: float = 0.7  # 70% undergo crossover
     tournament_size: int = 3
-    plateau_threshold: int = 30  # Generations without 1% improvement
-    improvement_threshold: float = 0.01  # 1% improvement
+    plateau_threshold: int = 100  # Generations without improvement (increased from 30)
+    improvement_threshold: float = 0.005  # 0.5% improvement (relaxed from 1%)
     diversity_threshold: float = 0.1  # Warn if diversity < 0.1
     seed_ratio: float = 0.7  # 70% known games, 30% mutants
     random_seed: Optional[int] = None
