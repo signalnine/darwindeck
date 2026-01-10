@@ -1,8 +1,16 @@
 # Phase 3: Golang Performance Core - Implementation Plan
 
-**Date:** 2026-01-10
+**Date:** 2026-01-10 (Updated with corrections)
 **Phase:** 3 of 4
 **Goal:** Implement high-performance Golang simulation core with CGo interface, achieving 10-50x speedup over pure Python
+
+**Plan Updates:**
+- Fixed all `cards_playtest` → `cards_evolve` references
+- Updated Go module paths to use existing `src/gosim/` structure
+- Fixed test fixture references to use `create_war_genome()` from Phase 2
+- Added prerequisites section for flatbuffers installation
+- Removed duplicate `checkWinConditions` function (now shared in engine package)
+- Updated golden test generation to match Phase 2 API
 
 ## Overview
 
@@ -459,19 +467,21 @@ sudo apt-get install flatbuffers-compiler  # or brew install flatbuffers on macO
 
 **Generate Python bindings:**
 ```bash
+mkdir -p src/cards_evolve/bindings
 flatc --python -o src/cards_evolve/bindings schema/simulation.fbs
 ```
 
 **Generate Go bindings:**
 ```bash
-flatc --go -o internal/bindings schema/simulation.fbs
+mkdir -p src/gosim/bindings
+flatc --go -o src/gosim/bindings schema/simulation.fbs
 ```
 
 **Test:**
 ```bash
 # Verify generated files exist
 ls src/cards_evolve/bindings/cardsim/
-ls internal/bindings/cardsim/
+ls src/gosim/bindings/cardsim/
 ```
 
 **Expected:** Python and Go packages generated with BatchRequest/BatchResponse types
@@ -495,7 +505,7 @@ Add Flatbuffers schema for batch simulation interface
 
 #### Step 3.1: Create Go entry point (10 min)
 
-**File:** `internal/cgo/bridge.go`
+**File:** `src/gosim/cgo/bridge.go`
 
 ```go
 package main
@@ -504,8 +514,8 @@ import "C"
 import (
 	"unsafe"
 	"github.com/google/flatbuffers/go"
-	"github.com/signalnine/cards-evolve/internal/bindings/cardsim"
-	"github.com/signalnine/cards-evolve/internal/engine"
+	"github.com/signalnine/cards-evolve/gosim/bindings/cardsim"
+	"github.com/signalnine/cards-evolve/gosim/engine"
 )
 
 //export SimulateBatch
@@ -581,8 +591,8 @@ func main() {} // Required for CGo
 .PHONY: build-cgo test-cgo clean
 
 build-cgo:
-	cd internal/cgo && \
-	go build -buildmode=c-shared -o ../../libcardsim.so bridge.go
+	cd src/gosim/cgo && \
+	go build -buildmode=c-shared -o ../../../libcardsim.so bridge.go
 
 test-cgo: build-cgo
 	uv run pytest tests/integration/test_cgo_bridge.py -v
@@ -657,7 +667,7 @@ Add CGo bridge for batch simulation
 
 #### Step 4.1: Define core types (10 min)
 
-**File:** `internal/engine/types.go`
+**File:** `gosim/engine/types.go`
 
 ```go
 package engine
@@ -773,7 +783,7 @@ func (s *GameState) Clone() *GameState {
 
 #### Step 4.2: Add move operations (10 min)
 
-**File:** `internal/engine/moves.go`
+**File:** `gosim/engine/moves.go`
 
 ```go
 package engine
@@ -848,7 +858,7 @@ func (s *GameState) ShuffleDeck(seed uint64) {
 
 #### Step 4.3: Create unit tests (5 min)
 
-**File:** `internal/engine/types_test.go`
+**File:** `gosim/engine/types_test.go`
 
 ```go
 package engine
@@ -930,7 +940,7 @@ func TestDrawAndPlay(t *testing.T) {
 
 **Test:**
 ```bash
-cd internal/engine && go test -v
+cd src/gosim/engine && go test -v
 ```
 
 **Expected:** All tests pass, pool reuses memory
@@ -956,7 +966,7 @@ Implement mutable GameState with memory pooling
 
 #### Step 5.1: Create bytecode reader (10 min)
 
-**File:** `internal/engine/bytecode.go`
+**File:** `gosim/engine/bytecode.go`
 
 ```go
 package engine
@@ -1141,7 +1151,7 @@ func (g *Genome) parseWinConditions() error {
 
 #### Step 5.2: Implement condition evaluation (10 min)
 
-**File:** `internal/engine/conditions.go`
+**File:** `gosim/engine/conditions.go`
 
 ```go
 package engine
@@ -1231,7 +1241,7 @@ func getReferencedCard(state *GameState, reference uint8) *Card {
 
 #### Step 5.3: Implement move generation (10 min)
 
-**File:** `internal/engine/movegen.go`
+**File:** `gosim/engine/movegen.go`
 
 ```go
 package engine
@@ -1356,7 +1366,7 @@ Add genome interpreter with bytecode execution
 
 #### Step 6.1: Create MCTS node structure (10 min)
 
-**File:** `internal/mcts/tree.go`
+**File:** `gosim/mcts/tree.go`
 
 ```go
 package mcts
@@ -1364,7 +1374,7 @@ package mcts
 import (
 	"math"
 	"sync"
-	"github.com/signalnine/cards-evolve/internal/engine"
+	"github.com/signalnine/cards-evolve/gosim/engine"
 )
 
 // Node represents MCTS tree node
@@ -1455,14 +1465,14 @@ func (n *Node) MostVisitedChild() *Node {
 
 #### Step 6.2: Implement MCTS algorithm (15 min)
 
-**File:** `internal/mcts/search.go`
+**File:** `gosim/mcts/search.go`
 
 ```go
 package mcts
 
 import (
 	"math/rand"
-	"github.com/signalnine/cards-evolve/internal/engine"
+	"github.com/signalnine/cards-evolve/gosim/engine"
 )
 
 const ExplorationParam = 1.41 // sqrt(2)
@@ -1559,33 +1569,9 @@ func simulate(state *engine.GameState, genome *engine.Genome, rng *rand.Rand) in
 }
 
 // checkWinConditions evaluates win conditions, returns winner ID or -1
+// NOTE: This will be moved to engine package to avoid duplication
 func checkWinConditions(state *engine.GameState, genome *engine.Genome) int8 {
-	for _, wc := range genome.WinConditions {
-		switch wc.WinType {
-		case 0: // empty_hand
-			for playerID, player := range state.Players {
-				if len(player.Hand) == 0 {
-					return int8(playerID)
-				}
-			}
-		case 1: // high_score
-			// TODO: Implement score-based win
-		case 2: // first_to_score
-			for playerID, player := range state.Players {
-				if player.Score >= wc.Threshold {
-					return int8(playerID)
-				}
-			}
-		case 3: // capture_all
-			for playerID, player := range state.Players {
-				if len(player.Hand) == 52 {
-					return int8(playerID)
-				}
-			}
-		}
-	}
-
-	return -1 // No winner yet
+	return engine.CheckWinConditions(state, genome)
 }
 
 // releaseTree recursively returns all nodes to pool
@@ -1599,7 +1585,7 @@ func releaseTree(node *Node) {
 
 #### Step 6.3: Add unit tests (10 min)
 
-**File:** `internal/mcts/search_test.go`
+**File:** `gosim/mcts/search_test.go`
 
 ```go
 package mcts
@@ -1607,7 +1593,7 @@ package mcts
 import (
 	"math/rand"
 	"testing"
-	"github.com/signalnine/cards-evolve/internal/engine"
+	"github.com/signalnine/cards-evolve/gosim/engine"
 )
 
 func TestNodePooling(t *testing.T) {
@@ -1669,7 +1655,7 @@ func BenchmarkMCTSSearch(b *testing.B) {
 
 **Test:**
 ```bash
-cd internal/mcts && go test -v -bench=.
+cd src/gosim/mcts && go test -v -bench=.
 ```
 
 **Expected:**
@@ -1773,7 +1759,7 @@ uv run python tests/golden/generate_golden.py
 
 #### Step 7.2: Create Go golden test (10 min)
 
-**File:** `internal/engine/golden_test.go`
+**File:** `gosim/engine/golden_test.go`
 
 ```go
 package engine
@@ -1873,7 +1859,7 @@ func TestGoldenWar(t *testing.T) {
 
 **Test:**
 ```bash
-cd internal/engine && go test -v -run TestGoldenWar
+cd src/gosim/engine && go test -v -run TestGoldenWar
 ```
 
 **Expected:** Test passes, all turns match Python trace
@@ -1897,14 +1883,14 @@ Add golden test suite for Python↔Go equivalence
 
 #### Step 8.1: Create batch runner (15 min)
 
-**File:** `internal/engine/batch.go`
+**File:** `gosim/engine/batch.go`
 
 ```go
 package engine
 
 import (
 	"math/rand"
-	"github.com/signalnine/cards-evolve/internal/mcts"
+	"github.com/signalnine/cards-evolve/gosim/mcts"
 )
 
 // AggStats holds aggregated simulation results
@@ -1994,7 +1980,7 @@ func RunBatchSimulation(bytecode []byte, numGames int, aiType AIPlayerType, mcts
 			ApplyMove(state, chosenMove, genome)
 
 			// Check win
-			state.WinnerID = checkWinConditions(state, genome)
+			state.WinnerID = CheckWinConditions(state, genome)
 		}
 
 		// Record results
@@ -2032,13 +2018,22 @@ func RunBatchSimulation(bytecode []byte, numGames int, aiType AIPlayerType, mcts
 	return stats
 }
 
-// Helper from mcts package
-func checkWinConditions(state *GameState, genome *Genome) int8 {
+// CheckWinConditions evaluates win conditions, returns winner ID or -1
+// Exported so mcts package can use it
+func CheckWinConditions(state *GameState, genome *Genome) int8 {
 	for _, wc := range genome.WinConditions {
 		switch wc.WinType {
 		case 0: // empty_hand
 			for playerID, player := range state.Players {
 				if len(player.Hand) == 0 {
+					return int8(playerID)
+				}
+			}
+		case 1: // high_score
+			// TODO: Implement score-based win
+		case 2: // first_to_score
+			for playerID, player := range state.Players {
+				if player.Score >= wc.Threshold {
 					return int8(playerID)
 				}
 			}
@@ -2056,11 +2051,11 @@ func checkWinConditions(state *GameState, genome *Genome) int8 {
 
 #### Step 8.2: Update CGo bridge to use batch runner (5 min)
 
-**File:** `internal/cgo/bridge.go` (update)
+**File:** `src/gosim/cgo/bridge.go` (update)
 
 ```go
 // ... (previous imports)
-import "github.com/signalnine/cards-evolve/internal/engine"
+import "github.com/signalnine/cards-evolve/gosim/engine"
 
 //export SimulateBatch
 func SimulateBatch(requestPtr unsafe.Pointer, requestLen C.int) *C.char {
@@ -2204,7 +2199,7 @@ If benchmark shows < 10x speedup:
 
 **Profile Go code:**
 ```bash
-cd internal/engine
+cd src/gosim/engine
 go test -bench=BenchmarkBatchSimulation -cpuprofile=cpu.prof
 go tool pprof cpu.prof
 ```
@@ -2295,7 +2290,7 @@ print(f"Win rate: {stats.Player0Wins() / stats.TotalGames()}")
 **Run Tests:**
 ```bash
 # Go unit tests
-cd internal/engine && go test -v
+cd src/gosim/engine && go test -v
 
 # Go golden tests
 go test -v -run TestGolden
@@ -2317,7 +2312,7 @@ make build-cgo
 make build-cgo && uv run pytest tests/integration/test_cgo_bridge.py
 
 # Profile Go code
-cd internal/engine
+cd src/gosim/engine
 go test -bench=. -cpuprofile=cpu.prof
 go tool pprof cpu.prof
 ```
