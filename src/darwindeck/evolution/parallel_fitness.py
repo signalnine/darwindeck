@@ -10,11 +10,12 @@ The two-level parallelization strategy:
 """
 
 from multiprocessing import Pool, cpu_count
-from typing import List, Optional, Callable, Tuple
+from typing import List, Optional, Callable
 from dataclasses import dataclass
 
 from darwindeck.genome.schema import GameGenome
 from darwindeck.evolution.fitness_full import FitnessMetrics, FitnessEvaluator, SimulationResults
+from darwindeck.simulation.go_simulator import GoSimulator
 
 
 @dataclass
@@ -34,7 +35,6 @@ class ParallelFitnessEvaluator:
     Usage:
         evaluator = ParallelFitnessEvaluator(
             evaluator_factory=lambda: FitnessEvaluator(),
-            simulator_factory=lambda: create_simulator(),
             num_workers=4
         )
         metrics = evaluator.evaluate_population(genomes)
@@ -43,7 +43,7 @@ class ParallelFitnessEvaluator:
     def __init__(
         self,
         evaluator_factory: Callable[[], FitnessEvaluator],
-        simulator_factory: Optional[Callable[[], 'Simulator']] = None,
+        simulator_factory: Optional[Callable[[], GoSimulator]] = None,
         num_workers: Optional[int] = None
     ):
         """Initialize parallel evaluator.
@@ -51,12 +51,12 @@ class ParallelFitnessEvaluator:
         Args:
             evaluator_factory: Factory function that creates a FitnessEvaluator
                               (called once per worker process)
-            simulator_factory: Factory function that creates a simulator
-                              (called once per worker process)
+            simulator_factory: Factory function that creates a GoSimulator
+                              (default: creates GoSimulator with worker-specific seed)
             num_workers: Number of worker processes (default: cpu_count())
         """
         self.evaluator_factory = evaluator_factory
-        self.simulator_factory = simulator_factory
+        self.simulator_factory = simulator_factory or (lambda: GoSimulator())
         self.num_workers = num_workers or cpu_count()
 
     def evaluate_population(
@@ -95,63 +95,40 @@ class ParallelFitnessEvaluator:
 
 # Global instances for each worker process
 _worker_evaluator: Optional[FitnessEvaluator] = None
-_worker_simulator: Optional['Simulator'] = None
+_worker_simulator: Optional[GoSimulator] = None
 
 
 def _worker_init(
     evaluator_factory: Callable[[], FitnessEvaluator],
-    simulator_factory: Optional[Callable[[], 'Simulator']]
+    simulator_factory: Callable[[], GoSimulator]
 ):
     """Initialize worker process with its own evaluator and simulator instances."""
     global _worker_evaluator, _worker_simulator
     _worker_evaluator = evaluator_factory()
-    if simulator_factory is not None:
-        _worker_simulator = simulator_factory()
+    _worker_simulator = simulator_factory()
 
 
 def _evaluate_task(task: EvaluationTask) -> FitnessMetrics:
     """Evaluate a single genome task (runs in worker subprocess).
 
     This function is called by multiprocessing.Pool.map() in each
-    worker process. It runs simulations and evaluates fitness.
+    worker process. It runs simulations using the Go engine and evaluates fitness.
     """
     global _worker_evaluator, _worker_simulator
     if _worker_evaluator is None:
         raise RuntimeError("Worker evaluator not initialized")
+    if _worker_simulator is None:
+        raise RuntimeError("Worker simulator not initialized")
 
-    # For now, create mock simulation results
-    # In a full implementation, this would use _worker_simulator
-    # to run actual simulations
-    results = _create_mock_results(task.genome, task.num_simulations)
+    # Run real simulations using Go engine
+    results = _worker_simulator.simulate(
+        task.genome,
+        num_games=task.num_simulations,
+        use_mcts=task.use_mcts
+    )
 
     return _worker_evaluator.evaluate(
         task.genome,
         results,
         use_mcts=task.use_mcts
-    )
-
-
-def _create_mock_results(genome: GameGenome, num_games: int) -> SimulationResults:
-    """Create mock simulation results for testing.
-
-    This is a placeholder until we have full simulator integration.
-    In production, this would be replaced by actual simulation calls.
-    """
-    # Mock balanced results with some variance
-    import hashlib
-    seed = int(hashlib.md5(genome.genome_id.encode()).hexdigest()[:8], 16)
-
-    # Use seed to create deterministic but varied results
-    p0_wins = (num_games // 2) + (seed % 10) - 5
-    p1_wins = num_games - p0_wins
-    draws = 0
-    avg_turns = 50.0 + (seed % 100)
-
-    return SimulationResults(
-        total_games=num_games,
-        player0_wins=p0_wins,
-        player1_wins=p1_wins,
-        draws=draws,
-        avg_turns=avg_turns,
-        errors=0
     )
