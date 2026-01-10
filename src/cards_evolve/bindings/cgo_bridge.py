@@ -10,10 +10,8 @@ LIB_PATH = Path(__file__).parent.parent.parent.parent / "libcardsim.so"
 _lib = ctypes.CDLL(str(LIB_PATH))
 
 # Define C function signatures
-_lib.SimulateBatch.argtypes = [ctypes.c_void_p, ctypes.c_int]
-_lib.SimulateBatch.restype = ctypes.c_char_p
-_lib.FreeCString.argtypes = [ctypes.c_char_p]
-_lib.FreeCString.restype = None
+_lib.SimulateBatch.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.POINTER(ctypes.c_int)]
+_lib.SimulateBatch.restype = ctypes.c_void_p
 
 
 def simulate_batch(batch_request_bytes: bytes) -> BatchResponse.BatchResponse:
@@ -28,17 +26,18 @@ def simulate_batch(batch_request_bytes: bytes) -> BatchResponse.BatchResponse:
     # Create buffer from bytes
     buf = ctypes.create_string_buffer(batch_request_bytes)
 
+    # Prepare output length
+    response_len = ctypes.c_int()
+
     # Call C function
     result_ptr = _lib.SimulateBatch(
         ctypes.cast(buf, ctypes.c_void_p),
-        len(batch_request_bytes)
+        len(batch_request_bytes),
+        ctypes.byref(response_len)
     )
 
-    # Convert result to Python bytes
-    result_bytes = ctypes.string_at(result_ptr)
-
-    # Free C memory
-    _lib.FreeCString(result_ptr)
+    # Copy result bytes
+    result_bytes = bytes(ctypes.string_at(result_ptr, response_len.value))
 
     # Parse Flatbuffers response
-    return BatchResponse.BatchResponse.GetRootAs(result_bytes, 0)
+    return BatchResponse.BatchResponse.GetRootAsBatchResponse(result_bytes, 0)

@@ -1,0 +1,4 @@
+# file: /home/gabe/cards-playtest/.venv/bin/pytest
+# hypothesis_version: 6.150.0
+
+['-script.pyw', '.exe', '__main__']

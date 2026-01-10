@@ -1,0 +1,4 @@
+# file: /home/gabe/cards-playtest/src/cards_evolve/genome/examples.py
+# hypothesis_version: 6.150.0
+
+[1000, '1.0', 'capture_all', 'hand', 'standard_52', 'war-baseline']

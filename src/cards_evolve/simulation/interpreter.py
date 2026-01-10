@@ -2,7 +2,7 @@
 
 import random
 from typing import List
-from cards_evolve.genome.schema import GameGenome, Rank, Suit
+from cards_evolve.genome.schema import GameGenome, Rank, Suit, Location
 from cards_evolve.simulation.state import GameState, PlayerState, Card
 
 
@@ -43,12 +43,22 @@ class GameLogic:
         # Remaining cards go to deck
         remaining_deck = tuple(deck[player_count * cards_per_player:])
 
+        # Check if game uses tableau (check if any phase targets tableau)
+        uses_tableau = any(
+            hasattr(phase, 'target') and phase.target == Location.TABLEAU
+            for phase in self.genome.turn_structure.phases
+        )
+
+        # Initialize tableau if needed
+        tableau = ((),) if uses_tableau else None
+
         return GameState(
             players=tuple(players),
             deck=remaining_deck,
             discard=(),
             turn=0,
-            active_player=0
+            active_player=0,
+            tableau=tableau
         )
 
 

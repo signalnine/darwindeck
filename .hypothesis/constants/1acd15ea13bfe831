@@ -1,0 +1,4 @@
+# file: /home/gabe/cards-playtest/src/cards_evolve/genome/conditions.py
+# hypothesis_version: 6.150.0
+
+['!=', '<', '<=', '==', '>', '>=', 'AND', 'ConditionOrCompound', 'OR', 'card_is_rank', 'card_matches_color', 'card_matches_rank', 'card_matches_suit', 'conditions', 'hand_size', 'location_empty', 'location_size', 'logic', 'player_has_card', 'score_compare', 'sequence_adjacent']

@@ -24,6 +24,7 @@ extern const char *_GoStringPtr(_GoString_ s);
 #line 3 "bridge.go"
 
 #include <stdlib.h>
+#include <string.h>
 
 #line 1 "cgo-generated-wrapper"
 
@@ -87,8 +88,8 @@ typedef struct { void *data; GoInt len; GoInt cap; } GoSlice;
 extern "C" {
 #endif
 
-extern char* SimulateBatch(void* requestPtr, int requestLen);
-extern void FreeCString(char* s);
+extern void* SimulateBatch(void* requestPtr, int requestLen, int* responseLen);
+extern void FreeResponse(void* ptr);
 
 #ifdef __cplusplus
 }

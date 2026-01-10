@@ -1,5 +1,7 @@
 """Core genome schema types and enumerations."""
 
+from __future__ import annotations
+
 from enum import Enum
 from typing import List, Optional, Union, TYPE_CHECKING
 from dataclasses import dataclass, field
@@ -81,6 +83,10 @@ class SetupRules:
     hand_visibility: Visibility = Visibility.OWNER_ONLY
     deck_visibility: Visibility = Visibility.FACE_DOWN
     discard_visibility: Visibility = Visibility.FACE_UP
+    # NEW: Trick-taking support
+    trump_suit: Optional[Suit] = None        # Fixed trump (e.g., Spades in some variants)
+    rotate_trump: bool = False               # Trump changes each hand
+    random_trump: bool = False               # Trump selected randomly
 
     def __post_init__(self):
         """Convert lists to tuples for immutability."""
@@ -101,13 +107,59 @@ class PlayPhase:
 
 
 @dataclass(frozen=True)
+class DrawPhase:
+    """Draw cards from a location."""
+
+    source: Location
+    count: int = 1
+    mandatory: bool = True
+    condition: Optional["ConditionOrCompound"] = None  # type: ignore
+
+
+@dataclass(frozen=True)
+class DiscardPhase:
+    """Discard cards to a location."""
+
+    target: Location
+    count: int = 1
+    mandatory: bool = False
+    matching_condition: Optional["ConditionOrCompound"] = None  # type: ignore
+
+
+@dataclass(frozen=True)
+class TrickPhase:
+    """
+    Trick-taking phase for games like Hearts, Spades, Bridge.
+
+    A trick consists of each player playing one card in turn.
+    The highest card (considering trump) wins the trick.
+    """
+    lead_suit_required: bool = True  # Must follow suit if able
+    trump_suit: Optional[Suit] = None  # Trump overrides suit hierarchy
+    high_card_wins: bool = True  # False for "lowest card wins" variants
+
+    # Optional: special rules
+    breaking_suit: Optional[Suit] = None  # Suit that cannot be played until "broken" (Hearts in Hearts)
+
+    def __post_init__(self):
+        """Convert lists to tuples for immutability."""
+        # No mutable fields currently, but keep pattern for consistency
+        pass
+
+
+@dataclass(frozen=True)
 class TurnStructure:
     """Ordered phases within a turn."""
 
     phases: tuple["Phase", ...]
+    # NEW: Trick-taking game structure
+    is_trick_based: bool = False  # True for Hearts, Spades, etc.
+    tricks_per_hand: Optional[int] = None  # Number of tricks in a hand (e.g., 13 for Hearts)
 
-    def __init__(self, phases: list) -> None:  # type: ignore
+    def __init__(self, phases: list, is_trick_based: bool = False, tricks_per_hand: Optional[int] = None) -> None:  # type: ignore
         object.__setattr__(self, "phases", tuple(phases))
+        object.__setattr__(self, "is_trick_based", is_trick_based)
+        object.__setattr__(self, "tricks_per_hand", tricks_per_hand)
 
 
 @dataclass(frozen=True)

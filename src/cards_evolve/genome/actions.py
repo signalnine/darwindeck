@@ -20,6 +20,13 @@ class ActionType(Enum):
     ADD_SCORE = "add_score"
     PASS = "pass"
 
+    # Trick-taking actions
+    LEAD_CARD = "lead_card"              # First card of trick
+    FOLLOW_SUIT = "follow_suit"          # Play card matching lead suit
+    PLAY_TRUMP = "play_trump"            # Play trump card
+    COLLECT_TRICK = "collect_trick"      # Winner takes trick cards
+    SCORE_TRICK = "score_trick"          # Score points based on trick contents
+
 
 @dataclass(frozen=True)
 class PrimitiveAction:
