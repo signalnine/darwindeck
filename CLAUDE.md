@@ -55,3 +55,67 @@ When implementing, follow this sequence:
 - MCTS approximates skilled play
 - Skill gap = MCTS win rate differential vs random baseline
 - Human playtesting validates proxy metrics correlate with actual enjoyment
+
+## Performance Benchmarks
+
+### Golang Core Validation (Phase 1)
+
+**War Game Benchmark:**
+- Python implementation: 0.07ms per game
+- Golang implementation: 0.03ms per game
+- Measured speedup: 2.9x
+
+**Interface Decision:** CGo
+
+**Rationale:** Despite modest speedup on simple War game, Golang provides measurable performance benefit. More complex simulations (MCTS, deep game trees) will show greater advantages. CGo chosen for tight integration without serialization overhead, critical for millions of evolutionary iterations.
+
+## Development Commands
+
+### Run Tests
+
+**Python:**
+```bash
+uv run pytest tests/ -v
+uv run pytest tests/unit/test_specific.py -v  # Single file
+```
+
+**Golang:**
+```bash
+cd src/gosim
+go test ./game -v
+go test ./game -bench=. -benchtime=10s
+```
+
+### Benchmarks
+
+```bash
+uv run python benchmarks/compare_war.py
+```
+
+### Code Quality
+
+```bash
+uv run black src/ tests/
+uv run mypy src/
+```
+
+## Project Structure
+
+```
+cards-evolve/
+├── src/
+│   ├── cards_evolve/          # Python package
+│   │   ├── genome/            # Game genome representation
+│   │   ├── simulation/        # Game simulation engines
+│   │   ├── evolution/         # Genetic algorithm
+│   │   └── cli/               # Command-line interface
+│   └── gosim/                 # Golang simulation core
+│       └── game/              # Card game primitives
+├── tests/
+│   ├── unit/                  # Unit tests
+│   └── integration/           # Integration tests
+├── benchmarks/                # Performance comparisons
+└── docs/
+    ├── architecture/          # Architecture decisions
+    └── plans/                 # Implementation plans
+```
