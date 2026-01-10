@@ -56,6 +56,10 @@ Each layer has clear interfaces, making components swappable. For example, you c
 
 ## Genome Structure
 
+**Design Decision (2026-01-10):** Multi-agent consensus review (all 3 agents) recommended against textual DSL. Using **Path A: Enhanced Dataclasses** with composable Condition/Action types.
+
+See `docs/genome-schema-examples.md` for complete schema and validation via known games (Crazy 8s, War, Gin Rummy).
+
 The `GameGenome` dataclass defines game rules through structured fields, generates Python code at runtime, and remains data for genetic operations.
 
 ### Core Genome Fields
