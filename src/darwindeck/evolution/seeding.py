@@ -15,14 +15,15 @@ from darwindeck.evolution.population import Individual
 
 def create_seed_population(
     size: int = 100,
-    seed_ratio: float = 0.7,
+    seed_ratio: float = 0.3,
     random_seed: int | None = None
 ) -> List[Individual]:
     """Create initial population with mix of known games and mutations.
 
     Args:
         size: Population size (default: 100)
-        seed_ratio: Ratio of known games to mutants (default: 0.7 for 70%)
+        seed_ratio: Ratio of known games to mutants (default: 0.3 for 30%)
+                   Reduced from 0.7 to encourage more exploration
         random_seed: Random seed for reproducibility
 
     Returns:
@@ -72,9 +73,9 @@ def create_seed_population(
         # Pick random base genome
         base_genome = random.choice(base_genomes)
 
-        # Apply mutations (1-3 rounds)
+        # Apply mutations (2-6 rounds for more exploration)
         mutated = base_genome
-        num_rounds = random.randint(1, 3)
+        num_rounds = random.randint(2, 6)
         for _ in range(num_rounds):
             mutated = mutation_pipeline.apply(mutated)
 

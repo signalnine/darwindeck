@@ -626,12 +626,12 @@ def create_default_pipeline() -> MutationPipeline:
         MutationPipeline with all 7 mutation operators
     """
     operators = [
-        TweakParameterMutation(probability=0.15),      # 15% - common tweaks
-        SwapPhaseOrderMutation(probability=0.10),      # 10% - reorder phases
-        AddPhaseMutation(probability=0.05),            # 5% - add phases
-        RemovePhaseMutation(probability=0.05),         # 5% - remove phases
-        ModifyConditionMutation(probability=0.10),     # 10% - tweak conditions
-        AddSpecialEffectMutation(probability=0.05),    # 5% - add effects
-        ModifyWinConditionMutation(probability=0.10),  # 10% - change win conditions
+        TweakParameterMutation(probability=0.25),      # 25% - common tweaks (was 15%)
+        SwapPhaseOrderMutation(probability=0.15),      # 15% - reorder phases (was 10%)
+        AddPhaseMutation(probability=0.10),            # 10% - add phases (was 5%)
+        RemovePhaseMutation(probability=0.10),         # 10% - remove phases (was 5%)
+        ModifyConditionMutation(probability=0.20),     # 20% - tweak conditions (was 10%)
+        AddSpecialEffectMutation(probability=0.10),    # 10% - add effects (was 5%)
+        ModifyWinConditionMutation(probability=0.15),  # 15% - change win conditions (was 10%)
     ]
     return MutationPipeline(operators)
