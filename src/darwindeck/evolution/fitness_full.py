@@ -40,17 +40,24 @@ class FitnessEvaluator:
         """Initialize fitness evaluator.
 
         Args:
-            weights: Metric weights (default: equal weights, session_length excluded)
+            weights: Metric weights (default: reweighted to favor skill and interaction)
             use_cache: Enable fitness caching
         """
         # Session length excluded from weights (it's a constraint, not a metric)
+        # Reweighted based on evolved game analysis (see docs/analysis-0.8403-ceiling.md):
+        # - Increased skill_vs_luck (0.30): Most important for game quality
+        # - Increased interaction_frequency (0.20): Enables interesting gameplay
+        # - Increased decision_density (0.20): Meaningful choices matter
+        # - Decreased rules_complexity (0.05): Was blocking special effects
+        # - Decreased tension_curve (0.10): Less critical, often saturated
+        # - Maintained comeback_potential (0.15): Balance still important
         self.weights = weights or {
-            'decision_density': 1.0,
-            'comeback_potential': 1.0,
-            'tension_curve': 1.0,
-            'interaction_frequency': 1.0,
-            'rules_complexity': 1.0,
-            'skill_vs_luck': 1.0,
+            'decision_density': 0.20,
+            'comeback_potential': 0.15,
+            'tension_curve': 0.10,
+            'interaction_frequency': 0.20,
+            'rules_complexity': 0.05,
+            'skill_vs_luck': 0.30,
         }
 
         # Normalize weights to sum to 1.0
@@ -132,14 +139,26 @@ class FitnessEvaluator:
             multi_phase_score
         )
 
-        # 5. Rules complexity (inverse - simpler is better)
-        complexity = (
-            len(genome.turn_structure.phases) +
-            len(genome.special_effects) * 2 +
-            len(genome.scoring_rules) +
-            len(genome.win_conditions)
-        )
-        rules_complexity = max(0.0, 1.0 - complexity / 20.0)
+        # 5. Rules complexity - separated into mechanical vs gameplay complexity
+        # Mechanical complexity (simpler = better): phase count, mandatory steps
+        mechanical_complexity = len(genome.turn_structure.phases)
+        mechanical_score = max(0.0, 1.0 - mechanical_complexity / 8.0)  # Cap at 8 phases
+
+        # Gameplay richness (richer = better, but balanced): special effects, scoring
+        # Special effects add interaction and interest (positive!)
+        # But too many can make game confusing (diminishing returns)
+        special_effects_count = len(genome.special_effects)
+        scoring_rules_count = len(genome.scoring_rules)
+
+        # Reward 1-3 special effects, neutral at 0, penalty beyond 5
+        effects_score = min(1.0, max(0.0, (
+            0.7 +  # Baseline for no effects
+            (special_effects_count / 3.0) * 0.5 -  # Reward up to 3 effects
+            max(0.0, (special_effects_count - 3) * 0.1)  # Penalty beyond 3
+        )))
+
+        # Combine: 60% mechanical simplicity, 40% gameplay richness
+        rules_complexity = mechanical_score * 0.6 + effects_score * 0.4
 
         # 6. Session length - CONSTRAINT, not metric
         estimated_duration_sec = results.avg_turns * 2  # 2 sec per turn
