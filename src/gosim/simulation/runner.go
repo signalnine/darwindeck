@@ -63,12 +63,16 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 	state := engine.GetState()
 	defer engine.PutState(state)
 
-	// Setup deck
+	// Setup deck and deal cards
 	setupDeck(state, seed)
 
-	// Deal initial hands (if specified in genome)
-	// For now, assume cards_per_player from setup
-	// TODO: Read from genome.Setup once parsed
+	// Deal 26 cards to each player (War game setup)
+	// TODO: Read cards_per_player from genome.Setup once parsed
+	cardsPerPlayer := 26
+	for i := 0; i < cardsPerPlayer; i++ {
+		state.DrawCard(0, engine.LocationDeck)
+		state.DrawCard(1, engine.LocationDeck)
+	}
 
 	// Game loop with turn limit protection
 	maxTurns := genome.Header.MaxTurns

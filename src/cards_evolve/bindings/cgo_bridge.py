@@ -25,9 +25,12 @@ def simulate_batch(batch_request_bytes: bytes) -> BatchResponse.BatchResponse:
     Returns:
         BatchResponse object
     """
+    # Create buffer from bytes
+    buf = ctypes.create_string_buffer(batch_request_bytes)
+
     # Call C function
     result_ptr = _lib.SimulateBatch(
-        ctypes.c_char_p(batch_request_bytes),
+        ctypes.cast(buf, ctypes.c_void_p),
         len(batch_request_bytes)
     )
 
