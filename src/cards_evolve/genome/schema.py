@@ -1,8 +1,11 @@
 """Core genome schema types and enumerations."""
 
 from enum import Enum
-from typing import List, Optional, Union
+from typing import List, Optional, Union, TYPE_CHECKING
 from dataclasses import dataclass, field
+
+if TYPE_CHECKING:
+    from cards_evolve.genome.conditions import ConditionOrCompound
 
 
 class Rank(Enum):
@@ -41,10 +44,56 @@ class Location(Enum):
     TABLEAU = "tableau"
 
 
-@dataclass
-class GameGenome:
-    """Placeholder for complete genome structure."""
+@dataclass(frozen=True)
+class SetupRules:
+    """Initial game configuration."""
 
-    schema_version: str = "1.0"
-    genome_id: str = ""
-    generation: int = 0
+    cards_per_player: int
+    initial_deck: str = "standard_52"
+    initial_discard_count: int = 0
+
+
+@dataclass(frozen=True)
+class PlayPhase:
+    """Play cards from hand."""
+
+    target: Location
+    valid_play_condition: "ConditionOrCompound"  # type: ignore
+    min_cards: int = 1
+    max_cards: int = 1
+    mandatory: bool = True
+    pass_if_unable: bool = True
+
+
+@dataclass(frozen=True)
+class TurnStructure:
+    """Ordered phases within a turn."""
+
+    phases: tuple["Phase", ...]
+
+    def __init__(self, phases: list) -> None:  # type: ignore
+        object.__setattr__(self, "phases", tuple(phases))
+
+
+@dataclass(frozen=True)
+class WinCondition:
+    """How to win the game."""
+
+    type: str  # "empty_hand", "high_score", "first_to_score", "capture_all"
+    threshold: Optional[int] = None
+
+
+@dataclass(frozen=True)
+class GameGenome:
+    """Complete game specification."""
+
+    schema_version: str
+    genome_id: str
+    generation: int
+    setup: SetupRules
+    turn_structure: TurnStructure
+    special_effects: list  # type: ignore
+    win_conditions: list[WinCondition]
+    scoring_rules: list  # type: ignore
+    max_turns: int = 100
+    player_count: int = 2
