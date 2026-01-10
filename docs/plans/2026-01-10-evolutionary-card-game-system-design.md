@@ -16,8 +16,10 @@ Build a production-ready system that uses genetic algorithms and Monte Carlo sim
 
 ## Technology Stack
 
-- **Language:** Python 3.11+
-- **Key Libraries:** numpy, pydantic, click, anthropic/openai, pytest, hypothesis
+- **Primary Language:** Python 3.11+ (orchestration, evolution, fitness evaluation)
+- **Performance Core:** Golang (simulation loops, MCTS tree search)
+- **Interface:** CGo bindings or gRPC for Python↔Golang communication
+- **Key Python Libraries:** numpy, pydantic, click, anthropic/openai, pytest, hypothesis
 - **Architecture:** Layered with plugin system
 - **Scale:** Medium (multi-core, hours per run, thousands of games per generation)
 
@@ -740,10 +742,12 @@ A production system needs comprehensive tests at multiple levels to ensure relia
 ```
 cards-evolve/
   pyproject.toml              # Poetry/pip config
+  go.mod                      # Go module dependencies
   README.md
   CLAUDE.md
 
   src/
+    # Python orchestration layer
     cards_evolve/
       __init__.py
 
@@ -755,12 +759,13 @@ cards-evolve/
         interpreter.py        # Genome → executable Python
         validator.py          # Validation logic
 
-      # Simulation layer
+      # Simulation layer (Python wrapper)
       simulation/
         __init__.py
-        engine.py             # GameEngine
+        engine.py             # GameEngine (delegates to Go)
         state.py              # GameState, GameLogic
-        ai_players.py         # RandomPlayer, GreedyPlayer, MCTSPlayer
+        ai_players.py         # RandomPlayer, GreedyPlayer (Python)
+        go_bridge.py          # Python↔Go interface
 
       # Evolution layer
       evolution/
@@ -784,21 +789,44 @@ cards-evolve/
         __init__.py
         generator.py          # RuleGenerator
         llm_client.py         # LLM API abstraction
+        validator.py          # RuleConsistencyValidator
+
+    # Golang performance core
+    gosim/
+      main.go                 # Entry point for gRPC server (if used)
+      game/
+        state.go              # GameState representation
+        logic.go              # Game simulation logic
+        actions.go            # Action representation
+      mcts/
+        tree.go               # MCTS tree structure
+        search.go             # UCB1 selection, rollouts
+        player.go             # MCTSPlayer variants
+      proto/
+        game.proto            # Protocol buffer definitions (if gRPC)
+        game.pb.go            # Generated protobuf code
 
   tests/
-    unit/
-    integration/
-    e2e/
+    python/
+      unit/
+      integration/
+      e2e/
+    go/
+      game_test.go            # Go unit tests
+      mcts_test.go
+      benchmark_test.go       # Performance benchmarks
     fixtures/                 # Sample genomes, test data
 
   experiments/                # Output directory (gitignored)
 
   docs/
     plans/                    # Design documents
+    architecture/             # Python↔Go interface specs
 ```
 
 ### Key Dependencies
 
+**Python Dependencies:**
 ```toml
 [tool.poetry.dependencies]
 python = "^3.11"
@@ -810,6 +838,25 @@ anthropic = "^0.18"          # Claude API (or openai)
 tqdm = "^4.66"               # Progress bars
 pytest = "^7.4"              # Testing
 hypothesis = "^6.92"         # Property-based testing
+
+# Choose one based on interface decision:
+grpcio = "^1.60"             # If using gRPC
+grpcio-tools = "^1.60"       # Protocol buffer compiler
+# OR
+cffi = "^1.16"               # If using CGo bindings
+```
+
+**Golang Dependencies:**
+```go
+// go.mod
+module github.com/youruser/cards-evolve
+
+go 1.21
+
+require (
+    google.golang.org/grpc v1.60.0     // If using gRPC
+    google.golang.org/protobuf v1.32.0 // Protocol buffers
+)
 ```
 
 ### Additional Considerations
@@ -822,47 +869,419 @@ hypothesis = "^6.92"         # Property-based testing
 
 ---
 
+## Architecture Review & Risk Mitigation
+
+**Multi-Agent Consensus Review Date:** 2026-01-10
+
+A multi-agent consensus review (Gemini + Codex) identified critical risks and design strengths. This section documents the findings and architectural decisions to address them.
+
+### Validated Strengths
+
+The consensus review confirmed these design decisions are sound:
+- **Immutable GameState** - Excellent for MCTS tree search and parallel safety
+- **Skill gradient via AI hierarchy** - Random → Greedy → MCTS is conceptually sophisticated
+- **Two-pass LLM rule generation** - High-value approach, separates content from style
+- **Reproducibility infrastructure** - Deterministic seeding and full tracking are well-designed
+- **Layered architecture** - Clean separation enables component swapping
+
+### Critical Risk: MCTS Performance Bottleneck
+
+**Consensus Finding:** Both reviewers identified Python MCTS performance as the highest implementation risk.
+
+**Analysis:**
+- Typical game: 50 turns
+- MCTS iterations per move: 100-10,000 depending on variant
+- Games per genome evaluation: 2,300 (1000 Random + 1000 Greedy + 100 MCTS + 200 mixed)
+- Result: Millions of Python loop iterations per genome evaluation
+- **Impact:** Could take days per generation instead of hours
+
+**Mitigation Strategy - Golang MCTS Core:**
+
+Use Golang for the performance-critical simulation and MCTS inner loops while keeping Python for orchestration, genetics, and fitness evaluation.
+
+```
+Architecture:
+┌─────────────────────────────────────┐
+│ Python Layer (Orchestration)        │
+│ - Evolution engine                  │
+│ - Fitness evaluation                │
+│ - Genetic operators                 │
+│ - CLI, tracking, rule generation    │
+└──────────────┬──────────────────────┘
+               │ CGo/gRPC interface
+┌──────────────▼──────────────────────┐
+│ Golang Core (Performance-Critical)  │
+│ - Game simulation loop              │
+│ - MCTS tree search (UCB1, rollouts) │
+│ - GameState operations              │
+│ - Move generation and validation    │
+└─────────────────────────────────────┘
+```
+
+**Interface Design:**
+
+Python sends genome representation and simulation parameters to Golang via:
+- **Option A:** CGo bindings (lower overhead, tighter coupling)
+- **Option B:** gRPC service (cleaner separation, easier debugging)
+
+Golang returns aggregated results (winner, turn count, decision points, state history for metrics).
+
+**Progressive Evaluation Strategy:**
+
+To further optimize performance:
+1. **Cheap tests first:** Run 1000 Random vs Random games (fast, validates playability)
+2. **Filter failures:** Discard genomes that timeout, deadlock, or have <20% completion rate
+3. **Medium tests:** Run 1000 Greedy vs Greedy on survivors
+4. **Expensive MCTS:** Run 100 MCTS games only on top 50% by Greedy fitness
+5. **Adaptive budgets:** Reduce MCTS iterations for genomes with low decision density
+
+**Estimated Performance Gains:**
+- Golang is ~10-50x faster than Python for tight loops
+- Progressive evaluation reduces MCTS workload by ~50-75%
+- Combined: 20-100x speedup, bringing generation time from days to hours
+
+### Critical Risk: Code Generation Ambiguity
+
+**Consensus Finding:** "The current 'Python generation' approach is underspecified and risky" (security, debugging, cache/pickling issues).
+
+**Clarification - Interpreter Pattern:**
+
+The system uses the **interpreter pattern**, NOT `exec()` or runtime code generation:
+
+```python
+class GenomeInterpreter:
+    def to_executable(self, genome: GameGenome) -> GameLogic:
+        """Convert genome data to executable game logic object."""
+        # Instantiate logic objects based on genome fields
+        setup = SetupLogic(genome.setup)
+        phases = [self._phase_factory(p) for p in genome.turn_phases]
+        effects = {r: self._effect_factory(e)
+                   for r, e in genome.special_effects.items()}
+
+        return GameLogic(
+            setup=setup,
+            phases=phases,
+            effects=effects,
+            win_conditions=genome.win_conditions,
+            scoring=genome.scoring
+        )
+```
+
+**Key Points:**
+- Genomes are pure data (dataclasses, JSON-serializable)
+- No code generation, no `exec()`, no security risk
+- Logic objects implement fixed interfaces (move validation, state transitions)
+- Safe to pickle and send across multiprocessing boundaries
+- Slower than compiled code (hence Golang core for inner loops)
+
+**Tradeoff Accepted:**
+The structured genome limits the types of games that can evolve (reviewers noted this). The alternative (AST manipulation) would be more expressive but far more fragile. If evolution stagnates due to genome constraints, we can revisit this decision.
+
+### Critical Risk: Fitness Metric Noise
+
+**Consensus Finding:** Metrics like "tension curve" and "decision density" need rigorous definitions to avoid optimizing garbage signals.
+
+**Mitigation - Formal Metric Definitions:**
+
+Add to fitness evaluation documentation:
+
+**Decision Density:**
+```python
+def _calc_decision_density(self, results: List[GameResult]) -> float:
+    """Ratio of turns with meaningful choices to total turns.
+
+    Meaningful choice = turn with 2+ legal actions where actions
+    lead to observably different outcomes (different scores, card counts,
+    or game state hash after 1 turn of simulation).
+    """
+    total_turns = sum(r.turn_count for r in results)
+    meaningful_turns = sum(
+        len([a for a in turn.legal_actions
+             if self._outcome_differs(turn.state, a)])
+        for r in results for turn in r.history
+    )
+    return meaningful_turns / total_turns if total_turns > 0 else 0.0
+```
+
+**Tension Curve:**
+```python
+def _calc_tension_score(self, results: List[GameResult]) -> float:
+    """Measure uncertainty in game outcome over time.
+
+    High tension = win probability stays near 50% until late game.
+    Low tension = runaway leader dominates early.
+
+    Computed as: average Shannon entropy of win probability
+    distribution over time, weighted toward late game.
+    """
+    scores = []
+    for result in results:
+        entropies = []
+        for i, snapshot in enumerate(result.history):
+            # Estimate win probability from state (heuristic evaluation)
+            probs = self._estimate_win_probs(snapshot.state)
+            entropy = -sum(p * log(p) for p in probs if p > 0)
+            # Weight later turns more heavily
+            weight = (i + 1) / len(result.history)
+            entropies.append(entropy * weight)
+        scores.append(mean(entropies))
+    return mean(scores)
+```
+
+**Comeback Potential:**
+```python
+def _calc_comeback_rate(self, results: List[GameResult]) -> float:
+    """Probability trailing player at midgame can still win.
+
+    At turn = floor(game_length * 0.5), identify player with lowest
+    score/card count. Measure how often they win from that position.
+    """
+    comebacks = 0
+    total_games = 0
+    for result in results:
+        if len(result.history) < 10:  # Skip very short games
+            continue
+        mid_idx = len(result.history) // 2
+        trailing_player = self._get_trailing_player(
+            result.history[mid_idx].state
+        )
+        if result.winner == trailing_player:
+            comebacks += 1
+        total_games += 1
+    return comebacks / total_games if total_games > 0 else 0.0
+```
+
+**Sanity Checks:**
+- Flag genomes with decision_density > 0.95 (suspiciously high, likely measurement error)
+- Flag genomes with tension_curve < 0.1 (trivial games) or > 5.0 (entropy overflow)
+- Require comeback_potential in [0.15, 0.45] range for "strategic-depth" profile
+
+### Moderate Risk: Degenerate Game Detection
+
+**Consensus Finding:** Search space contains far more broken games than playable ones. Current validation may be insufficient.
+
+**Enhanced Validation Pipeline:**
+
+```python
+class DegenGameDetector:
+    def is_degenerate(self, genome: GameGenome,
+                      results: List[GameResult]) -> bool:
+        """Detect degenerate games beyond basic validation."""
+
+        # Too short (games end immediately)
+        avg_length = mean(r.turn_count for r in results)
+        if avg_length < 5:
+            return True
+
+        # Too deterministic (no meaningful decisions)
+        decision_density = self._calc_decision_density(results)
+        if decision_density < 0.1:
+            return True
+
+        # All games end the same way (no variety)
+        endings = [self._classify_ending(r) for r in results]
+        if len(set(endings)) < 3:  # Need at least 3 different ending types
+            return True
+
+        # Same player always wins (broken balance)
+        win_rates = self._calc_win_rates_by_position(results)
+        if max(win_rates) > 0.95:  # Player 0 wins 95%+ of games
+            return True
+
+        return False
+```
+
+Add to validation stages:
+- **Post-simulation:** Run degenerate detector on RandomPlayer results
+- **Fitness penalty:** Reduce fitness by 50% for near-degenerate games (marginal cases)
+- **Population diversity:** Track ending variety across population, penalize homogeneity
+
+### Moderate Risk: Greedy Heuristics Undefined
+
+**Consensus Finding:** No specification for how Greedy players work across evolved games.
+
+**Generic Greedy Framework:**
+
+```python
+class GreedyPlayer(AIPlayer):
+    """Heuristic-based player using domain-agnostic scoring."""
+
+    def choose_action(self, state: GameState,
+                      logic: GameLogic) -> Action:
+        actions = logic.get_valid_actions(state)
+        if len(actions) == 1:
+            return actions[0]
+
+        # Score each action by simulating 1 step ahead
+        scores = []
+        for action in actions:
+            next_state = logic.apply_action(state, action)
+            score = self._evaluate_state(next_state, state.current_player)
+            scores.append(score)
+
+        return actions[argmax(scores)]
+
+    def _evaluate_state(self, state: GameState, player_id: int) -> float:
+        """Generic heuristic: fewer cards + higher score is better."""
+        my_cards = len(state.hands[player_id])
+        my_score = state.scores.get(player_id, 0)
+
+        # Normalize by opponents
+        opp_avg_cards = mean(len(state.hands[i])
+                            for i in range(len(state.hands))
+                            if i != player_id)
+        opp_avg_score = mean(state.scores.get(i, 0)
+                            for i in range(len(state.hands))
+                            if i != player_id)
+
+        # Simple linear combination (tunable weights)
+        return (opp_avg_cards - my_cards) * 1.0 + (my_score - opp_avg_score) * 0.5
+```
+
+**Limitations:** This greedy strategy may perform poorly on games where card count isn't meaningful (e.g., trick-taking games where temporary accumulation is required). Accept this as baseline; evolution will select games where the heuristic reveals skill differentiation.
+
+### Design Decision: LLM Pass 2 Verification
+
+**Consensus Finding:** Gemini warns copyediting may delete technical details ("face up" → removed).
+
+**Mitigation - Consistency Validation:**
+
+```python
+class RuleConsistencyValidator:
+    def validate_copyedit(self, draft: str, edited: str,
+                         genome: GameGenome) -> ValidationResult:
+        """Ensure Pass 2 didn't lose technical information."""
+
+        # Extract key terms from genome
+        required_terms = self._extract_required_terms(genome)
+        # Examples: "face up", "draw 2", "clockwise", "ace", "trump"
+
+        missing = []
+        for term in required_terms:
+            if term.lower() in draft.lower() and term.lower() not in edited.lower():
+                missing.append(term)
+
+        if missing:
+            return ValidationResult(
+                valid=False,
+                errors=[f"Pass 2 removed required term: {term}"
+                       for term in missing],
+                warnings=[]
+            )
+
+        return ValidationResult(valid=True, errors=[], warnings=[])
+```
+
+**Fallback Policy:** If consistency check fails, return Pass 1 output with a warning flag.
+
+### Missing Pieces Identified
+
+**To Address in Implementation:**
+
+1. **Schema Versioning:**
+   - Add `schema_version: str` to `GameGenome`
+   - Track version in experiment metadata
+   - Refuse to load genomes from incompatible schema versions
+
+2. **Concrete Action/GameLogic Interfaces:**
+   - Define `Action` base class with common fields (player_id, action_type)
+   - Specify `GameLogic.get_valid_actions()` signature and visibility rules
+   - Document how imperfect information (hidden hands) is handled
+
+3. **Resource Limits:**
+   - Per-worker memory limit (e.g., 2GB per subprocess)
+   - Per-simulation timeout (enforce at Golang level, not just Python max_turns)
+   - Genome cache size limits (LRU eviction for interpreted logic objects)
+
+4. **Rollback/Recovery:**
+   - Save evolution RNG state every N generations
+   - CLI command: `cards-evolve resume --rollback-to=generation_N`
+   - Rebuild population from saved generation + RNG state
+
+---
+
 ## Next Steps
 
 With this design in place, implementation should follow this sequence:
 
-1. **Foundation** (Week 1-2)
-   - Project scaffolding and dependencies
-   - GameGenome dataclass definitions
-   - GenomeValidator with basic rules
+### Phase 1: Foundation & Benchmarking (Week 1-2)
 
-2. **Simulation Core** (Week 2-3)
-   - GameState and GameLogic interfaces
-   - GenomeInterpreter (structured data → executable)
-   - GameEngine with RandomPlayer
-   - Basic fitness metrics
+**Critical: Address performance risk early**
 
-3. **Evolution Engine** (Week 3-4)
-   - GeneticOperators (mutation, crossover, selection)
-   - FitnessEvaluator with FitnessProfile
-   - EvolutionEngine orchestration
-   - Initial population generation
+- Project scaffolding (Python + Golang)
+- GameGenome dataclass definitions with schema versioning
+- GenomeValidator with basic rules
+- **Performance prototype:** Simple game simulation in both Python and Golang, measure speedup
+- Define Python↔Golang interface (protocol buffers for gRPC or C structs for CGo)
 
-4. **AI Players** (Week 4-5)
-   - GreedyPlayer with heuristics
-   - MCTSPlayer variants (weak/medium/strong)
-   - Skill gradient measurement
+### Phase 2: Python Simulation Core (Week 2-3)
 
-5. **CLI & Tracking** (Week 5-6)
-   - Command interface (run, resume, explain, export)
-   - ExperimentTracker persistence
-   - Progress display and logging
+**Build Python version first for rapid iteration**
 
-6. **Rule Generation** (Week 6)
-   - LLM client abstraction
-   - RuleGenerator with two-pass system (content generation + Elements of Style copyediting)
-   - Caching for both draft and final rules
-   - Fallback strategies for LLM failures
+- GameState and GameLogic interfaces (with Action abstraction)
+- GenomeInterpreter (interpreter pattern, NOT exec())
+- GameEngine with RandomPlayer
+- Basic fitness metrics with formal definitions (decision density, tension curve, comeback potential)
+- Enhanced degenerate game detection
+- Run small-scale tests, identify bottlenecks
 
-7. **Testing & Polish** (Week 7-8)
-   - Comprehensive test suite
-   - Performance optimization
-   - Documentation and examples
+### Phase 3: Golang Performance Core (Week 3-4)
+
+**Port performance-critical paths to Golang**
+
+- Implement GameState and move generation in Go
+- MCTS tree search (UCB1, rollouts) in Go
+- Python↔Go interface implementation (choose CGo or gRPC based on Week 1 prototype)
+- Benchmark: confirm 10-50x speedup on simulation loops
+- Progressive evaluation strategy implementation
+
+### Phase 4: Evolution Engine (Week 4-5)
+
+**With performance solved, build the evolutionary loop**
+
+- GeneticOperators (mutation, crossover, selection)
+- FitnessEvaluator with FitnessProfile
+- EvolutionEngine orchestration
+- Initial population generation
+- Integration with Golang simulation core
+
+### Phase 5: AI Players & Skill Measurement (Week 5-6)
+
+**Complete the AI hierarchy**
+
+- GreedyPlayer with generic heuristics (card count + score)
+- MCTSPlayer variants (weak/medium/strong) in Golang
+- Skill gradient measurement across player types
+- Validation that skill gradient metrics work as expected
+
+### Phase 6: CLI & Tracking (Week 6-7)
+
+**User-facing tools and persistence**
+
+- Command interface (run, resume, explain, export, replay)
+- ExperimentTracker persistence with rollback/recovery
+- Progress display and structured logging
+- Resource limits (memory, timeout) per worker
+
+### Phase 7: Rule Generation (Week 7)
+
+**Human-readable output**
+
+- LLM client abstraction (OpenAI, Anthropic)
+- RuleGenerator with two-pass system (content generation + Elements of Style copyediting)
+- RuleConsistencyValidator (check Pass 2 didn't lose technical details)
+- Caching for both draft and final rules
+- Fallback strategies for LLM failures
+
+### Phase 8: Testing & Polish (Week 8-9)
+
+**Production hardening**
+
+- Comprehensive test suite (unit, integration, e2e, property-based)
+- Performance benchmarks and optimization
+- Documentation and examples
+- Known game validation (Crazy 8s, Rummy genomes)
+- Human playtesting of top evolved games
 
 ---
 
