@@ -491,7 +491,12 @@ Show live progress bar, current generation, best fitness, ETA. Log to file for h
 
 ## Natural Language Rule Generator
 
-The rule generator converts evolved genomes into human-readable instructions for playtesting.
+The rule generator uses a two-pass system to convert evolved genomes into clear, human-readable instructions for playtesting.
+
+### Two-Pass Generation Process
+
+**Pass 1: Content Generation** - Focus on completeness and accuracy
+**Pass 2: Copyediting with Elements of Style** - Refine for clarity and conciseness
 
 ### RuleGenerator
 
@@ -505,18 +510,57 @@ class RuleGenerator:
         genome: GameGenome,
         sample_games: List[GameResult] = None
     ) -> str:
-        # Create structured prompt
-        prompt = self._build_prompt(genome, sample_games)
+        # Pass 1: Generate initial rules
+        draft_rules = self._generate_draft(genome, sample_games)
 
-        # Call LLM API
-        rules_text = self.client.generate(
+        # Pass 2: Copyedit with Elements of Style
+        final_rules = self._copyedit_with_strunk(draft_rules)
+
+        return final_rules
+
+    def _generate_draft(self, genome: GameGenome, samples):
+        prompt = self._build_generation_prompt(genome, samples)
+
+        draft = self.client.generate(
             prompt,
-            system="You are a card game rules writer. Generate clear, concise rules for human players."
+            system="You are a card game rules writer. Generate complete, accurate rules for human players. Focus on covering all game mechanics."
         )
 
-        return rules_text
+        return draft
 
-    def _build_prompt(self, genome: GameGenome, samples):
+    def _copyedit_with_strunk(self, draft_rules: str) -> str:
+        """Apply Elements of Style principles to improve clarity."""
+        copyedit_prompt = f"""
+Copyedit these card game rules following William Strunk Jr.'s Elements of Style principles:
+
+RULES TO EDIT:
+{draft_rules}
+
+Apply these principles:
+1. Use active voice (not "cards are dealt" but "deal cards")
+2. Put statements in positive form (not "do not play" but "discard")
+3. Use definite, specific, concrete language
+4. Omit needless words - be concise
+5. Keep related words together
+6. Place emphatic words at end of sentence
+
+Focus on:
+- Converting passive constructions to active
+- Removing wordy phrases ("the fact that", "in order to")
+- Making instructions direct and imperative
+- Ensuring clarity without repetition
+
+Return only the edited rules, maintaining all sections and game information.
+"""
+
+        edited = self.client.generate(
+            copyedit_prompt,
+            system="You are a copyeditor applying The Elements of Style to technical writing. Make the text clear, direct, and concise."
+        )
+
+        return edited
+
+    def _build_generation_prompt(self, genome: GameGenome, samples):
         return f"""
 Convert this game genome into human-readable rules:
 
@@ -538,6 +582,7 @@ SCORING:
 {self._format_sample_games(samples) if samples else ""}
 
 Generate a rulebook with sections: Setup, How to Play, Special Rules, Winning.
+Include examples where helpful.
 """
 ```
 
@@ -545,17 +590,30 @@ Generate a rulebook with sections: Setup, How to Play, Special Rules, Winning.
 
 Support multiple providers (OpenAI, Anthropic) via unified interface. Allow API key configuration via environment variables.
 
-### Rule Quality
+### Pass 1: Content Generation
 
-Include sample game walkthroughs in the prompt to give LLM concrete examples. This helps it explain edge cases and unusual rule interactions.
+The first pass focuses on completeness:
+- Convert all genome fields to natural language
+- Include sample game walkthroughs for concrete examples
+- Explain edge cases and unusual rule interactions
+- No optimization for style - just accuracy
+
+### Pass 2: Elements of Style Copyediting
+
+The second pass refines for clarity:
+- **Active voice**: "Deal 7 cards" not "7 cards are dealt"
+- **Positive form**: "Keep cards hidden" not "Don't show cards"
+- **Omit needless words**: "If you cannot play" not "In the case that you are unable to play"
+- **Concrete language**: "Draw 2 cards" not "Perform the draw action twice"
+- **Direct imperatives**: "Play a card" not "The player may choose to play a card"
 
 ### Caching
 
-Cache generated rules per genome_id to avoid redundant API calls during analysis.
+Cache both draft and final rules per genome_id to avoid redundant API calls during analysis. Store separately to enable regenerating just pass 2 if editing principles change.
 
 ### Fallback
 
-If LLM unavailable, provide template-based fallback that's less polished but functional.
+If LLM unavailable, provide template-based fallback that's less polished but functional. Skip pass 2 if copyediting fails, returning pass 1 output.
 
 ---
 
@@ -646,12 +704,16 @@ A production system needs comprehensive tests at multiple levels to ensure relia
 - Evolution pipeline (generation → evaluation → selection → breeding)
 - ExperimentTracker persistence (save/load round-trip)
 - CLI commands (run, resume, explain, export)
+- Two-pass rule generation (draft → copyedit → final output)
+- Rule caching (same genome returns cached result)
 
 **End-to-End Tests** - Full system validation
 - Small evolution runs (5 generations, 10 population) complete successfully
 - Known game genomes (manually crafted "Crazy 8s" genome) simulate correctly
 - Fitness profiles produce expected selection pressure
 - Generated rules are readable and accurate
+- Copyedited rules use active voice and omit needless words (manual review)
+- Pass 2 fallback works when copyediting fails
 
 **Property-Based Tests** - Generative testing with hypothesis
 - Any valid genome should simulate without errors
@@ -793,8 +855,9 @@ With this design in place, implementation should follow this sequence:
 
 6. **Rule Generation** (Week 6)
    - LLM client abstraction
-   - RuleGenerator with prompts
-   - Caching and fallback strategies
+   - RuleGenerator with two-pass system (content generation + Elements of Style copyediting)
+   - Caching for both draft and final rules
+   - Fallback strategies for LLM failures
 
 7. **Testing & Polish** (Week 7-8)
    - Comprehensive test suite
