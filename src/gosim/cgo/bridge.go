@@ -92,12 +92,12 @@ func SimulateBatch(requestPtr unsafe.Pointer, requestLen C.int, responseLen *C.i
 			p1AI = simulation.AIPlayerType(p1Override - 1)
 		}
 
-		// Run batch simulation (symmetric or asymmetric)
+		// Run batch simulation (symmetric or asymmetric) using parallel workers
 		var simStats simulation.AggregatedStats
 		if p0AI == p1AI {
-			simStats = simulation.RunBatch(genome, int(req.NumGames()), p0AI, mctsIter, seed)
+			simStats = simulation.RunBatchParallel(genome, int(req.NumGames()), p0AI, mctsIter, seed)
 		} else {
-			simStats = simulation.RunBatchAsymmetric(genome, int(req.NumGames()), p0AI, p1AI, mctsIter, seed)
+			simStats = simulation.RunBatchAsymmetricParallel(genome, int(req.NumGames()), p0AI, p1AI, mctsIter, seed)
 		}
 
 		// Convert to AggStats

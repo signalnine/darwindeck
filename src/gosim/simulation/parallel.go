@@ -76,3 +76,53 @@ func aggregateParallelResults(results <-chan GameResult, numGames int) Aggregate
 	// Reuse existing aggregation logic
 	return aggregateResults(allResults)
 }
+
+// RunBatchAsymmetricParallel executes asymmetric batch simulations using worker pool.
+// Used for MCTS skill evaluation where different AI types play against each other.
+func RunBatchAsymmetricParallel(genome *engine.Genome, numGames int, p0AIType AIPlayerType, p1AIType AIPlayerType, mctsIterations int, seed uint64) AggregatedStats {
+	numWorkers := runtime.NumCPU()
+	runtime.GOMAXPROCS(numWorkers)
+
+	jobs := make(chan GameJob, numGames)
+	results := make(chan GameResult, numGames)
+
+	var wg sync.WaitGroup
+
+	// Start workers
+	for w := 0; w < numWorkers; w++ {
+		wg.Add(1)
+		go workerAsymmetric(&wg, jobs, results, genome, p0AIType, p1AIType, mctsIterations)
+	}
+
+	// Generate deterministic seeds
+	rng := rand.New(rand.NewSource(int64(seed)))
+
+	// Queue all simulation jobs
+	for i := 0; i < numGames; i++ {
+		gameSeed := rng.Uint64()
+		jobs <- GameJob{
+			SimID: i,
+			Seed:  gameSeed,
+		}
+	}
+	close(jobs)
+
+	// Wait for all workers to complete, then close results
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	// Collect and aggregate results
+	return aggregateParallelResults(results, numGames)
+}
+
+// workerAsymmetric processes asymmetric simulation jobs
+func workerAsymmetric(wg *sync.WaitGroup, jobs <-chan GameJob, results chan<- GameResult, genome *engine.Genome, p0AIType AIPlayerType, p1AIType AIPlayerType, mctsIterations int) {
+	defer wg.Done()
+
+	for job := range jobs {
+		result := RunSingleGameAsymmetric(genome, p0AIType, p1AIType, mctsIterations, job.Seed)
+		results <- result
+	}
+}
