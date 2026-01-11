@@ -3,22 +3,10 @@
 from __future__ import annotations
 
 import random
-from typing import List, Set
+from typing import List, Set, Optional
 from darwindeck.genome.schema import GameGenome
 from darwindeck.evolution.naming import generate_unique_name
-from darwindeck.genome.examples import (
-    create_war_genome,
-    create_hearts_genome,
-    create_crazy_eights_genome,
-    create_gin_rummy_genome,
-    create_old_maid_genome,
-    create_go_fish_genome,
-    create_betting_war_genome,
-    create_cheat_genome,
-    create_scopa_genome,
-    create_draw_poker_genome,
-    create_scotch_whist_genome,
-)
+from darwindeck.genome.examples import get_seed_genomes
 from darwindeck.evolution.operators import create_default_pipeline
 from darwindeck.evolution.population import Individual
 
@@ -26,7 +14,8 @@ from darwindeck.evolution.population import Individual
 def create_seed_population(
     size: int = 100,
     seed_ratio: float = 0.3,
-    random_seed: int | None = None
+    random_seed: int | None = None,
+    player_count: int | None = None
 ) -> List[Individual]:
     """Create initial population with mix of known games and mutations.
 
@@ -35,6 +24,7 @@ def create_seed_population(
         seed_ratio: Ratio of known games to mutants (default: 0.3 for 30%)
                    Reduced from 0.7 to encourage more exploration
         random_seed: Random seed for reproducibility
+        player_count: Filter seeds by player count (2, 3, or 4). None = all games
 
     Returns:
         List of Individual objects with seeded genomes
@@ -46,20 +36,14 @@ def create_seed_population(
     n_seeds = int(size * seed_ratio)
     n_mutants = size - n_seeds
 
-    # Load base genomes - all 11 example games
-    base_genomes = [
-        create_war_genome(),
-        create_hearts_genome(),
-        create_crazy_eights_genome(),
-        create_gin_rummy_genome(),
-        create_old_maid_genome(),
-        create_go_fish_genome(),
-        create_betting_war_genome(),
-        create_cheat_genome(),
-        create_scopa_genome(),
-        create_draw_poker_genome(),
-        create_scotch_whist_genome(),
-    ]
+    # Load base genomes from centralized examples (16 games)
+    base_genomes = get_seed_genomes()
+
+    # Filter by player count if specified
+    if player_count is not None:
+        base_genomes = [g for g in base_genomes if g.player_count == player_count]
+        if not base_genomes:
+            raise ValueError(f"No seed games found with player_count={player_count}")
 
     population: List[Individual] = []
     used_names: Set[str] = set()
@@ -86,7 +70,8 @@ def create_seed_population(
         population.append(Individual(genome=genome_copy, fitness=0.0, evaluated=False))
 
     # 2. Add mutated variants
-    mutation_pipeline = create_default_pipeline()
+    # Preserve player_count if filtering is active
+    mutation_pipeline = create_default_pipeline(preserve_player_count=(player_count is not None))
 
     for i in range(n_mutants):
         # Pick random base genome
@@ -138,7 +123,8 @@ def create_seed_population_from_genomes(
     base_genomes: List[GameGenome],
     size: int = 100,
     seed_ratio: float = 0.3,
-    random_seed: int | None = None
+    random_seed: int | None = None,
+    player_count: int | None = None
 ) -> List[Individual]:
     """Create initial population from custom genomes.
 
@@ -147,6 +133,7 @@ def create_seed_population_from_genomes(
         size: Population size (default: 100)
         seed_ratio: Ratio of seeds to mutants (default: 0.3 for 30%)
         random_seed: Random seed for reproducibility
+        player_count: Filter seeds by player count (2, 3, or 4). None = all games
 
     Returns:
         List of Individual objects with seeded genomes
@@ -156,6 +143,12 @@ def create_seed_population_from_genomes(
 
     if not base_genomes:
         raise ValueError("No base genomes provided")
+
+    # Filter by player count if specified
+    if player_count is not None:
+        base_genomes = [g for g in base_genomes if g.player_count == player_count]
+        if not base_genomes:
+            raise ValueError(f"No seed games found with player_count={player_count}")
 
     # Calculate counts
     n_seeds = int(size * seed_ratio)
@@ -185,7 +178,8 @@ def create_seed_population_from_genomes(
         population.append(Individual(genome=genome_copy, fitness=0.0, evaluated=False))
 
     # 2. Add mutated variants
-    mutation_pipeline = create_default_pipeline()
+    # Preserve player_count if filtering is active
+    mutation_pipeline = create_default_pipeline(preserve_player_count=(player_count is not None))
 
     for i in range(n_mutants):
         base_genome = random.choice(base_genomes)

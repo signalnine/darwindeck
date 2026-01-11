@@ -46,13 +46,15 @@ class MutationOperator(ABC):
 class TweakParameterMutation(MutationOperator):
     """Mutate numeric parameters (hand size, max turns, etc.)."""
 
-    def __init__(self, probability: float = 0.15):
+    def __init__(self, probability: float = 0.15, preserve_player_count: bool = False):
         """Initialize parameter tweaking mutation.
 
         Args:
             probability: Mutation probability (default: 15%)
+            preserve_player_count: If True, don't mutate player_count (for filtered evolution)
         """
         super().__init__(probability)
+        self.preserve_player_count = preserve_player_count
 
     def mutate(self, genome: GameGenome) -> GameGenome:
         """Tweak a random numeric parameter.
@@ -63,12 +65,16 @@ class TweakParameterMutation(MutationOperator):
         Returns:
             New genome with tweaked parameter
         """
-        choice = random.choice([
+        choices = [
             'cards_per_player',
             'max_turns',
             'initial_discard_count',
-            'player_count'
-        ])
+        ]
+        # Only allow player_count mutation if not preserving it
+        if not self.preserve_player_count:
+            choices.append('player_count')
+
+        choice = random.choice(choices)
 
         if choice == 'cards_per_player':
             # Adjust ±3 cards, keep in range [3, 26]
@@ -805,11 +811,15 @@ class MutationPipeline:
         return mutated
 
 
-def create_default_pipeline(aggressive: bool = False) -> MutationPipeline:
+def create_default_pipeline(
+    aggressive: bool = False,
+    preserve_player_count: bool = False
+) -> MutationPipeline:
     """Create default mutation pipeline with standard operators.
 
     Args:
         aggressive: If True, use higher mutation rates for escaping local optima
+        preserve_player_count: If True, don't mutate player_count (for filtered evolution)
 
     Returns:
         MutationPipeline with all mutation operators
@@ -818,8 +828,11 @@ def create_default_pipeline(aggressive: bool = False) -> MutationPipeline:
     mult = 2.0 if aggressive else 1.0
 
     operators = [
-        # Parameter tweaks
-        TweakParameterMutation(probability=min(0.30 * mult, 0.6)),      # 30% (60% aggressive)
+        # Parameter tweaks (with optional player_count preservation)
+        TweakParameterMutation(
+            probability=min(0.30 * mult, 0.6),
+            preserve_player_count=preserve_player_count
+        ),  # 30% (60% aggressive)
 
         # Structural mutations
         SwapPhaseOrderMutation(probability=min(0.15 * mult, 0.3)),      # 15% (30% aggressive)
@@ -838,10 +851,13 @@ def create_default_pipeline(aggressive: bool = False) -> MutationPipeline:
     return MutationPipeline(operators)
 
 
-def create_aggressive_pipeline() -> MutationPipeline:
+def create_aggressive_pipeline(preserve_player_count: bool = False) -> MutationPipeline:
     """Create aggressive mutation pipeline for escaping local optima.
+
+    Args:
+        preserve_player_count: If True, don't mutate player_count (for filtered evolution)
 
     Returns:
         MutationPipeline with doubled mutation rates
     """
-    return create_default_pipeline(aggressive=True)
+    return create_default_pipeline(aggressive=True, preserve_player_count=preserve_player_count)

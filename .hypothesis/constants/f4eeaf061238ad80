@@ -1,4 +1,0 @@
-# file: /home/gabe/cards-playtest/src/cards_evolve/simulation/engine.py
-# hypothesis_version: 6.150.0
-
-['history', 'turn_count', 'winner']

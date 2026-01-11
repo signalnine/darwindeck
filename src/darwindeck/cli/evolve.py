@@ -183,6 +183,13 @@ def main() -> int:
         help='Random seed for reproducibility'
     )
     parser.add_argument(
+        '--player-count',
+        type=int,
+        default=None,
+        choices=[2, 3, 4],
+        help='Filter seed games by player count (2, 3, or 4 players). Default: no filter (all games)'
+    )
+    parser.add_argument(
         '--seed-from',
         type=Path,
         default=None,
@@ -341,6 +348,7 @@ def main() -> int:
         random_seed=args.random_seed,
         seed_genomes=seed_genomes,
         fitness_style=args.style,
+        player_count=args.player_count,  # Filter seeds by player count
         # In-evolution skill evaluation
         skill_eval_frequency=args.skill_eval_frequency,
         skill_eval_games=args.skill_eval_games,
@@ -356,6 +364,10 @@ def main() -> int:
     logging.info(f"  Population size: {config.population_size}")
     logging.info(f"  Max generations: {config.max_generations}")
     logging.info(f"  Fitness style: {config.fitness_style}")
+    if config.player_count:
+        logging.info(f"  Player count filter: {config.player_count} players only")
+    else:
+        logging.info(f"  Player count filter: all games")
     logging.info(f"  Elitism rate: {config.elitism_rate*100:.0f}%")
     logging.info(f"  Crossover rate: {config.crossover_rate*100:.0f}%")
     logging.info(f"  Tournament size: {config.tournament_size}")

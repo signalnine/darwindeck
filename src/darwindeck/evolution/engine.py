@@ -40,6 +40,7 @@ class EvolutionConfig:
     random_seed: Optional[int] = None
     seed_genomes: Optional[List[GameGenome]] = None  # Custom genomes to seed from
     fitness_style: str = 'balanced'  # Fitness weight preset (balanced, bluffing, strategic, party, trick-taking)
+    player_count: Optional[int] = None  # Filter seeds by player count (2, 3, or 4). None = all games
     # Skill evaluation during evolution
     skill_eval_frequency: int = 5  # Run skill eval every N generations (0 = disabled)
     skill_eval_top_percent: float = 0.2  # Evaluate top 20% of population
@@ -104,8 +105,15 @@ class EvolutionEngine:
         logger.info(f"Fitness style: {config.fitness_style}")
 
         self.fitness_evaluator = fitness_evaluator or self._default_fitness_evaluator
-        self.mutation_pipeline = mutation_pipeline or create_default_pipeline()
-        self.aggressive_pipeline = create_aggressive_pipeline()
+
+        # Create mutation pipelines, preserving player_count if filtered
+        preserve_player_count = config.player_count is not None
+        self.mutation_pipeline = mutation_pipeline or create_default_pipeline(
+            preserve_player_count=preserve_player_count
+        )
+        self.aggressive_pipeline = create_aggressive_pipeline(
+            preserve_player_count=preserve_player_count
+        )
         self.crossover = crossover_operator or CrossoverOperator(probability=config.crossover_rate)
 
         if config.random_seed is not None:
@@ -145,14 +153,16 @@ class EvolutionEngine:
                 base_genomes=self.config.seed_genomes,
                 size=self.config.population_size,
                 seed_ratio=self.config.seed_ratio,
-                random_seed=self.config.random_seed
+                random_seed=self.config.random_seed,
+                player_count=self.config.player_count
             )
         else:
             # Use default example games
             individuals = create_seed_population(
                 size=self.config.population_size,
                 seed_ratio=self.config.seed_ratio,
-                random_seed=self.config.random_seed
+                random_seed=self.config.random_seed,
+                player_count=self.config.player_count
             )
 
         self.population = Population(individuals=individuals)
