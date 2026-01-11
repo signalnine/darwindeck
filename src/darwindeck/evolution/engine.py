@@ -171,15 +171,16 @@ class EvolutionEngine:
             use_mcts=False  # Start with random AI, can upgrade to MCTS later
         )
 
-        # Update individuals with fitness scores
+        # Update individuals with fitness scores and full metrics
         for i, (individual, fitness_metrics) in enumerate(zip(unevaluated, fitness_results)):
             # Find index in population
             idx = self.population.individuals.index(individual)
-            # Create evaluated individual
+            # Create evaluated individual with full metrics breakdown
             evaluated = Individual(
                 genome=individual.genome,
                 fitness=fitness_metrics.total_fitness,
-                evaluated=True
+                evaluated=True,
+                fitness_metrics=fitness_metrics  # Store full metrics for saving
             )
             self.population.individuals[idx] = evaluated
 
