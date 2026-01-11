@@ -429,6 +429,22 @@ def main() -> int:
                     f.write(f"**Fitness:** {individual.fitness:.4f}\n")
                     if skill:
                         f.write(f"**MCTS Win Rate:** {skill.mcts_win_rate:.1%}\n")
+
+                    # Include fitness metrics breakdown
+                    if individual.fitness_metrics:
+                        fm = individual.fitness_metrics
+                        f.write("\n**Fitness Metrics:**\n")
+                        f.write(f"| Metric | Score |\n")
+                        f.write(f"|--------|-------|\n")
+                        f.write(f"| Decision Density | {fm.decision_density:.3f} |\n")
+                        f.write(f"| Comeback Potential | {fm.comeback_potential:.3f} |\n")
+                        f.write(f"| Tension Curve | {fm.tension_curve:.3f} |\n")
+                        f.write(f"| Interaction Frequency | {fm.interaction_frequency:.3f} |\n")
+                        f.write(f"| Rules Complexity | {fm.rules_complexity:.3f} |\n")
+                        f.write(f"| Skill vs Luck | {fm.skill_vs_luck:.3f} |\n")
+                        f.write(f"| Bluffing Depth | {fm.bluffing_depth:.3f} |\n")
+                        f.write(f"| Session Length | {fm.session_length:.3f} |\n")
+
                     f.write("\n")
                     if genome_id in descriptions:
                         f.write(f"{descriptions[genome_id]}\n\n")
@@ -447,6 +463,15 @@ def main() -> int:
                 skill = skill_results.get(genome_id)
                 skill_str = f", skill={skill.mcts_win_rate:.1%}" if skill else ""
                 logging.info(f"\n{i}. {genome_id} (fitness={individual.fitness:.4f}{skill_str})")
+
+                # Print fitness metrics breakdown
+                if individual.fitness_metrics:
+                    fm = individual.fitness_metrics
+                    logging.info(f"   Metrics: DD={fm.decision_density:.2f} CP={fm.comeback_potential:.2f} "
+                                f"TC={fm.tension_curve:.2f} IF={fm.interaction_frequency:.2f} "
+                                f"RC={fm.rules_complexity:.2f} SL={fm.skill_vs_luck:.2f} "
+                                f"BD={fm.bluffing_depth:.2f}")
+
                 if genome_id in descriptions:
                     logging.info(f"   {descriptions[genome_id]}")
 
