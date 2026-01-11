@@ -338,13 +338,13 @@ class EvolutionEngine:
         logger.info("="*60)
 
     def get_best_genomes(self, n: int = 10) -> List[Individual]:
-        """Get top N genomes from all generations.
+        """Get top N unique genomes from all generations.
 
         Args:
             n: Number of top genomes to return
 
         Returns:
-            List of top individuals
+            List of top individuals (deduplicated by genome_id)
         """
         if self.population is None:
             return []
@@ -353,6 +353,17 @@ class EvolutionEngine:
         all_individuals = [self.best_ever] if self.best_ever else []
         all_individuals.extend(self.population.individuals)
 
-        # Sort by fitness and return top N
+        # Sort by fitness
         sorted_inds = sorted(all_individuals, key=lambda ind: ind.fitness, reverse=True)
-        return sorted_inds[:n]
+
+        # Deduplicate by genome_id, keeping highest fitness version
+        seen_ids: set = set()
+        unique_inds: List[Individual] = []
+        for ind in sorted_inds:
+            if ind.genome.genome_id not in seen_ids:
+                seen_ids.add(ind.genome.genome_id)
+                unique_inds.append(ind)
+                if len(unique_inds) >= n:
+                    break
+
+        return unique_inds
