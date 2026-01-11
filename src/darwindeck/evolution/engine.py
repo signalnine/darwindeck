@@ -123,6 +123,7 @@ class EvolutionEngine:
         self.stats_history: List[GenerationStats] = []
         self.best_ever: Optional[Individual] = None
         self.use_aggressive_mutation = False  # Switch to True when diversity drops
+        self._skill_eval_cache: Dict[str, SkillEvalResult] = {}  # Cache skill results by genome_id
 
         logger.info(f"Evolution engine initialized with {self.num_workers} parallel workers")
 
@@ -231,27 +232,45 @@ class EvolutionEngine:
 
         logger.info(f"🎯 Running skill evaluation on top {n_to_evaluate} individuals...")
 
-        # Extract genomes for batch evaluation
-        genomes = [ind.genome for ind in top_individuals]
+        # Check cache for already-evaluated genomes
+        uncached_genomes = []
+        cached_results = []
+        for ind in top_individuals:
+            genome_id = ind.genome.genome_id
+            if genome_id in self._skill_eval_cache:
+                cached_results.append(self._skill_eval_cache[genome_id])
+            else:
+                uncached_genomes.append(ind.genome)
 
-        # Run skill evaluation
+        cache_hits = len(cached_results)
+        if cache_hits > 0:
+            logger.info(f"  Cache hits: {cache_hits}/{n_to_evaluate}")
+
+        # Run skill evaluation only on uncached genomes
         from darwindeck.evolution.skill_evaluation import evaluate_batch_skill
 
-        def progress(completed: int, total: int) -> None:
-            if completed % 5 == 0 or completed == total:
-                logger.info(f"  Skill eval: {completed}/{total}")
+        new_results = []
+        if uncached_genomes:
+            def progress(completed: int, total: int) -> None:
+                if completed % 5 == 0 or completed == total:
+                    logger.info(f"  Skill eval: {completed}/{total}")
 
-        results = evaluate_batch_skill(
-            genomes=genomes,
-            num_games=self.config.skill_eval_games,
-            mcts_iterations=self.config.skill_eval_mcts_iterations,
-            timeout_sec=30.0,  # Shorter timeout for in-evolution eval
-            num_workers=self.num_workers,
-            progress_callback=progress
-        )
+            new_results = evaluate_batch_skill(
+                genomes=uncached_genomes,
+                num_games=self.config.skill_eval_games,
+                mcts_iterations=self.config.skill_eval_mcts_iterations,
+                timeout_sec=30.0,  # Shorter timeout for in-evolution eval
+                num_workers=self.num_workers,
+                progress_callback=progress
+            )
 
-        # Build result lookup
-        skill_by_id = {r.genome_id: r for r in results}
+            # Update cache with new results
+            for result in new_results:
+                self._skill_eval_cache[result.genome_id] = result
+
+        # Build result lookup from cached + new
+        all_results = cached_results + new_results
+        skill_by_id = {r.genome_id: r for r in all_results}
 
         # Apply penalties
         penalties_applied = 0
