@@ -54,7 +54,7 @@ uv run python -m darwindeck.cli.evolve --style strategic
 
 # Adjust skill evaluation during evolution
 uv run python -m darwindeck.cli.evolve \
-    --skill-eval-frequency 5 \
+    --skill-eval-frequency 10 \
     --fpa-penalty-threshold 0.3
 
 # Deploy to 256-core server
