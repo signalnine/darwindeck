@@ -1,0 +1,79 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "InnerWave",
+  "generation": 3,
+  "setup": {
+    "cards_per_player": 13,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 0
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "TrickPhase",
+        "lead_suit_required": true,
+        "trump_suit": null,
+        "high_card_wins": true,
+        "breaking_suit": "HEARTS"
+      },
+      {
+        "type": "TrickPhase",
+        "lead_suit_required": false,
+        "trump_suit": "HEARTS",
+        "high_card_wins": false,
+        "breaking_suit": null
+      },
+      {
+        "type": "TrickPhase",
+        "lead_suit_required": true,
+        "trump_suit": null,
+        "high_card_wins": true,
+        "breaking_suit": "HEARTS"
+      }
+    ],
+    "is_trick_based": true,
+    "tricks_per_hand": 13
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "low_score",
+      "threshold": 100
+    },
+    {
+      "type": "all_hands_empty",
+      "threshold": 0
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 500,
+  "min_turns": 52,
+  "player_count": 4,
+  "fitness": 0.7081500000000001,
+  "fitness_rank": 1,
+  "fitness_metrics": {
+    "decision_density": 0.65,
+    "comeback_potential": 0.69,
+    "tension_curve": 0.5680000000000001,
+    "interaction_frequency": 1.0,
+    "rules_complexity": 0.655,
+    "session_length": 0.11555555555555555,
+    "skill_vs_luck": 0.617,
+    "bluffing_depth": 0.0,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "skill_evaluation": {
+    "greedy_win_rate": 0.5,
+    "greedy_wins_as_p0": 26,
+    "greedy_wins_as_p1": 24,
+    "mcts_win_rate": 0.63,
+    "mcts_wins_as_p0": 38,
+    "mcts_wins_as_p1": 25,
+    "skill_score": 0.565,
+    "first_player_advantage": 0.15000000000000002,
+    "total_games": 200,
+    "timed_out": false
+  },
+  "skill_rank": 1
+}

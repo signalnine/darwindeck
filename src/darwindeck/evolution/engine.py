@@ -43,8 +43,8 @@ class EvolutionConfig:
     player_count: Optional[int] = None  # Filter seeds by player count (2, 3, or 4). None = all games
     # Skill evaluation during evolution
     skill_eval_frequency: int = 5  # Run skill eval every N generations (0 = disabled)
-    skill_eval_top_percent: float = 0.2  # Evaluate top 20% of population
-    skill_eval_games: int = 50  # Games per skill evaluation (fast: 50, thorough: 100)
+    skill_eval_top_percent: float = 0.1  # Evaluate top 10% (matches elitism rate)
+    skill_eval_games: int = 10  # Games per skill evaluation (fast: 10, thorough: 50)
     skill_eval_mcts_iterations: int = 100  # MCTS iterations for skill eval
     fpa_penalty_threshold: float = 0.3  # Penalize if |first_player_advantage| > this
     fpa_penalty_weight: float = 0.3  # Fitness multiplier for FPA penalty (0.3 = 30% reduction)
