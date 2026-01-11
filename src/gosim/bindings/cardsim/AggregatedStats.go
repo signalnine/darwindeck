@@ -158,7 +158,7 @@ func (rcv *AggregatedStats) MutateForcedDecisions(n uint64) bool {
 	return rcv._tab.MutateUint64Slot(24, n)
 }
 
-func (rcv *AggregatedStats) TotalInteractions() uint64 {
+func (rcv *AggregatedStats) TotalHandSize() uint64 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(26))
 	if o != 0 {
 		return rcv._tab.GetUint64(o + rcv._tab.Pos)
@@ -166,11 +166,11 @@ func (rcv *AggregatedStats) TotalInteractions() uint64 {
 	return 0
 }
 
-func (rcv *AggregatedStats) MutateTotalInteractions(n uint64) bool {
+func (rcv *AggregatedStats) MutateTotalHandSize(n uint64) bool {
 	return rcv._tab.MutateUint64Slot(26, n)
 }
 
-func (rcv *AggregatedStats) TotalActions() uint64 {
+func (rcv *AggregatedStats) TotalInteractions() uint64 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(28))
 	if o != 0 {
 		return rcv._tab.GetUint64(o + rcv._tab.Pos)
@@ -178,12 +178,24 @@ func (rcv *AggregatedStats) TotalActions() uint64 {
 	return 0
 }
 
-func (rcv *AggregatedStats) MutateTotalActions(n uint64) bool {
+func (rcv *AggregatedStats) MutateTotalInteractions(n uint64) bool {
 	return rcv._tab.MutateUint64Slot(28, n)
 }
 
+func (rcv *AggregatedStats) TotalActions() uint64 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(30))
+	if o != 0 {
+		return rcv._tab.GetUint64(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *AggregatedStats) MutateTotalActions(n uint64) bool {
+	return rcv._tab.MutateUint64Slot(30, n)
+}
+
 func AggregatedStatsStart(builder *flatbuffers.Builder) {
-	builder.StartObject(13)
+	builder.StartObject(14)
 }
 func AggregatedStatsAddTotalGames(builder *flatbuffers.Builder, totalGames uint32) {
 	builder.PrependUint32Slot(0, totalGames, 0)
@@ -218,11 +230,14 @@ func AggregatedStatsAddTotalValidMoves(builder *flatbuffers.Builder, totalValidM
 func AggregatedStatsAddForcedDecisions(builder *flatbuffers.Builder, forcedDecisions uint64) {
 	builder.PrependUint64Slot(10, forcedDecisions, 0)
 }
+func AggregatedStatsAddTotalHandSize(builder *flatbuffers.Builder, totalHandSize uint64) {
+	builder.PrependUint64Slot(11, totalHandSize, 0)
+}
 func AggregatedStatsAddTotalInteractions(builder *flatbuffers.Builder, totalInteractions uint64) {
-	builder.PrependUint64Slot(11, totalInteractions, 0)
+	builder.PrependUint64Slot(12, totalInteractions, 0)
 }
 func AggregatedStatsAddTotalActions(builder *flatbuffers.Builder, totalActions uint64) {
-	builder.PrependUint64Slot(12, totalActions, 0)
+	builder.PrependUint64Slot(13, totalActions, 0)
 }
 func AggregatedStatsEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

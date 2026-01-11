@@ -31,6 +31,7 @@ type AggStats struct {
 	ForcedDecisions   uint64
 	TotalInteractions uint64
 	TotalActions      uint64
+	TotalHandSize     uint64
 }
 
 //export SimulateBatch
@@ -107,6 +108,7 @@ func SimulateBatch(requestPtr unsafe.Pointer, requestLen C.int, responseLen *C.i
 			ForcedDecisions:   simStats.ForcedDecisions,
 			TotalInteractions: simStats.TotalInteractions,
 			TotalActions:      simStats.TotalActions,
+			TotalHandSize:     simStats.TotalHandSize,
 		}
 
 		// Serialize result
@@ -163,6 +165,7 @@ func serializeStats(builder *flatbuffers.Builder, stats *AggStats) flatbuffers.U
 	cardsim.AggregatedStatsAddTotalDecisions(builder, stats.TotalDecisions)
 	cardsim.AggregatedStatsAddTotalValidMoves(builder, stats.TotalValidMoves)
 	cardsim.AggregatedStatsAddForcedDecisions(builder, stats.ForcedDecisions)
+	cardsim.AggregatedStatsAddTotalHandSize(builder, stats.TotalHandSize)
 	cardsim.AggregatedStatsAddTotalInteractions(builder, stats.TotalInteractions)
 	cardsim.AggregatedStatsAddTotalActions(builder, stats.TotalActions)
 	return cardsim.AggregatedStatsEnd(builder)

@@ -68,6 +68,7 @@ class SimulationResults:
     total_decisions: int = 0
     total_valid_moves: int = 0
     forced_decisions: int = 0
+    total_hand_size: int = 0  # For filtering ratio calculation
     total_interactions: int = 0
     total_actions: int = 0
 
@@ -158,12 +159,32 @@ class FitnessEvaluator:
             avg_valid_moves = results.total_valid_moves / results.total_decisions
             forced_ratio = results.forced_decisions / results.total_decisions
 
-            # Score: High when many moves available, low when forced
-            # avg_valid_moves: 1 = forced, 2-3 = some choice, 4+ = rich decisions
-            # Cap at 6 valid moves as "perfect"
+            # Calculate filtering ratio: how much the game filters available moves
+            # If valid_moves == hand_size, no filtering is happening (meaningless choice)
+            # filtering_ratio = 0 means all cards always valid (like War)
+            # filtering_ratio = 0.8 means only 20% of hand is valid (real constraints)
+            if results.total_hand_size > 0:
+                raw_ratio = 1.0 - (results.total_valid_moves / results.total_hand_size)
+                if raw_ratio < 0:
+                    # More moves than cards = multi-phase game or draw options
+                    # This indicates meaningful choices exist (not just "play any card")
+                    filtering_ratio = 0.5  # Baseline for games with phase variety
+                else:
+                    filtering_ratio = min(1.0, raw_ratio)
+            else:
+                filtering_ratio = 0.0
+
+            # Score: High when many FILTERED moves available, low when forced or unfiltered
+            # avg_valid_moves matters only if there's actual filtering
+            # Without filtering, having many options is meaningless (like War)
+            choice_score = min(1.0, (avg_valid_moves - 1) / 5.0)
+
+            # Apply filtering penalty: unfiltered games get low decision density
+            # even if they have many valid moves
             decision_density = min(1.0, (
-                min(1.0, (avg_valid_moves - 1) / 5.0) * 0.7 +  # Reward choice
-                (1.0 - forced_ratio) * 0.3  # Penalty for forced moves
+                choice_score * filtering_ratio * 0.5 +  # Filtered choices (most important)
+                (1.0 - forced_ratio) * 0.3 +  # Not being forced is still good
+                filtering_ratio * 0.2  # Raw filtering score
             ))
         else:
             # Fallback to heuristic (current implementation)

@@ -45,6 +45,7 @@ table AggregatedStats {
   total_decisions: uint64;       // Total decision points across all games
   total_valid_moves: uint64;     // Sum of valid moves at each decision point
   forced_decisions: uint64;      // Decisions with only 1 valid move
+  total_hand_size: uint64;       // Sum of hand sizes at each decision (for filtering ratio)
 
   // Interaction frequency metrics
   total_interactions: uint64;    // Actions affecting opponent state

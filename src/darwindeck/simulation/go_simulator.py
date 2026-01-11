@@ -117,6 +117,7 @@ class GoSimulator:
                 total_decisions=result.TotalDecisions(),
                 total_valid_moves=result.TotalValidMoves(),
                 forced_decisions=result.ForcedDecisions(),
+                total_hand_size=result.TotalHandSize(),
                 total_interactions=result.TotalInteractions(),
                 total_actions=result.TotalActions(),
             )
@@ -208,6 +209,7 @@ class GoSimulator:
                 total_decisions=result.TotalDecisions(),
                 total_valid_moves=result.TotalValidMoves(),
                 forced_decisions=result.ForcedDecisions(),
+                total_hand_size=result.TotalHandSize(),
                 total_interactions=result.TotalInteractions(),
                 total_actions=result.TotalActions(),
             )

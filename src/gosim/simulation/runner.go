@@ -28,6 +28,7 @@ type GameMetrics struct {
 	ForcedDecisions   uint64 // Decisions with only 1 valid move
 	TotalInteractions uint64 // Actions affecting opponent state
 	TotalActions      uint64 // Total actions taken
+	TotalHandSize     uint64 // Sum of hand sizes at each decision (for filtering ratio)
 }
 
 // GameResult holds the outcome of a single game
@@ -56,6 +57,7 @@ type AggregatedStats struct {
 	ForcedDecisions   uint64
 	TotalInteractions uint64
 	TotalActions      uint64
+	TotalHandSize     uint64 // For filtering ratio calculation
 }
 
 // RunBatch simulates multiple games with the same genome and AI configuration
@@ -139,6 +141,7 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 		// Phase 1 instrumentation: decision counting
 		metrics.TotalDecisions++
 		metrics.TotalValidMoves += uint64(len(moves))
+		metrics.TotalHandSize += uint64(len(state.Players[state.CurrentPlayer].Hand))
 		if len(moves) == 1 {
 			metrics.ForcedDecisions++
 		}
@@ -259,6 +262,7 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 
 		metrics.TotalDecisions++
 		metrics.TotalValidMoves += uint64(len(moves))
+		metrics.TotalHandSize += uint64(len(state.Players[state.CurrentPlayer].Hand))
 		if len(moves) == 1 {
 			metrics.ForcedDecisions++
 		}
@@ -431,6 +435,7 @@ func aggregateResults(results []GameResult) AggregatedStats {
 		stats.ForcedDecisions += result.Metrics.ForcedDecisions
 		stats.TotalInteractions += result.Metrics.TotalInteractions
 		stats.TotalActions += result.Metrics.TotalActions
+		stats.TotalHandSize += result.Metrics.TotalHandSize
 	}
 
 	// Calculate averages
