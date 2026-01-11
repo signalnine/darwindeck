@@ -3,6 +3,7 @@ package engine
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 )
 
 // OpCode matches Python bytecode.py
@@ -141,35 +142,40 @@ func (g *Genome) parseTurnStructure() error {
 	g.TurnPhases = make([]PhaseDescriptor, 0, phaseCount)
 
 	for i := 0; i < phaseCount; i++ {
+		if offset >= int32(len(g.Bytecode)) {
+			return errors.New("unexpected end of bytecode in turn structure")
+		}
 		phaseType := g.Bytecode[offset]
 		offset++
 
 		// Read phase data (format depends on phase type)
+		// Python bytecode format (phase_type already read):
 		var phaseLen int
 		switch phaseType {
-		case 1: // DrawPhase
-			phaseLen = 5 // source:1 + count:4 + mandatory:1 + has_condition:1
-			if offset+int32(phaseLen) > int32(len(g.Bytecode)) {
-				return errors.New("invalid phase data")
+		case 1: // DrawPhase: source:1 + count:4 + mandatory:1 + has_condition:1 = 7 bytes
+			baseLen := 7
+			if offset+int32(baseLen) > int32(len(g.Bytecode)) {
+				return errors.New("invalid draw phase data")
 			}
-			// Check if has condition
-			if g.Bytecode[offset+int32(phaseLen)-1] == 1 {
+			hasCondition := g.Bytecode[offset+6]
+			phaseLen = baseLen
+			if hasCondition == 1 {
 				phaseLen += 7 // Add condition bytes
 			}
-		case 2: // PlayPhase
-			if offset+5 >= int32(len(g.Bytecode)) {
-				return errors.New("invalid play phase")
+		case 2: // PlayPhase: target:1 + min:1 + max:1 + mandatory:1 + conditionLen:4 + condition
+			if offset+8 > int32(len(g.Bytecode)) {
+				return errors.New("invalid play phase header")
 			}
 			conditionLen := int(binary.BigEndian.Uint32(g.Bytecode[offset+4 : offset+8]))
-			phaseLen = 8 + conditionLen // target:1 + min:1 + max:1 + mandatory:1 + conditionLen:4 + condition
-		case 3: // DiscardPhase
-			phaseLen = 6 // target:1 + count:4 + mandatory:1
+			phaseLen = 8 + conditionLen
+		case 3: // DiscardPhase: target:1 + count:4 + mandatory:1 = 6 bytes
+			phaseLen = 6
 		case 4: // BettingPhase (optional)
 			phaseLen = 21
 		case 5: // ClaimPhase (optional)
 			phaseLen = 10
 		default:
-			return errors.New("unknown phase type")
+			return fmt.Errorf("unknown phase type: %d", phaseType)
 		}
 
 		phaseEnd := offset + int32(phaseLen)

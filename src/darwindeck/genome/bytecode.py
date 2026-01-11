@@ -10,6 +10,9 @@ from darwindeck.genome.schema import (
     SetupRules,
     TurnStructure,
     PlayPhase,
+    DrawPhase,
+    DiscardPhase,
+    TrickPhase,
     WinCondition,
     Location,
 )
@@ -143,14 +146,27 @@ class BytecodeCompiler:
         return struct.pack("!ii", setup.cards_per_player, setup.initial_discard_count)
 
     def _compile_turn_structure(self, turn: TurnStructure) -> bytes:
-        """Encode turn phases."""
+        """Encode turn phases.
+
+        Format: phase_count:4 + [phase_type:1 + phase_data]...
+        Go reads phase_type first, then phase_data based on type.
+        """
         phase_count = len(turn.phases)
-        result = struct.pack("!i", phase_count)
+        result = struct.pack("!I", phase_count)  # Use unsigned int
 
         for phase in turn.phases:
-            if isinstance(phase, PlayPhase):
+            if isinstance(phase, DrawPhase):
+                result += self._compile_draw_phase(phase)
+            elif isinstance(phase, PlayPhase):
                 result += self._compile_play_phase(phase)
-            # TODO: Add support for DrawPhase, DiscardPhase when they're added to schema
+            elif isinstance(phase, DiscardPhase):
+                result += self._compile_discard_phase(phase)
+            elif isinstance(phase, TrickPhase):
+                # TrickPhase not fully supported yet, skip with placeholder
+                result += self._compile_trick_phase_placeholder(phase)
+            else:
+                # Unknown phase type, skip
+                pass
 
         return result
 
@@ -172,8 +188,31 @@ class BytecodeCompiler:
             ref = self._reference_to_code(cond.reference) if cond.reference else 0
             return struct.pack("!BBiB", opcode, operator, value, ref)
 
+    def _compile_draw_phase(self, phase: DrawPhase) -> bytes:
+        """Encode DrawPhase to bytecode.
+
+        Go format: phase_type:1 + source:1 + count:4 + mandatory:1 + has_condition:1 [+ condition:7]
+        Note: Go expects phaseLen=5, but that seems wrong. Using actual format from comment.
+        """
+        phase_type = 1  # DrawPhase
+        source = self._location_to_code(phase.source)
+        count = phase.count
+        mandatory = 1 if phase.mandatory else 0
+        has_condition = 1 if phase.condition else 0
+
+        result = struct.pack("!BBIB", phase_type, source, count, mandatory)
+        result += struct.pack("!B", has_condition)
+
+        if phase.condition:
+            result += self._compile_condition(phase.condition)
+
+        return result
+
     def _compile_play_phase(self, phase: PlayPhase) -> bytes:
-        """Encode PlayPhase to bytecode."""
+        """Encode PlayPhase to bytecode.
+
+        Go format: phase_type:1 + target:1 + min:1 + max:1 + mandatory:1 + conditionLen:4 + condition
+        """
         phase_type = 2  # PlayPhase
         target = self._location_to_code(phase.target)
         min_cards = phase.min_cards
@@ -182,8 +221,33 @@ class BytecodeCompiler:
 
         condition_bytes = self._compile_condition(phase.valid_play_condition)
 
-        header = struct.pack("!BBBBBi", phase_type, target, min_cards, max_cards, mandatory, len(condition_bytes))
+        # Go reads: target:1 + min:1 + max:1 + mandatory:1 + conditionLen:4 = 8 bytes header
+        header = struct.pack("!BBBBBI", phase_type, target, min_cards, max_cards, mandatory, len(condition_bytes))
         return header + condition_bytes
+
+    def _compile_discard_phase(self, phase: DiscardPhase) -> bytes:
+        """Encode DiscardPhase to bytecode.
+
+        Go format: phase_type:1 + target:1 + count:4 + mandatory:1
+        """
+        phase_type = 3  # DiscardPhase
+        target = self._location_to_code(phase.target)
+        count = phase.count
+        mandatory = 1 if phase.mandatory else 0
+
+        return struct.pack("!BBIB", phase_type, target, count, mandatory)
+
+    def _compile_trick_phase_placeholder(self, phase: TrickPhase) -> bytes:
+        """Encode TrickPhase placeholder (not fully supported in Go yet)."""
+        # For now, encode as a DrawPhase with minimal data
+        # This allows evolution to continue while TrickPhase is being developed
+        phase_type = 1  # Pretend it's a DrawPhase
+        source = 0  # DECK
+        count = 0  # Draw nothing
+        mandatory = 0  # Optional
+        has_condition = 0
+
+        return struct.pack("!BBIB", phase_type, source, count, mandatory) + struct.pack("!B", has_condition)
 
     def _compile_win_conditions(self, conditions: List[WinCondition]) -> bytes:
         """Encode win conditions."""
