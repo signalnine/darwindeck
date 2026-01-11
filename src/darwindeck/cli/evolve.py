@@ -241,14 +241,14 @@ def main() -> int:
     parser.add_argument(
         '--mcts-iterations',
         type=int,
-        default=500,
+        default=100,
         choices=[100, 500, 1000, 2000],
-        help='MCTS search iterations per move (default: 500)'
+        help='MCTS search iterations per move (default: 100)'
     )
     parser.add_argument(
         '--skip-skill-eval',
         action='store_true',
-        help='Skip post-evolution MCTS skill evaluation'
+        help='Skip post-evolution skill evaluation (Greedy + MCTS vs Random)'
     )
 
     # Logging
@@ -330,10 +330,11 @@ def main() -> int:
     # Get best genomes
     best_genomes = engine.get_best_genomes(n=args.save_top_n)
 
-    # MCTS Skill evaluation (unless skipped)
+    # Two-tier skill evaluation (unless skipped)
     skill_results: Dict[str, SkillEvalResult] = {}
     if not args.skip_skill_eval:
-        logging.info(f"\nMCTS Skill Evaluation ({args.mcts_games} games, {args.mcts_iterations} iterations)")
+        logging.info(f"\nSkill Evaluation: Greedy vs Random + MCTS vs Random")
+        logging.info(f"  ({args.mcts_games} games per tier, MCTS {args.mcts_iterations} iterations)")
         try:
             skill_results = engine.evaluate_skill_gaps(
                 top_n=args.save_top_n,
@@ -347,21 +348,23 @@ def main() -> int:
             for ind in best_genomes:
                 skill = skill_results.get(ind.genome.genome_id)
                 if skill:
-                    logging.info(f"  {ind.genome.genome_id}: mcts_win_rate={skill.mcts_win_rate:.2f}")
+                    fpa = skill.first_player_advantage
+                    fpa_str = f" P0+{fpa:.0%}" if fpa > 0.1 else (f" P1+{-fpa:.0%}" if fpa < -0.1 else "")
+                    logging.info(f"  {ind.genome.genome_id}: greedy={skill.greedy_win_rate:.0%} mcts={skill.mcts_win_rate:.0%} skill={skill.skill_score:.2f}{fpa_str}")
         except Exception as e:
             logging.warning(f"  Skill evaluation failed: {e}")
 
-    # Re-rank if strategic style
+    # Re-rank if strategic style (use combined skill_score)
     if args.style == 'strategic' and skill_results:
-        logging.info("\nRe-ranking by skill (--style strategic)...")
+        logging.info("\nRe-ranking by skill score (--style strategic)...")
         best_genomes = sorted(
             best_genomes,
             key=lambda ind: skill_results.get(ind.genome.genome_id, SkillEvalResult(
                 genome_id=ind.genome.genome_id,
-                mcts_wins_as_p1=0, mcts_wins_as_p2=0,
-                total_mcts_wins=0, total_games=0,
-                mcts_win_rate=0.0
-            )).mcts_win_rate,
+                greedy_wins_as_p0=0, greedy_wins_as_p1=0, greedy_win_rate=0.5,
+                mcts_wins_as_p0=0, mcts_wins_as_p1=0, mcts_win_rate=0.5,
+                total_games=0, skill_score=0.5, first_player_advantage=0.0
+            )).skill_score,
             reverse=True
         )
 
@@ -396,18 +399,26 @@ def main() -> int:
             }
 
         if skill:
-            genome_data['mcts_win_rate'] = skill.mcts_win_rate
+            genome_data['skill_evaluation'] = {
+                'greedy_win_rate': skill.greedy_win_rate,
+                'greedy_wins_as_p0': skill.greedy_wins_as_p0,
+                'greedy_wins_as_p1': skill.greedy_wins_as_p1,
+                'mcts_win_rate': skill.mcts_win_rate,
+                'mcts_wins_as_p0': skill.mcts_wins_as_p0,
+                'mcts_wins_as_p1': skill.mcts_wins_as_p1,
+                'skill_score': skill.skill_score,
+                'first_player_advantage': skill.first_player_advantage,
+                'total_games': skill.total_games,
+                'timed_out': skill.timed_out,
+            }
             genome_data['skill_rank'] = i
-            genome_data['mcts_wins_as_p1'] = skill.mcts_wins_as_p1
-            genome_data['mcts_wins_as_p2'] = skill.mcts_wins_as_p2
-            genome_data['skill_eval_timed_out'] = skill.timed_out
 
         # Save as JSON
         json_file = run_output_dir / f"rank{i:02d}_{individual.genome.genome_id}.json"
         with open(json_file, 'w') as f:
             json.dump(genome_data, f, indent=2)
 
-        skill_str = f", mcts_win_rate={skill.mcts_win_rate:.2f}" if skill else ""
+        skill_str = f", greedy={skill.greedy_win_rate:.0%} mcts={skill.mcts_win_rate:.0%}" if skill else ""
         logging.info(f"  {i}. {individual.genome.genome_id} (fitness={individual.fitness:.4f}{skill_str})")
 
     # Generate LLM descriptions for top 5 games
@@ -428,7 +439,13 @@ def main() -> int:
                     f.write(f"## {i}. {genome_id}\n\n")
                     f.write(f"**Fitness:** {individual.fitness:.4f}\n")
                     if skill:
-                        f.write(f"**MCTS Win Rate:** {skill.mcts_win_rate:.1%}\n")
+                        f.write(f"**Skill Evaluation:**\n")
+                        f.write(f"- Greedy vs Random: {skill.greedy_win_rate:.1%}\n")
+                        f.write(f"- MCTS vs Random: {skill.mcts_win_rate:.1%}\n")
+                        f.write(f"- Combined Skill Score: {skill.skill_score:.2f}\n")
+                        fpa = skill.first_player_advantage
+                        if abs(fpa) > 0.1:
+                            f.write(f"- **First Player Advantage: {fpa:+.1%}** {'⚠️' if abs(fpa) > 0.3 else ''}\n")
 
                     # Include fitness metrics breakdown
                     if individual.fitness_metrics:
@@ -461,7 +478,7 @@ def main() -> int:
             for i, individual in enumerate(best_genomes[:5], 1):
                 genome_id = individual.genome.genome_id
                 skill = skill_results.get(genome_id)
-                skill_str = f", skill={skill.mcts_win_rate:.1%}" if skill else ""
+                skill_str = f", greedy={skill.greedy_win_rate:.0%} mcts={skill.mcts_win_rate:.0%}" if skill else ""
                 logging.info(f"\n{i}. {genome_id} (fitness={individual.fitness:.4f}{skill_str})")
 
                 # Print fitness metrics breakdown

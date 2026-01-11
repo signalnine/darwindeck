@@ -1,7 +1,10 @@
-"""MCTS skill evaluation for evolved games.
+"""Two-tier skill evaluation for evolved games.
 
-Measures skill gap by running MCTS vs Random head-to-head games
-in both directions (MCTS as P1, then as P2) to eliminate first-player bias.
+Measures skill gap using two AI comparisons:
+1. Greedy vs Random - measures if basic strategy helps (fast)
+2. MCTS vs Random - measures skill ceiling (moderate speed)
+
+Both run in both directions to eliminate first-player bias.
 """
 
 from dataclasses import dataclass
@@ -22,13 +25,20 @@ _mp_context = mp.get_context('spawn')
 
 @dataclass
 class SkillEvalResult:
-    """Result of MCTS skill evaluation for a single genome."""
+    """Result of two-tier skill evaluation for a single genome."""
     genome_id: str
+    # Greedy vs Random results
+    greedy_wins_as_p0: int    # Greedy wins when playing as Player 0
+    greedy_wins_as_p1: int    # Greedy wins when playing as Player 1
+    greedy_win_rate: float    # Combined greedy win rate (0.0-1.0)
+    # MCTS vs Random results
+    mcts_wins_as_p0: int      # MCTS wins when playing as Player 0
     mcts_wins_as_p1: int      # MCTS wins when playing as Player 1
-    mcts_wins_as_p2: int      # MCTS wins when playing as Player 2
-    total_mcts_wins: int      # Combined wins
-    total_games: int          # Total games played
-    mcts_win_rate: float      # total_mcts_wins / total_games (0.0-1.0)
+    mcts_win_rate: float      # Combined MCTS win rate (0.0-1.0)
+    # Combined
+    total_games: int          # Total games played (greedy + mcts)
+    skill_score: float        # Combined skill metric
+    first_player_advantage: float  # 0.0 = balanced, 1.0 = P0 always wins, -1.0 = P1 always wins
     timed_out: bool = False   # True if evaluation was cut short
 
 
@@ -44,29 +54,60 @@ class _SkillEvalTask:
 def evaluate_skill(
     genome: GameGenome,
     num_games: int = 100,
-    mcts_iterations: int = 500,
+    mcts_iterations: int = 100,
     timeout_sec: float = 60.0,
     progress_callback: Optional[Callable[[str], None]] = None
 ) -> SkillEvalResult:
-    """Run symmetric MCTS vs Random evaluation.
+    """Run two-tier skill evaluation: Greedy vs Random, then MCTS vs Random.
 
-    Runs num_games/2 with MCTS as P1, num_games/2 with MCTS as P2.
-    This eliminates first-player advantage bias.
+    Each tier runs num_games/2 in each direction to eliminate first-player bias.
+    Total games = num_games * 2 (half for greedy, half for mcts).
 
     Args:
         genome: Game genome to evaluate
-        num_games: Total games to play (split evenly between directions)
-        mcts_iterations: MCTS search iterations per move
+        num_games: Games per tier (split between directions), total = 2x this
+        mcts_iterations: MCTS search iterations per move (default: 100)
         timeout_sec: Maximum time for entire evaluation
         progress_callback: Optional callback for progress updates
 
     Returns:
-        SkillEvalResult with win rates and timing info
+        SkillEvalResult with greedy and mcts win rates
     """
     start_time = time.time()
     simulator = GoSimulator()
 
     games_per_direction = num_games // 2
+
+    # === Tier 1: Greedy vs Random (fast) ===
+    if progress_callback:
+        progress_callback("Running Greedy vs Random...")
+
+    # Greedy as P0
+    greedy_p0 = simulator.simulate_asymmetric(
+        genome=genome,
+        num_games=games_per_direction,
+        p0_ai_type="greedy",
+        p1_ai_type="random"
+    )
+
+    # Check timeout
+    if time.time() - start_time > timeout_sec:
+        return _make_timeout_result(genome.genome_id, greedy_p0, None, None, None, games_per_direction)
+
+    # Greedy as P1
+    greedy_p1 = simulator.simulate_asymmetric(
+        genome=genome,
+        num_games=games_per_direction,
+        p0_ai_type="random",
+        p1_ai_type="greedy"
+    )
+
+    if time.time() - start_time > timeout_sec:
+        return _make_timeout_result(genome.genome_id, greedy_p0, greedy_p1, None, None, games_per_direction)
+
+    # === Tier 2: MCTS vs Random ===
+    if progress_callback:
+        progress_callback("Running MCTS vs Random...")
 
     # Determine MCTS AI type based on iterations
     if mcts_iterations >= 2000:
@@ -78,11 +119,8 @@ def evaluate_skill(
     else:
         mcts_type = "mcts"  # mcts100
 
-    # Direction 1: MCTS as P0, Random as P1
-    if progress_callback:
-        progress_callback(f"Running MCTS as P0...")
-
-    result_p0 = simulator.simulate_asymmetric(
+    # MCTS as P0
+    mcts_p0 = simulator.simulate_asymmetric(
         genome=genome,
         num_games=games_per_direction,
         p0_ai_type=mcts_type,
@@ -90,26 +128,11 @@ def evaluate_skill(
         mcts_iterations=mcts_iterations
     )
 
-    # Check timeout
-    elapsed = time.time() - start_time
-    if elapsed > timeout_sec:
-        mcts_wins = result_p0.player0_wins
-        total = games_per_direction
-        return SkillEvalResult(
-            genome_id=genome.genome_id,
-            mcts_wins_as_p1=mcts_wins,
-            mcts_wins_as_p2=0,
-            total_mcts_wins=mcts_wins,
-            total_games=total,
-            mcts_win_rate=mcts_wins / total if total > 0 else 0.5,
-            timed_out=True
-        )
+    if time.time() - start_time > timeout_sec:
+        return _make_timeout_result(genome.genome_id, greedy_p0, greedy_p1, mcts_p0, None, games_per_direction)
 
-    # Direction 2: Random as P0, MCTS as P1
-    if progress_callback:
-        progress_callback(f"Running MCTS as P1...")
-
-    result_p1 = simulator.simulate_asymmetric(
+    # MCTS as P1
+    mcts_p1 = simulator.simulate_asymmetric(
         genome=genome,
         num_games=games_per_direction,
         p0_ai_type="random",
@@ -118,32 +141,94 @@ def evaluate_skill(
     )
 
     # Combine results
-    mcts_wins_as_p0 = result_p0.player0_wins  # MCTS was P0
-    mcts_wins_as_p1 = result_p1.player1_wins  # MCTS was P1
-    total_wins = mcts_wins_as_p0 + mcts_wins_as_p1
-    total_games_played = games_per_direction * 2
+    greedy_wins_p0 = greedy_p0.player0_wins
+    greedy_wins_p1 = greedy_p1.player1_wins
+    mcts_wins_p0 = mcts_p0.player0_wins
+    mcts_wins_p1 = mcts_p1.player1_wins
 
-    # Check for errors - if all games errored, use 0.5 as neutral
-    total_errors = result_p0.errors + result_p1.errors
-    if total_errors >= total_games_played:
+    total_greedy_games = games_per_direction * 2
+    total_mcts_games = games_per_direction * 2
+    total_games = total_greedy_games + total_mcts_games
+
+    # Check for errors
+    greedy_errors = greedy_p0.errors + greedy_p1.errors
+    mcts_errors = mcts_p0.errors + mcts_p1.errors
+
+    if greedy_errors >= total_greedy_games and mcts_errors >= total_mcts_games:
         return SkillEvalResult(
             genome_id=genome.genome_id,
-            mcts_wins_as_p1=0,
-            mcts_wins_as_p2=0,
-            total_mcts_wins=0,
-            total_games=total_games_played,
-            mcts_win_rate=0.5,  # Neutral when all errors
+            greedy_wins_as_p0=0, greedy_wins_as_p1=0, greedy_win_rate=0.5,
+            mcts_wins_as_p0=0, mcts_wins_as_p1=0, mcts_win_rate=0.5,
+            total_games=total_games,
+            skill_score=0.5,
+            first_player_advantage=0.0,
             timed_out=False
         )
 
+    # Calculate win rates
+    greedy_win_rate = (greedy_wins_p0 + greedy_wins_p1) / total_greedy_games if total_greedy_games > 0 else 0.5
+    mcts_win_rate = (mcts_wins_p0 + mcts_wins_p1) / total_mcts_games if total_mcts_games > 0 else 0.5
+
+    # Combined skill score: weighted average
+    # Greedy measures basic skill, MCTS measures skill ceiling
+    skill_score = greedy_win_rate * 0.5 + mcts_win_rate * 0.5
+
+    # Calculate first player advantage
+    # Compare P0 win rate vs P1 win rate across all tests
+    # Positive = P0 advantage, Negative = P1 advantage, 0 = balanced
+    p0_win_rate = (greedy_wins_p0 + mcts_wins_p0) / (games_per_direction * 2) if games_per_direction > 0 else 0.5
+    p1_win_rate = (greedy_wins_p1 + mcts_wins_p1) / (games_per_direction * 2) if games_per_direction > 0 else 0.5
+    # Scale to -1..1 range: (p0 - p1) where both are 0..1
+    first_player_advantage = p0_win_rate - p1_win_rate
+
     return SkillEvalResult(
         genome_id=genome.genome_id,
-        mcts_wins_as_p1=mcts_wins_as_p0,  # When MCTS was "first" (P0)
-        mcts_wins_as_p2=mcts_wins_as_p1,  # When MCTS was "second" (P1)
-        total_mcts_wins=total_wins,
-        total_games=total_games_played,
-        mcts_win_rate=total_wins / total_games_played if total_games_played > 0 else 0.5,
+        greedy_wins_as_p0=greedy_wins_p0,
+        greedy_wins_as_p1=greedy_wins_p1,
+        greedy_win_rate=greedy_win_rate,
+        mcts_wins_as_p0=mcts_wins_p0,
+        mcts_wins_as_p1=mcts_wins_p1,
+        mcts_win_rate=mcts_win_rate,
+        total_games=total_games,
+        skill_score=skill_score,
+        first_player_advantage=first_player_advantage,
         timed_out=False
+    )
+
+
+def _make_timeout_result(genome_id, greedy_p0, greedy_p1, mcts_p0, mcts_p1, games_per_direction) -> SkillEvalResult:
+    """Create a partial result when timeout occurs."""
+    greedy_wins_p0 = greedy_p0.player0_wins if greedy_p0 else 0
+    greedy_wins_p1 = greedy_p1.player1_wins if greedy_p1 else 0
+    mcts_wins_p0 = mcts_p0.player0_wins if mcts_p0 else 0
+    mcts_wins_p1 = mcts_p1.player1_wins if mcts_p1 else 0
+
+    greedy_games = (games_per_direction if greedy_p0 else 0) + (games_per_direction if greedy_p1 else 0)
+    mcts_games = (games_per_direction if mcts_p0 else 0) + (games_per_direction if mcts_p1 else 0)
+
+    greedy_win_rate = (greedy_wins_p0 + greedy_wins_p1) / greedy_games if greedy_games > 0 else 0.5
+    mcts_win_rate = (mcts_wins_p0 + mcts_wins_p1) / mcts_games if mcts_games > 0 else 0.5
+    skill_score = greedy_win_rate * 0.5 + mcts_win_rate * 0.5
+
+    # Calculate first player advantage from available data
+    p0_games = (games_per_direction if greedy_p0 else 0) + (games_per_direction if mcts_p0 else 0)
+    p1_games = (games_per_direction if greedy_p1 else 0) + (games_per_direction if mcts_p1 else 0)
+    p0_win_rate = (greedy_wins_p0 + mcts_wins_p0) / p0_games if p0_games > 0 else 0.5
+    p1_win_rate = (greedy_wins_p1 + mcts_wins_p1) / p1_games if p1_games > 0 else 0.5
+    first_player_advantage = p0_win_rate - p1_win_rate
+
+    return SkillEvalResult(
+        genome_id=genome_id,
+        greedy_wins_as_p0=greedy_wins_p0,
+        greedy_wins_as_p1=greedy_wins_p1,
+        greedy_win_rate=greedy_win_rate,
+        mcts_wins_as_p0=mcts_wins_p0,
+        mcts_wins_as_p1=mcts_wins_p1,
+        mcts_win_rate=mcts_win_rate,
+        total_games=greedy_games + mcts_games,
+        skill_score=skill_score,
+        first_player_advantage=first_player_advantage,
+        timed_out=True
     )
 
 
@@ -160,17 +245,19 @@ def _evaluate_skill_task(task: _SkillEvalTask) -> SkillEvalResult:
 def evaluate_batch_skill(
     genomes: List[GameGenome],
     num_games: int = 100,
-    mcts_iterations: int = 500,
+    mcts_iterations: int = 100,
     timeout_sec: float = 60.0,
     num_workers: Optional[int] = None,
     progress_callback: Optional[Callable[[int, int], None]] = None
 ) -> List[SkillEvalResult]:
     """Evaluate skill gap for multiple genomes in parallel.
 
+    Uses two-tier evaluation: Greedy vs Random + MCTS vs Random.
+
     Args:
         genomes: List of genomes to evaluate
-        num_games: Games per genome (split between directions)
-        mcts_iterations: MCTS search iterations
+        num_games: Games per tier per genome (total = 2x this)
+        mcts_iterations: MCTS search iterations (default: 100)
         timeout_sec: Timeout per genome
         num_workers: Worker processes (default: CPU count)
         progress_callback: Called with (completed, total) for progress
