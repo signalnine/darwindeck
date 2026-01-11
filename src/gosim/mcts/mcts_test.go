@@ -3,7 +3,7 @@ package mcts
 import (
 	"testing"
 
-	"github.com/signalnine/cards-evolve/gosim/engine"
+	"github.com/signalnine/darwindeck/gosim/engine"
 )
 
 func TestNodePool(t *testing.T) {

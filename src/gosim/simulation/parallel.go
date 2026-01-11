@@ -5,7 +5,7 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/signalnine/cards-evolve/gosim/engine"
+	"github.com/signalnine/darwindeck/gosim/engine"
 )
 
 // GameJob represents a single simulation job

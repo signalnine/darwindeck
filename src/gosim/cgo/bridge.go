@@ -9,9 +9,9 @@ import (
 	"unsafe"
 
 	flatbuffers "github.com/google/flatbuffers/go"
-	"github.com/signalnine/cards-evolve/gosim/bindings/cardsim"
-	"github.com/signalnine/cards-evolve/gosim/engine"
-	"github.com/signalnine/cards-evolve/gosim/simulation"
+	"github.com/signalnine/darwindeck/gosim/bindings/cardsim"
+	"github.com/signalnine/darwindeck/gosim/engine"
+	"github.com/signalnine/darwindeck/gosim/simulation"
 )
 
 // AggStats holds aggregated simulation results

@@ -1,4 +1,4 @@
-module github.com/signalnine/cards-evolve/gosim
+module github.com/signalnine/darwindeck/gosim
 
 go 1.25.5
 

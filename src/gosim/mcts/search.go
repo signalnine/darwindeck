@@ -3,7 +3,7 @@ package mcts
 import (
 	"math/rand"
 
-	"github.com/signalnine/cards-evolve/gosim/engine"
+	"github.com/signalnine/darwindeck/gosim/engine"
 )
 
 const (

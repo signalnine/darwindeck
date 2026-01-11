@@ -16,9 +16,13 @@ DarwinDeck combines:
 
 - 🧬 **Evolutionary Design**: Genetic operators (mutation, crossover, selection) evolve game rules
 - 🎯 **Fitness Evaluation**: Measures fun proxies (decision density, comeback potential, tension curve)
+- 🎲 **Two-Tier Skill Evaluation**: Greedy vs Random + MCTS vs Random measures skill ceiling
+- ⚖️ **First-Player Advantage Detection**: Filters out unbalanced games (>30% FPA)
+- 🔄 **In-Evolution Skill Penalties**: Penalizes unfit games during breeding, not just at the end
 - ⚡ **Parallel Execution**: 360x speedup on 256-core systems
 - 🎮 **11 Seed Games**: War, Hearts, Crazy 8s, Gin Rummy, Old Maid, Go Fish, and more
 - 🚀 **High Throughput**: 800,000+ games/second on large servers
+- 📝 **LLM Descriptions**: Auto-generated game summaries using Claude
 - 📊 **Comprehensive Testing**: 100+ unit/integration tests
 
 ## Performance
@@ -36,14 +40,22 @@ DarwinDeck combines:
 ## Quick Start
 
 ```bash
-# Install dependencies
-poetry install
+# Install dependencies (using uv - recommended)
+uv sync
 
 # Run evolution locally
-poetry run python -m darwindeck.cli.evolve \
+uv run python -m darwindeck.cli.evolve \
     --population-size 100 \
     --generations 50 \
     --output-dir output/run1
+
+# Run with fitness style preset
+uv run python -m darwindeck.cli.evolve --style strategic
+
+# Adjust skill evaluation during evolution
+uv run python -m darwindeck.cli.evolve \
+    --skill-eval-frequency 5 \
+    --fpa-penalty-threshold 0.3
 
 # Deploy to 256-core server
 ./scripts/deploy-to-server.sh
@@ -76,6 +88,41 @@ DarwinDeck implements two-level parallelization:
 
 See `docs/parallelization-strategy.md` for details.
 
+## Fitness Metrics
+
+Games are evaluated on multiple dimensions:
+
+| Metric | Description |
+|--------|-------------|
+| **Decision Density** | Ratio of meaningful choices to total actions |
+| **Comeback Potential** | Can trailing players recover? |
+| **Tension Curve** | Uncertainty over game progression |
+| **Interaction Frequency** | How much do players affect each other? |
+| **Rules Complexity** | Reasonable rule count for learning |
+| **Session Length** | Target game duration in turns |
+| **Bluffing Depth** | Deception and hidden information |
+
+### Skill Evaluation
+
+Two-tier evaluation measures skill vs luck:
+
+1. **Greedy vs Random**: Does basic strategy help?
+2. **MCTS vs Random**: What's the skill ceiling?
+
+Games are penalized for:
+- **High First-Player Advantage** (>30%): Unbalanced turn order
+- **Low Skill Score** (<0.6): Too luck-dependent
+
+### Fitness Styles
+
+Presets optimize for different game types:
+
+- `balanced`: General-purpose (default)
+- `strategic`: Deep decision-making
+- `bluffing`: Hidden information and deception
+- `party`: Quick, accessible games
+- `trick-taking`: Traditional card game mechanics
+
 ## Example Games
 
 DarwinDeck includes 11 seed games from Hoyle's Encyclopedia:
@@ -104,12 +151,12 @@ DarwinDeck includes 11 seed games from Hoyle's Encyclopedia:
 
 ```bash
 # Run all tests
-poetry run pytest
+uv run pytest
 
 # Run specific test suites
-poetry run pytest tests/unit/              # Unit tests
-poetry run pytest tests/integration/       # Integration tests
-poetry run pytest tests/property/          # Property-based tests
+uv run pytest tests/unit/              # Unit tests
+uv run pytest tests/integration/       # Integration tests
+uv run pytest tests/property/          # Property-based tests
 
 # Run Go tests
 cd src/gosim && go test ./...
@@ -122,16 +169,16 @@ cd src/gosim/simulation && go test -bench=. -benchmem
 
 ```bash
 # Format code
-poetry run black src/ tests/
+uv run black src/ tests/
 
 # Type checking
-poetry run mypy src/
+uv run mypy src/
 
-# Build Go simulator
-cd src/gosim && make
+# Build Go simulator (CGo shared library)
+make build-cgo
 
 # Run evolution locally
-poetry run python -m darwindeck.cli.evolve --verbose
+uv run python -m darwindeck.cli.evolve --verbose
 ```
 
 ## License

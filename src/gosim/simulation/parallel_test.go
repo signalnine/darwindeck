@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/signalnine/cards-evolve/gosim/engine"
+	"github.com/signalnine/darwindeck/gosim/engine"
 )
 
 // createTestGenome creates a simple War game genome for testing

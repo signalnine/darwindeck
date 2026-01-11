@@ -5,8 +5,8 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/signalnine/cards-evolve/gosim/engine"
-	"github.com/signalnine/cards-evolve/gosim/mcts"
+	"github.com/signalnine/darwindeck/gosim/engine"
+	"github.com/signalnine/darwindeck/gosim/mcts"
 )
 
 // AIPlayerType specifies which AI to use

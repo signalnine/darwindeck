@@ -4,7 +4,7 @@ import (
 	"math"
 	"sync"
 
-	"github.com/signalnine/cards-evolve/gosim/engine"
+	"github.com/signalnine/darwindeck/gosim/engine"
 )
 
 // MCTSNode represents a node in the Monte Carlo search tree

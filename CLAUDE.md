@@ -275,7 +275,7 @@ uv run mypy src/
 ## Project Structure
 
 ```
-cards-evolve/
+darwindeck/
 ├── src/
 │   ├── darwindeck/          # Python package
 │   │   ├── genome/            # Game genome representation
