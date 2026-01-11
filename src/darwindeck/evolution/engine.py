@@ -50,6 +50,9 @@ class EvolutionConfig:
     fpa_penalty_weight: float = 0.3  # Fitness multiplier for FPA penalty (0.3 = 30% reduction)
     low_skill_penalty_threshold: float = 0.6  # Penalize if skill_score < this
     low_skill_penalty_weight: float = 0.2  # Fitness multiplier for low skill penalty
+    # Party style: penalize high skill (we want luck-friendly games)
+    high_skill_penalty_threshold: float = 0.85  # Penalize if skill_score > this (party style only)
+    high_skill_penalty_weight: float = 0.3  # Fitness multiplier for high skill penalty
 
 
 @dataclass
@@ -276,6 +279,7 @@ class EvolutionEngine:
         penalties_applied = 0
         fpa_penalties = 0
         skill_penalties = 0
+        is_party_style = self.config.fitness_style == 'party'
 
         for i, ind in enumerate(self.population.individuals):
             skill_result = skill_by_id.get(ind.genome.genome_id)
@@ -289,10 +293,17 @@ class EvolutionEngine:
                 penalty_multiplier *= (1.0 - self.config.fpa_penalty_weight)
                 fpa_penalties += 1
 
-            # Penalize low skill score
-            if skill_result.skill_score < self.config.low_skill_penalty_threshold:
-                penalty_multiplier *= (1.0 - self.config.low_skill_penalty_weight)
-                skill_penalties += 1
+            # Style-aware skill penalty
+            if is_party_style:
+                # Party games: penalize HIGH skill (we want luck-friendly games)
+                if skill_result.skill_score > self.config.high_skill_penalty_threshold:
+                    penalty_multiplier *= (1.0 - self.config.high_skill_penalty_weight)
+                    skill_penalties += 1
+            else:
+                # Other styles: penalize LOW skill (we want skill-rewarding games)
+                if skill_result.skill_score < self.config.low_skill_penalty_threshold:
+                    penalty_multiplier *= (1.0 - self.config.low_skill_penalty_weight)
+                    skill_penalties += 1
 
             # Apply penalty if any
             if penalty_multiplier < 1.0:
@@ -309,8 +320,9 @@ class EvolutionEngine:
                 logger.debug(f"  Penalized {ind.genome.genome_id}: {old_fitness:.4f} -> {new_fitness:.4f} "
                            f"(FPA={skill_result.first_player_advantage:+.2f}, skill={skill_result.skill_score:.2f})")
 
+        skill_label = "high-skill" if is_party_style else "low-skill"
         logger.info(f"  Skill eval complete: {penalties_applied} penalties applied "
-                   f"({fpa_penalties} FPA, {skill_penalties} low-skill)")
+                   f"({fpa_penalties} FPA, {skill_penalties} {skill_label})")
 
     def tournament_selection(self, k: int = 3) -> Individual:
         """Select individual via tournament selection.
