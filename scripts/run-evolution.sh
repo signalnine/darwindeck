@@ -18,12 +18,14 @@ echo "🔧 Using $WORKERS parallel workers"
 # Evolution parameters
 POPULATION=${POPULATION:-500}  # Larger population for beefy server
 GENERATIONS=${GENERATIONS:-100}
+STYLE=${STYLE:-balanced}
 OUTPUT_DIR=${OUTPUT_DIR:-"output/evolution-$(date +%Y%m%d-%H%M%S)"}
 
 echo ""
 echo "🧬 Evolution Configuration:"
 echo "  Population size: $POPULATION"
 echo "  Generations: $GENERATIONS"
+echo "  Style: $STYLE"
 echo "  Workers: $WORKERS"
 echo "  Output directory: $OUTPUT_DIR"
 echo ""
@@ -36,6 +38,7 @@ export EVOLUTION_WORKERS=$WORKERS
 /home/gabe/.local/bin/poetry run python -m darwindeck.cli.evolve \
     --population-size $POPULATION \
     --generations $GENERATIONS \
+    --style $STYLE \
     --output-dir "$OUTPUT_DIR" \
     --save-top-n 20 \
     --verbose
