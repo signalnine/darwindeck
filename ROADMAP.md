@@ -11,24 +11,7 @@ This document tracks planned features, known limitations, and future work.
 - Two-tier skill evaluation (Greedy + MCTS)
 - Parallel execution (360x speedup on 256 cores)
 - LLM-powered game description generation
-
----
-
-## In Progress
-
-### Multiplayer Simulation Support
-
-**Status:** Planned (see `docs/plans/structured-questing-fountain.md`)
-
-**Goal:** Extend simulation from fixed 2-player to 2-4 players.
-
-**Tasks:**
-- [ ] Update Go GameState to use `[]PlayerState` slice
-- [ ] Update FlatBuffers schema for dynamic player arrays
-- [ ] Update Python fitness metrics for N-player games
-- [ ] Restore 4-player seed games (Hearts, Spades, President)
-
-**Impact:** Hearts, Spades, President currently run as 2-player approximations.
+- Multiplayer support (2-4 players)
 
 ---
 
@@ -165,6 +148,13 @@ This document tracks planned features, known limitations, and future work.
 - [x] In-evolution penalties
 - [x] Style-aware skill handling
 
+### Multiplayer Simulation (Complete)
+- [x] Go GameState with `[]PlayerState` slice and `NumPlayers`
+- [x] FlatBuffers schema with dynamic `wins: [uint32]` and `ai_types: [ubyte]`
+- [x] CGo bridge for N-player serialization
+- [x] Python fitness metrics for N-player games
+- [x] 4-player seed games (Hearts, Spades, President, Knock-Out Whist)
+
 ---
 
 ## Contributing
@@ -183,3 +173,4 @@ To work on a roadmap item:
 |------|---------|-----------|
 | 2026-01-10 | 0.1.0 | Initial release with full evolution pipeline |
 | 2026-01-11 | 0.1.1 | Diversity-based seeding, documentation updates |
+| 2026-01-11 | 0.1.2 | Confirmed multiplayer (2-4 players) fully functional |
