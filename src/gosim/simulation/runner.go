@@ -346,6 +346,10 @@ func isInteraction(state *engine.GameState, move *engine.LegalMove, genome *engi
 	case 3: // DiscardPhase
 		// Regular discard doesn't affect opponent
 		return false
+	case 4: // TrickPhase
+		// Trick-taking is inherently interactive - every card played
+		// affects the trick outcome and impacts all players
+		return true
 	}
 
 	return false
