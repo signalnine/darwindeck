@@ -156,10 +156,11 @@ def main() -> int:
         help='Tournament selection size'
     )
     parser.add_argument(
-        '--plateau-threshold',
+        '--enable-plateau',
         type=int,
-        default=30,
-        help='Generations without improvement before stopping'
+        default=None,
+        metavar='N',
+        help='Enable plateau detection: stop after N generations without improvement (disabled by default)'
     )
     parser.add_argument(
         '--seed-ratio',
@@ -269,7 +270,7 @@ def main() -> int:
         elitism_rate=args.elitism_rate,
         crossover_rate=args.crossover_rate,
         tournament_size=args.tournament_size,
-        plateau_threshold=args.plateau_threshold,
+        plateau_threshold=args.enable_plateau,  # None = disabled
         seed_ratio=args.seed_ratio,
         random_seed=args.random_seed,
         seed_genomes=seed_genomes
@@ -282,7 +283,10 @@ def main() -> int:
     logging.info(f"  Elitism rate: {config.elitism_rate*100:.0f}%")
     logging.info(f"  Crossover rate: {config.crossover_rate*100:.0f}%")
     logging.info(f"  Tournament size: {config.tournament_size}")
-    logging.info(f"  Plateau threshold: {config.plateau_threshold}")
+    if config.plateau_threshold:
+        logging.info(f"  Plateau detection: enabled ({config.plateau_threshold} generations)")
+    else:
+        logging.info(f"  Plateau detection: disabled")
 
     engine = EvolutionEngine(config)
 
