@@ -73,6 +73,9 @@ type GameState struct {
 	CardsPerPlayer int         // Cards dealt to each player (for hand size check)
 	// Scopa/capture game state
 	CaptureMode    bool        // If true, use Scopa capture mechanics instead of War
+	// Special effects state
+	PlayDirection int8  // 1 = clockwise, -1 = counter-clockwise
+	SkipCount     uint8 // Number of players to skip (capped at NumPlayers-1)
 }
 
 // StatePool manages GameState memory
@@ -130,6 +133,8 @@ func (s *GameState) Reset() {
 	s.NumPlayers = 2
 	s.CardsPerPlayer = 0
 	s.CaptureMode = false
+	s.PlayDirection = 1
+	s.SkipCount = 0
 }
 
 // Clone creates a deep copy for MCTS tree search
@@ -185,6 +190,8 @@ func (s *GameState) Clone() *GameState {
 	clone.NumPlayers = s.NumPlayers
 	clone.CardsPerPlayer = s.CardsPerPlayer
 	clone.CaptureMode = s.CaptureMode
+	clone.PlayDirection = s.PlayDirection
+	clone.SkipCount = s.SkipCount
 
 	return clone
 }
