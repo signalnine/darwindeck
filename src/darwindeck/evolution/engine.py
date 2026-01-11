@@ -6,9 +6,10 @@ import random
 import logging
 import os
 from functools import partial
-from typing import List, Optional, Callable
+from typing import List, Optional, Callable, Dict
 from dataclasses import dataclass, field
 from darwindeck.evolution.population import Population, Individual
+from darwindeck.evolution.skill_evaluation import evaluate_batch_skill, SkillEvalResult
 from darwindeck.evolution.operators import (
     MutationPipeline,
     CrossoverOperator,
@@ -376,3 +377,38 @@ class EvolutionEngine:
                     break
 
         return unique_inds
+
+    def evaluate_skill_gaps(
+        self,
+        top_n: int = 20,
+        num_games: int = 100,
+        mcts_iterations: int = 500,
+        timeout_sec: float = 60.0
+    ) -> Dict[str, SkillEvalResult]:
+        """Run MCTS skill evaluation on top genomes.
+
+        Args:
+            top_n: Number of top genomes to evaluate
+            num_games: Games per genome for evaluation
+            mcts_iterations: MCTS search iterations
+            timeout_sec: Timeout per genome
+
+        Returns:
+            Dict mapping genome_id to SkillEvalResult
+        """
+        best_genomes = self.get_best_genomes(n=top_n)
+        genomes = [ind.genome for ind in best_genomes]
+
+        def progress(completed: int, total: int) -> None:
+            logger.info(f"  Evaluating genome {completed}/{total}...")
+
+        results = evaluate_batch_skill(
+            genomes=genomes,
+            num_games=num_games,
+            mcts_iterations=mcts_iterations,
+            timeout_sec=timeout_sec,
+            num_workers=self.num_workers,
+            progress_callback=progress
+        )
+
+        return {result.genome_id: result for result in results}
