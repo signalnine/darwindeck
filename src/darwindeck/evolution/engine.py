@@ -42,7 +42,7 @@ class EvolutionConfig:
     fitness_style: str = 'balanced'  # Fitness weight preset (balanced, bluffing, strategic, party, trick-taking)
     player_count: Optional[int] = None  # Filter seeds by player count (2, 3, or 4). None = all games
     # Skill evaluation during evolution
-    skill_eval_frequency: int = 5  # Run skill eval every N generations (0 = disabled)
+    skill_eval_frequency: int = 10  # Run skill eval every N generations (0 = disabled)
     skill_eval_top_percent: float = 0.1  # Evaluate top 10% (matches elitism rate)
     skill_eval_games: int = 10  # Games per skill evaluation (fast: 10, thorough: 50)
     skill_eval_mcts_iterations: int = 100  # MCTS iterations for skill eval
