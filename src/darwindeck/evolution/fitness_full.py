@@ -2,7 +2,56 @@
 
 from dataclasses import dataclass
 from typing import Dict, Optional
-from darwindeck.genome.schema import GameGenome
+from darwindeck.genome.schema import GameGenome, PlayPhase, DrawPhase
+
+
+# Preset weight configurations for different game styles
+STYLE_PRESETS = {
+    'balanced': {
+        'decision_density': 0.20,
+        'comeback_potential': 0.15,
+        'tension_curve': 0.10,
+        'interaction_frequency': 0.20,
+        'rules_complexity': 0.05,
+        'skill_vs_luck': 0.30,
+    },
+    'bluffing': {
+        # Favor hidden information, betting, and player interaction
+        'decision_density': 0.25,
+        'comeback_potential': 0.10,
+        'tension_curve': 0.15,
+        'interaction_frequency': 0.30,  # High - bluffing needs interaction
+        'rules_complexity': 0.05,
+        'skill_vs_luck': 0.15,  # Lower - bluffing has luck element
+    },
+    'strategic': {
+        # Favor deep thinking, skill-based play
+        'decision_density': 0.25,
+        'comeback_potential': 0.10,
+        'tension_curve': 0.05,
+        'interaction_frequency': 0.15,
+        'rules_complexity': 0.05,
+        'skill_vs_luck': 0.40,  # High skill emphasis
+    },
+    'party': {
+        # Favor quick, interactive, accessible games
+        'decision_density': 0.10,
+        'comeback_potential': 0.25,  # Everyone can win
+        'tension_curve': 0.20,
+        'interaction_frequency': 0.30,  # High interaction
+        'rules_complexity': 0.10,  # Simple rules
+        'skill_vs_luck': 0.05,  # Luck-friendly
+    },
+    'trick-taking': {
+        # Favor trick-based mechanics
+        'decision_density': 0.20,
+        'comeback_potential': 0.15,
+        'tension_curve': 0.15,
+        'interaction_frequency': 0.25,
+        'rules_complexity': 0.05,
+        'skill_vs_luck': 0.20,
+    },
+}
 
 
 @dataclass(frozen=True)
@@ -43,29 +92,25 @@ class FitnessEvaluator:
 
     def __init__(self,
                  weights: Optional[Dict[str, float]] = None,
+                 style: Optional[str] = None,
                  use_cache: bool = True):
         """Initialize fitness evaluator.
 
         Args:
-            weights: Metric weights (default: reweighted to favor skill and interaction)
+            weights: Metric weights (overrides style if provided)
+            style: Style preset name (balanced, bluffing, strategic, party, trick-taking)
             use_cache: Enable fitness caching
         """
-        # Session length excluded from weights (it's a constraint, not a metric)
-        # Reweighted based on evolved game analysis (see docs/analysis-0.8403-ceiling.md):
-        # - Increased skill_vs_luck (0.30): Most important for game quality
-        # - Increased interaction_frequency (0.20): Enables interesting gameplay
-        # - Increased decision_density (0.20): Meaningful choices matter
-        # - Decreased rules_complexity (0.05): Was blocking special effects
-        # - Decreased tension_curve (0.10): Less critical, often saturated
-        # - Maintained comeback_potential (0.15): Balance still important
-        self.weights = weights or {
-            'decision_density': 0.20,
-            'comeback_potential': 0.15,
-            'tension_curve': 0.10,
-            'interaction_frequency': 0.20,
-            'rules_complexity': 0.05,
-            'skill_vs_luck': 0.30,
-        }
+        # Use style preset if specified, otherwise use weights or default
+        if style and style in STYLE_PRESETS:
+            self.weights = STYLE_PRESETS[style].copy()
+            self.style = style
+        elif weights:
+            self.weights = weights.copy()
+            self.style = 'custom'
+        else:
+            self.weights = STYLE_PRESETS['balanced'].copy()
+            self.style = 'balanced'
 
         # Normalize weights to sum to 1.0
         total_weight = sum(self.weights.values())

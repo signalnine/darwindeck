@@ -138,6 +138,13 @@ def main() -> int:
         help='Maximum number of generations'
     )
     parser.add_argument(
+        '--style', '-s',
+        type=str,
+        default='balanced',
+        choices=['balanced', 'bluffing', 'strategic', 'party', 'trick-taking'],
+        help='Fitness style preset (affects what kinds of games are favored)'
+    )
+    parser.add_argument(
         '--elitism-rate', '-e',
         type=float,
         default=0.1,
@@ -273,13 +280,15 @@ def main() -> int:
         plateau_threshold=args.enable_plateau,  # None = disabled
         seed_ratio=args.seed_ratio,
         random_seed=args.random_seed,
-        seed_genomes=seed_genomes
+        seed_genomes=seed_genomes,
+        fitness_style=args.style
     )
 
     # Create evolution engine
     logging.info("Creating evolution engine...")
     logging.info(f"  Population size: {config.population_size}")
     logging.info(f"  Max generations: {config.max_generations}")
+    logging.info(f"  Fitness style: {config.fitness_style}")
     logging.info(f"  Elitism rate: {config.elitism_rate*100:.0f}%")
     logging.info(f"  Crossover rate: {config.crossover_rate*100:.0f}%")
     logging.info(f"  Tournament size: {config.tournament_size}")

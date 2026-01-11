@@ -26,9 +26,9 @@ from darwindeck.simulation.go_simulator import GoSimulator
 
 # Top-level factory functions for pickling with 'spawn' multiprocessing context.
 # Lambda functions can't be pickled, so we need named functions.
-def _create_evaluator() -> FitnessEvaluator:
-    """Create a FitnessEvaluator instance."""
-    return FitnessEvaluator()
+def _create_evaluator(style: str = 'balanced') -> FitnessEvaluator:
+    """Create a FitnessEvaluator instance with optional style."""
+    return FitnessEvaluator(style=style)
 
 
 def _create_simulator() -> GoSimulator:

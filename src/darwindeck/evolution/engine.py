@@ -5,6 +5,7 @@ from __future__ import annotations
 import random
 import logging
 import os
+from functools import partial
 from typing import List, Optional, Callable
 from dataclasses import dataclass, field
 from darwindeck.evolution.population import Population, Individual
@@ -37,6 +38,7 @@ class EvolutionConfig:
     seed_ratio: float = 0.7  # 70% known games, 30% mutants
     random_seed: Optional[int] = None
     seed_genomes: Optional[List[GameGenome]] = None  # Custom genomes to seed from
+    fitness_style: str = 'balanced'  # Fitness weight preset (balanced, bluffing, strategic, party, trick-taking)
 
 
 @dataclass
@@ -81,12 +83,15 @@ class EvolutionEngine:
         self.config = config
         self.num_workers = num_workers or int(os.environ.get('EVOLUTION_WORKERS', os.cpu_count() or 4))
 
-        # Initialize parallel fitness evaluator
-        # Note: We use named functions instead of lambdas for pickling with 'spawn' context
+        # Initialize parallel fitness evaluator with style preset
+        # Use partial to pass style to the factory function (picklable unlike lambdas)
+        evaluator_factory = partial(_create_evaluator, style=config.fitness_style)
         self.parallel_evaluator = ParallelFitnessEvaluator(
-            evaluator_factory=_create_evaluator,
+            evaluator_factory=evaluator_factory,
             num_workers=self.num_workers
         )
+
+        logger.info(f"Fitness style: {config.fitness_style}")
 
         self.fitness_evaluator = fitness_evaluator or self._default_fitness_evaluator
         self.mutation_pipeline = mutation_pipeline or create_default_pipeline()
