@@ -68,11 +68,27 @@ class SimulationRequest(object):
             return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
         return 0
 
-def SimulationRequestStart(builder): builder.StartObject(5)
+    # SimulationRequest
+    def Player0AiType(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(14))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint8Flags, o + self._tab.Pos)
+        return 0
+
+    # SimulationRequest
+    def Player1AiType(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(16))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint8Flags, o + self._tab.Pos)
+        return 0
+
+def SimulationRequestStart(builder): builder.StartObject(7)
 def SimulationRequestAddGenomeBytecode(builder, genomeBytecode): builder.PrependUOffsetTRelativeSlot(0, flatbuffers.number_types.UOffsetTFlags.py_type(genomeBytecode), 0)
 def SimulationRequestStartGenomeBytecodeVector(builder, numElems): return builder.StartVector(1, numElems, 1)
 def SimulationRequestAddNumGames(builder, numGames): builder.PrependUint32Slot(1, numGames, 0)
 def SimulationRequestAddAiPlayerType(builder, aiPlayerType): builder.PrependUint8Slot(2, aiPlayerType, 0)
 def SimulationRequestAddMctsIterations(builder, mctsIterations): builder.PrependUint32Slot(3, mctsIterations, 0)
 def SimulationRequestAddRandomSeed(builder, randomSeed): builder.PrependUint64Slot(4, randomSeed, 0)
+def SimulationRequestAddPlayer0AiType(builder, player0AiType): builder.PrependUint8Slot(5, player0AiType, 0)
+def SimulationRequestAddPlayer1AiType(builder, player1AiType): builder.PrependUint8Slot(6, player1AiType, 0)
 def SimulationRequestEnd(builder): return builder.EndObject()

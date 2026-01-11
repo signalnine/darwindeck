@@ -8,6 +8,10 @@ table SimulationRequest {
   ai_player_type: ubyte;                 // 0=Random, 1=Greedy, 2=MCTS_Weak, 3=MCTS_Medium, 4=MCTS_Strong
   mcts_iterations: uint32;               // Only used if ai_player_type >= 2
   random_seed: uint64;                   // For reproducible results
+  // Per-player AI types for asymmetric evaluation (skill gap measurement)
+  // 0 = use ai_player_type for this player, 1+ = override (value-1 is the AI type)
+  player0_ai_type: ubyte;                // Override AI for player 0
+  player1_ai_type: ubyte;                // Override AI for player 1
 }
 
 // Batch of simulation requests

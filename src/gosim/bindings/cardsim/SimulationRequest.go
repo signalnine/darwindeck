@@ -108,8 +108,32 @@ func (rcv *SimulationRequest) MutateRandomSeed(n uint64) bool {
 	return rcv._tab.MutateUint64Slot(12, n)
 }
 
+func (rcv *SimulationRequest) Player0AiType() byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
+	if o != 0 {
+		return rcv._tab.GetByte(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *SimulationRequest) MutatePlayer0AiType(n byte) bool {
+	return rcv._tab.MutateByteSlot(14, n)
+}
+
+func (rcv *SimulationRequest) Player1AiType() byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
+	if o != 0 {
+		return rcv._tab.GetByte(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *SimulationRequest) MutatePlayer1AiType(n byte) bool {
+	return rcv._tab.MutateByteSlot(16, n)
+}
+
 func SimulationRequestStart(builder *flatbuffers.Builder) {
-	builder.StartObject(5)
+	builder.StartObject(7)
 }
 func SimulationRequestAddGenomeBytecode(builder *flatbuffers.Builder, genomeBytecode flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(genomeBytecode), 0)
@@ -128,6 +152,12 @@ func SimulationRequestAddMctsIterations(builder *flatbuffers.Builder, mctsIterat
 }
 func SimulationRequestAddRandomSeed(builder *flatbuffers.Builder, randomSeed uint64) {
 	builder.PrependUint64Slot(4, randomSeed, 0)
+}
+func SimulationRequestAddPlayer0AiType(builder *flatbuffers.Builder, player0AiType byte) {
+	builder.PrependByteSlot(5, player0AiType, 0)
+}
+func SimulationRequestAddPlayer1AiType(builder *flatbuffers.Builder, player1AiType byte) {
+	builder.PrependByteSlot(6, player1AiType, 0)
 }
 func SimulationRequestEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
