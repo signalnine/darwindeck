@@ -46,7 +46,7 @@ cd /home/gabe/cards-playtest
 ```
 
 This will:
-- Install Poetry if needed
+- Install uv if needed
 - Install Python dependencies
 - Verify Go simulator is present
 
@@ -60,7 +60,7 @@ This will:
 POPULATION=1000 GENERATIONS=200 ./scripts/run-evolution.sh
 
 # Or run directly with more control
-poetry run python -m darwindeck.cli.evolve \
+uv run python -m darwindeck.cli.evolve \
     --population-size 500 \
     --generations 100 \
     --output-dir output/my-run \
@@ -99,7 +99,7 @@ Different style presets weight fitness metrics differently:
 STYLE=strategic ./scripts/run-evolution.sh
 
 # Or via CLI
-poetry run python -m darwindeck.cli.evolve --style bluffing
+uv run python -m darwindeck.cli.evolve --style bluffing
 ```
 
 ### Environment Variables
