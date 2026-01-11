@@ -37,7 +37,8 @@ func GenerateLegalMoves(state *GameState, genome *Genome) []LegalMove {
 			case LocationDiscard:
 				canDraw = len(state.Discard) > 0
 			case LocationOpponentHand:
-				opponentID := 1 - currentPlayer
+				// Pick next player for N-player support
+				opponentID := (currentPlayer + 1) % state.NumPlayers
 				canDraw = len(state.Players[opponentID].Hand) > 0
 			}
 

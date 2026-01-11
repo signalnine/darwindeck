@@ -50,8 +50,7 @@ type GameResult struct {
 // AggregatedStats summarizes multiple game results
 type AggregatedStats struct {
 	TotalGames    uint32
-	Player0Wins   uint32
-	Player1Wins   uint32
+	Wins          []uint32 // Wins per player (index = player ID)
 	Draws         uint32
 	AvgTurns      float32
 	MedianTurns   uint32
@@ -528,6 +527,7 @@ func scoreMove(state *engine.GameState, move *engine.LegalMove) float64 {
 func aggregateResults(results []GameResult) AggregatedStats {
 	stats := AggregatedStats{
 		TotalGames: uint32(len(results)),
+		Wins:       make([]uint32, 4), // Support up to 4 players
 	}
 
 	turnCounts := make([]uint32, 0, len(results))
@@ -539,12 +539,10 @@ func aggregateResults(results []GameResult) AggregatedStats {
 			continue
 		}
 
-		switch result.WinnerID {
-		case 0:
-			stats.Player0Wins++
-		case 1:
-			stats.Player1Wins++
-		default:
+		// Track wins by player ID (supports N players)
+		if result.WinnerID >= 0 && int(result.WinnerID) < len(stats.Wins) {
+			stats.Wins[result.WinnerID]++
+		} else {
 			stats.Draws++
 		}
 

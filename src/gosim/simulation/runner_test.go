@@ -66,14 +66,14 @@ func TestRunBatchWithGoldenGenome(t *testing.T) {
 		t.Errorf("Got %d errors", stats.Errors)
 	}
 
-	totalWins := stats.Player0Wins + stats.Player1Wins + stats.Draws
+	totalWins := stats.Wins[0] + stats.Wins[1] + stats.Draws
 	if totalWins != 10 {
 		t.Errorf("Wins don't add up: %d+%d+%d = %d",
-			stats.Player0Wins, stats.Player1Wins, stats.Draws, totalWins)
+			stats.Wins[0], stats.Wins[1], stats.Draws, totalWins)
 	}
 
 	t.Logf("Batch results: P0=%d P1=%d Draws=%d, Avg turns=%.1f",
-		stats.Player0Wins, stats.Player1Wins, stats.Draws, stats.AvgTurns)
+		stats.Wins[0], stats.Wins[1], stats.Draws, stats.AvgTurns)
 }
 
 func BenchmarkRunSingleGame(b *testing.B) {

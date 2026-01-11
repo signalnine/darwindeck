@@ -129,16 +129,16 @@ func TestRunBatchParallel_ProducesSameResultsAsSerial(t *testing.T) {
 	}
 
 	// Check win rates are within reasonable bounds (10% tolerance)
-	serialP0WinRate := float64(serialStats.Player0Wins) / float64(numGames)
-	parallelP0WinRate := float64(parallelStats.Player0Wins) / float64(numGames)
+	serialP0WinRate := float64(serialStats.Wins[0]) / float64(numGames)
+	parallelP0WinRate := float64(parallelStats.Wins[0]) / float64(numGames)
 	winRateDiff := absDiff64(serialP0WinRate, parallelP0WinRate)
 	if winRateDiff > 0.10 {
 		t.Errorf("Player0 win rate too different: serial=%.3f, parallel=%.3f (diff=%.3f)",
 			serialP0WinRate, parallelP0WinRate, winRateDiff)
 	}
 
-	serialP1WinRate := float64(serialStats.Player1Wins) / float64(numGames)
-	parallelP1WinRate := float64(parallelStats.Player1Wins) / float64(numGames)
+	serialP1WinRate := float64(serialStats.Wins[1]) / float64(numGames)
+	parallelP1WinRate := float64(parallelStats.Wins[1]) / float64(numGames)
 	p1WinRateDiff := absDiff64(serialP1WinRate, parallelP1WinRate)
 	if p1WinRateDiff > 0.10 {
 		t.Errorf("Player1 win rate too different: serial=%.3f, parallel=%.3f (diff=%.3f)",
@@ -219,7 +219,7 @@ func TestRunBatchParallel_HandlesSmallBatches(t *testing.T) {
 	}
 
 	// Should complete without errors
-	totalOutcomes := stats.Player0Wins + stats.Player1Wins + stats.Draws + stats.Errors
+	totalOutcomes := stats.Wins[0] + stats.Wins[1] + stats.Draws + stats.Errors
 	if totalOutcomes != uint32(numGames) {
 		t.Errorf("Outcome count mismatch: %d != %d", totalOutcomes, numGames)
 	}
@@ -248,7 +248,7 @@ func TestRunBatchParallel_HandlesLargeBatches(t *testing.T) {
 	}
 
 	// Should complete without errors
-	totalOutcomes := stats.Player0Wins + stats.Player1Wins + stats.Draws + stats.Errors
+	totalOutcomes := stats.Wins[0] + stats.Wins[1] + stats.Draws + stats.Errors
 	if totalOutcomes != uint32(numGames) {
 		t.Errorf("Outcome count mismatch: %d != %d", totalOutcomes, numGames)
 	}
