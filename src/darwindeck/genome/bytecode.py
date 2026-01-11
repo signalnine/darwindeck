@@ -16,6 +16,9 @@ from darwindeck.genome.schema import (
     ClaimPhase,
     WinCondition,
     Location,
+    EffectType,
+    TargetSelector,
+    Rank,
 )
 from darwindeck.genome.conditions import Condition, ConditionType, Operator, CompoundCondition, ConditionOrCompound
 
@@ -67,6 +70,63 @@ class OpCode(IntEnum):
     OP_GT = 53
     OP_LE = 54
     OP_GE = 55
+    # Special Effects (60-69)
+    EFFECT_HEADER = 60
+    EFFECT_ENTRY = 61
+
+
+# Rank to bytecode mapping
+RANK_TO_BYTE = {
+    Rank.TWO: 0, Rank.THREE: 1, Rank.FOUR: 2, Rank.FIVE: 3,
+    Rank.SIX: 4, Rank.SEVEN: 5, Rank.EIGHT: 6, Rank.NINE: 7,
+    Rank.TEN: 8, Rank.JACK: 9, Rank.QUEEN: 10, Rank.KING: 11, Rank.ACE: 12,
+}
+
+# EffectType to bytecode mapping
+EFFECT_TYPE_TO_BYTE = {
+    EffectType.SKIP_NEXT: 0,
+    EffectType.REVERSE_DIRECTION: 1,
+    EffectType.DRAW_CARDS: 2,
+    EffectType.EXTRA_TURN: 3,
+    EffectType.FORCE_DISCARD: 4,
+}
+
+# TargetSelector to bytecode mapping
+TARGET_TO_BYTE = {
+    TargetSelector.NEXT_PLAYER: 0,
+    TargetSelector.PREV_PLAYER: 1,
+    TargetSelector.PLAYER_CHOICE: 2,
+    TargetSelector.RANDOM_OPPONENT: 3,
+    TargetSelector.ALL_OPPONENTS: 4,
+    TargetSelector.LEFT_OPPONENT: 5,
+    TargetSelector.RIGHT_OPPONENT: 6,
+}
+
+
+def compile_effects(effects: list) -> bytes:
+    """Compile special effects to bytecode.
+
+    Format:
+    - EFFECT_HEADER opcode (1 byte)
+    - effect_count (1 byte)
+    - For each effect (4 bytes):
+      - trigger_rank (1 byte)
+      - effect_type (1 byte)
+      - target (1 byte)
+      - value (1 byte)
+    """
+    if not effects:
+        return bytes()
+
+    result = bytes([OpCode.EFFECT_HEADER.value, len(effects)])
+    for effect in effects:
+        result += bytes([
+            RANK_TO_BYTE[effect.trigger_rank],
+            EFFECT_TYPE_TO_BYTE[effect.effect_type],
+            TARGET_TO_BYTE[effect.target],
+            effect.value,
+        ])
+    return result
 
 
 @dataclass
