@@ -10,6 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Tuple
 from darwindeck.evolution.engine import EvolutionEngine, EvolutionConfig
+from darwindeck.evolution.describe import describe_top_games
 from darwindeck.genome.serialization import genome_to_json, genome_from_json
 from darwindeck.genome.schema import GameGenome
 
@@ -206,6 +207,11 @@ def main() -> int:
         default=10,
         help='Number of top genomes to save'
     )
+    parser.add_argument(
+        '--no-describe',
+        action='store_true',
+        help='Skip LLM-generated game descriptions'
+    )
 
     # Logging
     parser.add_argument(
@@ -291,6 +297,40 @@ def main() -> int:
         with open(json_file, 'w') as f:
             f.write(genome_to_json(individual.genome))
         logging.info(f"  {i}. {individual.genome.genome_id} (fitness={individual.fitness:.4f})")
+
+    # Generate LLM descriptions for top 5 games
+    if not args.no_describe:
+        logging.info("\nGenerating descriptions for top 5 games...")
+        top_5 = [(ind.genome, ind.fitness) for ind in best_genomes[:5]]
+        descriptions = describe_top_games(top_5, top_n=5)
+
+        if descriptions:
+            # Save descriptions to markdown file
+            desc_file = run_output_dir / "descriptions.md"
+            with open(desc_file, 'w') as f:
+                f.write(f"# Top 5 Evolved Games\n\n")
+                f.write(f"Run: {timestamp}\n\n")
+                for i, individual in enumerate(best_genomes[:5], 1):
+                    genome_id = individual.genome.genome_id
+                    f.write(f"## {i}. {genome_id}\n\n")
+                    f.write(f"**Fitness:** {individual.fitness:.4f}\n\n")
+                    if genome_id in descriptions:
+                        f.write(f"{descriptions[genome_id]}\n\n")
+                    else:
+                        f.write("*Description not available*\n\n")
+                    f.write("---\n\n")
+
+            logging.info(f"  Saved descriptions to {desc_file}")
+
+            # Also print descriptions to console
+            logging.info("\n" + "="*60)
+            logging.info("TOP 5 GAME DESCRIPTIONS")
+            logging.info("="*60)
+            for i, individual in enumerate(best_genomes[:5], 1):
+                genome_id = individual.genome.genome_id
+                logging.info(f"\n{i}. {genome_id} (fitness={individual.fitness:.4f})")
+                if genome_id in descriptions:
+                    logging.info(f"   {descriptions[genome_id]}")
 
     logging.info(f"\n✅ Evolution complete! Best fitness: {engine.best_ever.fitness:.4f}")
     return 0
