@@ -112,3 +112,18 @@ func applyToTargets(state *GameState, target uint8, rng RNG, action func(int)) {
 		action(targetID)
 	}
 }
+
+// AdvanceTurn moves to the next player, respecting direction and skips
+func AdvanceTurn(state *GameState) {
+	step := int(state.PlayDirection)
+	next := int(state.CurrentPlayer)
+	numPlayers := int(state.NumPlayers)
+
+	// Always advance at least once, plus any skips
+	for i := 0; i <= int(state.SkipCount); i++ {
+		next = (next + step + numPlayers) % numPlayers
+	}
+
+	state.CurrentPlayer = uint8(next)
+	state.SkipCount = 0 // Reset after applying
+}
