@@ -373,8 +373,10 @@ func resolveWarBattle(state *GameState) {
 	} else if card2.Rank > card1.Rank {
 		winner = 1
 	} else {
-		// Tie - in simplified War, alternate who wins ties
-		winner = state.CurrentPlayer
+		// Tie - alternate who wins ties based on battle number
+		// Each battle takes 2 turns, so divide TurnNumber by 2
+		battleNum := state.TurnNumber / 2
+		winner = uint8(battleNum % 2)
 	}
 
 	// Winner takes all cards from tableau
