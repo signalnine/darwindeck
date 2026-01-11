@@ -8,7 +8,8 @@ from typing import List, Optional
 from dataclasses import replace
 from darwindeck.genome.schema import (
     GameGenome, WinCondition, SetupRules, TurnStructure,
-    PlayPhase, DrawPhase, DiscardPhase, Location
+    PlayPhase, DrawPhase, DiscardPhase, TrickPhase, ClaimPhase,
+    Location, Suit
 )
 from darwindeck.genome.conditions import Condition, ConditionType, Operator
 from darwindeck.evolution.naming import generate_name
@@ -166,13 +167,21 @@ class AddPhaseMutation(MutationOperator):
             return genome
 
         # Create new phase (random type)
-        new_phase = random.choice([
-            DrawPhase(
+        # Weight towards simpler phases, but allow complex ones
+        phase_type = random.choices(
+            ["draw", "play", "discard", "trick", "claim"],
+            weights=[30, 30, 20, 10, 10],  # Trick/claim less common
+            k=1
+        )[0]
+
+        if phase_type == "draw":
+            new_phase = DrawPhase(
                 source=random.choice([Location.DECK, Location.DISCARD]),
                 count=1,
                 mandatory=random.choice([True, False])
-            ),
-            PlayPhase(
+            )
+        elif phase_type == "play":
+            new_phase = PlayPhase(
                 target=Location.DISCARD,
                 valid_play_condition=Condition(
                     type=ConditionType.HAND_SIZE,
@@ -182,13 +191,28 @@ class AddPhaseMutation(MutationOperator):
                 min_cards=1,
                 max_cards=1,
                 mandatory=True
-            ),
-            DiscardPhase(
+            )
+        elif phase_type == "discard":
+            new_phase = DiscardPhase(
                 target=Location.DISCARD,
                 count=1,
                 mandatory=False
             )
-        ])
+        elif phase_type == "trick":
+            new_phase = TrickPhase(
+                lead_suit_required=random.choice([True, False]),
+                trump_suit=random.choice([None, Suit.SPADES, Suit.HEARTS]),
+                high_card_wins=random.choice([True, False]),
+                breaking_suit=random.choice([None, Suit.HEARTS])
+            )
+        else:  # claim (bluffing)
+            new_phase = ClaimPhase(
+                min_cards=1,
+                max_cards=random.choice([1, 2, 3, 4]),
+                sequential_rank=random.choice([True, False]),
+                allow_challenge=True,
+                pile_penalty=True
+            )
 
         # Insert at random position
         insert_pos = random.randint(0, len(phases))
@@ -350,7 +374,12 @@ class ReplacePhaseMutation(MutationOperator):
         idx = random.randint(0, len(phases) - 1)
 
         # Generate completely new random phase
-        phase_type = random.choice(['draw', 'play', 'discard'])
+        # Weight towards simpler phases, but allow complex ones
+        phase_type = random.choices(
+            ['draw', 'play', 'discard', 'trick', 'claim'],
+            weights=[30, 30, 20, 10, 10],
+            k=1
+        )[0]
 
         if phase_type == 'draw':
             new_phase = DrawPhase(
@@ -367,11 +396,26 @@ class ReplacePhaseMutation(MutationOperator):
                 max_cards=random.randint(1, 10),
                 mandatory=random.choice([True, False])
             )
-        else:
+        elif phase_type == 'discard':
             new_phase = DiscardPhase(
                 target=Location.DISCARD,
                 count=random.randint(1, 3),
                 mandatory=random.choice([True, False])
+            )
+        elif phase_type == 'trick':
+            new_phase = TrickPhase(
+                lead_suit_required=random.choice([True, False]),
+                trump_suit=random.choice([None, Suit.SPADES, Suit.HEARTS, Suit.DIAMONDS, Suit.CLUBS]),
+                high_card_wins=random.choice([True, False]),
+                breaking_suit=random.choice([None, Suit.HEARTS, Suit.SPADES])
+            )
+        else:  # claim (bluffing)
+            new_phase = ClaimPhase(
+                min_cards=1,
+                max_cards=random.choice([1, 2, 3, 4]),
+                sequential_rank=random.choice([True, False]),
+                allow_challenge=True,
+                pile_penalty=True
             )
 
         phases[idx] = new_phase
@@ -473,7 +517,8 @@ class ModifyWinConditionMutation(MutationOperator):
 
     WIN_CONDITION_TYPES = [
         "empty_hand", "high_score", "first_to_score", "capture_all",
-        "low_score", "all_hands_empty"  # Added for trick-taking games
+        "low_score", "all_hands_empty",  # Trick-taking games
+        "most_captured", "best_hand"  # Scopa-style capture, Poker hand evaluation
     ]
 
     def __init__(self, probability: float = 0.1):
