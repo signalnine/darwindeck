@@ -193,7 +193,7 @@ func ApplyMove(state *GameState, move *LegalMove, genome *Genome) {
 			state.PlayCard(currentPlayer, move.CardIndex, move.TargetLoc)
 
 			// War-specific logic: if playing to tableau in 2-player game
-			if move.TargetLoc == LocationTableau && len(state.Players) == 2 {
+			if move.TargetLoc == LocationTableau && state.NumPlayers == 2 {
 				resolveWarBattle(state)
 			}
 		}
