@@ -40,6 +40,15 @@ class EvolutionConfig:
     random_seed: Optional[int] = None
     seed_genomes: Optional[List[GameGenome]] = None  # Custom genomes to seed from
     fitness_style: str = 'balanced'  # Fitness weight preset (balanced, bluffing, strategic, party, trick-taking)
+    # Skill evaluation during evolution
+    skill_eval_frequency: int = 5  # Run skill eval every N generations (0 = disabled)
+    skill_eval_top_percent: float = 0.2  # Evaluate top 20% of population
+    skill_eval_games: int = 50  # Games per skill evaluation (fast: 50, thorough: 100)
+    skill_eval_mcts_iterations: int = 100  # MCTS iterations for skill eval
+    fpa_penalty_threshold: float = 0.3  # Penalize if |first_player_advantage| > this
+    fpa_penalty_weight: float = 0.3  # Fitness multiplier for FPA penalty (0.3 = 30% reduction)
+    low_skill_penalty_threshold: float = 0.6  # Penalize if skill_score < this
+    low_skill_penalty_weight: float = 0.2  # Fitness multiplier for low skill penalty
 
 
 @dataclass
@@ -186,6 +195,94 @@ class EvolutionEngine:
 
         logger.info(f"Evaluation complete. Avg fitness: {self.population.get_average_fitness():.3f}")
 
+    def evaluate_skill_and_penalize(self, generation: int) -> None:
+        """Run skill evaluation on top performers and penalize unfit games.
+
+        Penalizes games with:
+        - High first-player advantage (|FPA| > threshold)
+        - Low skill scores (skill_score < threshold)
+
+        Args:
+            generation: Current generation number (for logging)
+        """
+        if self.population is None:
+            return
+
+        # Check if skill eval is enabled and it's the right generation
+        if self.config.skill_eval_frequency <= 0:
+            return
+        if generation % self.config.skill_eval_frequency != 0:
+            return
+
+        # Get top N% of population for skill evaluation
+        n_to_evaluate = max(1, int(len(self.population.individuals) * self.config.skill_eval_top_percent))
+        sorted_pop = sorted(self.population.individuals, key=lambda ind: ind.fitness, reverse=True)
+        top_individuals = sorted_pop[:n_to_evaluate]
+
+        logger.info(f"🎯 Running skill evaluation on top {n_to_evaluate} individuals...")
+
+        # Extract genomes for batch evaluation
+        genomes = [ind.genome for ind in top_individuals]
+
+        # Run skill evaluation
+        from darwindeck.evolution.skill_evaluation import evaluate_batch_skill
+
+        def progress(completed: int, total: int) -> None:
+            if completed % 5 == 0 or completed == total:
+                logger.info(f"  Skill eval: {completed}/{total}")
+
+        results = evaluate_batch_skill(
+            genomes=genomes,
+            num_games=self.config.skill_eval_games,
+            mcts_iterations=self.config.skill_eval_mcts_iterations,
+            timeout_sec=30.0,  # Shorter timeout for in-evolution eval
+            num_workers=self.num_workers,
+            progress_callback=progress
+        )
+
+        # Build result lookup
+        skill_by_id = {r.genome_id: r for r in results}
+
+        # Apply penalties
+        penalties_applied = 0
+        fpa_penalties = 0
+        skill_penalties = 0
+
+        for i, ind in enumerate(self.population.individuals):
+            skill_result = skill_by_id.get(ind.genome.genome_id)
+            if skill_result is None:
+                continue
+
+            penalty_multiplier = 1.0
+
+            # Penalize high first-player advantage
+            if abs(skill_result.first_player_advantage) > self.config.fpa_penalty_threshold:
+                penalty_multiplier *= (1.0 - self.config.fpa_penalty_weight)
+                fpa_penalties += 1
+
+            # Penalize low skill score
+            if skill_result.skill_score < self.config.low_skill_penalty_threshold:
+                penalty_multiplier *= (1.0 - self.config.low_skill_penalty_weight)
+                skill_penalties += 1
+
+            # Apply penalty if any
+            if penalty_multiplier < 1.0:
+                penalties_applied += 1
+                old_fitness = ind.fitness
+                new_fitness = ind.fitness * penalty_multiplier
+                # Update individual in population
+                self.population.individuals[i] = Individual(
+                    genome=ind.genome,
+                    fitness=new_fitness,
+                    evaluated=True,
+                    fitness_metrics=ind.fitness_metrics
+                )
+                logger.debug(f"  Penalized {ind.genome.genome_id}: {old_fitness:.4f} -> {new_fitness:.4f} "
+                           f"(FPA={skill_result.first_player_advantage:+.2f}, skill={skill_result.skill_score:.2f})")
+
+        logger.info(f"  Skill eval complete: {penalties_applied} penalties applied "
+                   f"({fpa_penalties} FPA, {skill_penalties} low-skill)")
+
     def tournament_selection(self, k: int = 3) -> Individual:
         """Select individual via tournament selection.
 
@@ -286,6 +383,10 @@ class EvolutionEngine:
         # Evaluate initial population
         self.evaluate_population()
 
+        # Run initial skill evaluation if enabled
+        if self.config.skill_eval_frequency > 0:
+            self.evaluate_skill_and_penalize(0)
+
         # Evolution loop
         for generation in range(self.config.max_generations):
             logger.info(f"\n{'='*60}")
@@ -341,6 +442,9 @@ class EvolutionEngine:
 
             # Evaluate new individuals
             self.evaluate_population()
+
+            # Run skill evaluation and penalize unfit games (every N generations)
+            self.evaluate_skill_and_penalize(generation + 1)
 
         logger.info("\n" + "="*60)
         logger.info("Evolution complete!")

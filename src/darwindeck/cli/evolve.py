@@ -251,6 +251,44 @@ def main() -> int:
         help='Skip post-evolution skill evaluation (Greedy + MCTS vs Random)'
     )
 
+    # In-evolution skill evaluation (to penalize unfit games during breeding)
+    parser.add_argument(
+        '--skill-eval-frequency',
+        type=int,
+        default=5,
+        help='Run skill evaluation every N generations during evolution (0 = disabled)'
+    )
+    parser.add_argument(
+        '--skill-eval-games',
+        type=int,
+        default=50,
+        help='Games per genome for in-evolution skill evaluation'
+    )
+    parser.add_argument(
+        '--fpa-penalty-threshold',
+        type=float,
+        default=0.3,
+        help='Penalize games with |first_player_advantage| > this (0.3 = 30%%)'
+    )
+    parser.add_argument(
+        '--fpa-penalty-weight',
+        type=float,
+        default=0.3,
+        help='Fitness penalty multiplier for high FPA (0.3 = 30%% fitness reduction)'
+    )
+    parser.add_argument(
+        '--low-skill-threshold',
+        type=float,
+        default=0.6,
+        help='Penalize games with skill_score < this'
+    )
+    parser.add_argument(
+        '--low-skill-penalty',
+        type=float,
+        default=0.2,
+        help='Fitness penalty multiplier for low skill (0.2 = 20%% fitness reduction)'
+    )
+
     # Logging
     parser.add_argument(
         '--verbose', '-v',
@@ -302,7 +340,15 @@ def main() -> int:
         seed_ratio=args.seed_ratio,
         random_seed=args.random_seed,
         seed_genomes=seed_genomes,
-        fitness_style=args.style
+        fitness_style=args.style,
+        # In-evolution skill evaluation
+        skill_eval_frequency=args.skill_eval_frequency,
+        skill_eval_games=args.skill_eval_games,
+        skill_eval_mcts_iterations=args.mcts_iterations,
+        fpa_penalty_threshold=args.fpa_penalty_threshold,
+        fpa_penalty_weight=args.fpa_penalty_weight,
+        low_skill_penalty_threshold=args.low_skill_threshold,
+        low_skill_penalty_weight=args.low_skill_penalty
     )
 
     # Create evolution engine
@@ -317,6 +363,13 @@ def main() -> int:
         logging.info(f"  Plateau detection: enabled ({config.plateau_threshold} generations)")
     else:
         logging.info(f"  Plateau detection: disabled")
+    if config.skill_eval_frequency > 0:
+        logging.info(f"  In-evolution skill eval: every {config.skill_eval_frequency} generations")
+        logging.info(f"    - Top {config.skill_eval_top_percent*100:.0f}% evaluated, {config.skill_eval_games} games each")
+        logging.info(f"    - FPA penalty: >{config.fpa_penalty_threshold*100:.0f}% -> {config.fpa_penalty_weight*100:.0f}% fitness reduction")
+        logging.info(f"    - Low skill penalty: <{config.low_skill_penalty_threshold:.1f} -> {config.low_skill_penalty_weight*100:.0f}% fitness reduction")
+    else:
+        logging.info(f"  In-evolution skill eval: disabled")
 
     engine = EvolutionEngine(config)
 
