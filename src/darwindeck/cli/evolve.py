@@ -6,8 +6,9 @@ import argparse
 import logging
 import sys
 import json
+from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from darwindeck.evolution.engine import EvolutionEngine, EvolutionConfig
 from darwindeck.genome.serialization import genome_to_json, genome_from_json
 from darwindeck.genome.schema import GameGenome
@@ -49,6 +50,59 @@ def load_seed_genomes(seed_dir: Path) -> List[GameGenome]:
                 logging.debug(f"  Loaded {genome.genome_id} from {json_file.name}")
         except Exception as e:
             logging.warning(f"  Failed to load {json_file.name}: {e}")
+
+    return genomes
+
+
+def load_seeds_from_last_runs(
+    output_dir: Path,
+    num_runs: int = 5,
+    top_n_per_run: int = 10
+) -> List[GameGenome]:
+    """Load top genomes from the last N evolution runs.
+
+    Args:
+        output_dir: Base output directory containing run subdirectories
+        num_runs: Number of recent runs to load from (default: 5)
+        top_n_per_run: Number of top genomes to load per run (default: 10)
+
+    Returns:
+        List of loaded GameGenome objects
+    """
+    if not output_dir.exists():
+        return []
+
+    # Find all run directories (timestamped subdirectories)
+    run_dirs = []
+    for d in output_dir.iterdir():
+        if d.is_dir():
+            # Check if it looks like a timestamp directory (YYYY-MM-DD_HH-MM-SS)
+            try:
+                datetime.strptime(d.name, "%Y-%m-%d_%H-%M-%S")
+                run_dirs.append(d)
+            except ValueError:
+                # Not a timestamp directory, skip
+                continue
+
+    if not run_dirs:
+        logging.info("No previous runs found in output directory")
+        return []
+
+    # Sort by name (which is timestamp) and take last N
+    run_dirs = sorted(run_dirs, key=lambda d: d.name)[-num_runs:]
+
+    genomes = []
+    for run_dir in run_dirs:
+        # Load ranked genomes (rank01, rank02, etc.)
+        json_files = sorted(run_dir.glob("rank*.json"))[:top_n_per_run]
+        for json_file in json_files:
+            try:
+                with open(json_file) as f:
+                    genome = genome_from_json(f.read())
+                    genomes.append(genome)
+                    logging.debug(f"  Loaded {genome.genome_id} from {run_dir.name}/{json_file.name}")
+            except Exception as e:
+                logging.warning(f"  Failed to load {json_file.name}: {e}")
 
     return genomes
 
@@ -115,6 +169,29 @@ def main() -> int:
         default=None,
         help='Directory containing JSON genomes to use as seeds (replaces default seeds)'
     )
+    parser.add_argument(
+        '--auto-seed',
+        action='store_true',
+        default=True,
+        help='Automatically load seeds from last N runs (default: enabled)'
+    )
+    parser.add_argument(
+        '--no-auto-seed',
+        action='store_true',
+        help='Disable auto-seeding from previous runs'
+    )
+    parser.add_argument(
+        '--auto-seed-runs',
+        type=int,
+        default=5,
+        help='Number of previous runs to load seeds from'
+    )
+    parser.add_argument(
+        '--auto-seed-top-n',
+        type=int,
+        default=10,
+        help='Number of top genomes to load per previous run'
+    )
 
     # Output options
     parser.add_argument(
@@ -142,9 +219,11 @@ def main() -> int:
     # Setup logging
     setup_logging(args.verbose)
 
-    # Load seed genomes if specified
+    # Load seed genomes
     seed_genomes = None
+
     if args.seed_from:
+        # Explicit seed directory takes precedence
         if not args.seed_from.exists():
             logging.error(f"Seed directory not found: {args.seed_from}")
             return 1
@@ -154,6 +233,19 @@ def main() -> int:
             logging.error("No valid genomes found in seed directory")
             return 1
         logging.info(f"  Loaded {len(seed_genomes)} seed genomes")
+
+    elif args.auto_seed and not args.no_auto_seed:
+        # Auto-seed from last N runs
+        logging.info(f"Auto-seeding from last {args.auto_seed_runs} runs (top {args.auto_seed_top_n} per run)...")
+        seed_genomes = load_seeds_from_last_runs(
+            output_dir=args.output_dir,
+            num_runs=args.auto_seed_runs,
+            top_n_per_run=args.auto_seed_top_n
+        )
+        if seed_genomes:
+            logging.info(f"  Loaded {len(seed_genomes)} seed genomes from previous runs")
+        else:
+            logging.info("  No previous runs found, using default seeds")
 
     # Create configuration
     config = EvolutionConfig(
@@ -186,14 +278,16 @@ def main() -> int:
         logging.info("\n\nEvolution interrupted by user")
         return 1
 
-    # Save best genomes as JSON (can be reused as seeds)
-    args.output_dir.mkdir(parents=True, exist_ok=True)
+    # Save best genomes as JSON to timestamped subdirectory
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    run_output_dir = args.output_dir / timestamp
+    run_output_dir.mkdir(parents=True, exist_ok=True)
     best_genomes = engine.get_best_genomes(n=args.save_top_n)
 
-    logging.info(f"\nSaving top {len(best_genomes)} genomes to {args.output_dir}")
+    logging.info(f"\nSaving top {len(best_genomes)} genomes to {run_output_dir}")
     for i, individual in enumerate(best_genomes, 1):
         # Save as JSON for reuse as seeds
-        json_file = args.output_dir / f"rank{i:02d}_{individual.genome.genome_id}.json"
+        json_file = run_output_dir / f"rank{i:02d}_{individual.genome.genome_id}.json"
         with open(json_file, 'w') as f:
             f.write(genome_to_json(individual.genome))
         logging.info(f"  {i}. {individual.genome.genome_id} (fitness={individual.fitness:.4f})")
