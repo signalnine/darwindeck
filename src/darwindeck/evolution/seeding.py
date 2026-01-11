@@ -7,7 +7,16 @@ from typing import List
 from darwindeck.genome.schema import GameGenome
 from darwindeck.genome.examples import (
     create_war_genome,
-    create_hearts_genome
+    create_hearts_genome,
+    create_crazy_eights_genome,
+    create_gin_rummy_genome,
+    create_old_maid_genome,
+    create_go_fish_genome,
+    create_betting_war_genome,
+    create_cheat_genome,
+    create_scopa_genome,
+    create_draw_poker_genome,
+    create_scotch_whist_genome,
 )
 from darwindeck.evolution.operators import create_default_pipeline
 from darwindeck.evolution.population import Individual
@@ -36,13 +45,19 @@ def create_seed_population(
     n_seeds = int(size * seed_ratio)
     n_mutants = size - n_seeds
 
-    # Load base genomes
+    # Load base genomes - all 11 example games
     base_genomes = [
         create_war_genome(),
         create_hearts_genome(),
-        # TODO: Add more when examples are available:
-        # create_crazy_eights_genome(),
-        # create_gin_rummy_genome(),
+        create_crazy_eights_genome(),
+        create_gin_rummy_genome(),
+        create_old_maid_genome(),
+        create_go_fish_genome(),
+        create_betting_war_genome(),
+        create_cheat_genome(),
+        create_scopa_genome(),
+        create_draw_poker_genome(),
+        create_scotch_whist_genome(),
     ]
 
     population: List[Individual] = []
