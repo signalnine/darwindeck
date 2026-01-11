@@ -419,7 +419,7 @@ def main() -> int:
         except Exception as e:
             logging.warning(f"  Skill evaluation failed: {e}")
 
-    # Re-rank if strategic style (use combined skill_score)
+    # Re-rank if strategic style (use combined skill_score - higher is better)
     if args.style == 'strategic' and skill_results:
         logging.info("\nRe-ranking by skill score (--style strategic)...")
         best_genomes = sorted(
@@ -431,6 +431,20 @@ def main() -> int:
                 total_games=0, skill_score=0.5, first_player_advantage=0.0
             )).skill_score,
             reverse=True
+        )
+
+    # Re-rank if party style (use combined skill_score - LOWER is better for party games)
+    if args.style == 'party' and skill_results:
+        logging.info("\nRe-ranking by luck-friendliness (--style party, lower skill = better)...")
+        best_genomes = sorted(
+            best_genomes,
+            key=lambda ind: skill_results.get(ind.genome.genome_id, SkillEvalResult(
+                genome_id=ind.genome.genome_id,
+                greedy_wins_as_p0=0, greedy_wins_as_p1=0, greedy_win_rate=0.5,
+                mcts_wins_as_p0=0, mcts_wins_as_p1=0, mcts_win_rate=0.5,
+                total_games=0, skill_score=0.5, first_player_advantage=0.0
+            )).skill_score,
+            reverse=False  # Lower skill = higher rank for party
         )
 
     # Filter out games with severe first-player advantage (> 30%)
