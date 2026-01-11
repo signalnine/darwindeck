@@ -14,15 +14,17 @@ STYLE_PRESETS = {
         'interaction_frequency': 0.20,
         'rules_complexity': 0.05,
         'skill_vs_luck': 0.30,
+        'bluffing_depth': 0.00,  # Not required for balanced games
     },
     'bluffing': {
         # Favor hidden information, betting, and player interaction
-        'decision_density': 0.25,
+        'decision_density': 0.15,
         'comeback_potential': 0.10,
-        'tension_curve': 0.15,
-        'interaction_frequency': 0.30,  # High - bluffing needs interaction
+        'tension_curve': 0.10,
+        'interaction_frequency': 0.20,
         'rules_complexity': 0.05,
-        'skill_vs_luck': 0.15,  # Lower - bluffing has luck element
+        'skill_vs_luck': 0.10,
+        'bluffing_depth': 0.30,  # High - must have quality bluffing mechanics
     },
     'strategic': {
         # Favor deep thinking, skill-based play
@@ -32,6 +34,7 @@ STYLE_PRESETS = {
         'interaction_frequency': 0.15,
         'rules_complexity': 0.05,
         'skill_vs_luck': 0.40,  # High skill emphasis
+        'bluffing_depth': 0.00,  # Not required for strategic games
     },
     'party': {
         # Favor quick, interactive, accessible games
@@ -41,6 +44,7 @@ STYLE_PRESETS = {
         'interaction_frequency': 0.25,  # High interaction
         'rules_complexity': 0.20,  # Simple rules
         'skill_vs_luck': 0.05,  # Luck-friendly
+        'bluffing_depth': 0.00,  # Not required for party games
     },
     'trick-taking': {
         # Favor trick-based mechanics
@@ -50,6 +54,7 @@ STYLE_PRESETS = {
         'interaction_frequency': 0.25,
         'rules_complexity': 0.05,
         'skill_vs_luck': 0.20,
+        'bluffing_depth': 0.00,  # Not required for trick-taking
     },
 }
 
@@ -72,6 +77,13 @@ class SimulationResults:
     total_interactions: int = 0
     total_actions: int = 0
 
+    # Bluffing metrics (ClaimPhase games)
+    total_claims: int = 0
+    total_bluffs: int = 0
+    total_challenges: int = 0
+    successful_bluffs: int = 0
+    successful_catches: int = 0
+
 
 @dataclass(frozen=True)
 class FitnessMetrics:
@@ -83,6 +95,7 @@ class FitnessMetrics:
     rules_complexity: float
     session_length: float       # Tracked but not averaged (constraint only)
     skill_vs_luck: float
+    bluffing_depth: float       # Quality of bluffing mechanics (0 for non-bluffing games)
     total_fitness: float
     games_simulated: int
     valid: bool
@@ -269,6 +282,7 @@ class FitnessEvaluator:
                 rules_complexity=0.0,
                 session_length=0.0,  # Violates constraint
                 skill_vs_luck=0.0,
+                bluffing_depth=0.0,
                 total_fitness=0.0,   # Failed constraint
                 games_simulated=results.total_games,
                 valid=False  # Mark as invalid
@@ -312,18 +326,59 @@ class FitnessEvaluator:
                 complexity_factor * 0.3
             )
 
+        # 8. Bluffing depth - quality of bluffing mechanics
+        # Only relevant for games with ClaimPhase (bluffing mechanics)
+        if results.total_claims > 0:
+            # Game has bluffing - evaluate quality
+            bluff_rate = results.total_bluffs / results.total_claims
+            challenge_rate = results.total_challenges / results.total_claims if results.total_claims > 0 else 0
+
+            # Good bluffing games have:
+            # - Mix of bluffs and honest claims (not 100% bluffs)
+            # - Meaningful challenge decisions (not 0% or 100%)
+            # - Both successful bluffs and catches (skill in reading opponents)
+
+            # Bluff rate score: Best around 50-70% (some honest, some bluff)
+            bluff_score = 1.0 - abs(bluff_rate - 0.6) * 2
+            bluff_score = max(0.0, min(1.0, bluff_score))
+
+            # Challenge rate score: Best around 30-50% (some trust, some skepticism)
+            challenge_score = 1.0 - abs(challenge_rate - 0.4) * 2
+            challenge_score = max(0.0, min(1.0, challenge_score))
+
+            # Success balance: Both bluffs and catches should succeed sometimes
+            total_outcomes = results.successful_bluffs + results.successful_catches
+            if total_outcomes > 0:
+                bluff_success_rate = results.successful_bluffs / total_outcomes
+                # Best around 50% - neither side dominates
+                balance_score = 1.0 - abs(bluff_success_rate - 0.5) * 2
+                balance_score = max(0.0, min(1.0, balance_score))
+            else:
+                balance_score = 0.0
+
+            # Combine scores
+            bluffing_depth = (
+                bluff_score * 0.3 +      # Good bluff rate
+                challenge_score * 0.3 +  # Good challenge rate
+                balance_score * 0.4      # Balanced outcomes (most important)
+            )
+        else:
+            # No bluffing mechanics
+            bluffing_depth = 0.0
+
         # Check validity
         valid = results.errors == 0 and results.total_games > 0
 
         # Compute weighted total (session_length removed from average)
-        # Only 6 metrics now (session_length is a constraint)
+        # 7 metrics now (session_length is a constraint)
         total_fitness = (
             self.weights['decision_density'] * decision_density +
             self.weights['comeback_potential'] * comeback_potential +
             self.weights['tension_curve'] * tension_curve +
             self.weights['interaction_frequency'] * interaction_frequency +
             self.weights['rules_complexity'] * rules_complexity +
-            self.weights['skill_vs_luck'] * skill_vs_luck
+            self.weights['skill_vs_luck'] * skill_vs_luck +
+            self.weights['bluffing_depth'] * bluffing_depth
         )
 
         # No need to renormalize - weights already sum to 1.0
@@ -336,6 +391,7 @@ class FitnessEvaluator:
             rules_complexity=rules_complexity,
             session_length=session_length,  # Keep for reporting
             skill_vs_luck=skill_vs_luck,
+            bluffing_depth=bluffing_depth,
             total_fitness=total_fitness,
             games_simulated=results.total_games,
             valid=valid

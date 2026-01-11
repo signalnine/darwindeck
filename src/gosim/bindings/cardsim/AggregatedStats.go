@@ -194,8 +194,68 @@ func (rcv *AggregatedStats) MutateTotalActions(n uint64) bool {
 	return rcv._tab.MutateUint64Slot(30, n)
 }
 
+func (rcv *AggregatedStats) TotalClaims() uint64 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(32))
+	if o != 0 {
+		return rcv._tab.GetUint64(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *AggregatedStats) MutateTotalClaims(n uint64) bool {
+	return rcv._tab.MutateUint64Slot(32, n)
+}
+
+func (rcv *AggregatedStats) TotalBluffs() uint64 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(34))
+	if o != 0 {
+		return rcv._tab.GetUint64(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *AggregatedStats) MutateTotalBluffs(n uint64) bool {
+	return rcv._tab.MutateUint64Slot(34, n)
+}
+
+func (rcv *AggregatedStats) TotalChallenges() uint64 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(36))
+	if o != 0 {
+		return rcv._tab.GetUint64(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *AggregatedStats) MutateTotalChallenges(n uint64) bool {
+	return rcv._tab.MutateUint64Slot(36, n)
+}
+
+func (rcv *AggregatedStats) SuccessfulBluffs() uint64 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(38))
+	if o != 0 {
+		return rcv._tab.GetUint64(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *AggregatedStats) MutateSuccessfulBluffs(n uint64) bool {
+	return rcv._tab.MutateUint64Slot(38, n)
+}
+
+func (rcv *AggregatedStats) SuccessfulCatches() uint64 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(40))
+	if o != 0 {
+		return rcv._tab.GetUint64(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *AggregatedStats) MutateSuccessfulCatches(n uint64) bool {
+	return rcv._tab.MutateUint64Slot(40, n)
+}
+
 func AggregatedStatsStart(builder *flatbuffers.Builder) {
-	builder.StartObject(14)
+	builder.StartObject(19)
 }
 func AggregatedStatsAddTotalGames(builder *flatbuffers.Builder, totalGames uint32) {
 	builder.PrependUint32Slot(0, totalGames, 0)
@@ -238,6 +298,21 @@ func AggregatedStatsAddTotalInteractions(builder *flatbuffers.Builder, totalInte
 }
 func AggregatedStatsAddTotalActions(builder *flatbuffers.Builder, totalActions uint64) {
 	builder.PrependUint64Slot(13, totalActions, 0)
+}
+func AggregatedStatsAddTotalClaims(builder *flatbuffers.Builder, totalClaims uint64) {
+	builder.PrependUint64Slot(14, totalClaims, 0)
+}
+func AggregatedStatsAddTotalBluffs(builder *flatbuffers.Builder, totalBluffs uint64) {
+	builder.PrependUint64Slot(15, totalBluffs, 0)
+}
+func AggregatedStatsAddTotalChallenges(builder *flatbuffers.Builder, totalChallenges uint64) {
+	builder.PrependUint64Slot(16, totalChallenges, 0)
+}
+func AggregatedStatsAddSuccessfulBluffs(builder *flatbuffers.Builder, successfulBluffs uint64) {
+	builder.PrependUint64Slot(17, successfulBluffs, 0)
+}
+func AggregatedStatsAddSuccessfulCatches(builder *flatbuffers.Builder, successfulCatches uint64) {
+	builder.PrependUint64Slot(18, successfulCatches, 0)
 }
 func AggregatedStatsEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

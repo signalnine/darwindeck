@@ -32,6 +32,13 @@ type AggStats struct {
 	TotalInteractions uint64
 	TotalActions      uint64
 	TotalHandSize     uint64
+
+	// Bluffing metrics
+	TotalClaims       uint64
+	TotalBluffs       uint64
+	TotalChallenges   uint64
+	SuccessfulBluffs  uint64
+	SuccessfulCatches uint64
 }
 
 //export SimulateBatch
@@ -109,6 +116,12 @@ func SimulateBatch(requestPtr unsafe.Pointer, requestLen C.int, responseLen *C.i
 			TotalInteractions: simStats.TotalInteractions,
 			TotalActions:      simStats.TotalActions,
 			TotalHandSize:     simStats.TotalHandSize,
+			// Bluffing metrics
+			TotalClaims:       simStats.TotalClaims,
+			TotalBluffs:       simStats.TotalBluffs,
+			TotalChallenges:   simStats.TotalChallenges,
+			SuccessfulBluffs:  simStats.SuccessfulBluffs,
+			SuccessfulCatches: simStats.SuccessfulCatches,
 		}
 
 		// Serialize result
@@ -168,6 +181,12 @@ func serializeStats(builder *flatbuffers.Builder, stats *AggStats) flatbuffers.U
 	cardsim.AggregatedStatsAddTotalHandSize(builder, stats.TotalHandSize)
 	cardsim.AggregatedStatsAddTotalInteractions(builder, stats.TotalInteractions)
 	cardsim.AggregatedStatsAddTotalActions(builder, stats.TotalActions)
+	// Bluffing metrics
+	cardsim.AggregatedStatsAddTotalClaims(builder, stats.TotalClaims)
+	cardsim.AggregatedStatsAddTotalBluffs(builder, stats.TotalBluffs)
+	cardsim.AggregatedStatsAddTotalChallenges(builder, stats.TotalChallenges)
+	cardsim.AggregatedStatsAddSuccessfulBluffs(builder, stats.SuccessfulBluffs)
+	cardsim.AggregatedStatsAddSuccessfulCatches(builder, stats.SuccessfulCatches)
 	return cardsim.AggregatedStatsEnd(builder)
 }
 
