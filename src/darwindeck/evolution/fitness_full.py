@@ -190,11 +190,11 @@ class FitnessEvaluator:
 
         # 6. Session length - CONSTRAINT, not metric
         estimated_duration_sec = results.avg_turns * 2  # 2 sec per turn
-        target_min = 3 * 60   # 3 minutes
-        target_max = 20 * 60  # 20 minutes
+        target_min = 0        # No minimum
+        target_max = 30 * 60  # 30 minutes
 
         # If outside acceptable range, return invalid fitness
-        if estimated_duration_sec < target_min or estimated_duration_sec > target_max:
+        if estimated_duration_sec > target_max:
             return FitnessMetrics(
                 decision_density=0.0,
                 comeback_potential=0.0,
@@ -208,11 +208,13 @@ class FitnessEvaluator:
                 valid=False  # Mark as invalid
             )
 
-        # Within range: compute normalized score (1.0 = perfect 10 min)
-        if estimated_duration_sec < 600:
-            session_length = estimated_duration_sec / 600  # 0.5-1.0 for 3-10 min
+        # Within range: compute normalized score (1.0 = perfect 15 min)
+        optimal_sec = 15 * 60  # 15 minutes is ideal
+        if estimated_duration_sec < optimal_sec:
+            session_length = estimated_duration_sec / optimal_sec  # 0.0-1.0 for 0-15 min
         else:
-            session_length = 1.0 - (estimated_duration_sec - 600) / 600  # 1.0-0.5 for 10-20 min
+            # Gradual decline from 15-30 min (1.0 to 0.5)
+            session_length = 1.0 - (estimated_duration_sec - optimal_sec) / (target_max - optimal_sec) * 0.5
 
         # 7. Skill vs luck - improved heuristic
         # Use win rate variance as proxy: balanced games suggest more skill
