@@ -65,12 +65,32 @@ func SimulateBatch(requestPtr unsafe.Pointer, requestLen C.int, responseLen *C.i
 			continue
 		}
 
-		// Run batch simulation
+		// Determine AI types
 		aiType := simulation.AIPlayerType(req.AiPlayerType())
 		mctsIter := int(req.MctsIterations())
 		seed := req.RandomSeed()
 
-		simStats := simulation.RunBatch(genome, int(req.NumGames()), aiType, mctsIter, seed)
+		// Check for per-player AI type overrides
+		p0AI := aiType
+		p1AI := aiType
+		p0Override := req.Player0AiType()
+		p1Override := req.Player1AiType()
+
+		// Non-zero means override (value-1 is the AI type)
+		if p0Override > 0 {
+			p0AI = simulation.AIPlayerType(p0Override - 1)
+		}
+		if p1Override > 0 {
+			p1AI = simulation.AIPlayerType(p1Override - 1)
+		}
+
+		// Run batch simulation (symmetric or asymmetric)
+		var simStats simulation.AggregatedStats
+		if p0AI == p1AI {
+			simStats = simulation.RunBatch(genome, int(req.NumGames()), p0AI, mctsIter, seed)
+		} else {
+			simStats = simulation.RunBatchAsymmetric(genome, int(req.NumGames()), p0AI, p1AI, mctsIter, seed)
+		}
 
 		// Convert to AggStats
 		stats := &AggStats{
