@@ -70,6 +70,24 @@ class Visibility(Enum):
     REVEALED = "revealed"      # Temporarily shown to all
 
 
+class EffectType(Enum):
+    """Types of immediate effects a card can trigger."""
+    SKIP_NEXT = "skip_next"
+    REVERSE_DIRECTION = "reverse"
+    DRAW_CARDS = "draw_cards"
+    EXTRA_TURN = "extra_turn"
+    FORCE_DISCARD = "force_discard"
+
+
+@dataclass(frozen=True)
+class SpecialEffect:
+    """A card-triggered immediate effect."""
+    trigger_rank: Rank
+    effect_type: EffectType
+    target: TargetSelector
+    value: int = 1
+
+
 @dataclass(frozen=True)
 class SetupRules:
     """Initial game configuration."""
