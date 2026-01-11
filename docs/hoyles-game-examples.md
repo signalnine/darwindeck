@@ -45,19 +45,9 @@ slapjack = GameGenome(
         )
     ]),
 
-    special_effects=[
-        SpecialEffect(
-            trigger_card=Rank.JACK,
-            actions=[
-                Action(
-                    type=ActionType.TRANSFER_CARDS,
-                    source=Location.DISCARD,
-                    target=Location.HAND,  # Current player wins entire discard pile
-                    count=-1  # All cards
-                )
-            ]
-        )
-    ],
+    # NOTE: SpecialEffect not implemented - Jack triggering pile capture
+    # would require future extension to the schema
+    special_effects=[],
 
     win_conditions=[
         WinCondition(
@@ -73,13 +63,13 @@ slapjack = GameGenome(
 
 **Notes:**
 - Loses the real-time "slapping" element that makes the game exciting
-- Demonstrates special effect triggered by specific rank
-- Uses TRANSFER_CARDS action to move entire discard pile to hand
+- The Jack-triggered pile capture shown above requires SpecialEffect (not implemented)
+- This example shows a conceptual encoding, not a working implementation
 
 **Schema Validation:**
-- ✅ Can represent with current schema
+- ⚠️ CANNOT fully represent with current schema (no SpecialEffect)
 - ⚠️ Loses core mechanic (real-time slapping)
-- 💡 Extension idea: `RaceCondition` action type for simultaneous player responses
+- 💡 Extension needed: SpecialEffect for card-triggered actions
 
 ---
 
@@ -146,38 +136,29 @@ old_maid = GameGenome(
 ```
 
 **Schema Gaps Identified:**
-1. **Pairing logic:** Need `card_filter` in DiscardPhase to specify "same rank, same color"
-2. **Drawing from opponent:** No way to specify `source=Location.OPPONENT_HAND`
-3. **Initial pairing:** Should happen during setup, not each turn
+1. **Pairing logic:** Use DiscardPhase.matching_condition to specify "same rank, same color"
+2. **Drawing from opponent:** ✅ NOW IMPLEMENTED - use `source=Location.OPPONENT_HAND`
+3. **Initial pairing:** Setup phase actions not implemented - would need extension
 
-**Possible Schema Extensions:**
+**Implementation Status of Suggested Extensions:**
 
 ```python
-# Extension 1: Enhanced DiscardPhase
+# ✅ IMPLEMENTED: DiscardPhase with matching_condition
 @dataclass
 class DiscardPhase:
     target: Location
     count: int
     mandatory: bool = False
-    pair_condition: Optional[Condition] = None  # NEW: Cards must satisfy this to be discarded together
+    matching_condition: Optional[Condition] = None  # Can constrain discards
 
-# Extension 2: Opponent interaction
+# ✅ IMPLEMENTED: Opponent hand/discard locations
 class Location(Enum):
-    DECK = "deck"
-    HAND = "hand"
-    DISCARD = "discard"
-    TABLEAU = "tableau"
-    OPPONENT_HAND = "opponent_hand"  # NEW: For Old Maid, I Doubt It, etc.
+    # ... standard locations ...
+    OPPONENT_HAND = "opponent_hand"      # For Old Maid, I Doubt It, etc.
+    OPPONENT_DISCARD = "opponent_discard"
 
-# Extension 3: Setup phase actions
-@dataclass
-class SetupRules:
-    cards_per_player: int
-    initial_deck: str = "standard_52"
-    initial_discard_count: int = 0
-    initial_tableau: Optional[TableauConfig] = None
-    starting_player: str = "random"
-    setup_actions: List[Action] = field(default_factory=list)  # NEW: Run after deal
+# ❌ NOT IMPLEMENTED: Setup phase actions
+# SetupRules.setup_actions does not exist - would need future work
 ```
 
 ---
@@ -258,29 +239,21 @@ go_fish = GameGenome(
 2. **Opponent hand checking:** Cannot check/transfer from opponent's hand
 3. **Grouping by rank:** `PLAYER_HAS_CARD` with `same_rank_group` reference is conceptual, not implemented
 
-**Required Extensions for Go Fish:**
+**Required Extensions for Go Fish (NOT IMPLEMENTED):**
 
 ```python
-# Extension 1: Player input actions
-class ActionType(Enum):
-    # ... existing ...
-    ASK_FOR_RANK = "ask_for_rank"  # NEW
-    TRANSFER_FROM_OPPONENT = "transfer_from_opponent"  # NEW
+# These are conceptual extensions that would be needed:
 
-@dataclass
-class AskForRankAction(Action):
-    """Player chooses a rank to request from opponent."""
-    type: ActionType = ActionType.ASK_FOR_RANK
-    must_have_rank: bool = True  # Player must hold at least one of requested rank
+# Extension 1: Player input actions (requires ActionType enum, not implemented)
+# ASK_FOR_RANK - Player chooses a rank to request from opponent
+# TRANSFER_FROM_OPPONENT - Transfer matching cards from opponent
 
-@dataclass
-class ConditionalTransferAction(Action):
-    """Transfer cards based on condition, otherwise trigger alternative."""
-    type: ActionType = ActionType.TRANSFER_FROM_OPPONENT
-    requested_rank: str  # Set by previous ASK_FOR_RANK action
-    on_success: List[Action]  # Continue turn
-    on_failure: List[Action]  # Draw from deck
+# Extension 2: Conditional transfer based on opponent's response
+# on_success: Continue turn
+# on_failure: Draw from deck ("go fish")
 ```
+
+**Note:** The above extensions are design proposals, not implemented features.
 
 ---
 
@@ -302,62 +275,56 @@ class ConditionalTransferAction(Action):
 ### Games Requiring Major Extensions ❌
 
 1. **Go Fish** - Needs player input, opponent hand checking
-2. **Poker** - Needs betting, bluffing, complex hand evaluation
+2. **Poker** - Needs betting system (not implemented)
 3. **Concentration/Memory** - Needs hidden tableau positions
-4. **I Doubt It** - Needs lying/challenging mechanics
+4. **I Doubt It** - Partially supported via ClaimPhase (bluffing/challenging implemented)
 
 ---
 
 ## Recommendations
 
-### 1. ✅ IMPLEMENTED - Schema Extensions Added
+### 1. Schema Features - Current Status
 
-The following extensions have been added to the genome schema (see `docs/genome-schema-examples.md`):
-
-**A. Opponent Interaction ✅**
+**A. Opponent Interaction ✅ IMPLEMENTED**
 ```python
 Location.OPPONENT_HAND       # Draw from opponent (Old Maid, I Doubt It)
 Location.OPPONENT_DISCARD    # Access opponent's discard
 ```
 
-**B. Set/Sequence Detection ✅**
+**B. Set/Sequence Detection ✅ IMPLEMENTED (schema only, evaluation partial)**
 ```python
 ConditionType.HAS_SET_OF_N      # N cards of same rank (Go Fish books)
 ConditionType.HAS_RUN_OF_N      # Sequential cards (Gin Rummy runs)
 ConditionType.HAS_MATCHING_PAIR # Pairs by property (Old Maid)
 ```
 
-**C. Setup Actions ✅**
+**C. Discard Matching ✅ IMPLEMENTED**
 ```python
-SetupRules.post_deal_actions    # Actions after deal
 DiscardPhase.matching_condition # Constrain to matching sets
 ```
 
-**D. Betting/Wagering ✅**
+**D. Bluffing/Claiming ✅ IMPLEMENTED**
 ```python
-ResourceRules                # Chip tracking
-BettingPhase                # Betting rounds
-ActionType.BET/CALL/RAISE/FOLD/CHECK/ALL_IN
-ConditionType.CHIP_COUNT/POT_SIZE/CURRENT_BET/CAN_AFFORD
+ClaimPhase                  # Making claims (Cheat/BS/I Doubt It)
+# Players play face-down, claim rank, can be challenged
 ```
 
-**E. Bluffing/Challenges ✅**
+**E. Trick-Taking ✅ IMPLEMENTED**
 ```python
-ClaimPhase                  # Making claims
-ActionType.CLAIM/CHALLENGE/REVEAL
+TrickPhase                  # Trick-based games (Hearts, Spades)
+# Follow suit, trump, breaking suit
 ```
 
-All extensions are **optionally enabled** and **backward-compatible**.
+### 2. Not Yet Implemented
 
-### 2. Defer to Phase 4+
+Features that require future work:
 
-Features that are complex or rarely used:
-
+- **Betting/wagering** - No ResourceRules, BettingPhase, or chip tracking
+- **Post-deal actions** - No SetupRules.post_deal_actions
 - **Player input/choice actions** (Choose rank, choose suit, etc.)
 - **Hidden information beyond hands** (Concentration's face-down cards)
 - **Simultaneous actions** (Slapjack, Spoons, Egyptian Ratscrew)
-- **Betting/resources** (Poker, any gambling game)
-- **Lying/bluffing** (I Doubt It, Cheat, BS)
+- **Special effects** - No SpecialEffect or ActionType system
 
 ### 3. Document "Evolvable Game Space"
 
