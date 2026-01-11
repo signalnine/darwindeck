@@ -11,7 +11,8 @@ from darwindeck.bindings.cardsim.SimulationRequest import (
     SimulationRequestAddNumGames, SimulationRequestAddAiPlayerType,
     SimulationRequestAddMctsIterations, SimulationRequestAddRandomSeed,
     SimulationRequestAddPlayer0AiType, SimulationRequestAddPlayer1AiType,
-    SimulationRequestEnd,
+    SimulationRequestAddAiTypes, SimulationRequestStartAiTypesVector,
+    SimulationRequestAddPlayerCount, SimulationRequestEnd,
 )
 
 # AI type mapping for asymmetric simulation
@@ -50,7 +51,8 @@ class GoSimulator:
         genome: GameGenome,
         num_games: int = 100,
         use_mcts: bool = False,
-        mcts_iterations: int = 100
+        mcts_iterations: int = 100,
+        player_count: int = 2
     ) -> SimulationResults:
         """Simulate games with the given genome.
 
@@ -59,10 +61,15 @@ class GoSimulator:
             num_games: Number of games to run
             use_mcts: Whether to use MCTS AI (slower but measures skill)
             mcts_iterations: MCTS iterations if use_mcts is True
+            player_count: Number of players (2-4)
 
         Returns:
             SimulationResults with game statistics and Phase 1 metrics
         """
+        # Validate player count
+        if player_count < 2 or player_count > 4:
+            player_count = 2
+
         # Compile genome to bytecode
         try:
             bytecode = self.compiler.compile_genome(genome)
@@ -70,8 +77,8 @@ class GoSimulator:
             # Return error results for invalid genomes
             return SimulationResults(
                 total_games=num_games,
-                player0_wins=0,
-                player1_wins=0,
+                wins=tuple(0 for _ in range(player_count)),
+                player_count=player_count,
                 draws=0,
                 avg_turns=0.0,
                 errors=num_games,
@@ -87,6 +94,7 @@ class GoSimulator:
         SimulationRequestAddAiPlayerType(builder, 2 if use_mcts else 0)  # MCTS100 or Random
         SimulationRequestAddMctsIterations(builder, mcts_iterations if use_mcts else 0)
         SimulationRequestAddRandomSeed(builder, self.seed + self._batch_id)
+        SimulationRequestAddPlayerCount(builder, player_count)
         req_offset = SimulationRequestEnd(builder)
 
         BatchRequestStartRequestsVector(builder, 1)
@@ -106,10 +114,22 @@ class GoSimulator:
             response = simulate_batch(bytes(builder.Output()))
             result = response.Results(0)
 
+            # Read wins array, falling back to legacy fields if array is empty
+            wins_len = result.WinsLength()
+            if wins_len > 0:
+                wins = tuple(result.Wins(i) for i in range(wins_len))
+            else:
+                # Fallback to legacy fields for backward compatibility
+                wins = (result.Player0Wins(), result.Player1Wins())
+
+            result_player_count = result.PlayerCount()
+            if result_player_count == 0:
+                result_player_count = 2
+
             return SimulationResults(
                 total_games=result.TotalGames(),
-                player0_wins=result.Player0Wins(),
-                player1_wins=result.Player1Wins(),
+                wins=wins,
+                player_count=result_player_count,
                 draws=result.Draws(),
                 avg_turns=result.AvgTurns(),
                 errors=result.Errors(),
@@ -131,8 +151,8 @@ class GoSimulator:
             # Return error results for simulation failures
             return SimulationResults(
                 total_games=num_games,
-                player0_wins=0,
-                player1_wins=0,
+                wins=tuple(0 for _ in range(player_count)),
+                player_count=player_count,
                 draws=0,
                 avg_turns=0.0,
                 errors=num_games,
@@ -142,9 +162,12 @@ class GoSimulator:
         self,
         genome: GameGenome,
         num_games: int = 100,
-        p0_ai_type: str = "random",
-        p1_ai_type: str = "random",
-        mcts_iterations: int = 500
+        ai_types: Optional[list[str]] = None,
+        mcts_iterations: int = 500,
+        player_count: int = 2,
+        # Legacy parameters for backward compatibility
+        p0_ai_type: Optional[str] = None,
+        p1_ai_type: Optional[str] = None,
     ) -> SimulationResults:
         """Simulate games with different AI types for each player.
 
@@ -153,31 +176,55 @@ class GoSimulator:
         Args:
             genome: Game genome to simulate
             num_games: Number of games to run
-            p0_ai_type: AI for player 0 ("random", "greedy", "mcts", "mcts500", etc)
-            p1_ai_type: AI for player 1
-            mcts_iterations: MCTS iterations (used if either player is MCTS)
+            ai_types: AI type per player (list of "random", "greedy", "mcts", etc.)
+            mcts_iterations: MCTS iterations (used if any player is MCTS)
+            player_count: Number of players (2-4)
+            p0_ai_type: (DEPRECATED) AI for player 0
+            p1_ai_type: (DEPRECATED) AI for player 1
 
         Returns:
             SimulationResults with game statistics
         """
+        # Validate player count
+        if player_count < 2 or player_count > 4:
+            player_count = 2
+
+        # Handle ai_types parameter
+        if ai_types is None:
+            # Fallback to legacy parameters
+            ai_types = [
+                p0_ai_type or "random",
+                p1_ai_type or "random",
+            ]
+            # Extend to player_count if needed
+            while len(ai_types) < player_count:
+                ai_types.append("random")
+
         try:
             bytecode = self.compiler.compile_genome(genome)
         except Exception as e:
             return SimulationResults(
                 total_games=num_games,
-                player0_wins=0,
-                player1_wins=0,
+                wins=tuple(0 for _ in range(player_count)),
+                player_count=player_count,
                 draws=0,
                 avg_turns=0.0,
                 errors=num_games,
             )
 
         # Map AI type strings to enum values (with offset)
-        p0_type = AI_TYPE_MAP.get(p0_ai_type.lower(), 1)  # Default to random
-        p1_type = AI_TYPE_MAP.get(p1_ai_type.lower(), 1)
+        ai_type_values = [
+            AI_TYPE_MAP.get(ai.lower(), 1) for ai in ai_types[:player_count]
+        ]
 
         builder = flatbuffers.Builder(2048)
         genome_offset = builder.CreateByteVector(bytecode)
+
+        # Build ai_types vector
+        SimulationRequestStartAiTypesVector(builder, len(ai_type_values))
+        for ai_val in reversed(ai_type_values):
+            builder.PrependUint8(ai_val)
+        ai_types_offset = builder.EndVector()
 
         SimulationRequestStart(builder)
         SimulationRequestAddGenomeBytecode(builder, genome_offset)
@@ -185,8 +232,11 @@ class GoSimulator:
         SimulationRequestAddAiPlayerType(builder, 0)  # Not used when per-player set
         SimulationRequestAddMctsIterations(builder, mcts_iterations)
         SimulationRequestAddRandomSeed(builder, self.seed + self._batch_id)
-        SimulationRequestAddPlayer0AiType(builder, p0_type)
-        SimulationRequestAddPlayer1AiType(builder, p1_type)
+        SimulationRequestAddAiTypes(builder, ai_types_offset)
+        SimulationRequestAddPlayerCount(builder, player_count)
+        # Also set legacy fields for backward compatibility with older Go code
+        SimulationRequestAddPlayer0AiType(builder, ai_type_values[0] if ai_type_values else 1)
+        SimulationRequestAddPlayer1AiType(builder, ai_type_values[1] if len(ai_type_values) > 1 else 1)
         req_offset = SimulationRequestEnd(builder)
 
         BatchRequestStartRequestsVector(builder, 1)
@@ -205,10 +255,22 @@ class GoSimulator:
             response = simulate_batch(bytes(builder.Output()))
             result = response.Results(0)
 
+            # Read wins array, falling back to legacy fields if array is empty
+            wins_len = result.WinsLength()
+            if wins_len > 0:
+                wins = tuple(result.Wins(i) for i in range(wins_len))
+            else:
+                # Fallback to legacy fields for backward compatibility
+                wins = (result.Player0Wins(), result.Player1Wins())
+
+            result_player_count = result.PlayerCount()
+            if result_player_count == 0:
+                result_player_count = 2
+
             return SimulationResults(
                 total_games=result.TotalGames(),
-                player0_wins=result.Player0Wins(),
-                player1_wins=result.Player1Wins(),
+                wins=wins,
+                player_count=result_player_count,
                 draws=result.Draws(),
                 avg_turns=result.AvgTurns(),
                 errors=result.Errors(),
@@ -228,8 +290,8 @@ class GoSimulator:
         except Exception as e:
             return SimulationResults(
                 total_games=num_games,
-                player0_wins=0,
-                player1_wins=0,
+                wins=tuple(0 for _ in range(player_count)),
+                player_count=player_count,
                 draws=0,
                 avg_turns=0.0,
                 errors=num_games,

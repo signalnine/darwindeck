@@ -10,8 +10,11 @@ table SimulationRequest {
   random_seed: uint64;                   // For reproducible results
   // Per-player AI types for asymmetric evaluation (skill gap measurement)
   // 0 = use ai_player_type for this player, 1+ = override (value-1 is the AI type)
-  player0_ai_type: ubyte;                // Override AI for player 0
-  player1_ai_type: ubyte;                // Override AI for player 1
+  player0_ai_type: ubyte;                // Override AI for player 0 (DEPRECATED: use ai_types)
+  player1_ai_type: ubyte;                // Override AI for player 1 (DEPRECATED: use ai_types)
+  // N-player support (2-4 players)
+  ai_types: [ubyte];                     // AI type per player (index = player ID), 0 = use ai_player_type
+  player_count: ubyte;                   // Number of players (2-4), 0 = use default (2)
 }
 
 // Batch of simulation requests
@@ -32,13 +35,16 @@ table SimulationResult {
 // Aggregated statistics for a genome
 table AggregatedStats {
   total_games: uint32;
-  player0_wins: uint32;
-  player1_wins: uint32;
+  player0_wins: uint32;        // DEPRECATED: use wins array
+  player1_wins: uint32;        // DEPRECATED: use wins array
   draws: uint32;
   avg_turns: float;
   median_turns: uint32;
   avg_duration_ns: uint64;
   errors: uint32;              // Count of failed simulations
+  // N-player support
+  wins: [uint32];              // Wins per player (index = player ID)
+  player_count: ubyte;         // Number of players (2-4)
 
   // Phase 1 instrumentation: Real gameplay metrics (v2.0)
   // Decision density metrics

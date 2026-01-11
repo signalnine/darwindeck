@@ -63,8 +63,8 @@ STYLE_PRESETS = {
 class SimulationResults:
     """Results from batch simulation."""
     total_games: int
-    player0_wins: int
-    player1_wins: int
+    wins: tuple[int, ...]  # Wins per player (index = player ID)
+    player_count: int  # Number of players (2-4)
     draws: int
     avg_turns: float
     errors: int
@@ -83,6 +83,16 @@ class SimulationResults:
     total_challenges: int = 0
     successful_bluffs: int = 0
     successful_catches: int = 0
+
+    @property
+    def player0_wins(self) -> int:
+        """Backward compatibility property."""
+        return self.wins[0] if self.wins else 0
+
+    @property
+    def player1_wins(self) -> int:
+        """Backward compatibility property."""
+        return self.wins[1] if len(self.wins) > 1 else 0
 
 
 @dataclass(frozen=True)

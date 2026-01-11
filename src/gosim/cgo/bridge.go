@@ -17,8 +17,8 @@ import (
 // AggStats holds aggregated simulation results
 type AggStats struct {
 	TotalGames    uint32
-	Player0Wins   uint32
-	Player1Wins   uint32
+	Wins          []uint32 // Wins per player (index = player ID)
+	PlayerCount   uint8    // Number of players (2-4)
 	Draws         uint32
 	AvgTurns      float32
 	MedianTurns   uint32
@@ -78,42 +78,69 @@ func SimulateBatch(requestPtr unsafe.Pointer, requestLen C.int, responseLen *C.i
 		mctsIter := int(req.MctsIterations())
 		seed := req.RandomSeed()
 
-		// Check for per-player AI type overrides
-		p0AI := aiType
-		p1AI := aiType
-		p0Override := req.Player0AiType()
-		p1Override := req.Player1AiType()
-
-		// Non-zero means override (value-1 is the AI type)
-		if p0Override > 0 {
-			p0AI = simulation.AIPlayerType(p0Override - 1)
+		// Get player count (default to 2 for backward compatibility)
+		playerCount := int(req.PlayerCount())
+		if playerCount == 0 || playerCount < 2 || playerCount > 4 {
+			playerCount = 2
 		}
-		if p1Override > 0 {
-			p1AI = simulation.AIPlayerType(p1Override - 1)
+
+		// Build per-player AI types array
+		// Priority: ai_types array > legacy player0/player1_ai_type > default ai_player_type
+		aiTypes := make([]simulation.AIPlayerType, playerCount)
+		for p := 0; p < playerCount; p++ {
+			aiTypes[p] = aiType // Default
+		}
+
+		// Check for new ai_types array (preferred)
+		if req.AiTypesLength() > 0 {
+			for p := 0; p < playerCount && p < req.AiTypesLength(); p++ {
+				override := req.AiTypes(p)
+				if override > 0 {
+					aiTypes[p] = simulation.AIPlayerType(override - 1)
+				}
+			}
+		} else {
+			// Fallback to legacy player0/player1_ai_type fields
+			p0Override := req.Player0AiType()
+			p1Override := req.Player1AiType()
+			if p0Override > 0 {
+				aiTypes[0] = simulation.AIPlayerType(p0Override - 1)
+			}
+			if p1Override > 0 && playerCount > 1 {
+				aiTypes[1] = simulation.AIPlayerType(p1Override - 1)
+			}
+		}
+
+		// Check if all players have the same AI type (symmetric)
+		symmetric := true
+		for p := 1; p < playerCount; p++ {
+			if aiTypes[p] != aiTypes[0] {
+				symmetric = false
+				break
+			}
 		}
 
 		// Run batch simulation (symmetric or asymmetric) using parallel workers
 		var simStats simulation.AggregatedStats
-		if p0AI == p1AI {
-			simStats = simulation.RunBatchParallel(genome, int(req.NumGames()), p0AI, mctsIter, seed)
+		if symmetric {
+			simStats = simulation.RunBatchParallel(genome, int(req.NumGames()), aiTypes[0], mctsIter, seed)
 		} else {
-			simStats = simulation.RunBatchAsymmetricParallel(genome, int(req.NumGames()), p0AI, p1AI, mctsIter, seed)
+			// For now, asymmetric only supports 2 players
+			// TODO: Extend RunBatchAsymmetricParallel for N players
+			simStats = simulation.RunBatchAsymmetricParallel(genome, int(req.NumGames()), aiTypes[0], aiTypes[1], mctsIter, seed)
 		}
 
 		// Convert to AggStats
-		// Use Wins slice for N-player support while maintaining FlatBuffers compatibility
-		player0Wins := uint32(0)
-		player1Wins := uint32(0)
-		if len(simStats.Wins) > 0 {
-			player0Wins = simStats.Wins[0]
+		// Copy wins slice, trimming to actual player count
+		wins := make([]uint32, playerCount)
+		for p := 0; p < playerCount && p < len(simStats.Wins); p++ {
+			wins[p] = simStats.Wins[p]
 		}
-		if len(simStats.Wins) > 1 {
-			player1Wins = simStats.Wins[1]
-		}
+
 		stats := &AggStats{
 			TotalGames:        simStats.TotalGames,
-			Player0Wins:       player0Wins,
-			Player1Wins:       player1Wins,
+			Wins:              wins,
+			PlayerCount:       uint8(playerCount),
 			Draws:             simStats.Draws,
 			AvgTurns:          simStats.AvgTurns,
 			MedianTurns:       simStats.MedianTurns,
@@ -174,15 +201,42 @@ func FreeResponse(ptr unsafe.Pointer) {
 }
 
 func serializeStats(builder *flatbuffers.Builder, stats *AggStats) flatbuffers.UOffsetT {
+	// Build wins vector first (must be created before table)
+	var winsOffset flatbuffers.UOffsetT
+	if len(stats.Wins) > 0 {
+		cardsim.AggregatedStatsStartWinsVector(builder, len(stats.Wins))
+		// Add in reverse order (FlatBuffers convention)
+		for i := len(stats.Wins) - 1; i >= 0; i-- {
+			builder.PrependUint32(stats.Wins[i])
+		}
+		winsOffset = builder.EndVector(len(stats.Wins))
+	}
+
+	// Get player0/player1 wins for backward compatibility
+	player0Wins := uint32(0)
+	player1Wins := uint32(0)
+	if len(stats.Wins) > 0 {
+		player0Wins = stats.Wins[0]
+	}
+	if len(stats.Wins) > 1 {
+		player1Wins = stats.Wins[1]
+	}
+
 	cardsim.AggregatedStatsStart(builder)
 	cardsim.AggregatedStatsAddTotalGames(builder, stats.TotalGames)
-	cardsim.AggregatedStatsAddPlayer0Wins(builder, stats.Player0Wins)
-	cardsim.AggregatedStatsAddPlayer1Wins(builder, stats.Player1Wins)
+	// Deprecated fields for backward compatibility
+	cardsim.AggregatedStatsAddPlayer0Wins(builder, player0Wins)
+	cardsim.AggregatedStatsAddPlayer1Wins(builder, player1Wins)
 	cardsim.AggregatedStatsAddDraws(builder, stats.Draws)
 	cardsim.AggregatedStatsAddAvgTurns(builder, stats.AvgTurns)
 	cardsim.AggregatedStatsAddMedianTurns(builder, stats.MedianTurns)
 	cardsim.AggregatedStatsAddAvgDurationNs(builder, stats.AvgDurationNs)
 	cardsim.AggregatedStatsAddErrors(builder, stats.Errors)
+	// N-player support
+	if winsOffset > 0 {
+		cardsim.AggregatedStatsAddWins(builder, winsOffset)
+	}
+	cardsim.AggregatedStatsAddPlayerCount(builder, stats.PlayerCount)
 	// Phase 1 instrumentation fields
 	cardsim.AggregatedStatsAddTotalDecisions(builder, stats.TotalDecisions)
 	cardsim.AggregatedStatsAddTotalValidMoves(builder, stats.TotalValidMoves)

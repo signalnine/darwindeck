@@ -82,7 +82,36 @@ class SimulationRequest(object):
             return self._tab.Get(flatbuffers.number_types.Uint8Flags, o + self._tab.Pos)
         return 0
 
-def SimulationRequestStart(builder): builder.StartObject(7)
+    # SimulationRequest
+    def AiTypes(self, j):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(18))
+        if o != 0:
+            a = self._tab.Vector(o)
+            return self._tab.Get(flatbuffers.number_types.Uint8Flags, a + flatbuffers.number_types.UOffsetTFlags.py_type(j * 1))
+        return 0
+
+    # SimulationRequest
+    def AiTypesAsNumpy(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(18))
+        if o != 0:
+            return self._tab.GetVectorAsNumpy(flatbuffers.number_types.Uint8Flags, o)
+        return 0
+
+    # SimulationRequest
+    def AiTypesLength(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(18))
+        if o != 0:
+            return self._tab.VectorLen(o)
+        return 0
+
+    # SimulationRequest
+    def PlayerCount(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(20))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint8Flags, o + self._tab.Pos)
+        return 0
+
+def SimulationRequestStart(builder): builder.StartObject(9)
 def SimulationRequestAddGenomeBytecode(builder, genomeBytecode): builder.PrependUOffsetTRelativeSlot(0, flatbuffers.number_types.UOffsetTFlags.py_type(genomeBytecode), 0)
 def SimulationRequestStartGenomeBytecodeVector(builder, numElems): return builder.StartVector(1, numElems, 1)
 def SimulationRequestAddNumGames(builder, numGames): builder.PrependUint32Slot(1, numGames, 0)
@@ -91,4 +120,7 @@ def SimulationRequestAddMctsIterations(builder, mctsIterations): builder.Prepend
 def SimulationRequestAddRandomSeed(builder, randomSeed): builder.PrependUint64Slot(4, randomSeed, 0)
 def SimulationRequestAddPlayer0AiType(builder, player0AiType): builder.PrependUint8Slot(5, player0AiType, 0)
 def SimulationRequestAddPlayer1AiType(builder, player1AiType): builder.PrependUint8Slot(6, player1AiType, 0)
+def SimulationRequestAddAiTypes(builder, aiTypes): builder.PrependUOffsetTRelativeSlot(7, flatbuffers.number_types.UOffsetTFlags.py_type(aiTypes), 0)
+def SimulationRequestStartAiTypesVector(builder, numElems): return builder.StartVector(1, numElems, 1)
+def SimulationRequestAddPlayerCount(builder, playerCount): builder.PrependUint8Slot(8, playerCount, 0)
 def SimulationRequestEnd(builder): return builder.EndObject()

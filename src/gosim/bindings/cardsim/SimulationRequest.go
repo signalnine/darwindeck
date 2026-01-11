@@ -132,8 +132,54 @@ func (rcv *SimulationRequest) MutatePlayer1AiType(n byte) bool {
 	return rcv._tab.MutateByteSlot(16, n)
 }
 
+func (rcv *SimulationRequest) AiTypes(j int) byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(18))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.GetByte(a + flatbuffers.UOffsetT(j*1))
+	}
+	return 0
+}
+
+func (rcv *SimulationRequest) AiTypesLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(18))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
+func (rcv *SimulationRequest) AiTypesBytes() []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(18))
+	if o != 0 {
+		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+	}
+	return nil
+}
+
+func (rcv *SimulationRequest) MutateAiTypes(j int, n byte) bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(18))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.MutateByte(a+flatbuffers.UOffsetT(j*1), n)
+	}
+	return false
+}
+
+func (rcv *SimulationRequest) PlayerCount() byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(20))
+	if o != 0 {
+		return rcv._tab.GetByte(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *SimulationRequest) MutatePlayerCount(n byte) bool {
+	return rcv._tab.MutateByteSlot(20, n)
+}
+
 func SimulationRequestStart(builder *flatbuffers.Builder) {
-	builder.StartObject(7)
+	builder.StartObject(9)
 }
 func SimulationRequestAddGenomeBytecode(builder *flatbuffers.Builder, genomeBytecode flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(genomeBytecode), 0)
@@ -158,6 +204,15 @@ func SimulationRequestAddPlayer0AiType(builder *flatbuffers.Builder, player0AiTy
 }
 func SimulationRequestAddPlayer1AiType(builder *flatbuffers.Builder, player1AiType byte) {
 	builder.PrependByteSlot(6, player1AiType, 0)
+}
+func SimulationRequestAddAiTypes(builder *flatbuffers.Builder, aiTypes flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(7, flatbuffers.UOffsetT(aiTypes), 0)
+}
+func SimulationRequestStartAiTypesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(1, numElems, 1)
+}
+func SimulationRequestAddPlayerCount(builder *flatbuffers.Builder, playerCount byte) {
+	builder.PrependByteSlot(8, playerCount, 0)
 }
 func SimulationRequestEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
