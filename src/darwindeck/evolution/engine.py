@@ -11,7 +11,8 @@ from darwindeck.evolution.population import Population, Individual
 from darwindeck.evolution.operators import (
     MutationPipeline,
     CrossoverOperator,
-    create_default_pipeline
+    create_default_pipeline,
+    create_aggressive_pipeline
 )
 from darwindeck.evolution.seeding import create_seed_population, create_seed_population_from_genomes
 from darwindeck.evolution.parallel_fitness import ParallelFitnessEvaluator, _create_evaluator
@@ -89,6 +90,7 @@ class EvolutionEngine:
 
         self.fitness_evaluator = fitness_evaluator or self._default_fitness_evaluator
         self.mutation_pipeline = mutation_pipeline or create_default_pipeline()
+        self.aggressive_pipeline = create_aggressive_pipeline()
         self.crossover = crossover_operator or CrossoverOperator(probability=config.crossover_rate)
 
         if config.random_seed is not None:
@@ -97,6 +99,7 @@ class EvolutionEngine:
         self.population: Optional[Population] = None
         self.stats_history: List[GenerationStats] = []
         self.best_ever: Optional[Individual] = None
+        self.use_aggressive_mutation = False  # Switch to True when diversity drops
 
         logger.info(f"Evolution engine initialized with {self.num_workers} parallel workers")
 
@@ -205,6 +208,9 @@ class EvolutionEngine:
 
         offspring: List[Individual] = []
 
+        # Select mutation pipeline based on diversity
+        pipeline = self.aggressive_pipeline if self.use_aggressive_mutation else self.mutation_pipeline
+
         # 1. Elitism - preserve top individuals
         n_elite = int(self.config.population_size * self.config.elitism_rate)
         elite = sorted(self.population.individuals, key=lambda ind: ind.fitness, reverse=True)[:n_elite]
@@ -222,9 +228,9 @@ class EvolutionEngine:
             # Crossover
             child1, child2 = self.crossover.crossover(parent1.genome, parent2.genome)
 
-            # Mutation
-            child1 = self.mutation_pipeline.apply(child1)
-            child2 = self.mutation_pipeline.apply(child2)
+            # Mutation (use selected pipeline)
+            child1 = pipeline.apply(child1)
+            child2 = pipeline.apply(child2)
 
             # Add to offspring (mark as unevaluated)
             offspring.append(Individual(genome=child1, fitness=0.0, evaluated=False))
@@ -296,13 +302,21 @@ class EvolutionEngine:
             self.stats_history.append(stats)
 
             # Log stats
+            mode_indicator = " [AGGRESSIVE]" if self.use_aggressive_mutation else ""
             logger.info(f"Best fitness: {best.fitness:.4f}")
             logger.info(f"Avg fitness: {avg_fitness:.4f}")
-            logger.info(f"Diversity: {diversity:.4f}")
+            logger.info(f"Diversity: {diversity:.4f}{mode_indicator}")
 
-            # Check diversity crisis
+            # Check diversity and switch mutation mode
             if diversity < self.config.diversity_threshold:
-                logger.warning(f"⚠️  Low diversity: {diversity:.4f} (threshold: {self.config.diversity_threshold})")
+                if not self.use_aggressive_mutation:
+                    logger.warning(f"⚠️  Low diversity ({diversity:.4f}) - switching to AGGRESSIVE mutation mode")
+                    self.use_aggressive_mutation = True
+            elif diversity > self.config.diversity_threshold * 1.5:
+                # Diversity recovered - switch back to normal mode
+                if self.use_aggressive_mutation:
+                    logger.info(f"✓ Diversity recovered ({diversity:.4f}) - switching back to normal mutation mode")
+                    self.use_aggressive_mutation = False
 
             # Check plateau
             if self.check_plateau():
