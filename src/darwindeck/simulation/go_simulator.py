@@ -45,6 +45,7 @@ class GoSimulator:
         self.compiler = BytecodeCompiler()
         self.seed = seed or 42
         self._batch_id = 0
+        self._bytecode_cache: dict[str, bytes] = {}  # Cache compiled bytecode by genome_id
 
     def simulate(
         self,
@@ -70,9 +71,14 @@ class GoSimulator:
         if player_count < 2 or player_count > 4:
             player_count = 2
 
-        # Compile genome to bytecode
+        # Compile genome to bytecode (with caching)
         try:
-            bytecode = self.compiler.compile_genome(genome)
+            cache_key = genome.genome_id
+            if cache_key in self._bytecode_cache:
+                bytecode = self._bytecode_cache[cache_key]
+            else:
+                bytecode = self.compiler.compile_genome(genome)
+                self._bytecode_cache[cache_key] = bytecode
         except Exception as e:
             # Return error results for invalid genomes
             return SimulationResults(
@@ -200,8 +206,14 @@ class GoSimulator:
             while len(ai_types) < player_count:
                 ai_types.append("random")
 
+        # Compile genome to bytecode (with caching)
         try:
-            bytecode = self.compiler.compile_genome(genome)
+            cache_key = genome.genome_id
+            if cache_key in self._bytecode_cache:
+                bytecode = self._bytecode_cache[cache_key]
+            else:
+                bytecode = self.compiler.compile_genome(genome)
+                self._bytecode_cache[cache_key] = bytecode
         except Exception as e:
             return SimulationResults(
                 total_games=num_games,
