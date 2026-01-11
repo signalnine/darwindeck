@@ -143,3 +143,51 @@ func TestResolveTargetAllOpponents(t *testing.T) {
 		t.Errorf("ALL_OPPONENTS should return -1, got %d", target)
 	}
 }
+
+func TestAdvanceTurnWithSkip(t *testing.T) {
+	state := GetState()
+	defer PutState(state)
+	state.NumPlayers = 4
+	state.CurrentPlayer = 0
+	state.PlayDirection = 1
+	state.SkipCount = 1
+
+	AdvanceTurn(state)
+
+	if state.CurrentPlayer != 2 {
+		t.Errorf("Should skip to player 2, got %d", state.CurrentPlayer)
+	}
+	if state.SkipCount != 0 {
+		t.Errorf("SkipCount should reset to 0, got %d", state.SkipCount)
+	}
+}
+
+func TestAdvanceTurnReversed(t *testing.T) {
+	state := GetState()
+	defer PutState(state)
+	state.NumPlayers = 4
+	state.CurrentPlayer = 1
+	state.PlayDirection = -1
+	state.SkipCount = 0
+
+	AdvanceTurn(state)
+
+	if state.CurrentPlayer != 0 {
+		t.Errorf("Reversed from 1 should go to 0, got %d", state.CurrentPlayer)
+	}
+}
+
+func TestAdvanceTurnWraparound(t *testing.T) {
+	state := GetState()
+	defer PutState(state)
+	state.NumPlayers = 3
+	state.CurrentPlayer = 2
+	state.PlayDirection = 1
+	state.SkipCount = 0
+
+	AdvanceTurn(state)
+
+	if state.CurrentPlayer != 0 {
+		t.Errorf("Should wrap to 0, got %d", state.CurrentPlayer)
+	}
+}
