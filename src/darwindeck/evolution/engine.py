@@ -31,7 +31,7 @@ class EvolutionConfig:
     elitism_rate: float = 0.1  # Top 10% preserved
     crossover_rate: float = 0.7  # 70% undergo crossover
     tournament_size: int = 3
-    plateau_threshold: int = 100  # Generations without improvement (increased from 30)
+    plateau_threshold: Optional[int] = None  # None = disabled, or N generations without improvement
     improvement_threshold: float = 0.005  # 0.5% improvement (relaxed from 1%)
     diversity_threshold: float = 0.1  # Warn if diversity < 0.1
     seed_ratio: float = 0.7  # 70% known games, 30% mutants
@@ -245,6 +245,10 @@ class EvolutionEngine:
         Returns:
             True if plateaued (no improvement for plateau_threshold generations)
         """
+        # Plateau detection disabled
+        if self.config.plateau_threshold is None:
+            return False
+
         if len(self.stats_history) < self.config.plateau_threshold:
             return False
 
