@@ -11,6 +11,11 @@ from darwindeck.genome.serialization import genome_to_json
 
 logger = logging.getLogger(__name__)
 
+# Suppress verbose HTTP logging from anthropic SDK
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+logging.getLogger("anthropic").setLevel(logging.WARNING)
+
 
 def describe_game(genome: GameGenome, fitness: float) -> Optional[str]:
     """Generate a human-readable description of a game using an LLM.
