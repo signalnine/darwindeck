@@ -305,6 +305,11 @@ def main() -> int:
 
     args = parser.parse_args()
 
+    # Style-based defaults for player count
+    if args.player_count is None:
+        if args.style == 'party':
+            args.player_count = 4  # Party games should be 4+ players
+
     # Setup logging
     setup_logging(args.verbose)
 
