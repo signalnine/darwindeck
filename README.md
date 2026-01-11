@@ -10,7 +10,7 @@ DarwinDeck combines:
 - **Genetic algorithms** for game rule evolution
 - **Monte Carlo simulation** for fitness evaluation
 - **Multi-core parallelization** for massive performance (256+ cores supported)
-- **11 seed games** from Hoyle's Encyclopedia as starting population
+- **16 seed games** from Hoyle's Encyclopedia as starting population
 
 ## Features
 
@@ -20,7 +20,7 @@ DarwinDeck combines:
 - ⚖️ **First-Player Advantage Detection**: Filters out unbalanced games (>30% FPA)
 - 🔄 **In-Evolution Skill Penalties**: Penalizes unfit games during breeding, not just at the end
 - ⚡ **Parallel Execution**: 360x speedup on 256-core systems
-- 🎮 **11 Seed Games**: War, Hearts, Crazy 8s, Gin Rummy, Old Maid, Go Fish, and more
+- 🎮 **16 Seed Games**: War, Hearts, Spades, President, Blackjack, and more
 - 🚀 **High Throughput**: 800,000+ games/second on large servers
 - 📝 **LLM Descriptions**: Auto-generated game summaries using Claude
 - 📊 **Comprehensive Testing**: 100+ unit/integration tests
@@ -125,19 +125,33 @@ Presets optimize for different game types:
 
 ## Example Games
 
-DarwinDeck includes 11 seed games from Hoyle's Encyclopedia:
+DarwinDeck includes 16 seed games from Hoyle's Encyclopedia and classic card game collections:
 
+**Luck-based:**
 - **War**: Pure luck baseline
-- **Hearts**: Trick-taking with suit breaking
-- **Crazy 8s**: Shedding with wildcards
-- **Gin Rummy**: Set collection and melds
-- **Old Maid**: Pairing and avoidance
-- **Go Fish**: Book collection
-- **Scotch Whist**: Trump-based trick-taking
-- **Draw Poker**: Hand improvement
-- **Scopa**: Italian capturing game
-- **I Doubt It**: Bluffing (simplified)
 - **Betting War**: War variant
+
+**Trick-taking:**
+- **Hearts**: Trick-taking with penalty cards
+- **Scotch Whist**: Trump-based trick-taking
+- **Knock-Out Whist**: Elimination trick-taking
+- **Spades**: Fixed trump (spades always trump)
+
+**Shedding/Matching:**
+- **Crazy 8s**: Shedding with wildcards
+- **Old Maid**: Pairing and avoidance
+- **President/Daifugō**: Climbing game (2 is high)
+- **Fan Tan/Sevens**: Sequential building from 7s
+
+**Set Collection:**
+- **Gin Rummy**: Set collection and melds
+- **Go Fish**: Book collection
+
+**Other Mechanics:**
+- **I Doubt It/Cheat**: Bluffing
+- **Scopa**: Italian capturing game
+- **Draw Poker**: Hand improvement
+- **Blackjack/21**: Hand value targeting
 
 ## Documentation
 

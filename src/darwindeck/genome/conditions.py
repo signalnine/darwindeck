@@ -36,6 +36,15 @@ class ConditionType(Enum):
     IS_TRICK_WINNER = "is_trick_winner"            # Player won current trick
     TRICK_CONTAINS_CARD = "trick_contains_card"    # Specific card in current trick
 
+    # NEW: Hand value conditions (for Blackjack, etc.)
+    HAND_VALUE = "hand_value"                      # Sum of card values in hand
+
+    # NEW: Layout/building conditions (for Fan Tan, Sevens, etc.)
+    CARD_ADJACENT_TO_LAYOUT = "card_adjacent_to_layout"  # Card is adjacent to existing layout
+
+    # NEW: Climbing game conditions (for President, Daifugō, etc.)
+    CARD_BEATS_TOP = "card_beats_top"              # Card beats top card of pile
+
 
 class Operator(Enum):
     """Comparison operators."""

@@ -603,32 +603,343 @@ def create_scotch_whist_genome() -> GameGenome:
     )
 
 
+def create_knockout_whist_genome() -> GameGenome:
+    """Create Knock-Out Whist card game genome.
+
+    Simple elimination trick-taking game:
+    - Players start with 7 cards
+    - Must follow suit if able
+    - Trump suit rotates each round
+    - Player who wins most tricks in a round stays in
+    - Players who win no tricks are eliminated
+    - Last player standing wins
+
+    Simplified version:
+    - Fixed trump (Hearts)
+    - Single round for simulation
+    - Most tricks wins
+    """
+    return GameGenome(
+        schema_version="1.0",
+        genome_id="knockout-whist",
+        generation=0,
+        setup=SetupRules(
+            cards_per_player=7,
+            initial_deck="standard_52",
+            initial_discard_count=0,
+            trump_suit=Suit.HEARTS
+        ),
+        turn_structure=TurnStructure(
+            phases=[
+                TrickPhase(
+                    lead_suit_required=True,
+                    trump_suit=Suit.HEARTS,
+                    high_card_wins=True
+                )
+            ],
+            is_trick_based=True,
+            tricks_per_hand=7
+        ),
+        special_effects=[],
+        win_conditions=[
+            WinCondition(
+                type="most_tricks",  # Most tricks wins
+                threshold=0
+            ),
+            WinCondition(
+                type="all_hands_empty",
+                threshold=0
+            )
+        ],
+        scoring_rules=[],
+        max_turns=100,
+        player_count=2
+    )
+
+
+def create_blackjack_genome() -> GameGenome:
+    """Create Blackjack/21 card game genome.
+
+    Classic hand-value game:
+    - Goal: Get hand value as close to 21 as possible without going over
+    - Card values: Number cards = face value, Face cards = 10, Ace = 1 or 11
+    - Players choose to "hit" (draw) or "stand" (stop)
+    - Going over 21 = "bust" = lose
+    - Highest hand value under 21 wins
+
+    Simplified version:
+    - 2 players (no dealer distinction)
+    - Draw until satisfied or bust
+    - Compare final hand values
+    """
+    return GameGenome(
+        schema_version="1.0",
+        genome_id="blackjack",
+        generation=0,
+        setup=SetupRules(
+            cards_per_player=2,  # Start with 2 cards each
+            initial_deck="standard_52",
+            initial_discard_count=0
+        ),
+        turn_structure=TurnStructure(
+            phases=[
+                # Optional draw (hit)
+                DrawPhase(
+                    source=Location.DECK,
+                    count=1,
+                    mandatory=False,  # Player chooses to hit or stand
+                    condition=Condition(
+                        type=ConditionType.HAND_VALUE,
+                        operator=Operator.LT,
+                        value=21  # Can only hit if not at 21
+                    )
+                )
+            ]
+        ),
+        special_effects=[],
+        win_conditions=[
+            WinCondition(
+                type="closest_to_target",  # Closest to 21 without busting
+                threshold=21
+            )
+        ],
+        scoring_rules=[],
+        max_turns=50,  # Short game - just drawing cards
+        player_count=2
+    )
+
+
+def create_fan_tan_genome() -> GameGenome:
+    """Create Fan Tan / Sevens card game genome.
+
+    Sequential building layout game:
+    - Start by playing 7s to the center
+    - Build up (8, 9, 10, J, Q, K, A) and down (6, 5, 4, 3, 2) from 7s
+    - Must play if able, otherwise pass
+    - First to empty hand wins
+
+    Strategic element: holding key cards (6s, 7s, 8s) blocks opponents.
+
+    Simplified version:
+    - Play cards adjacent to existing layout
+    - 7s start each suit
+    """
+    return GameGenome(
+        schema_version="1.0",
+        genome_id="fan-tan",
+        generation=0,
+        setup=SetupRules(
+            cards_per_player=13,  # Full deck split (4 players)
+            initial_deck="standard_52",
+            initial_discard_count=0
+        ),
+        turn_structure=TurnStructure(
+            phases=[
+                PlayPhase(
+                    target=Location.TABLEAU,
+                    valid_play_condition=CompoundCondition(
+                        logic="OR",
+                        conditions=[
+                            # Can play a 7 (starts a suit row)
+                            Condition(
+                                type=ConditionType.CARD_IS_RANK,
+                                value=Rank.SEVEN
+                            ),
+                            # Can play card adjacent to existing layout
+                            Condition(
+                                type=ConditionType.CARD_ADJACENT_TO_LAYOUT,
+                                reference="tableau"
+                            )
+                        ]
+                    ),
+                    min_cards=1,
+                    max_cards=1,
+                    mandatory=True,
+                    pass_if_unable=True  # Pass if no valid play
+                )
+            ]
+        ),
+        special_effects=[],
+        win_conditions=[
+            WinCondition(type="empty_hand")
+        ],
+        scoring_rules=[],
+        max_turns=200,
+        player_count=4
+    )
+
+
+def create_president_genome() -> GameGenome:
+    """Create President / Daifugō card game genome.
+
+    Climbing/shedding card game:
+    - Cards ranked: 3 (low) to 2 (high), with 2 being the highest
+    - Play cards that beat the previous play (higher rank)
+    - Can play singles, pairs, triples, etc. but must match count
+    - Pass if you can't or don't want to beat
+    - When all pass, last player to play starts fresh
+    - First to empty hand wins (becomes President)
+
+    Simplified version:
+    - Singles only for now
+    - 2 is highest, 3 is lowest
+    - First to empty hand wins
+    """
+    return GameGenome(
+        schema_version="1.0",
+        genome_id="president",
+        generation=0,
+        setup=SetupRules(
+            cards_per_player=13,  # Half deck each for 2 players
+            initial_deck="standard_52",
+            initial_discard_count=0
+        ),
+        turn_structure=TurnStructure(
+            phases=[
+                PlayPhase(
+                    target=Location.TABLEAU,
+                    valid_play_condition=CompoundCondition(
+                        logic="OR",
+                        conditions=[
+                            # Tableau empty - can play anything
+                            Condition(
+                                type=ConditionType.LOCATION_SIZE,
+                                reference="tableau",
+                                operator=Operator.EQ,
+                                value=0
+                            ),
+                            # Must beat top card (with 2 high ranking)
+                            Condition(
+                                type=ConditionType.CARD_BEATS_TOP,
+                                reference="tableau",
+                                value="two_high"  # Special ranking: 2 is highest
+                            )
+                        ]
+                    ),
+                    min_cards=1,
+                    max_cards=1,
+                    mandatory=True,
+                    pass_if_unable=True  # Pass starts new round
+                )
+            ]
+        ),
+        special_effects=[],
+        win_conditions=[
+            WinCondition(type="empty_hand")
+        ],
+        scoring_rules=[],
+        max_turns=200,
+        player_count=2
+    )
+
+
+def create_spades_genome() -> GameGenome:
+    """Create Spades card game genome.
+
+    Classic trick-taking with bidding:
+    - Spades are always trump
+    - Must follow suit if able
+    - Spades cannot be led until "broken"
+    - Players bid number of tricks they'll win
+    - Score points for meeting/exceeding bid
+    - Penalty for "bags" (overtricks)
+
+    Simplified version:
+    - No bidding (just play tricks)
+    - Spades always trump
+    - Breaking spades rule included
+    - Most tricks wins
+    """
+    return GameGenome(
+        schema_version="1.0",
+        genome_id="spades",
+        generation=0,
+        setup=SetupRules(
+            cards_per_player=13,
+            initial_deck="standard_52",
+            initial_discard_count=0,
+            trump_suit=Suit.SPADES
+        ),
+        turn_structure=TurnStructure(
+            phases=[
+                TrickPhase(
+                    lead_suit_required=True,
+                    trump_suit=Suit.SPADES,
+                    high_card_wins=True,
+                    breaking_suit=Suit.SPADES  # Can't lead spades until broken
+                )
+            ],
+            is_trick_based=True,
+            tricks_per_hand=13
+        ),
+        special_effects=[],
+        win_conditions=[
+            WinCondition(
+                type="most_tricks",
+                threshold=0
+            ),
+            WinCondition(
+                type="all_hands_empty",
+                threshold=0
+            )
+        ],
+        scoring_rules=[],
+        max_turns=200,
+        player_count=4
+    )
+
+
 def get_seed_genomes() -> List[GameGenome]:
     """Get all seed genomes for initial population in Phase 4.
 
-    Returns a diverse set of 11 games to seed the genetic algorithm:
+    Returns a diverse set of 16 games to seed the genetic algorithm:
+
+    Luck-based:
     - War: Pure luck baseline
-    - Hearts: Trick-taking
-    - Crazy 8s: Matching with wildcards
-    - Gin Rummy: Set collection and melds
-    - Old Maid: Pairing and avoidance
-    - Go Fish: Set collection
     - Betting War: War variant
-    - I Doubt It/Cheat: Bluffing (simplified)
+
+    Trick-taking:
+    - Hearts: Trick-taking with penalty cards
+    - Scotch Whist: Trump-based trick-taking
+    - Knock-Out Whist: Elimination trick-taking
+    - Spades: Trick-taking with fixed trump
+
+    Shedding/Matching:
+    - Crazy 8s: Matching with wildcards
+    - Old Maid: Pairing and avoidance
+    - President/Daifugō: Climbing game (2 is high)
+    - Fan Tan/Sevens: Sequential building
+
+    Set Collection:
+    - Gin Rummy: Set collection and melds
+    - Go Fish: Book collection
+
+    Other Mechanics:
+    - Cheat/I Doubt It: Bluffing
     - Scopa: Capturing game
     - Draw Poker: Hand improvement
-    - Scotch Whist: Trick-taking variant
+    - Blackjack: Hand value targeting
     """
     return [
+        # Luck-based
         create_war_genome(),
-        create_hearts_genome(),
-        create_crazy_eights_genome(),
-        create_gin_rummy_genome(),
-        create_old_maid_genome(),
-        create_go_fish_genome(),
         create_betting_war_genome(),
+        # Trick-taking
+        create_hearts_genome(),
+        create_scotch_whist_genome(),
+        create_knockout_whist_genome(),
+        create_spades_genome(),
+        # Shedding/Matching
+        create_crazy_eights_genome(),
+        create_old_maid_genome(),
+        create_president_genome(),
+        create_fan_tan_genome(),
+        # Set Collection
+        create_gin_rummy_genome(),
+        create_go_fish_genome(),
+        # Other Mechanics
         create_cheat_genome(),
         create_scopa_genome(),
         create_draw_poker_genome(),
-        create_scotch_whist_genome(),
+        create_blackjack_genome(),
     ]
