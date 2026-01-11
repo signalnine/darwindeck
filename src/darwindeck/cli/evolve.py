@@ -368,6 +368,22 @@ def main() -> int:
             reverse=True
         )
 
+    # Filter out games with severe first-player advantage (> 30%)
+    if skill_results:
+        original_count = len(best_genomes)
+        best_genomes = [
+            ind for ind in best_genomes
+            if abs(skill_results.get(ind.genome.genome_id, SkillEvalResult(
+                genome_id=ind.genome.genome_id,
+                greedy_wins_as_p0=0, greedy_wins_as_p1=0, greedy_win_rate=0.5,
+                mcts_wins_as_p0=0, mcts_wins_as_p1=0, mcts_win_rate=0.5,
+                total_games=0, skill_score=0.5, first_player_advantage=0.0
+            )).first_player_advantage) <= 0.3
+        ]
+        filtered_count = original_count - len(best_genomes)
+        if filtered_count > 0:
+            logging.info(f"\nFiltered out {filtered_count} games with first-player advantage > 30%")
+
     # Save best genomes as JSON to timestamped subdirectory
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     run_output_dir = args.output_dir / timestamp
