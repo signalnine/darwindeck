@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import random
-from typing import List
+from typing import List, Set
 from darwindeck.genome.schema import GameGenome
+from darwindeck.evolution.naming import generate_unique_name
 from darwindeck.genome.examples import (
     create_war_genome,
     create_hearts_genome,
@@ -61,14 +62,17 @@ def create_seed_population(
     ]
 
     population: List[Individual] = []
+    used_names: Set[str] = set()
 
     # 1. Add known games (replicated to fill n_seeds slots)
     for i in range(n_seeds):
         genome = base_genomes[i % len(base_genomes)]
         # Give each copy a unique genome_id
+        new_name = generate_unique_name(used_names)
+        used_names.add(new_name)
         genome_copy = genome.__class__(
             schema_version=genome.schema_version,
-            genome_id=f"{genome.genome_id}-seed-{i}",
+            genome_id=new_name,
             generation=genome.generation,
             setup=genome.setup,
             turn_structure=genome.turn_structure,
@@ -94,10 +98,12 @@ def create_seed_population(
         for _ in range(num_rounds):
             mutated = mutation_pipeline.apply(mutated)
 
-        # Update genome_id
+        # Update genome_id with random name
+        new_name = generate_unique_name(used_names)
+        used_names.add(new_name)
         mutated_copy = mutated.__class__(
             schema_version=mutated.schema_version,
-            genome_id=f"{base_genome.genome_id}-mutant-{i}",
+            genome_id=new_name,
             generation=0,  # Reset generation for seed population
             setup=mutated.setup,
             turn_structure=mutated.turn_structure,

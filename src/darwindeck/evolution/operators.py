@@ -11,6 +11,7 @@ from darwindeck.genome.schema import (
     PlayPhase, DrawPhase, DiscardPhase, Location
 )
 from darwindeck.genome.conditions import Condition, ConditionType, Operator
+from darwindeck.evolution.naming import generate_name
 
 
 class MutationOperator(ABC):
@@ -596,13 +597,13 @@ class CrossoverOperator:
         offspring1_phases = offspring1_phases[:5]
         offspring2_phases = offspring2_phases[:5]
 
-        # Create offspring genomes
+        # Create offspring genomes with new random names
         # Inherit from parent1
         offspring1 = replace(
             parent1,
             turn_structure=replace(parent1.turn_structure, phases=tuple(offspring1_phases)),
             generation=parent1.generation + 1,
-            genome_id=f"{parent1.genome_id}-x-{parent2.genome_id}"
+            genome_id=generate_name()
         )
 
         # Inherit from parent2
@@ -610,7 +611,7 @@ class CrossoverOperator:
             parent2,
             turn_structure=replace(parent2.turn_structure, phases=tuple(offspring2_phases)),
             generation=parent2.generation + 1,
-            genome_id=f"{parent2.genome_id}-x-{parent1.genome_id}"
+            genome_id=generate_name()
         )
 
         return offspring1, offspring2
