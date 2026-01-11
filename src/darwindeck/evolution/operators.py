@@ -64,7 +64,8 @@ class TweakParameterMutation(MutationOperator):
         choice = random.choice([
             'cards_per_player',
             'max_turns',
-            'initial_discard_count'
+            'initial_discard_count',
+            'player_count'
         ])
 
         if choice == 'cards_per_player':
@@ -85,6 +86,21 @@ class TweakParameterMutation(MutationOperator):
             new_value = 1 - genome.setup.initial_discard_count
             new_setup = replace(genome.setup, initial_discard_count=new_value)
             return replace(genome, setup=new_setup, generation=genome.generation + 1)
+
+        elif choice == 'player_count':
+            # Change player count: 2, 3, or 4 players
+            current = genome.player_count
+            # Pick a different player count
+            options = [p for p in [2, 3, 4] if p != current]
+            new_player_count = random.choice(options)
+
+            # Adjust cards_per_player if needed to not exceed 52 total cards
+            max_cards_per_player = 52 // new_player_count
+            new_cards_per_player = min(genome.setup.cards_per_player, max_cards_per_player)
+
+            new_setup = replace(genome.setup, cards_per_player=new_cards_per_player)
+            return replace(genome, setup=new_setup, player_count=new_player_count,
+                          generation=genome.generation + 1)
 
         return genome
 
@@ -333,7 +349,10 @@ class ModifyWinConditionMutation(MutationOperator):
     3. Add new win condition (up to 3 total)
     """
 
-    WIN_CONDITION_TYPES = ["empty_hand", "high_score", "first_to_score", "capture_all"]
+    WIN_CONDITION_TYPES = [
+        "empty_hand", "high_score", "first_to_score", "capture_all",
+        "low_score", "all_hands_empty"  # Added for trick-taking games
+    ]
 
     def __init__(self, probability: float = 0.1):
         """Initialize win condition mutation operator.
@@ -388,7 +407,7 @@ class ModifyWinConditionMutation(MutationOperator):
         new_type = random.choice(available_types)
 
         # Set threshold based on new type
-        if new_type in ["first_to_score", "high_score"]:
+        if new_type in ["first_to_score", "high_score", "low_score"]:
             # Score-based: use reasonable threshold
             new_threshold = random.choice([50, 100, 200, 500])
         else:
@@ -430,7 +449,7 @@ class ModifyWinConditionMutation(MutationOperator):
         # Find score-based conditions
         score_based_indices = [
             i for i, wc in enumerate(genome.win_conditions)
-            if wc.type in ["first_to_score", "high_score"] and wc.threshold is not None
+            if wc.type in ["first_to_score", "high_score", "low_score"] and wc.threshold is not None
         ]
 
         if not score_based_indices:
@@ -482,7 +501,7 @@ class ModifyWinConditionMutation(MutationOperator):
         new_type = random.choice(self.WIN_CONDITION_TYPES)
 
         # Set threshold if needed
-        if new_type in ["first_to_score", "high_score"]:
+        if new_type in ["first_to_score", "high_score", "low_score"]:
             new_threshold = random.choice([50, 100, 200, 500])
         else:
             new_threshold = None
