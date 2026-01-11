@@ -60,3 +60,40 @@ def test_opcode_values() -> None:
     # Operators: 50-55
     assert 50 <= OpCode.OP_EQ <= 55
     assert 50 <= OpCode.OP_NE <= 55
+
+
+def test_effect_opcodes_exist():
+    """Effect-related opcodes are defined."""
+    from darwindeck.genome.bytecode import OpCode
+
+    assert OpCode.EFFECT_HEADER.value == 60
+    assert OpCode.EFFECT_ENTRY.value == 61
+
+
+def test_compile_effects():
+    """compile_effects produces correct bytecode."""
+    from darwindeck.genome.bytecode import compile_effects
+    from darwindeck.genome.schema import SpecialEffect, EffectType, Rank, TargetSelector
+
+    effects = [
+        SpecialEffect(Rank.TWO, EffectType.DRAW_CARDS, TargetSelector.NEXT_PLAYER, 2),
+        SpecialEffect(Rank.JACK, EffectType.SKIP_NEXT, TargetSelector.NEXT_PLAYER, 1),
+    ]
+
+    bytecode = compile_effects(effects)
+
+    # Header: opcode (60), count (2)
+    assert bytecode[0] == 60  # EFFECT_HEADER
+    assert bytecode[1] == 2   # count
+
+    # Effect 1: TWO (0), DRAW_CARDS (2), NEXT_PLAYER (0), value (2)
+    assert bytecode[2] == 0   # Rank.TWO -> 0
+    assert bytecode[3] == 2   # EffectType.DRAW_CARDS -> 2
+    assert bytecode[4] == 0   # TARGET_NEXT_PLAYER -> 0
+    assert bytecode[5] == 2   # value
+
+    # Effect 2: JACK (9), SKIP_NEXT (0), NEXT_PLAYER (0), value (1)
+    assert bytecode[6] == 9   # Rank.JACK -> 9
+    assert bytecode[7] == 0   # EffectType.SKIP_NEXT -> 0
+    assert bytecode[8] == 0   # TARGET_NEXT_PLAYER -> 0
+    assert bytecode[9] == 1   # value
