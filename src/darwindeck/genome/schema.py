@@ -148,6 +148,25 @@ class TrickPhase:
 
 
 @dataclass(frozen=True)
+class ClaimPhase:
+    """
+    Bluffing/claiming phase for games like Cheat/BS/I Doubt It.
+
+    Players play cards face-down and claim what they are.
+    Other players can challenge the claim. If challenged:
+    - If claim was TRUE: challenger takes the discard pile
+    - If claim was FALSE: claimer takes the discard pile
+
+    The claimed rank typically follows a sequence (A, 2, 3, ... K, A, 2, ...).
+    """
+    min_cards: int = 1  # Minimum cards to play per claim
+    max_cards: int = 4  # Maximum cards to play per claim
+    sequential_rank: bool = True  # Must claim in order (A, 2, 3, ..., K, A, ...)
+    allow_challenge: bool = True  # Opponents can challenge claims
+    pile_penalty: bool = True  # Loser takes discard pile (vs just revealing)
+
+
+@dataclass(frozen=True)
 class TurnStructure:
     """Ordered phases within a turn."""
 

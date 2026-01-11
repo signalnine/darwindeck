@@ -71,6 +71,8 @@ type GameState struct {
 	HeartsBroken   bool        // For Hearts: whether hearts have been played
 	NumPlayers     uint8       // Number of players (for trick completion check)
 	CardsPerPlayer int         // Cards dealt to each player (for hand size check)
+	// Scopa/capture game state
+	CaptureMode    bool        // If true, use Scopa capture mechanics instead of War
 }
 
 // StatePool manages GameState memory
@@ -127,6 +129,7 @@ func (s *GameState) Reset() {
 	s.HeartsBroken = false
 	s.NumPlayers = 2
 	s.CardsPerPlayer = 0
+	s.CaptureMode = false
 }
 
 // Clone creates a deep copy for MCTS tree search
@@ -181,6 +184,7 @@ func (s *GameState) Clone() *GameState {
 	clone.HeartsBroken = s.HeartsBroken
 	clone.NumPlayers = s.NumPlayers
 	clone.CardsPerPlayer = s.CardsPerPlayer
+	clone.CaptureMode = s.CaptureMode
 
 	return clone
 }

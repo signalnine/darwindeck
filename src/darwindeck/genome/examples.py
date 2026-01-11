@@ -295,10 +295,13 @@ def create_go_fish_genome() -> GameGenome:
     """Create Go Fish card game genome.
 
     Simplified Go Fish features:
-    - Ask opponent for cards (simplified to draw from deck)
-    - Form sets of 4 matching ranks ("books")
-    - Draw if opponent doesn't have requested card
-    - Most books wins
+    - Draw from deck (instead of asking opponent)
+    - Play "books" (4 of a kind) to discard pile
+    - Score 1 point per book
+    - First to empty hand wins (or highest score at deck exhaustion)
+
+    Multi-card plays now supported - when you have 4 cards of the same rank,
+    you can play them all at once and score a point.
     """
     return GameGenome(
         schema_version="1.0",
@@ -317,9 +320,9 @@ def create_go_fish_genome() -> GameGenome:
                     count=1,
                     mandatory=True
                 ),
-                # Play books (sets of 4) to tableau
+                # Play books (sets of 4) to discard pile for scoring
                 PlayPhase(
-                    target=Location.TABLEAU,
+                    target=Location.DISCARD,
                     valid_play_condition=Condition(
                         type=ConditionType.HAS_SET_OF_N,
                         value=4  # Books of 4
@@ -332,10 +335,14 @@ def create_go_fish_genome() -> GameGenome:
         ),
         special_effects=[],
         win_conditions=[
-            WinCondition(type="empty_hand")
+            WinCondition(type="empty_hand"),  # First to empty hand wins
+            WinCondition(
+                type="high_score",  # Or highest score when deck depletes
+                threshold=1  # At least 1 book needed to trigger score win
+            )
         ],
         scoring_rules=[],
-        max_turns=150,
+        max_turns=200,
         player_count=2
     )
 
@@ -385,36 +392,38 @@ def create_betting_war_genome() -> GameGenome:
 
 
 def create_cheat_genome() -> GameGenome:
-    """Create I Doubt It / Cheat card game genome.
+    """Create I Doubt It / Cheat / BS card game genome.
 
-    Simplified version without bluffing mechanics:
-    - Play cards face down claiming a rank
-    - Opponents can challenge (not implemented - simplified)
-    - First to empty hand wins
+    The real Cheat game mechanics:
+    - Players play cards face-down to discard pile
+    - Players claim what rank they're playing (sequential: A, 2, 3, ..., K, A, ...)
+    - Can lie about the rank
+    - Opponents can challenge ("Cheat!" / "BS!" / "I Doubt It!")
+    - If challenged:
+      - Claim was TRUE: challenger takes the discard pile
+      - Claim was FALSE: claimer takes the discard pile
+    - First player to empty their hand wins
     """
+    from darwindeck.genome.schema import ClaimPhase
+
     return GameGenome(
         schema_version="1.0",
         genome_id="cheat",
         generation=0,
         setup=SetupRules(
-            cards_per_player=13,
+            cards_per_player=26,  # Half deck each for 2 players
             initial_deck="standard_52",
             initial_discard_count=0
         ),
         turn_structure=TurnStructure(
             phases=[
-                # Play cards to discard pile
-                PlayPhase(
-                    target=Location.DISCARD,
-                    valid_play_condition=Condition(
-                        type=ConditionType.HAND_SIZE,
-                        operator=Operator.GT,
-                        value=0
-                    ),
+                # Claim phase - play cards face-down with a claimed rank
+                ClaimPhase(
                     min_cards=1,
-                    max_cards=4,  # Can play 1-4 cards
-                    mandatory=True,
-                    pass_if_unable=False
+                    max_cards=1,  # Simplified: 1 card at a time
+                    sequential_rank=True,  # Must claim A, 2, 3, ..., K, A, ...
+                    allow_challenge=True,
+                    pile_penalty=True  # Loser of challenge takes pile
                 )
             ]
         ),
@@ -423,18 +432,24 @@ def create_cheat_genome() -> GameGenome:
             WinCondition(type="empty_hand")
         ],
         scoring_rules=[],
-        max_turns=100,
-        player_count=4
+        max_turns=2000,  # Games can be long with pile pickups and random challenges
+        player_count=2
     )
 
 
 def create_scopa_genome() -> GameGenome:
     """Create Scopa (Italian capturing game) genome.
 
-    Simplified version without arithmetic sum matching:
-    - Capture cards from tableau by matching rank
-    - Score points for captured cards
-    - Most captures wins
+    Simplified Scopa features:
+    - Play card to tableau to capture matching rank
+    - Each capture scores 2 points (both cards)
+    - When hands empty, draw 3 new cards
+    - Game ends when deck and hands are empty
+    - Player with most captured cards wins
+
+    Simplifications:
+    - Only captures by exact rank match (not sum matching)
+    - No "Scopa" bonus for clearing tableau
     """
     return GameGenome(
         schema_version="1.0",
@@ -486,10 +501,19 @@ def create_scopa_genome() -> GameGenome:
 def create_draw_poker_genome() -> GameGenome:
     """Create Draw Poker card game genome.
 
-    Simplified version without betting:
-    - Deal 5 cards
+    Simplified Draw Poker features:
+    - Deal 5 cards to each player
     - Discard and draw to improve hand
-    - Best poker hand wins
+    - Best poker hand wins (compared after drawing phase)
+
+    Hand rankings (high to low):
+    - Royal Flush, Straight Flush, Four of a Kind, Full House, Flush
+    - Straight, Three of a Kind, Two Pair, One Pair, High Card
+
+    Simplifications:
+    - No betting rounds
+    - Single draw phase
+    - Winner determined immediately after draw
     """
     return GameGenome(
         schema_version="1.0",
@@ -524,11 +548,11 @@ def create_draw_poker_genome() -> GameGenome:
         ),
         special_effects=[],
         win_conditions=[
-            WinCondition(type="best_hand")  # Poker hand evaluation
+            WinCondition(type="best_hand")  # Compare poker hands after drawing
         ],
         scoring_rules=[],
         max_turns=20,
-        player_count=4
+        player_count=2
     )
 
 

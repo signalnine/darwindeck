@@ -1,0 +1,45 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "GrandRite",
+  "generation": 1,
+  "setup": {
+    "cards_per_player": 13,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 0
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "TrickPhase",
+        "lead_suit_required": true,
+        "trump_suit": null,
+        "high_card_wins": true,
+        "breaking_suit": "HEARTS"
+      },
+      {
+        "type": "TrickPhase",
+        "lead_suit_required": true,
+        "trump_suit": null,
+        "high_card_wins": true,
+        "breaking_suit": "HEARTS"
+      }
+    ],
+    "is_trick_based": true,
+    "tricks_per_hand": 13
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "low_score",
+      "threshold": 100
+    },
+    {
+      "type": "all_hands_empty",
+      "threshold": 0
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 500,
+  "min_turns": 52,
+  "player_count": 4
+}

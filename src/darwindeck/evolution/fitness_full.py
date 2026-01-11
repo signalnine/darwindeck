@@ -257,7 +257,7 @@ class FitnessEvaluator:
         # 6. Session length - CONSTRAINT, not metric
         estimated_duration_sec = results.avg_turns * 2  # 2 sec per turn
         target_min = 0        # No minimum
-        target_max = 30 * 60  # 30 minutes
+        target_max = 60 * 60  # 60 minutes
 
         # If outside acceptable range, return invalid fitness
         if estimated_duration_sec > target_max:

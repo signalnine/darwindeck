@@ -13,6 +13,7 @@ from darwindeck.genome.schema import (
     DrawPhase,
     DiscardPhase,
     TrickPhase,
+    ClaimPhase,
     WinCondition,
     Location,
 )
@@ -166,6 +167,8 @@ class BytecodeCompiler:
                 result += self._compile_discard_phase(phase)
             elif isinstance(phase, TrickPhase):
                 result += self._compile_trick_phase(phase)
+            elif isinstance(phase, ClaimPhase):
+                result += self._compile_claim_phase(phase)
             else:
                 # Unknown phase type, skip
                 pass
@@ -253,6 +256,25 @@ class BytecodeCompiler:
 
         return struct.pack("!BBBBB", phase_type, lead_suit_required, trump_suit, high_card_wins, breaking_suit)
 
+    def _compile_claim_phase(self, phase: ClaimPhase) -> bytes:
+        """Encode ClaimPhase to bytecode.
+
+        Go format: phase_type:1 + min_cards:1 + max_cards:1 + sequential_rank:1 +
+                   allow_challenge:1 + pile_penalty:1 + reserved:5
+        Total: 11 bytes (1 type + 10 data)
+        """
+        phase_type = 6  # ClaimPhase
+        min_cards = phase.min_cards
+        max_cards = phase.max_cards
+        sequential_rank = 1 if phase.sequential_rank else 0
+        allow_challenge = 1 if phase.allow_challenge else 0
+        pile_penalty = 1 if phase.pile_penalty else 0
+
+        # Pack: type + 5 data bytes + 5 reserved bytes = 11 total
+        return struct.pack("!BBBBBBBBBBB", phase_type, min_cards, max_cards,
+                          sequential_rank, allow_challenge, pile_penalty,
+                          0, 0, 0, 0, 0)  # 5 reserved bytes
+
     def _suit_to_code(self, suit) -> int:
         """Map Suit enum to code."""
         from darwindeck.genome.schema import Suit
@@ -334,5 +356,7 @@ class BytecodeCompiler:
             "capture_all": 3,
             "low_score": 4,        # Hearts: lowest score wins
             "all_hands_empty": 5,  # Trick-taking: hand ends when all empty
+            "best_hand": 6,        # Poker: best poker hand wins
+            "most_captured": 7,    # Scopa: most captured cards wins
         }
         return mapping.get(win_type, 0)

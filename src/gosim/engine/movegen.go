@@ -2,10 +2,16 @@ package engine
 
 import "encoding/binary"
 
+// Special CardIndex values for ClaimPhase
+const (
+	MoveChallenge = -1 // Challenge the current claim
+	MovePass      = -2 // Accept the claim without challenging
+)
+
 // LegalMove represents a possible action
 type LegalMove struct {
 	PhaseIndex int
-	CardIndex  int // -1 if not card-specific
+	CardIndex  int // -1 if not card-specific, -1=Challenge, -2=Pass for ClaimPhase
 	TargetLoc  Location
 }
 
@@ -51,10 +57,15 @@ func GenerateLegalMoves(state *GameState, genome *Genome) []LegalMove {
 			minCards := int(phase.Data[1])
 			maxCards := int(phase.Data[2])
 
-			// For now, only support single-card plays
+			hand := state.Players[currentPlayer].Hand
+			if len(hand) == 0 {
+				continue
+			}
+
+			// Single-card plays (standard)
 			if minCards <= 1 && maxCards >= 1 {
 				// Check each card in hand
-				for cardIdx := range state.Players[currentPlayer].Hand {
+				for cardIdx := range hand {
 					// TODO: Evaluate valid_play_condition from phase.Data
 					// For now, allow all cards
 					moves = append(moves, LegalMove{
@@ -62,6 +73,30 @@ func GenerateLegalMoves(state *GameState, genome *Genome) []LegalMove {
 						CardIndex:  cardIdx,
 						TargetLoc:  target,
 					})
+				}
+			}
+
+			// Multi-card plays (Go Fish sets)
+			// When min_cards > 1, we need a complete set of matching rank
+			// CardIndex encodes the rank to play (all cards of that rank)
+			if minCards > 1 {
+				// Count cards by rank
+				rankCounts := make(map[uint8]int)
+				for _, card := range hand {
+					rankCounts[card.Rank]++
+				}
+
+				// Find ranks with enough cards
+				for rank, count := range rankCounts {
+					if count >= minCards && count <= maxCards {
+						// Use negative CardIndex to encode rank + 100
+						// CardIndex = -(rank + 100) to distinguish from single plays
+						moves = append(moves, LegalMove{
+							PhaseIndex: phaseIdx,
+							CardIndex:  -int(rank) - 100, // Negative rank encoding
+							TargetLoc:  target,
+						})
+					}
 				}
 			}
 
@@ -164,6 +199,37 @@ func GenerateLegalMoves(state *GameState, genome *Genome) []LegalMove {
 					}
 				}
 			}
+
+		case 6: // ClaimPhase - Bluffing/Cheat
+			if state.CurrentClaim == nil {
+				// No active claim - current player makes a claim
+				// For simplicity, play 1 card at a time
+				hand := state.Players[currentPlayer].Hand
+				if len(hand) > 0 {
+					for cardIdx := range hand {
+						moves = append(moves, LegalMove{
+							PhaseIndex: phaseIdx,
+							CardIndex:  cardIdx,
+							TargetLoc:  LocationDiscard, // Cards go face-down to discard
+						})
+					}
+				}
+			} else {
+				// Active claim exists - opponent responds
+				if currentPlayer != state.CurrentClaim.ClaimerID {
+					// Can challenge or pass
+					moves = append(moves, LegalMove{
+						PhaseIndex: phaseIdx,
+						CardIndex:  MoveChallenge, // -1 = Challenge
+						TargetLoc:  LocationDiscard,
+					})
+					moves = append(moves, LegalMove{
+						PhaseIndex: phaseIdx,
+						CardIndex:  MovePass, // -2 = Pass (accept claim)
+						TargetLoc:  LocationDiscard,
+					})
+				}
+			}
 		}
 	}
 
@@ -190,11 +256,47 @@ func ApplyMove(state *GameState, move *LegalMove, genome *Genome) {
 
 	case 2: // PlayPhase
 		if move.CardIndex >= 0 {
+			// Single-card play
+			playedCard := state.Players[currentPlayer].Hand[move.CardIndex]
 			state.PlayCard(currentPlayer, move.CardIndex, move.TargetLoc)
 
-			// War-specific logic: if playing to tableau in 2-player game
-			if move.TargetLoc == LocationTableau && state.NumPlayers == 2 {
-				resolveWarBattle(state)
+			if move.TargetLoc == LocationTableau {
+				if state.CaptureMode {
+					// Scopa capture mechanics: check for matching rank
+					resolveScopaCapture(state, currentPlayer, playedCard)
+				} else if state.NumPlayers == 2 {
+					// War-specific logic: compare cards
+					resolveWarBattle(state)
+				}
+			}
+		} else if move.CardIndex <= -100 {
+			// Multi-card play (Go Fish sets)
+			// CardIndex encodes rank as -(rank + 100)
+			targetRank := uint8(-(move.CardIndex + 100))
+
+			// Find and remove all cards of this rank from hand
+			cardsToPlay := make([]Card, 0, 4)
+			newHand := make([]Card, 0, len(state.Players[currentPlayer].Hand))
+			for _, card := range state.Players[currentPlayer].Hand {
+				if card.Rank == targetRank {
+					cardsToPlay = append(cardsToPlay, card)
+				} else {
+					newHand = append(newHand, card)
+				}
+			}
+			state.Players[currentPlayer].Hand = newHand
+
+			// Play cards to target location
+			switch move.TargetLoc {
+			case LocationDiscard:
+				state.Discard = append(state.Discard, cardsToPlay...)
+				// Score point for completing a set (Go Fish scoring)
+				state.Players[currentPlayer].Score++
+			case LocationTableau:
+				if len(state.Tableau) == 0 {
+					state.Tableau = make([][]Card, 1)
+				}
+				state.Tableau[0] = append(state.Tableau[0], cardsToPlay...)
 			}
 		}
 
@@ -237,6 +339,49 @@ func ApplyMove(state *GameState, move *LegalMove, genome *Genome) {
 				resolveTrick(state, genome, phase)
 				return // Don't advance turn normally - resolveTrick sets next player
 			}
+		}
+
+	case 6: // ClaimPhase - Bluffing/Cheat
+		if move.CardIndex >= 0 {
+			// Making a claim - play card and create claim
+			if move.CardIndex < len(state.Players[currentPlayer].Hand) {
+				card := state.Players[currentPlayer].Hand[move.CardIndex]
+
+				// Remove card from hand
+				state.Players[currentPlayer].Hand = append(
+					state.Players[currentPlayer].Hand[:move.CardIndex],
+					state.Players[currentPlayer].Hand[move.CardIndex+1:]...,
+				)
+
+				// Add to discard pile (face-down conceptually)
+				state.Discard = append(state.Discard, card)
+
+				// Create claim - claimed rank is sequential based on turn number
+				claimedRank := uint8(state.TurnNumber % 13) // A, 2, 3, ..., K, A, 2, ...
+				state.CurrentClaim = &Claim{
+					ClaimerID:    currentPlayer,
+					ClaimedRank:  claimedRank,
+					ClaimedCount: 1,
+					CardsPlayed:  []Card{card},
+					Challenged:   false,
+				}
+			}
+		} else if move.CardIndex == MoveChallenge {
+			// Challenge the claim
+			if state.CurrentClaim != nil {
+				resolveChallenge(state, currentPlayer)
+				// After challenge resolves, this player makes the next claim
+				// Don't advance turn - current player will claim
+				state.TurnNumber++
+				return
+			}
+		} else if move.CardIndex == MovePass {
+			// Accept claim - clear it, cards stay in discard
+			state.CurrentClaim = nil
+			// After pass, this player makes the next claim
+			// Don't advance turn - current player will claim
+			state.TurnNumber++
+			return
 		}
 	}
 
@@ -388,14 +533,63 @@ func resolveWarBattle(state *GameState) {
 	state.Tableau[0] = state.Tableau[0][:0]
 }
 
+// resolveScopaCapture handles Scopa-style rank matching capture
+// When playing a card to tableau, capture any card with matching rank
+func resolveScopaCapture(state *GameState, playerID uint8, playedCard Card) {
+	if len(state.Tableau) == 0 || len(state.Tableau[0]) == 0 {
+		return
+	}
+
+	tableau := state.Tableau[0]
+
+	// Find matching card in tableau (by rank)
+	matchIdx := -1
+	for i, card := range tableau {
+		// Skip the card we just played (it's the last one)
+		if i == len(tableau)-1 {
+			continue
+		}
+		if card.Rank == playedCard.Rank {
+			matchIdx = i
+			break
+		}
+	}
+
+	if matchIdx >= 0 {
+		// Capture both cards - add to player's score
+		capturedCard := tableau[matchIdx]
+
+		// Remove the matched card from tableau
+		state.Tableau[0] = append(tableau[:matchIdx], tableau[matchIdx+1:]...)
+
+		// Remove the played card from tableau (it's now at len-1 after removal)
+		if len(state.Tableau[0]) > 0 {
+			state.Tableau[0] = state.Tableau[0][:len(state.Tableau[0])-1]
+		}
+
+		// Score captures (each captured card = 1 point)
+		state.Players[playerID].Score += 2 // Both captured card and played card
+
+		// For a more complete Scopa implementation, we'd track captured cards
+		// in a separate pile, but for scoring purposes, just increment Score
+		_ = capturedCard // Used for capture
+	}
+	// If no match, played card stays on tableau (already added by PlayCard)
+}
+
 // CheckWinConditions evaluates win conditions, returns winner ID or -1
 // Exported so mcts package can use it
 func CheckWinConditions(state *GameState, genome *Genome) int8 {
+	numPlayers := int(state.NumPlayers)
+	if numPlayers == 0 {
+		numPlayers = 2 // Default fallback
+	}
+
 	for _, wc := range genome.WinConditions {
 		switch wc.WinType {
 		case 0: // empty_hand
-			for playerID, player := range state.Players {
-				if len(player.Hand) == 0 {
+			for playerID := 0; playerID < numPlayers; playerID++ {
+				if len(state.Players[playerID].Hand) == 0 {
 					return int8(playerID)
 				}
 			}
@@ -403,7 +597,8 @@ func CheckWinConditions(state *GameState, genome *Genome) int8 {
 			maxScore := int32(-1)
 			winner := int8(-1)
 			triggered := false
-			for playerID, player := range state.Players {
+			for playerID := 0; playerID < numPlayers; playerID++ {
+				player := state.Players[playerID]
 				if player.Score >= wc.Threshold {
 					triggered = true
 				}
@@ -416,14 +611,14 @@ func CheckWinConditions(state *GameState, genome *Genome) int8 {
 				return winner
 			}
 		case 2: // first_to_score
-			for playerID, player := range state.Players {
-				if player.Score >= wc.Threshold {
+			for playerID := 0; playerID < numPlayers; playerID++ {
+				if state.Players[playerID].Score >= wc.Threshold {
 					return int8(playerID)
 				}
 			}
 		case 3: // capture_all
-			for playerID, player := range state.Players {
-				if len(player.Hand) == 52 {
+			for playerID := 0; playerID < numPlayers; playerID++ {
+				if len(state.Players[playerID].Hand) == 52 {
 					return int8(playerID)
 				}
 			}
@@ -431,7 +626,8 @@ func CheckWinConditions(state *GameState, genome *Genome) int8 {
 			minScore := int32(999999)
 			winner := int8(-1)
 			triggered := false
-			for playerID, player := range state.Players {
+			for playerID := 0; playerID < numPlayers; playerID++ {
+				player := state.Players[playerID]
 				if player.Score >= wc.Threshold {
 					triggered = true
 				}
@@ -445,8 +641,8 @@ func CheckWinConditions(state *GameState, genome *Genome) int8 {
 			}
 		case 5: // all_hands_empty (trick-taking: hand ends when all empty)
 			allEmpty := true
-			for _, player := range state.Players {
-				if len(player.Hand) > 0 {
+			for playerID := 0; playerID < numPlayers; playerID++ {
+				if len(state.Players[playerID].Hand) > 0 {
 					allEmpty = false
 					break
 				}
@@ -455,9 +651,48 @@ func CheckWinConditions(state *GameState, genome *Genome) int8 {
 				// In trick-taking games, lowest score wins when hand ends
 				minScore := int32(999999)
 				winner := int8(-1)
-				for playerID, player := range state.Players {
-					if player.Score < minScore {
-						minScore = player.Score
+				for playerID := 0; playerID < numPlayers; playerID++ {
+					if state.Players[playerID].Score < minScore {
+						minScore = state.Players[playerID].Score
+						winner = int8(playerID)
+					}
+				}
+				return winner
+			}
+
+		case 6: // best_hand (poker: compare hands at end of game)
+			// This is checked when max_turns is reached
+			// For poker, we evaluate immediately when all players have 5 cards
+			// and the draw phase is complete
+			allHaveFive := true
+			for playerID := 0; playerID < numPlayers; playerID++ {
+				if len(state.Players[playerID].Hand) != 5 {
+					allHaveFive = false
+					break
+				}
+			}
+			// Only trigger after some turns have passed (draw phase complete)
+			if allHaveFive && state.TurnNumber >= uint32(numPlayers*2) {
+				return FindBestPokerWinner(state, numPlayers)
+			}
+
+		case 7: // most_captured (Scopa: player with most captured cards wins)
+			// Check if game should end (deck empty and hands empty)
+			deckEmpty := len(state.Deck) == 0
+			handsEmpty := true
+			for playerID := 0; playerID < numPlayers; playerID++ {
+				if len(state.Players[playerID].Hand) > 0 {
+					handsEmpty = false
+					break
+				}
+			}
+			if deckEmpty && handsEmpty {
+				// Compare captured card counts (stored in Score)
+				maxScore := int32(-1)
+				winner := int8(-1)
+				for playerID := 0; playerID < numPlayers; playerID++ {
+					if state.Players[playerID].Score > maxScore {
+						maxScore = state.Players[playerID].Score
 						winner = int8(playerID)
 					}
 				}
@@ -466,4 +701,43 @@ func CheckWinConditions(state *GameState, genome *Genome) int8 {
 		}
 	}
 	return -1
+}
+
+// resolveChallenge handles a challenge in ClaimPhase
+// If claim was TRUE (cards match claimed rank), challenger takes pile
+// If claim was FALSE (cards don't match), claimer takes pile
+func resolveChallenge(state *GameState, challengerID uint8) {
+	if state.CurrentClaim == nil {
+		return
+	}
+
+	claim := state.CurrentClaim
+	claimerID := claim.ClaimerID
+
+	// Check if the claim was truthful
+	truthful := true
+	for _, card := range claim.CardsPlayed {
+		if card.Rank != claim.ClaimedRank {
+			truthful = false
+			break
+		}
+	}
+
+	var loserID uint8
+	if truthful {
+		// Claim was true - challenger was wrong, takes the pile
+		loserID = challengerID
+	} else {
+		// Claim was false - claimer was lying, takes the pile
+		loserID = claimerID
+	}
+
+	// Loser takes entire discard pile
+	for _, card := range state.Discard {
+		state.Players[loserID].Hand = append(state.Players[loserID].Hand, card)
+	}
+	state.Discard = state.Discard[:0]
+
+	// Clear the claim
+	state.CurrentClaim = nil
 }

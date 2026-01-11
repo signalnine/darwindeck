@@ -104,6 +104,14 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 	state.NumPlayers = uint8(numPlayers)
 	state.CardsPerPlayer = cardsPerPlayer
 
+	// Check if this is a capture-mode game (Scopa-style)
+	for _, wc := range genome.WinConditions {
+		if wc.WinType == 7 { // most_captured
+			state.CaptureMode = true
+			break
+		}
+	}
+
 	// Deal cards to each player
 	for i := 0; i < cardsPerPlayer; i++ {
 		for p := 0; p < numPlayers; p++ {
@@ -148,21 +156,27 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 
 		// Select and apply move based on AI type
 		var move *engine.LegalMove
-		switch aiType {
-		case RandomAI:
-			move = &moves[rand.Intn(len(moves))]
-		case GreedyAI:
-			move = selectGreedyMove(state, genome, moves)
-		case MCTS100AI:
-			move = mcts.Search(state, genome, 100, mcts.DefaultExplorationParam)
-		case MCTS500AI:
-			move = mcts.Search(state, genome, 500, mcts.DefaultExplorationParam)
-		case MCTS1000AI:
-			move = mcts.Search(state, genome, 1000, mcts.DefaultExplorationParam)
-		case MCTS2000AI:
-			move = mcts.Search(state, genome, 2000, mcts.DefaultExplorationParam)
-		default:
+
+		// Optimization: skip MCTS search if only one legal move
+		if len(moves) == 1 {
 			move = &moves[0]
+		} else {
+			switch aiType {
+			case RandomAI:
+				move = &moves[rand.Intn(len(moves))]
+			case GreedyAI:
+				move = selectGreedyMove(state, genome, moves)
+			case MCTS100AI:
+				move = mcts.Search(state, genome, 100, mcts.DefaultExplorationParam)
+			case MCTS500AI:
+				move = mcts.Search(state, genome, 500, mcts.DefaultExplorationParam)
+			case MCTS1000AI:
+				move = mcts.Search(state, genome, 1000, mcts.DefaultExplorationParam)
+			case MCTS2000AI:
+				move = mcts.Search(state, genome, 2000, mcts.DefaultExplorationParam)
+			default:
+				move = &moves[0]
+			}
 		}
 
 		if move == nil {
@@ -231,6 +245,14 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 	state.NumPlayers = uint8(numPlayers)
 	state.CardsPerPlayer = cardsPerPlayer
 
+	// Check if this is a capture-mode game (Scopa-style)
+	for _, wc := range genome.WinConditions {
+		if wc.WinType == 7 { // most_captured
+			state.CaptureMode = true
+			break
+		}
+	}
+
 	for i := 0; i < cardsPerPlayer; i++ {
 		for p := 0; p < numPlayers; p++ {
 			state.DrawCard(uint8(p), engine.LocationDeck)
@@ -276,21 +298,27 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 		}
 
 		var move *engine.LegalMove
-		switch aiType {
-		case RandomAI:
-			move = &moves[rand.Intn(len(moves))]
-		case GreedyAI:
-			move = selectGreedyMove(state, genome, moves)
-		case MCTS100AI:
-			move = mcts.Search(state, genome, 100, mcts.DefaultExplorationParam)
-		case MCTS500AI:
-			move = mcts.Search(state, genome, 500, mcts.DefaultExplorationParam)
-		case MCTS1000AI:
-			move = mcts.Search(state, genome, 1000, mcts.DefaultExplorationParam)
-		case MCTS2000AI:
-			move = mcts.Search(state, genome, 2000, mcts.DefaultExplorationParam)
-		default:
+
+		// Optimization: skip MCTS search if only one legal move
+		if len(moves) == 1 {
 			move = &moves[0]
+		} else {
+			switch aiType {
+			case RandomAI:
+				move = &moves[rand.Intn(len(moves))]
+			case GreedyAI:
+				move = selectGreedyMove(state, genome, moves)
+			case MCTS100AI:
+				move = mcts.Search(state, genome, 100, mcts.DefaultExplorationParam)
+			case MCTS500AI:
+				move = mcts.Search(state, genome, 500, mcts.DefaultExplorationParam)
+			case MCTS1000AI:
+				move = mcts.Search(state, genome, 1000, mcts.DefaultExplorationParam)
+			case MCTS2000AI:
+				move = mcts.Search(state, genome, 2000, mcts.DefaultExplorationParam)
+			default:
+				move = &moves[0]
+			}
 		}
 
 		if move == nil {
@@ -349,6 +377,10 @@ func isInteraction(state *engine.GameState, move *engine.LegalMove, genome *engi
 	case 4: // TrickPhase
 		// Trick-taking is inherently interactive - every card played
 		// affects the trick outcome and impacts all players
+		return true
+	case 6: // ClaimPhase
+		// Bluffing/Cheat is highly interactive - claims affect opponent decisions
+		// and challenges affect who picks up the pile
 		return true
 	}
 

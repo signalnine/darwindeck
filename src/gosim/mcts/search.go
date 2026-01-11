@@ -127,19 +127,31 @@ func simulate(state *engine.GameState, genome *engine.Genome) int8 {
 }
 
 // backpropagate updates node statistics up the tree
+// IMPORTANT: Wins are stored from the perspective of the player who MADE the move
+// leading to this node (i.e., the PARENT's player), not the current node's player.
+// This is because UCB1 is used to select which child to visit, and the parent
+// wants to pick moves that are good for them.
 func backpropagate(node *MCTSNode, winner int8) {
 	for node != nil {
 		node.Visits++
 
-		// Award wins based on perspective
+		// Award wins from the perspective of who made the move to reach this node
+		// The move was made by the PARENT's player, so we check against parent's PlayerID
 		if winner >= 0 {
-			if uint8(winner) == node.PlayerID {
-				node.Wins += 1.0
+			if node.Parent != nil {
+				// Credit the parent's player (who made the move to reach this node)
+				if uint8(winner) == node.Parent.PlayerID {
+					node.Wins += 1.0
+				}
+			} else {
+				// Root node - credit if winner matches root's player
+				if uint8(winner) == node.PlayerID {
+					node.Wins += 1.0
+				}
 			}
-			// Could add partial credit for draws:
-			// else if winner == -1 {
-			//     node.Wins += 0.5
-			// }
+		} else {
+			// Draw - give partial credit
+			node.Wins += 0.5
 		}
 
 		node = node.Parent
