@@ -30,6 +30,30 @@ Games are scored on measurable proxies for "fun":
 - Rules complexity and session length
 - Skill vs luck ratio (MCTS win rate vs random)
 
+### Fitness Style Presets
+
+The system supports 5 fitness style presets that weight metrics differently for different game types:
+
+| Style | Description | Key Weights |
+|-------|-------------|-------------|
+| `balanced` | Default preset, well-rounded games | skill_vs_luck: 0.30, decision_density: 0.20 |
+| `bluffing` | Hidden information, betting, player interaction | interaction_frequency: 0.30, skill_vs_luck: 0.15 |
+| `strategic` | Deep thinking, skill-based play | skill_vs_luck: 0.40, decision_density: 0.25 |
+| `party` | Quick, interactive, accessible games | comeback_potential: 0.25, skill_vs_luck: 0.05 |
+| `trick-taking` | Trick-based mechanics | interaction_frequency: 0.25, balanced elsewhere |
+
+**Usage via CLI:**
+```bash
+uv run python -m darwindeck.cli.evolve --style strategic
+```
+
+**Usage via script:**
+```bash
+STYLE=bluffing ./scripts/run-evolution.sh
+```
+
+**Preset definitions:** `src/darwindeck/evolution/fitness_full.py`
+
 ## Performance and Parallelization
 
 The system implements **two-level parallelization** to maximize throughput on multi-core systems:

@@ -79,13 +79,35 @@ poetry run python -m darwindeck.cli.evolve \
 - `--seed-ratio`: Ratio of known games to mutants (default: 0.7)
 - `--output-dir` / `-o`: Output directory (default: output)
 - `--save-top-n`: Number of top genomes to save (default: 10)
+- `--style` / `-s`: Fitness style preset (default: balanced)
 - `--verbose` / `-v`: Enable verbose logging
+
+### Fitness Styles
+
+Different style presets weight fitness metrics differently:
+
+| Style | Description | Best For |
+|-------|-------------|----------|
+| `balanced` | Default, well-rounded games | General exploration |
+| `bluffing` | Hidden info, betting, interaction | Poker-like games |
+| `strategic` | Deep thinking, skill emphasis | Chess-like games |
+| `party` | Quick, accessible, high luck | Casual/family games |
+| `trick-taking` | Trick-based mechanics | Bridge/Hearts-like games |
+
+```bash
+# Run evolution with a specific style
+STYLE=strategic ./scripts/run-evolution.sh
+
+# Or via CLI
+poetry run python -m darwindeck.cli.evolve --style bluffing
+```
 
 ### Environment Variables
 
 - `EVOLUTION_WORKERS`: Override number of parallel workers (default: detect CPU count)
 - `POPULATION`: Population size for run-evolution.sh
 - `GENERATIONS`: Generations for run-evolution.sh
+- `STYLE`: Fitness style preset (default: balanced)
 - `OUTPUT_DIR`: Output directory for run-evolution.sh
 
 ## Monitoring
