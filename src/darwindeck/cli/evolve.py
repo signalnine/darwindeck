@@ -397,7 +397,7 @@ def main() -> int:
     if not args.no_describe:
         logging.info("\nGenerating descriptions for top 5 games...")
         top_5 = [(ind.genome, ind.fitness) for ind in best_genomes[:5]]
-        descriptions = describe_top_games(top_5, top_n=5)
+        descriptions = describe_top_games(top_5, top_n=5, skill_results=skill_results)
 
         if descriptions:
             # Save descriptions to markdown file
@@ -407,8 +407,12 @@ def main() -> int:
                 f.write(f"Run: {timestamp}\n\n")
                 for i, individual in enumerate(best_genomes[:5], 1):
                     genome_id = individual.genome.genome_id
+                    skill = skill_results.get(genome_id)
                     f.write(f"## {i}. {genome_id}\n\n")
-                    f.write(f"**Fitness:** {individual.fitness:.4f}\n\n")
+                    f.write(f"**Fitness:** {individual.fitness:.4f}\n")
+                    if skill:
+                        f.write(f"**MCTS Win Rate:** {skill.mcts_win_rate:.1%}\n")
+                    f.write("\n")
                     if genome_id in descriptions:
                         f.write(f"{descriptions[genome_id]}\n\n")
                     else:
@@ -423,7 +427,9 @@ def main() -> int:
             logging.info("="*60)
             for i, individual in enumerate(best_genomes[:5], 1):
                 genome_id = individual.genome.genome_id
-                logging.info(f"\n{i}. {genome_id} (fitness={individual.fitness:.4f})")
+                skill = skill_results.get(genome_id)
+                skill_str = f", skill={skill.mcts_win_rate:.1%}" if skill else ""
+                logging.info(f"\n{i}. {genome_id} (fitness={individual.fitness:.4f}{skill_str})")
                 if genome_id in descriptions:
                     logging.info(f"   {descriptions[genome_id]}")
 
