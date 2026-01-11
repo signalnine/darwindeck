@@ -29,6 +29,13 @@ type GameMetrics struct {
 	TotalInteractions uint64 // Actions affecting opponent state
 	TotalActions      uint64 // Total actions taken
 	TotalHandSize     uint64 // Sum of hand sizes at each decision (for filtering ratio)
+
+	// Bluffing metrics (ClaimPhase games)
+	TotalClaims        uint64 // Number of claims made
+	TotalBluffs        uint64 // Claims where cards didn't match claimed rank
+	TotalChallenges    uint64 // Number of challenges made
+	SuccessfulBluffs   uint64 // Bluffs that weren't challenged (opponent passed)
+	SuccessfulCatches  uint64 // Challenges that caught a bluff
 }
 
 // GameResult holds the outcome of a single game
@@ -58,6 +65,13 @@ type AggregatedStats struct {
 	TotalInteractions uint64
 	TotalActions      uint64
 	TotalHandSize     uint64 // For filtering ratio calculation
+
+	// Bluffing metrics: aggregated across all games
+	TotalClaims       uint64
+	TotalBluffs       uint64
+	TotalChallenges   uint64
+	SuccessfulBluffs  uint64
+	SuccessfulCatches uint64
 }
 
 // RunBatch simulates multiple games with the same genome and AI configuration
@@ -194,6 +208,9 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 		if isInteraction(state, move, genome) {
 			metrics.TotalInteractions++
 		}
+
+		// Track bluffing metrics before ApplyMove changes state
+		trackBluffingMetrics(state, move, genome, &metrics)
 
 		engine.ApplyMove(state, move, genome)
 	}
@@ -336,6 +353,9 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 			metrics.TotalInteractions++
 		}
 
+		// Track bluffing metrics before ApplyMove changes state
+		trackBluffingMetrics(state, move, genome, &metrics)
+
 		engine.ApplyMove(state, move, genome)
 	}
 
@@ -344,6 +364,72 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 		TurnCount:  state.TurnNumber,
 		DurationNs: uint64(time.Since(start).Nanoseconds()),
 		Metrics:    metrics,
+	}
+}
+
+// trackBluffingMetrics records claim/challenge/bluff events
+func trackBluffingMetrics(state *engine.GameState, move *engine.LegalMove, genome *engine.Genome, metrics *GameMetrics) {
+	// Only track for ClaimPhase (phase type 6)
+	if move.PhaseIndex >= len(genome.TurnPhases) {
+		return
+	}
+	phase := genome.TurnPhases[move.PhaseIndex]
+	if phase.PhaseType != 6 { // 6 = ClaimPhase
+		return
+	}
+
+	// Check if there's an active claim
+	claim := state.CurrentClaim
+
+	if move.CardIndex == engine.MoveChallenge {
+		// This is a challenge
+		metrics.TotalChallenges++
+
+		// Check if the claim was a bluff (cards don't match claimed rank)
+		if claim != nil {
+			isBluff := false
+			for _, card := range claim.CardsPlayed {
+				if card.Rank != claim.ClaimedRank {
+					isBluff = true
+					break
+				}
+			}
+			if isBluff {
+				metrics.SuccessfulCatches++ // Caught a bluff
+			}
+		}
+	} else if move.CardIndex == engine.MovePass {
+		// Opponent passed on the claim
+		if claim != nil {
+			// Check if this was a bluff that succeeded
+			isBluff := false
+			for _, card := range claim.CardsPlayed {
+				if card.Rank != claim.ClaimedRank {
+					isBluff = true
+					break
+				}
+			}
+			if isBluff {
+				metrics.SuccessfulBluffs++ // Bluff wasn't challenged
+			}
+		}
+	} else if move.CardIndex >= 0 && claim == nil {
+		// This is a new claim (no active claim, playing cards)
+		// We'll check if it's a bluff after the move is applied
+		// For now, just count the claim
+		metrics.TotalClaims++
+
+		// Check if it's a bluff by looking at the cards being played
+		// The claimed rank will be based on turn number (sequential)
+		claimedRank := uint8(state.TurnNumber % 13)
+		hand := state.Players[state.CurrentPlayer].Hand
+
+		if move.CardIndex < len(hand) {
+			card := hand[move.CardIndex]
+			if card.Rank != claimedRank {
+				metrics.TotalBluffs++
+			}
+		}
 	}
 }
 
@@ -472,6 +558,13 @@ func aggregateResults(results []GameResult) AggregatedStats {
 		stats.TotalInteractions += result.Metrics.TotalInteractions
 		stats.TotalActions += result.Metrics.TotalActions
 		stats.TotalHandSize += result.Metrics.TotalHandSize
+
+		// Bluffing metrics
+		stats.TotalClaims += result.Metrics.TotalClaims
+		stats.TotalBluffs += result.Metrics.TotalBluffs
+		stats.TotalChallenges += result.Metrics.TotalChallenges
+		stats.SuccessfulBluffs += result.Metrics.SuccessfulBluffs
+		stats.SuccessfulCatches += result.Metrics.SuccessfulCatches
 	}
 
 	// Calculate averages

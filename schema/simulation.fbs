@@ -50,6 +50,13 @@ table AggregatedStats {
   // Interaction frequency metrics
   total_interactions: uint64;    // Actions affecting opponent state
   total_actions: uint64;         // Total actions taken
+
+  // Bluffing metrics (ClaimPhase games)
+  total_claims: uint64;          // Number of claims made
+  total_bluffs: uint64;          // Claims where cards didn't match claimed rank
+  total_challenges: uint64;      // Number of challenges made
+  successful_bluffs: uint64;     // Bluffs that weren't challenged
+  successful_catches: uint64;    // Challenges that caught a bluff
 }
 
 // Batch response

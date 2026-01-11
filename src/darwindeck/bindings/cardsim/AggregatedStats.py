@@ -116,7 +116,42 @@ class AggregatedStats(object):
             return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
         return 0
 
-def AggregatedStatsStart(builder): builder.StartObject(14)
+    # AggregatedStats
+    def TotalClaims(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(32))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
+        return 0
+
+    # AggregatedStats
+    def TotalBluffs(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(34))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
+        return 0
+
+    # AggregatedStats
+    def TotalChallenges(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(36))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
+        return 0
+
+    # AggregatedStats
+    def SuccessfulBluffs(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(38))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
+        return 0
+
+    # AggregatedStats
+    def SuccessfulCatches(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(40))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
+        return 0
+
+def AggregatedStatsStart(builder): builder.StartObject(19)
 def AggregatedStatsAddTotalGames(builder, totalGames): builder.PrependUint32Slot(0, totalGames, 0)
 def AggregatedStatsAddPlayer0Wins(builder, player0Wins): builder.PrependUint32Slot(1, player0Wins, 0)
 def AggregatedStatsAddPlayer1Wins(builder, player1Wins): builder.PrependUint32Slot(2, player1Wins, 0)
@@ -131,4 +166,9 @@ def AggregatedStatsAddForcedDecisions(builder, forcedDecisions): builder.Prepend
 def AggregatedStatsAddTotalHandSize(builder, totalHandSize): builder.PrependUint64Slot(11, totalHandSize, 0)
 def AggregatedStatsAddTotalInteractions(builder, totalInteractions): builder.PrependUint64Slot(12, totalInteractions, 0)
 def AggregatedStatsAddTotalActions(builder, totalActions): builder.PrependUint64Slot(13, totalActions, 0)
+def AggregatedStatsAddTotalClaims(builder, totalClaims): builder.PrependUint64Slot(14, totalClaims, 0)
+def AggregatedStatsAddTotalBluffs(builder, totalBluffs): builder.PrependUint64Slot(15, totalBluffs, 0)
+def AggregatedStatsAddTotalChallenges(builder, totalChallenges): builder.PrependUint64Slot(16, totalChallenges, 0)
+def AggregatedStatsAddSuccessfulBluffs(builder, successfulBluffs): builder.PrependUint64Slot(17, successfulBluffs, 0)
+def AggregatedStatsAddSuccessfulCatches(builder, successfulCatches): builder.PrependUint64Slot(18, successfulCatches, 0)
 def AggregatedStatsEnd(builder): return builder.EndObject()

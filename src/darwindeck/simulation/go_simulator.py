@@ -120,6 +120,12 @@ class GoSimulator:
                 total_hand_size=result.TotalHandSize(),
                 total_interactions=result.TotalInteractions(),
                 total_actions=result.TotalActions(),
+                # Bluffing metrics
+                total_claims=result.TotalClaims(),
+                total_bluffs=result.TotalBluffs(),
+                total_challenges=result.TotalChallenges(),
+                successful_bluffs=result.SuccessfulBluffs(),
+                successful_catches=result.SuccessfulCatches(),
             )
         except Exception as e:
             # Return error results for simulation failures
@@ -212,6 +218,12 @@ class GoSimulator:
                 total_hand_size=result.TotalHandSize(),
                 total_interactions=result.TotalInteractions(),
                 total_actions=result.TotalActions(),
+                # Bluffing metrics
+                total_claims=result.TotalClaims(),
+                total_bluffs=result.TotalBluffs(),
+                total_challenges=result.TotalChallenges(),
+                successful_bluffs=result.SuccessfulBluffs(),
+                successful_catches=result.SuccessfulCatches(),
             )
         except Exception as e:
             return SimulationResults(
