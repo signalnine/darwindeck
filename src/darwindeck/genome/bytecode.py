@@ -109,6 +109,9 @@ class BytecodeCompiler:
 
     def compile_genome(self, genome: GameGenome) -> bytes:
         """Convert genome to bytecode blob."""
+        # Reset offset for each genome (instance is reused across compilations)
+        self.offset = 36  # After header
+
         # Compile sections
         setup_offset = self.offset
         setup_bytes = self._compile_setup(genome.setup)
