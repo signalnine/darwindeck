@@ -62,6 +62,29 @@ uv run python -m darwindeck.cli.evolve \
 ssh your-server "cd darwindeck && ./scripts/run-evolution.sh"
 ```
 
+## Generating Game Descriptions
+
+After evolution, generate human-readable game rules from saved genomes:
+
+```bash
+# Generate description from saved genome JSON
+uv run python -m darwindeck.cli.describe output/run1/rank01_GameName.json
+
+# With verbose output showing fitness and skill metrics
+uv run python -m darwindeck.cli.describe output/run1/rank01_GameName.json -v
+
+# Override fitness score (if not in file)
+uv run python -m darwindeck.cli.describe output/run1/genome.json --fitness 0.85
+```
+
+The describe command uses Claude to generate natural language game rules suitable for human playtesting. It extracts:
+- Game setup and deal rules
+- Turn structure and valid moves
+- Win conditions and scoring
+- Skill evaluation summary (if available)
+
+**Note:** Requires `ANTHROPIC_API_KEY` environment variable to be set.
+
 ## Architecture
 
 ```
