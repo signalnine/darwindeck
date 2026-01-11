@@ -334,8 +334,8 @@ class ModifyConditionMutation(MutationOperator):
         if not hasattr(condition, 'value'):
             return condition
 
-        # Tweak value by ±2
-        if condition.value is not None:
+        # Tweak value by ±2 (only for numeric values)
+        if condition.value is not None and isinstance(condition.value, (int, float)):
             new_value = max(0, condition.value + random.randint(-2, 2))
             return replace(condition, value=new_value)
 
