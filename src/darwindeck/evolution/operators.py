@@ -287,17 +287,21 @@ class ModifyConditionMutation(MutationOperator):
         new_turn = replace(genome.turn_structure, phases=tuple(phases))
         return replace(genome, turn_structure=new_turn, generation=genome.generation + 1)
 
-    def _tweak_condition(self, condition: Optional[Condition]) -> Optional[Condition]:
+    def _tweak_condition(self, condition) -> Optional[Condition]:
         """Tweak a condition's parameters.
 
         Args:
-            condition: Condition to tweak
+            condition: Condition or CompoundCondition to tweak
 
         Returns:
-            Modified condition
+            Modified condition (or original if compound)
         """
         if condition is None:
             return None
+
+        # Skip CompoundConditions - they're complex to mutate safely
+        if not hasattr(condition, 'value'):
+            return condition
 
         # Tweak value by ±2
         if condition.value is not None:
@@ -305,9 +309,12 @@ class ModifyConditionMutation(MutationOperator):
             return replace(condition, value=new_value)
 
         # Or change operator
-        operators = [Operator.EQ, Operator.GT, Operator.LT, Operator.GE, Operator.LE]
-        new_operator = random.choice([op for op in operators if op != condition.operator])
-        return replace(condition, operator=new_operator)
+        if hasattr(condition, 'operator') and condition.operator is not None:
+            operators = [Operator.EQ, Operator.GT, Operator.LT, Operator.GE, Operator.LE]
+            new_operator = random.choice([op for op in operators if op != condition.operator])
+            return replace(condition, operator=new_operator)
+
+        return condition
 
 
 class AddSpecialEffectMutation(MutationOperator):
