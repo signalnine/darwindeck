@@ -190,6 +190,131 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 	}
 }
 
+// RunBatchAsymmetric simulates games with different AI types for each player.
+// Used for skill gap measurement (e.g., MCTS vs Random).
+func RunBatchAsymmetric(genome *engine.Genome, numGames int, p0AIType AIPlayerType, p1AIType AIPlayerType, mctsIterations int, seed uint64) AggregatedStats {
+	results := make([]GameResult, numGames)
+	rng := rand.New(rand.NewSource(int64(seed)))
+
+	for i := 0; i < numGames; i++ {
+		gameSeed := rng.Uint64()
+		results[i] = RunSingleGameAsymmetric(genome, p0AIType, p1AIType, mctsIterations, gameSeed)
+	}
+
+	return aggregateResults(results)
+}
+
+// RunSingleGameAsymmetric plays one game with different AI for each player.
+func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIType AIPlayerType, mctsIterations int, seed uint64) GameResult {
+	start := time.Now()
+	var metrics GameMetrics
+
+	state := engine.GetState()
+	defer engine.PutState(state)
+
+	setupDeck(state, seed)
+
+	cardsPerPlayer := 26
+	if genome.Header.SetupOffset > 0 && genome.Header.SetupOffset+8 <= int32(len(genome.Bytecode)) {
+		setupOffset := genome.Header.SetupOffset
+		cardsPerPlayer = int(int32(binary.BigEndian.Uint32(genome.Bytecode[setupOffset : setupOffset+4])))
+	}
+
+	numPlayers := int(genome.Header.PlayerCount)
+	if numPlayers == 0 || numPlayers > 4 {
+		numPlayers = 2
+	}
+
+	state.NumPlayers = uint8(numPlayers)
+	state.CardsPerPlayer = cardsPerPlayer
+
+	for i := 0; i < cardsPerPlayer; i++ {
+		for p := 0; p < numPlayers; p++ {
+			state.DrawCard(uint8(p), engine.LocationDeck)
+		}
+	}
+
+	maxTurns := genome.Header.MaxTurns
+	for state.TurnNumber < maxTurns {
+		winner := engine.CheckWinConditions(state, genome)
+		if winner >= 0 {
+			return GameResult{
+				WinnerID:   winner,
+				TurnCount:  state.TurnNumber,
+				DurationNs: uint64(time.Since(start).Nanoseconds()),
+				Metrics:    metrics,
+			}
+		}
+
+		moves := engine.GenerateLegalMoves(state, genome)
+		if len(moves) == 0 {
+			return GameResult{
+				WinnerID:   -1,
+				TurnCount:  state.TurnNumber,
+				DurationNs: uint64(time.Since(start).Nanoseconds()),
+				Error:      "no legal moves",
+				Metrics:    metrics,
+			}
+		}
+
+		metrics.TotalDecisions++
+		metrics.TotalValidMoves += uint64(len(moves))
+		if len(moves) == 1 {
+			metrics.ForcedDecisions++
+		}
+
+		// Select AI based on current player
+		var aiType AIPlayerType
+		if state.CurrentPlayer == 0 {
+			aiType = p0AIType
+		} else {
+			aiType = p1AIType
+		}
+
+		var move *engine.LegalMove
+		switch aiType {
+		case RandomAI:
+			move = &moves[rand.Intn(len(moves))]
+		case GreedyAI:
+			move = selectGreedyMove(state, genome, moves)
+		case MCTS100AI:
+			move = mcts.Search(state, genome, 100, mcts.DefaultExplorationParam)
+		case MCTS500AI:
+			move = mcts.Search(state, genome, 500, mcts.DefaultExplorationParam)
+		case MCTS1000AI:
+			move = mcts.Search(state, genome, 1000, mcts.DefaultExplorationParam)
+		case MCTS2000AI:
+			move = mcts.Search(state, genome, 2000, mcts.DefaultExplorationParam)
+		default:
+			move = &moves[0]
+		}
+
+		if move == nil {
+			return GameResult{
+				WinnerID:   -1,
+				TurnCount:  state.TurnNumber,
+				DurationNs: uint64(time.Since(start).Nanoseconds()),
+				Error:      "AI returned nil move",
+				Metrics:    metrics,
+			}
+		}
+
+		metrics.TotalActions++
+		if isInteraction(state, move, genome) {
+			metrics.TotalInteractions++
+		}
+
+		engine.ApplyMove(state, move, genome)
+	}
+
+	return GameResult{
+		WinnerID:   -1,
+		TurnCount:  state.TurnNumber,
+		DurationNs: uint64(time.Since(start).Nanoseconds()),
+		Metrics:    metrics,
+	}
+}
+
 // isInteraction determines if a move affects the opponent's state
 func isInteraction(state *engine.GameState, move *engine.LegalMove, genome *engine.Genome) bool {
 	if move.PhaseIndex >= len(genome.TurnPhases) {
