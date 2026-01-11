@@ -58,15 +58,17 @@ def load_seed_genomes(seed_dir: Path) -> List[GameGenome]:
 
 def load_seeds_from_last_runs(
     output_dir: Path,
-    num_runs: int = 5,
-    top_n_per_run: int = 10
+    num_runs: int = 10,
 ) -> List[GameGenome]:
-    """Load top genomes from the last N evolution runs.
+    """Load ALL genomes from the last N evolution runs.
+
+    Loads all saved genomes for diversity selection to pick from.
+    The seeding function will apply structural diversity selection
+    to choose the most different genomes.
 
     Args:
         output_dir: Base output directory containing run subdirectories
-        num_runs: Number of recent runs to load from (default: 5)
-        top_n_per_run: Number of top genomes to load per run (default: 10)
+        num_runs: Number of recent runs to load from (default: 10)
 
     Returns:
         List of loaded GameGenome objects
@@ -103,8 +105,8 @@ def load_seeds_from_last_runs(
 
     genomes = []
     for run_dir, _ in recent_runs:
-        # Load ranked genomes (rank01, rank02, etc.)
-        json_files = sorted(run_dir.glob("rank*.json"))[:top_n_per_run]
+        # Load ALL ranked genomes from this run (for diversity selection later)
+        json_files = sorted(run_dir.glob("rank*.json"))
         for json_file in json_files:
             try:
                 with open(json_file) as f:
@@ -212,12 +214,7 @@ def main() -> int:
         default=5,
         help='Number of previous runs to load seeds from'
     )
-    parser.add_argument(
-        '--auto-seed-top-n',
-        type=int,
-        default=10,
-        help='Number of top genomes to load per previous run'
-    )
+    # Note: --auto-seed-top-n removed - we now load ALL genomes and use diversity selection
 
     # Output options
     parser.add_argument(
@@ -330,11 +327,10 @@ def main() -> int:
 
     elif args.auto_seed and not args.no_auto_seed:
         # Auto-seed from last N runs
-        logging.info(f"Auto-seeding from last {args.auto_seed_runs} runs (top {args.auto_seed_top_n} per run)...")
+        logging.info(f"Auto-seeding from last {args.auto_seed_runs} runs (all genomes, diversity selection applied)...")
         seed_genomes = load_seeds_from_last_runs(
             output_dir=args.output_dir,
             num_runs=args.auto_seed_runs,
-            top_n_per_run=args.auto_seed_top_n
         )
         if seed_genomes:
             logging.info(f"  Loaded {len(seed_genomes)} seed genomes from previous runs")
