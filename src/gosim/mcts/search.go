@@ -36,6 +36,11 @@ func Search(state *engine.GameState, genome *engine.Genome, iterations int, expl
 			}
 		}
 
+		// If selection resulted in nil node, skip this iteration
+		if node == nil {
+			continue
+		}
+
 		// 2. Expansion - add a new child node
 		if !node.IsTerminal() && len(node.UntriedMoves) > 0 {
 			node = expand(node, genome)

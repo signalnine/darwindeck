@@ -1,16 +1,28 @@
 """JSON serialization for GameGenome."""
 
 import json
+from enum import Enum
 from typing import Any, Dict, List, Optional
 from dataclasses import asdict
 
 from darwindeck.genome.schema import (
     GameGenome, SetupRules, TurnStructure, WinCondition,
-    PlayPhase, DrawPhase, DiscardPhase, TrickPhase, Location, Suit
+    PlayPhase, DrawPhase, DiscardPhase, TrickPhase, Location, Suit, Rank
 )
 from darwindeck.genome.conditions import (
     Condition, CompoundCondition, ConditionType, Operator
 )
+
+
+def _serialize_value(value: Any) -> Any:
+    """Serialize a value, converting enums to their name or value."""
+    if value is None:
+        return None
+    if isinstance(value, Enum):
+        # For Rank/Suit, use the name (e.g., "ACE", "HEARTS")
+        # For other enums, use the name as well
+        return value.name
+    return value
 
 
 def genome_to_dict(genome: GameGenome) -> Dict[str, Any]:
@@ -193,8 +205,8 @@ def _condition_to_dict(cond) -> Optional[Dict[str, Any]]:
             "type": "simple",
             "condition_type": cond.type.name,
             "operator": cond.operator.name if cond.operator else None,
-            "value": cond.value,
-            "reference": cond.reference,
+            "value": _serialize_value(cond.value),
+            "reference": _serialize_value(cond.reference),
         }
     return None
 
