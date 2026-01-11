@@ -318,16 +318,125 @@ class ModifyConditionMutation(MutationOperator):
         return condition
 
 
-class AddSpecialEffectMutation(MutationOperator):
-    """Add a special effect to the genome.
+class ReplacePhaseMutation(MutationOperator):
+    """Replace a phase with a completely different random phase.
 
-    NOTE: Currently a no-op placeholder since SpecialEffect schema
-    is not yet fully implemented. Will be activated when special effects
-    are properly defined in the schema.
+    More disruptive than other mutations - creates structural diversity.
+    """
+
+    def __init__(self, probability: float = 0.15):
+        """Initialize phase replacement mutation.
+
+        Args:
+            probability: Mutation probability (default: 15%)
+        """
+        super().__init__(probability)
+
+    def mutate(self, genome: GameGenome) -> GameGenome:
+        """Replace a random phase with a new random one.
+
+        Args:
+            genome: Genome to mutate
+
+        Returns:
+            New genome with replaced phase
+        """
+        phases = list(genome.turn_structure.phases)
+
+        if not phases:
+            return genome
+
+        # Pick random phase to replace
+        idx = random.randint(0, len(phases) - 1)
+
+        # Generate completely new random phase
+        phase_type = random.choice(['draw', 'play', 'discard'])
+
+        if phase_type == 'draw':
+            new_phase = DrawPhase(
+                source=random.choice([Location.DECK, Location.DISCARD]),
+                count=random.randint(1, 5),
+                mandatory=random.choice([True, False]),
+                condition=self._random_condition() if random.random() < 0.3 else None
+            )
+        elif phase_type == 'play':
+            new_phase = PlayPhase(
+                target=random.choice([Location.DISCARD, Location.TABLEAU]),
+                valid_play_condition=self._random_condition(),
+                min_cards=random.randint(0, 2),
+                max_cards=random.randint(1, 10),
+                mandatory=random.choice([True, False])
+            )
+        else:
+            new_phase = DiscardPhase(
+                target=Location.DISCARD,
+                count=random.randint(1, 3),
+                mandatory=random.choice([True, False])
+            )
+
+        phases[idx] = new_phase
+        new_turn = replace(genome.turn_structure, phases=tuple(phases))
+        return replace(genome, turn_structure=new_turn, generation=genome.generation + 1)
+
+    def _random_condition(self) -> Condition:
+        """Generate a random condition."""
+        cond_type = random.choice([
+            ConditionType.HAND_SIZE,
+            ConditionType.LOCATION_SIZE,
+        ])
+        operator = random.choice([Operator.GT, Operator.GE, Operator.LT, Operator.LE, Operator.EQ])
+        value = random.randint(0, 10)
+        return Condition(type=cond_type, operator=operator, value=value)
+
+
+class ModifyDrawCountMutation(MutationOperator):
+    """Aggressively modify draw counts in DrawPhases."""
+
+    def __init__(self, probability: float = 0.2):
+        """Initialize draw count mutation.
+
+        Args:
+            probability: Mutation probability (default: 20%)
+        """
+        super().__init__(probability)
+
+    def mutate(self, genome: GameGenome) -> GameGenome:
+        """Modify draw count in a random DrawPhase.
+
+        Args:
+            genome: Genome to mutate
+
+        Returns:
+            New genome with modified draw count
+        """
+        phases = list(genome.turn_structure.phases)
+
+        # Find DrawPhases
+        draw_indices = [i for i, p in enumerate(phases) if isinstance(p, DrawPhase)]
+
+        if not draw_indices:
+            return genome
+
+        idx = random.choice(draw_indices)
+        phase = phases[idx]
+
+        # Set new count (1-7, more aggressive range)
+        new_count = random.randint(1, 7)
+        new_phase = replace(phase, count=new_count)
+
+        phases[idx] = new_phase
+        new_turn = replace(genome.turn_structure, phases=tuple(phases))
+        return replace(genome, turn_structure=new_turn, generation=genome.generation + 1)
+
+
+class ShuffleAllPhasesMutation(MutationOperator):
+    """Completely shuffle the order of all phases.
+
+    Very disruptive - creates entirely new turn structures.
     """
 
     def __init__(self, probability: float = 0.05):
-        """Initialize special effect addition mutation.
+        """Initialize phase shuffle mutation.
 
         Args:
             probability: Mutation probability (default: 5%)
@@ -335,17 +444,22 @@ class AddSpecialEffectMutation(MutationOperator):
         super().__init__(probability)
 
     def mutate(self, genome: GameGenome) -> GameGenome:
-        """Add a new special effect (currently no-op).
+        """Shuffle all phases randomly.
 
         Args:
             genome: Genome to mutate
 
         Returns:
-            Unchanged genome (special effects not yet implemented)
+            New genome with shuffled phases
         """
-        # TODO: Implement when SpecialEffect schema is complete
-        # For now, return genome unchanged
-        return genome
+        phases = list(genome.turn_structure.phases)
+
+        if len(phases) < 2:
+            return genome
+
+        random.shuffle(phases)
+        new_turn = replace(genome.turn_structure, phases=tuple(phases))
+        return replace(genome, turn_structure=new_turn, generation=genome.generation + 1)
 
 
 class ModifyWinConditionMutation(MutationOperator):
@@ -646,19 +760,43 @@ class MutationPipeline:
         return mutated
 
 
-def create_default_pipeline() -> MutationPipeline:
+def create_default_pipeline(aggressive: bool = False) -> MutationPipeline:
     """Create default mutation pipeline with standard operators.
 
+    Args:
+        aggressive: If True, use higher mutation rates for escaping local optima
+
     Returns:
-        MutationPipeline with all 7 mutation operators
+        MutationPipeline with all mutation operators
     """
+    # Multiplier for aggressive mode (2x rates)
+    mult = 2.0 if aggressive else 1.0
+
     operators = [
-        TweakParameterMutation(probability=0.25),      # 25% - common tweaks (was 15%)
-        SwapPhaseOrderMutation(probability=0.15),      # 15% - reorder phases (was 10%)
-        AddPhaseMutation(probability=0.10),            # 10% - add phases (was 5%)
-        RemovePhaseMutation(probability=0.10),         # 10% - remove phases (was 5%)
-        ModifyConditionMutation(probability=0.20),     # 20% - tweak conditions (was 10%)
-        AddSpecialEffectMutation(probability=0.10),    # 10% - add effects (was 5%)
-        ModifyWinConditionMutation(probability=0.15),  # 15% - change win conditions (was 10%)
+        # Parameter tweaks
+        TweakParameterMutation(probability=min(0.30 * mult, 0.6)),      # 30% (60% aggressive)
+
+        # Structural mutations
+        SwapPhaseOrderMutation(probability=min(0.15 * mult, 0.3)),      # 15% (30% aggressive)
+        AddPhaseMutation(probability=min(0.12 * mult, 0.25)),           # 12% (24% aggressive)
+        RemovePhaseMutation(probability=min(0.12 * mult, 0.25)),        # 12% (24% aggressive)
+        ReplacePhaseMutation(probability=min(0.15 * mult, 0.3)),        # 15% (30% aggressive) - NEW
+        ShuffleAllPhasesMutation(probability=min(0.05 * mult, 0.15)),   # 5% (10% aggressive) - NEW
+
+        # Condition/parameter mutations
+        ModifyConditionMutation(probability=min(0.20 * mult, 0.4)),     # 20% (40% aggressive)
+        ModifyDrawCountMutation(probability=min(0.20 * mult, 0.4)),     # 20% (40% aggressive) - NEW
+
+        # Win condition mutations
+        ModifyWinConditionMutation(probability=min(0.15 * mult, 0.3)),  # 15% (30% aggressive)
     ]
     return MutationPipeline(operators)
+
+
+def create_aggressive_pipeline() -> MutationPipeline:
+    """Create aggressive mutation pipeline for escaping local optima.
+
+    Returns:
+        MutationPipeline with doubled mutation rates
+    """
+    return create_default_pipeline(aggressive=True)
