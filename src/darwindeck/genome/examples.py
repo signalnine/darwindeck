@@ -98,8 +98,12 @@ def create_hearts_genome() -> GameGenome:
         special_effects=[],
         win_conditions=[
             WinCondition(
-                type="first_to_score",
+                type="low_score",  # Lowest score wins when threshold reached
                 threshold=100  # Game ends when someone reaches 100 points
+            ),
+            WinCondition(
+                type="all_hands_empty",  # Also check if all hands empty (single hand game)
+                threshold=0
             )
         ],
         scoring_rules=[],  # Simplified: scoring handled by trick-taking logic
@@ -561,8 +565,12 @@ def create_scotch_whist_genome() -> GameGenome:
         special_effects=[],
         win_conditions=[
             WinCondition(
-                type="first_to_score",
+                type="high_score",  # Highest score wins when threshold reached
                 threshold=41  # Traditional scoring threshold
+            ),
+            WinCondition(
+                type="all_hands_empty",  # Also check if all hands empty
+                threshold=0
             )
         ],
         scoring_rules=[],

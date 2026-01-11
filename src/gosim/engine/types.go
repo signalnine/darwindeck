@@ -44,6 +44,12 @@ type Claim struct {
 	ChallengerID uint8   // Who challenged (if Challenged=true)
 }
 
+// TrickCard represents a card played to the current trick
+type TrickCard struct {
+	PlayerID uint8
+	Card     Card
+}
+
 // GameState is mutable and pooled
 type GameState struct {
 	Players       []PlayerState
@@ -58,16 +64,25 @@ type GameState struct {
 	CurrentBet int64 // Highest bet in current round (int64 for precision)
 	// Optional extensions for bluffing games
 	CurrentClaim *Claim // nil if no active claim
+	// Trick-taking game state
+	CurrentTrick   []TrickCard // Cards played in current trick
+	TrickLeader    uint8       // Who leads the current trick
+	TricksWon      []uint8     // Count of tricks won by each player
+	HeartsBroken   bool        // For Hearts: whether hearts have been played
+	NumPlayers     uint8       // Number of players (for trick completion check)
+	CardsPerPlayer int         // Cards dealt to each player (for hand size check)
 }
 
 // StatePool manages GameState memory
 var StatePool = sync.Pool{
 	New: func() interface{} {
 		return &GameState{
-			Players: make([]PlayerState, 2),
-			Deck:    make([]Card, 0, 52),
-			Discard: make([]Card, 0, 52),
-			Tableau: make([][]Card, 0, 10),
+			Players:      make([]PlayerState, 4), // Support up to 4 players
+			Deck:         make([]Card, 0, 52),
+			Discard:      make([]Card, 0, 52),
+			Tableau:      make([][]Card, 0, 10),
+			CurrentTrick: make([]TrickCard, 0, 4), // Max 4 players per trick
+			TricksWon:    make([]uint8, 0, 4),     // Max 4 players
 		}
 	},
 }
@@ -86,19 +101,15 @@ func PutState(state *GameState) {
 
 // Reset clears state for reuse
 func (s *GameState) Reset() {
-	s.Players[0].Hand = s.Players[0].Hand[:0]
-	s.Players[0].Score = 0
-	s.Players[0].Active = true
-	s.Players[0].Chips = 0
-	s.Players[0].CurrentBet = 0
-	s.Players[0].HasFolded = false
-
-	s.Players[1].Hand = s.Players[1].Hand[:0]
-	s.Players[1].Score = 0
-	s.Players[1].Active = true
-	s.Players[1].Chips = 0
-	s.Players[1].CurrentBet = 0
-	s.Players[1].HasFolded = false
+	// Reset all 4 potential players
+	for i := 0; i < len(s.Players); i++ {
+		s.Players[i].Hand = s.Players[i].Hand[:0]
+		s.Players[i].Score = 0
+		s.Players[i].Active = true
+		s.Players[i].Chips = 0
+		s.Players[i].CurrentBet = 0
+		s.Players[i].HasFolded = false
+	}
 
 	s.Deck = s.Deck[:0]
 	s.Discard = s.Discard[:0]
@@ -109,25 +120,32 @@ func (s *GameState) Reset() {
 	s.Pot = 0
 	s.CurrentBet = 0
 	s.CurrentClaim = nil
+	// Trick-taking state
+	s.CurrentTrick = s.CurrentTrick[:0]
+	s.TrickLeader = 0
+	s.TricksWon = s.TricksWon[:0]
+	s.HeartsBroken = false
+	s.NumPlayers = 2
+	s.CardsPerPlayer = 0
 }
 
 // Clone creates a deep copy for MCTS tree search
 func (s *GameState) Clone() *GameState {
 	clone := GetState()
 
-	clone.Players[0].Hand = append(clone.Players[0].Hand, s.Players[0].Hand...)
-	clone.Players[0].Score = s.Players[0].Score
-	clone.Players[0].Active = s.Players[0].Active
-	clone.Players[0].Chips = s.Players[0].Chips
-	clone.Players[0].CurrentBet = s.Players[0].CurrentBet
-	clone.Players[0].HasFolded = s.Players[0].HasFolded
-
-	clone.Players[1].Hand = append(clone.Players[1].Hand, s.Players[1].Hand...)
-	clone.Players[1].Score = s.Players[1].Score
-	clone.Players[1].Active = s.Players[1].Active
-	clone.Players[1].Chips = s.Players[1].Chips
-	clone.Players[1].CurrentBet = s.Players[1].CurrentBet
-	clone.Players[1].HasFolded = s.Players[1].HasFolded
+	// Clone all active players
+	numPlayers := int(s.NumPlayers)
+	if numPlayers == 0 {
+		numPlayers = 2 // Default fallback
+	}
+	for i := 0; i < numPlayers && i < len(s.Players); i++ {
+		clone.Players[i].Hand = append(clone.Players[i].Hand, s.Players[i].Hand...)
+		clone.Players[i].Score = s.Players[i].Score
+		clone.Players[i].Active = s.Players[i].Active
+		clone.Players[i].Chips = s.Players[i].Chips
+		clone.Players[i].CurrentBet = s.Players[i].CurrentBet
+		clone.Players[i].HasFolded = s.Players[i].HasFolded
+	}
 
 	clone.Deck = append(clone.Deck, s.Deck...)
 	clone.Discard = append(clone.Discard, s.Discard...)
@@ -155,6 +173,14 @@ func (s *GameState) Clone() *GameState {
 			ChallengerID: s.CurrentClaim.ChallengerID,
 		}
 	}
+
+	// Clone trick-taking state
+	clone.CurrentTrick = append(clone.CurrentTrick, s.CurrentTrick...)
+	clone.TrickLeader = s.TrickLeader
+	clone.TricksWon = append(clone.TricksWon, s.TricksWon...)
+	clone.HeartsBroken = s.HeartsBroken
+	clone.NumPlayers = s.NumPlayers
+	clone.CardsPerPlayer = s.CardsPerPlayer
 
 	return clone
 }
