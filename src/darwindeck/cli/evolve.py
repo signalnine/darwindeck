@@ -8,9 +8,10 @@ import sys
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict
 from darwindeck.evolution.engine import EvolutionEngine, EvolutionConfig
 from darwindeck.evolution.describe import describe_top_games
+from darwindeck.evolution.skill_evaluation import SkillEvalResult
 from darwindeck.genome.serialization import genome_to_json, genome_from_json
 from darwindeck.genome.schema import GameGenome
 
@@ -230,6 +231,26 @@ def main() -> int:
         help='Skip LLM-generated game descriptions'
     )
 
+    # Skill evaluation options
+    parser.add_argument(
+        '--mcts-games',
+        type=int,
+        default=100,
+        help='Games per genome for MCTS skill evaluation (default: 100)'
+    )
+    parser.add_argument(
+        '--mcts-iterations',
+        type=int,
+        default=500,
+        choices=[100, 500, 1000, 2000],
+        help='MCTS search iterations per move (default: 500)'
+    )
+    parser.add_argument(
+        '--skip-skill-eval',
+        action='store_true',
+        help='Skip post-evolution MCTS skill evaluation'
+    )
+
     # Logging
     parser.add_argument(
         '--verbose', '-v',
@@ -306,19 +327,71 @@ def main() -> int:
         logging.info("\n\nEvolution interrupted by user")
         return 1
 
+    # Get best genomes
+    best_genomes = engine.get_best_genomes(n=args.save_top_n)
+
+    # MCTS Skill evaluation (unless skipped)
+    skill_results: Dict[str, SkillEvalResult] = {}
+    if not args.skip_skill_eval:
+        logging.info(f"\nMCTS Skill Evaluation ({args.mcts_games} games, {args.mcts_iterations} iterations)")
+        try:
+            skill_results = engine.evaluate_skill_gaps(
+                top_n=args.save_top_n,
+                num_games=args.mcts_games,
+                mcts_iterations=args.mcts_iterations
+            )
+            logging.info(f"  Completed skill evaluation for {len(skill_results)} genomes")
+
+            # Show results
+            logging.info("\nSkill Evaluation Results:")
+            for ind in best_genomes:
+                skill = skill_results.get(ind.genome.genome_id)
+                if skill:
+                    logging.info(f"  {ind.genome.genome_id}: mcts_win_rate={skill.mcts_win_rate:.2f}")
+        except Exception as e:
+            logging.warning(f"  Skill evaluation failed: {e}")
+
+    # Re-rank if strategic style
+    if args.style == 'strategic' and skill_results:
+        logging.info("\nRe-ranking by skill (--style strategic)...")
+        best_genomes = sorted(
+            best_genomes,
+            key=lambda ind: skill_results.get(ind.genome.genome_id, SkillEvalResult(
+                genome_id=ind.genome.genome_id,
+                mcts_wins_as_p1=0, mcts_wins_as_p2=0,
+                total_mcts_wins=0, total_games=0,
+                mcts_win_rate=0.0
+            )).mcts_win_rate,
+            reverse=True
+        )
+
     # Save best genomes as JSON to timestamped subdirectory
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     run_output_dir = args.output_dir / timestamp
     run_output_dir.mkdir(parents=True, exist_ok=True)
-    best_genomes = engine.get_best_genomes(n=args.save_top_n)
 
     logging.info(f"\nSaving top {len(best_genomes)} genomes to {run_output_dir}")
     for i, individual in enumerate(best_genomes, 1):
-        # Save as JSON for reuse as seeds
+        skill = skill_results.get(individual.genome.genome_id)
+
+        # Create extended data dict with fitness and skill info
+        genome_data = json.loads(genome_to_json(individual.genome))
+        genome_data['fitness'] = individual.fitness
+        genome_data['fitness_rank'] = i
+        if skill:
+            genome_data['mcts_win_rate'] = skill.mcts_win_rate
+            genome_data['skill_rank'] = i
+            genome_data['mcts_wins_as_p1'] = skill.mcts_wins_as_p1
+            genome_data['mcts_wins_as_p2'] = skill.mcts_wins_as_p2
+            genome_data['skill_eval_timed_out'] = skill.timed_out
+
+        # Save as JSON
         json_file = run_output_dir / f"rank{i:02d}_{individual.genome.genome_id}.json"
         with open(json_file, 'w') as f:
-            f.write(genome_to_json(individual.genome))
-        logging.info(f"  {i}. {individual.genome.genome_id} (fitness={individual.fitness:.4f})")
+            json.dump(genome_data, f, indent=2)
+
+        skill_str = f", mcts_win_rate={skill.mcts_win_rate:.2f}" if skill else ""
+        logging.info(f"  {i}. {individual.genome.genome_id} (fitness={individual.fitness:.4f}{skill_str})")
 
     # Generate LLM descriptions for top 5 games
     if not args.no_describe:
