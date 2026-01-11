@@ -73,27 +73,26 @@ def load_seeds_from_last_runs(
     if not output_dir.exists():
         return []
 
-    # Find all run directories (timestamped subdirectories)
-    run_dirs = []
-    for d in output_dir.iterdir():
-        if d.is_dir():
-            # Check if it looks like a timestamp directory (YYYY-MM-DD_HH-MM-SS)
-            try:
-                datetime.strptime(d.name, "%Y-%m-%d_%H-%M-%S")
-                run_dirs.append(d)
-            except ValueError:
-                # Not a timestamp directory, skip
-                continue
+    # Find all directories containing rank*.json files (recursively)
+    # Group by parent directory to identify distinct runs
+    run_dirs_with_times: List[Tuple[Path, float]] = []
 
-    if not run_dirs:
+    for json_file in output_dir.rglob("rank01_*.json"):
+        run_dir = json_file.parent
+        # Use the modification time of rank01 as the run time
+        run_time = json_file.stat().st_mtime
+        run_dirs_with_times.append((run_dir, run_time))
+
+    if not run_dirs_with_times:
         logging.info("No previous runs found in output directory")
         return []
 
-    # Sort by name (which is timestamp) and take last N
-    run_dirs = sorted(run_dirs, key=lambda d: d.name)[-num_runs:]
+    # Sort by time (newest first) and take last N runs
+    run_dirs_with_times.sort(key=lambda x: x[1], reverse=True)
+    recent_runs = run_dirs_with_times[:num_runs]
 
     genomes = []
-    for run_dir in run_dirs:
+    for run_dir, _ in recent_runs:
         # Load ranked genomes (rank01, rank02, etc.)
         json_files = sorted(run_dir.glob("rank*.json"))[:top_n_per_run]
         for json_file in json_files:
@@ -105,6 +104,7 @@ def load_seeds_from_last_runs(
             except Exception as e:
                 logging.warning(f"  Failed to load {json_file.name}: {e}")
 
+    logging.info(f"  Found {len(recent_runs)} recent runs")
     return genomes
 
 
