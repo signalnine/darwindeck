@@ -70,18 +70,27 @@ def load_seeds_from_last_runs(
     Returns:
         List of loaded GameGenome objects
     """
-    if not output_dir.exists():
-        return []
+    # Search directories to check (output_dir and its parent)
+    # This handles cases like --output-dir output/evolution-xxx where we still
+    # want to find runs in output/other-evolution-yyy/
+    search_dirs = [output_dir]
+    if output_dir.parent != output_dir and output_dir.parent.exists():
+        search_dirs.append(output_dir.parent)
 
     # Find all directories containing rank*.json files (recursively)
-    # Group by parent directory to identify distinct runs
     run_dirs_with_times: List[Tuple[Path, float]] = []
 
-    for json_file in output_dir.rglob("rank01_*.json"):
-        run_dir = json_file.parent
-        # Use the modification time of rank01 as the run time
-        run_time = json_file.stat().st_mtime
-        run_dirs_with_times.append((run_dir, run_time))
+    for search_dir in search_dirs:
+        if not search_dir.exists():
+            continue
+        for json_file in search_dir.rglob("rank01_*.json"):
+            run_dir = json_file.parent
+            # Avoid duplicates
+            if any(run_dir == existing[0] for existing in run_dirs_with_times):
+                continue
+            # Use the modification time of rank01 as the run time
+            run_time = json_file.stat().st_mtime
+            run_dirs_with_times.append((run_dir, run_time))
 
     if not run_dirs_with_times:
         logging.info("No previous runs found in output directory")
