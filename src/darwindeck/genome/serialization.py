@@ -7,7 +7,7 @@ from dataclasses import asdict
 
 from darwindeck.genome.schema import (
     GameGenome, SetupRules, TurnStructure, WinCondition,
-    PlayPhase, DrawPhase, DiscardPhase, TrickPhase, Location, Suit, Rank
+    PlayPhase, DrawPhase, DiscardPhase, TrickPhase, ClaimPhase, Location, Suit, Rank
 )
 from darwindeck.genome.conditions import (
     Condition, CompoundCondition, ConditionType, Operator
@@ -146,6 +146,15 @@ def _phase_to_dict(phase) -> Dict[str, Any]:
             "high_card_wins": phase.high_card_wins,
             "breaking_suit": phase.breaking_suit.name if phase.breaking_suit else None,
         }
+    elif isinstance(phase, ClaimPhase):
+        return {
+            "type": "ClaimPhase",
+            "min_cards": phase.min_cards,
+            "max_cards": phase.max_cards,
+            "sequential_rank": phase.sequential_rank,
+            "allow_challenge": phase.allow_challenge,
+            "pile_penalty": phase.pile_penalty,
+        }
     else:
         return {"type": "Unknown"}
 
@@ -185,6 +194,18 @@ def _phase_from_dict(data: Dict[str, Any]):
             high_card_wins=data["high_card_wins"],
             breaking_suit=breaking,
         )
+    elif phase_type == "ClaimPhase":
+        return ClaimPhase(
+            min_cards=data.get("min_cards", 1),
+            max_cards=data.get("max_cards", 4),
+            sequential_rank=data.get("sequential_rank", True),
+            allow_challenge=data.get("allow_challenge", True),
+            pile_penalty=data.get("pile_penalty", True),
+        )
+    elif phase_type == "Unknown":
+        # Graceful fallback for corrupted old saves - convert to simple ClaimPhase
+        # This allows loading genomes that were saved before ClaimPhase serialization was added
+        return ClaimPhase()
     else:
         raise ValueError(f"Unknown phase type: {phase_type}")
 
