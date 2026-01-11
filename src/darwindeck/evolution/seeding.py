@@ -126,10 +126,13 @@ def create_seed_population_from_genomes(
     random_seed: int | None = None,
     player_count: int | None = None
 ) -> List[Individual]:
-    """Create initial population from custom genomes.
+    """Create initial population from custom genomes + example games.
+
+    Always includes example games for structural diversity, even when
+    seeding from previous winners.
 
     Args:
-        base_genomes: List of genomes to use as seeds
+        base_genomes: List of genomes to use as seeds (e.g., previous winners)
         size: Population size (default: 100)
         seed_ratio: Ratio of seeds to mutants (default: 0.3 for 30%)
         random_seed: Random seed for reproducibility
@@ -143,6 +146,20 @@ def create_seed_population_from_genomes(
 
     if not base_genomes:
         raise ValueError("No base genomes provided")
+
+    # Always include example games for diversity
+    example_genomes = get_seed_genomes()
+
+    # Merge custom genomes with examples (custom first for priority)
+    # Deduplicate by genome_id to avoid exact duplicates
+    seen_ids = set()
+    combined_genomes = []
+    for g in base_genomes + example_genomes:
+        if g.genome_id not in seen_ids:
+            combined_genomes.append(g)
+            seen_ids.add(g.genome_id)
+
+    base_genomes = combined_genomes
 
     # Filter by player count if specified
     if player_count is not None:
