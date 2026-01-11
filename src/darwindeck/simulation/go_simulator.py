@@ -10,8 +10,21 @@ from darwindeck.bindings.cardsim.SimulationRequest import (
     SimulationRequestStart, SimulationRequestAddGenomeBytecode,
     SimulationRequestAddNumGames, SimulationRequestAddAiPlayerType,
     SimulationRequestAddMctsIterations, SimulationRequestAddRandomSeed,
+    SimulationRequestAddPlayer0AiType, SimulationRequestAddPlayer1AiType,
     SimulationRequestEnd,
 )
+
+# AI type mapping for asymmetric simulation
+# Values are offset by 1 because 0 means "use default"
+AI_TYPE_MAP = {
+    "random": 1,    # RandomAI = 0, so offset = 1
+    "greedy": 2,    # GreedyAI = 1, so offset = 2
+    "mcts": 3,      # MCTS100AI = 2, so offset = 3
+    "mcts100": 3,
+    "mcts500": 4,   # MCTS500AI = 3, so offset = 4
+    "mcts1000": 5,  # MCTS1000AI = 4, so offset = 5
+    "mcts2000": 6,  # MCTS2000AI = 5, so offset = 6
+}
 from darwindeck.bindings.cardsim.BatchRequest import (
     BatchRequestStart, BatchRequestAddBatchId, BatchRequestAddRequests,
     BatchRequestStartRequestsVector, BatchRequestEnd,
@@ -109,6 +122,96 @@ class GoSimulator:
             )
         except Exception as e:
             # Return error results for simulation failures
+            return SimulationResults(
+                total_games=num_games,
+                player0_wins=0,
+                player1_wins=0,
+                draws=0,
+                avg_turns=0.0,
+                errors=num_games,
+            )
+
+    def simulate_asymmetric(
+        self,
+        genome: GameGenome,
+        num_games: int = 100,
+        p0_ai_type: str = "random",
+        p1_ai_type: str = "random",
+        mcts_iterations: int = 500
+    ) -> SimulationResults:
+        """Simulate games with different AI types for each player.
+
+        Used for skill gap measurement (e.g., MCTS vs Random).
+
+        Args:
+            genome: Game genome to simulate
+            num_games: Number of games to run
+            p0_ai_type: AI for player 0 ("random", "greedy", "mcts", "mcts500", etc)
+            p1_ai_type: AI for player 1
+            mcts_iterations: MCTS iterations (used if either player is MCTS)
+
+        Returns:
+            SimulationResults with game statistics
+        """
+        try:
+            bytecode = self.compiler.compile_genome(genome)
+        except Exception as e:
+            return SimulationResults(
+                total_games=num_games,
+                player0_wins=0,
+                player1_wins=0,
+                draws=0,
+                avg_turns=0.0,
+                errors=num_games,
+            )
+
+        # Map AI type strings to enum values (with offset)
+        p0_type = AI_TYPE_MAP.get(p0_ai_type.lower(), 1)  # Default to random
+        p1_type = AI_TYPE_MAP.get(p1_ai_type.lower(), 1)
+
+        builder = flatbuffers.Builder(2048)
+        genome_offset = builder.CreateByteVector(bytecode)
+
+        SimulationRequestStart(builder)
+        SimulationRequestAddGenomeBytecode(builder, genome_offset)
+        SimulationRequestAddNumGames(builder, num_games)
+        SimulationRequestAddAiPlayerType(builder, 0)  # Not used when per-player set
+        SimulationRequestAddMctsIterations(builder, mcts_iterations)
+        SimulationRequestAddRandomSeed(builder, self.seed + self._batch_id)
+        SimulationRequestAddPlayer0AiType(builder, p0_type)
+        SimulationRequestAddPlayer1AiType(builder, p1_type)
+        req_offset = SimulationRequestEnd(builder)
+
+        BatchRequestStartRequestsVector(builder, 1)
+        builder.PrependUOffsetTRelative(req_offset)
+        requests_offset = builder.EndVector()
+
+        self._batch_id += 1
+        BatchRequestStart(builder)
+        BatchRequestAddBatchId(builder, self._batch_id)
+        BatchRequestAddRequests(builder, requests_offset)
+        batch_offset = BatchRequestEnd(builder)
+
+        builder.Finish(batch_offset)
+
+        try:
+            response = simulate_batch(bytes(builder.Output()))
+            result = response.Results(0)
+
+            return SimulationResults(
+                total_games=result.TotalGames(),
+                player0_wins=result.Player0Wins(),
+                player1_wins=result.Player1Wins(),
+                draws=result.Draws(),
+                avg_turns=result.AvgTurns(),
+                errors=result.Errors(),
+                total_decisions=result.TotalDecisions(),
+                total_valid_moves=result.TotalValidMoves(),
+                forced_decisions=result.ForcedDecisions(),
+                total_interactions=result.TotalInteractions(),
+                total_actions=result.TotalActions(),
+            )
+        except Exception as e:
             return SimulationResults(
                 total_games=num_games,
                 player0_wins=0,
