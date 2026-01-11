@@ -121,10 +121,21 @@ def run_go_simulation(genome: GameGenome, num_games: int, random_seed: int = 42)
     result = response.Results(0)
 
     # Convert to SimulationResults
+    # Use new wins tuple format with backward-compatible property access
+    wins_len = result.WinsLength()
+    if wins_len > 0:
+        wins = tuple(result.Wins(i) for i in range(wins_len))
+    else:
+        wins = (result.Player0Wins(), result.Player1Wins())
+
+    player_count = result.PlayerCount()
+    if player_count == 0:
+        player_count = 2
+
     return SimulationResults(
         total_games=result.TotalGames(),
-        player0_wins=result.Player0Wins(),
-        player1_wins=result.Player1Wins(),
+        wins=wins,
+        player_count=player_count,
         draws=result.Draws(),
         avg_turns=result.AvgTurns(),
         errors=result.Errors()
