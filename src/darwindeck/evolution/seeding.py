@@ -9,6 +9,7 @@ from darwindeck.evolution.naming import generate_unique_name
 from darwindeck.genome.examples import get_seed_genomes
 from darwindeck.evolution.operators import create_default_pipeline
 from darwindeck.evolution.population import Individual
+from darwindeck.evolution.diversity import select_diverse_subset, compute_population_diversity
 
 
 def create_seed_population(
@@ -124,12 +125,13 @@ def create_seed_population_from_genomes(
     size: int = 100,
     seed_ratio: float = 0.3,
     random_seed: int | None = None,
-    player_count: int | None = None
+    player_count: int | None = None,
+    max_seeds_from_previous: int = 20,
 ) -> List[Individual]:
     """Create initial population from custom genomes + example games.
 
-    Always includes example games for structural diversity, even when
-    seeding from previous winners.
+    Uses diversity selection to pick structurally different genomes from
+    previous runs, avoiding convergence to local optima.
 
     Args:
         base_genomes: List of genomes to use as seeds (e.g., previous winners)
@@ -137,6 +139,7 @@ def create_seed_population_from_genomes(
         seed_ratio: Ratio of seeds to mutants (default: 0.3 for 30%)
         random_seed: Random seed for reproducibility
         player_count: Filter seeds by player count (2, 3, or 4). None = all games
+        max_seeds_from_previous: Max diverse genomes to select from previous runs (default: 20)
 
     Returns:
         List of Individual objects with seeded genomes
@@ -147,14 +150,29 @@ def create_seed_population_from_genomes(
     if not base_genomes:
         raise ValueError("No base genomes provided")
 
-    # Always include example games for diversity
+    # Select diverse subset from previous winners using structural distance
+    # This prevents seeding with many similar converged genomes
+    if len(base_genomes) > max_seeds_from_previous:
+        diverse_previous = select_diverse_subset(
+            base_genomes,
+            target_size=max_seeds_from_previous,
+            random_seed=random_seed
+        )
+        diversity_before = compute_population_diversity(base_genomes[:max_seeds_from_previous])
+        diversity_after = compute_population_diversity(diverse_previous)
+        print(f"Diversity selection: {len(base_genomes)} -> {len(diverse_previous)} genomes "
+              f"(diversity: {diversity_before:.3f} -> {diversity_after:.3f})")
+    else:
+        diverse_previous = base_genomes
+
+    # Always include example games for structural diversity
     example_genomes = get_seed_genomes()
 
-    # Merge custom genomes with examples (custom first for priority)
+    # Merge diverse previous winners with examples
     # Deduplicate by genome_id to avoid exact duplicates
     seen_ids = set()
     combined_genomes = []
-    for g in base_genomes + example_genomes:
+    for g in diverse_previous + example_genomes:
         if g.genome_id not in seen_ids:
             combined_genomes.append(g)
             seen_ids.add(g.genome_id)
