@@ -49,10 +49,11 @@ def describe_game(
         skill_info = ""
         if skill:
             skill_info = f"""
-Skill Evaluation (MCTS vs Random):
-- MCTS Win Rate: {skill.mcts_win_rate:.1%}
-- As First Player: {skill.mcts_wins_as_p1} wins
-- As Second Player: {skill.mcts_wins_as_p2} wins
+Skill Evaluation:
+- Greedy vs Random: {skill.greedy_win_rate:.1%}
+- MCTS vs Random: {skill.mcts_win_rate:.1%}
+- Combined Skill Score: {skill.skill_score:.2f}
+- First Player Advantage: {skill.first_player_advantage:+.1%}
 """
 
         prompt = f"""Analyze this evolved card game genome and provide a brief, engaging description.
