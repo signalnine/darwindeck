@@ -38,12 +38,13 @@ STYLE_PRESETS = {
     },
     'party': {
         # Favor quick, interactive, accessible games
+        # Note: skill_vs_luck is INVERTED for party - higher = more luck-friendly
         'decision_density': 0.10,
-        'comeback_potential': 0.25,  # Everyone can win
-        'tension_curve': 0.15,
+        'comeback_potential': 0.20,  # Everyone can win
+        'tension_curve': 0.10,
         'interaction_frequency': 0.25,  # High interaction
         'rules_complexity': 0.20,  # Simple rules
-        'skill_vs_luck': 0.05,  # Luck-friendly
+        'skill_vs_luck': 0.15,  # Luck-friendly (inverted: rewards low skill dominance)
         'bluffing_depth': 0.00,  # Not required for party games
     },
     'trick-taking': {
@@ -349,6 +350,11 @@ class FitnessEvaluator:
                 balance_factor * 0.3 +
                 complexity_factor * 0.3
             )
+
+        # For party style, invert skill metric: we want luck-friendly games
+        # where casual players can win, not games where skill dominates
+        if self.style == 'party':
+            skill_vs_luck = 1.0 - skill_vs_luck
 
         # 8. Bluffing depth - quality of bluffing mechanics
         # Only relevant for games with ClaimPhase (bluffing mechanics)
