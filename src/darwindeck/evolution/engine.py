@@ -14,7 +14,7 @@ from darwindeck.evolution.operators import (
     create_default_pipeline
 )
 from darwindeck.evolution.seeding import create_seed_population
-from darwindeck.evolution.parallel_fitness import ParallelFitnessEvaluator
+from darwindeck.evolution.parallel_fitness import ParallelFitnessEvaluator, _create_evaluator
 from darwindeck.evolution.fitness_full import FitnessEvaluator
 
 logger = logging.getLogger(__name__)
@@ -79,8 +79,9 @@ class EvolutionEngine:
         self.num_workers = num_workers or int(os.environ.get('EVOLUTION_WORKERS', os.cpu_count() or 4))
 
         # Initialize parallel fitness evaluator
+        # Note: We use named functions instead of lambdas for pickling with 'spawn' context
         self.parallel_evaluator = ParallelFitnessEvaluator(
-            evaluator_factory=lambda: FitnessEvaluator(),
+            evaluator_factory=_create_evaluator,
             num_workers=self.num_workers
         )
 

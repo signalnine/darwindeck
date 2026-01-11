@@ -9,13 +9,31 @@ The two-level parallelization strategy:
     3. Combined effect: Up to 5.7x total speedup (1.43 × 4.0)
 """
 
-from multiprocessing import Pool, cpu_count
+import multiprocessing as mp
 from typing import List, Optional, Callable
 from dataclasses import dataclass
+
+# CRITICAL: Use 'spawn' context instead of default 'fork' on Linux.
+# Go's runtime is not fork-safe - forked processes inherit corrupted goroutine state.
+# This causes deadlocks when CGo library is loaded before forking.
+# 'spawn' starts fresh processes that load their own copy of the library.
+_mp_context = mp.get_context('spawn')
 
 from darwindeck.genome.schema import GameGenome
 from darwindeck.evolution.fitness_full import FitnessMetrics, FitnessEvaluator, SimulationResults
 from darwindeck.simulation.go_simulator import GoSimulator
+
+
+# Top-level factory functions for pickling with 'spawn' multiprocessing context.
+# Lambda functions can't be pickled, so we need named functions.
+def _create_evaluator() -> FitnessEvaluator:
+    """Create a FitnessEvaluator instance."""
+    return FitnessEvaluator()
+
+
+def _create_simulator() -> GoSimulator:
+    """Create a GoSimulator instance."""
+    return GoSimulator()
 
 
 @dataclass
@@ -56,8 +74,8 @@ class ParallelFitnessEvaluator:
             num_workers: Number of worker processes (default: cpu_count())
         """
         self.evaluator_factory = evaluator_factory
-        self.simulator_factory = simulator_factory or (lambda: GoSimulator())
-        self.num_workers = num_workers or cpu_count()
+        self.simulator_factory = simulator_factory or _create_simulator
+        self.num_workers = num_workers or mp.cpu_count()
 
     def evaluate_population(
         self,
@@ -84,7 +102,7 @@ class ParallelFitnessEvaluator:
             for genome in genomes
         ]
 
-        with Pool(
+        with _mp_context.Pool(
             processes=self.num_workers,
             initializer=_worker_init,
             initargs=(self.evaluator_factory, self.simulator_factory)
