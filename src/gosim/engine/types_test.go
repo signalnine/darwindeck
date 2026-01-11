@@ -73,3 +73,33 @@ func TestDrawAndPlay(t *testing.T) {
 
 	PutState(s)
 }
+
+func TestGameStateHasEffectFields(t *testing.T) {
+	state := GetState()
+	defer PutState(state)
+
+	// New fields should exist and have defaults
+	if state.PlayDirection != 1 {
+		t.Errorf("PlayDirection should default to 1, got %d", state.PlayDirection)
+	}
+	if state.SkipCount != 0 {
+		t.Errorf("SkipCount should default to 0, got %d", state.SkipCount)
+	}
+}
+
+func TestGameStateClonePreservesEffectFields(t *testing.T) {
+	state := GetState()
+	state.PlayDirection = -1
+	state.SkipCount = 2
+
+	clone := state.Clone()
+	defer PutState(state)
+	defer PutState(clone)
+
+	if clone.PlayDirection != -1 {
+		t.Errorf("Clone PlayDirection should be -1, got %d", clone.PlayDirection)
+	}
+	if clone.SkipCount != 2 {
+		t.Errorf("Clone SkipCount should be 2, got %d", clone.SkipCount)
+	}
+}
