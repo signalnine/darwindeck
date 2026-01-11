@@ -1,6 +1,7 @@
 package simulation
 
 import (
+	"encoding/binary"
 	"math/rand"
 	"time"
 
@@ -84,12 +85,28 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 	// Setup deck and deal cards
 	setupDeck(state, seed)
 
-	// Deal 26 cards to each player (War game setup)
-	// TODO: Read cards_per_player from genome.Setup once parsed
-	cardsPerPlayer := 26
+	// Read cards_per_player from genome setup section
+	cardsPerPlayer := 26 // Default for War
+	if genome.Header.SetupOffset > 0 && genome.Header.SetupOffset+8 <= int32(len(genome.Bytecode)) {
+		setupOffset := genome.Header.SetupOffset
+		cardsPerPlayer = int(int32(binary.BigEndian.Uint32(genome.Bytecode[setupOffset : setupOffset+4])))
+	}
+
+	// Determine number of players from genome header
+	numPlayers := int(genome.Header.PlayerCount)
+	if numPlayers == 0 || numPlayers > 4 {
+		numPlayers = 2 // Default to 2 players
+	}
+
+	// Initialize trick-taking state
+	state.NumPlayers = uint8(numPlayers)
+	state.CardsPerPlayer = cardsPerPlayer
+
+	// Deal cards to each player
 	for i := 0; i < cardsPerPlayer; i++ {
-		state.DrawCard(0, engine.LocationDeck)
-		state.DrawCard(1, engine.LocationDeck)
+		for p := 0; p < numPlayers; p++ {
+			state.DrawCard(uint8(p), engine.LocationDeck)
+		}
 	}
 
 	// Game loop with turn limit protection

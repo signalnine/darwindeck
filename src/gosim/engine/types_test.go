@@ -7,8 +7,8 @@ import (
 func TestStatePool(t *testing.T) {
 	// Acquire and release
 	s1 := GetState()
-	if len(s1.Players) != 2 {
-		t.Errorf("Expected 2 players, got %d", len(s1.Players))
+	if len(s1.Players) != 4 {
+		t.Errorf("Expected 4 players, got %d", len(s1.Players))
 	}
 
 	PutState(s1)

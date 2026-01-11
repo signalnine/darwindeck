@@ -76,6 +76,94 @@ func GenerateLegalMoves(state *GameState, genome *Genome) []LegalMove {
 					})
 				}
 			}
+
+		case 4: // TrickPhase
+			if len(phase.Data) < 4 {
+				continue
+			}
+			leadSuitRequired := phase.Data[0] == 1
+			// trumpSuit := phase.Data[1]  // 255 = none
+			// highCardWins := phase.Data[2] == 1
+			breakingSuit := phase.Data[3] // 255 = none
+
+			hand := state.Players[currentPlayer].Hand
+			if len(hand) == 0 {
+				continue
+			}
+
+			// Determine if we're leading or following
+			isLeading := len(state.CurrentTrick) == 0
+
+			if isLeading {
+				// Leading: can play any card, except breaking suit until broken
+				for cardIdx, card := range hand {
+					// If breaking suit (e.g., Hearts) and not broken yet, can't lead it
+					if breakingSuit != 255 && card.Suit == breakingSuit && !state.HeartsBroken {
+						// Check if player has any non-breaking suit cards
+						hasOther := false
+						for _, c := range hand {
+							if c.Suit != breakingSuit {
+								hasOther = true
+								break
+							}
+						}
+						if hasOther {
+							continue // Can't lead breaking suit
+						}
+						// If only breaking suit cards, can lead them
+					}
+					moves = append(moves, LegalMove{
+						PhaseIndex: phaseIdx,
+						CardIndex:  cardIdx,
+						TargetLoc:  LocationTableau, // Use tableau as trick area
+					})
+				}
+			} else {
+				// Following: must follow suit if able
+				leadSuit := state.CurrentTrick[0].Card.Suit
+
+				if leadSuitRequired {
+					// Check if we have cards of lead suit
+					hasLeadSuit := false
+					for _, card := range hand {
+						if card.Suit == leadSuit {
+							hasLeadSuit = true
+							break
+						}
+					}
+
+					if hasLeadSuit {
+						// Must follow suit
+						for cardIdx, card := range hand {
+							if card.Suit == leadSuit {
+								moves = append(moves, LegalMove{
+									PhaseIndex: phaseIdx,
+									CardIndex:  cardIdx,
+									TargetLoc:  LocationTableau,
+								})
+							}
+						}
+					} else {
+						// Can't follow suit - can play any card
+						for cardIdx := range hand {
+							moves = append(moves, LegalMove{
+								PhaseIndex: phaseIdx,
+								CardIndex:  cardIdx,
+								TargetLoc:  LocationTableau,
+							})
+						}
+					}
+				} else {
+					// No suit following required - can play any card
+					for cardIdx := range hand {
+						moves = append(moves, LegalMove{
+							PhaseIndex: phaseIdx,
+							CardIndex:  cardIdx,
+							TargetLoc:  LocationTableau,
+						})
+					}
+				}
+			}
 		}
 	}
 
@@ -114,10 +202,156 @@ func ApplyMove(state *GameState, move *LegalMove, genome *Genome) {
 		if move.CardIndex >= 0 {
 			state.PlayCard(currentPlayer, move.CardIndex, LocationDiscard)
 		}
+
+	case 4: // TrickPhase
+		if move.CardIndex >= 0 && move.CardIndex < len(state.Players[currentPlayer].Hand) {
+			card := state.Players[currentPlayer].Hand[move.CardIndex]
+
+			// Remove card from hand
+			state.Players[currentPlayer].Hand = append(
+				state.Players[currentPlayer].Hand[:move.CardIndex],
+				state.Players[currentPlayer].Hand[move.CardIndex+1:]...,
+			)
+
+			// Add to current trick
+			state.CurrentTrick = append(state.CurrentTrick, TrickCard{
+				PlayerID: currentPlayer,
+				Card:     card,
+			})
+
+			// Check if this card breaks hearts (or other breaking suit)
+			if len(phase.Data) >= 4 {
+				breakingSuit := phase.Data[3]
+				if breakingSuit != 255 && card.Suit == breakingSuit {
+					state.HeartsBroken = true
+				}
+			}
+
+			// Check if trick is complete
+			numPlayers := int(state.NumPlayers)
+			if numPlayers == 0 {
+				numPlayers = 2 // Default to 2 players
+			}
+			if len(state.CurrentTrick) >= numPlayers {
+				// Resolve trick
+				resolveTrick(state, genome, phase)
+				return // Don't advance turn normally - resolveTrick sets next player
+			}
+		}
 	}
 
 	// Advance turn
-	state.CurrentPlayer = 1 - state.CurrentPlayer
+	state.CurrentPlayer = (state.CurrentPlayer + 1) % state.NumPlayers
+	if state.NumPlayers == 0 {
+		state.CurrentPlayer = 1 - currentPlayer // Fallback for 2 players
+	}
+	state.TurnNumber++
+}
+
+// resolveTrick determines the winner and scores points
+func resolveTrick(state *GameState, genome *Genome, phase PhaseDescriptor) {
+	if len(state.CurrentTrick) == 0 {
+		return
+	}
+
+	// Parse phase data
+	trumpSuit := uint8(255) // None
+	highCardWins := true
+	breakingSuit := uint8(255)
+	if len(phase.Data) >= 4 {
+		trumpSuit = phase.Data[1]
+		highCardWins = phase.Data[2] == 1
+		breakingSuit = phase.Data[3]
+	}
+
+	leadSuit := state.CurrentTrick[0].Card.Suit
+	winnerIdx := 0
+	winningCard := state.CurrentTrick[0].Card
+
+	for i := 1; i < len(state.CurrentTrick); i++ {
+		tc := state.CurrentTrick[i]
+		card := tc.Card
+
+		// Determine if this card beats the current winner
+		beats := false
+
+		if trumpSuit != 255 {
+			// Trump game rules
+			winnerIsTrump := winningCard.Suit == trumpSuit
+			cardIsTrump := card.Suit == trumpSuit
+
+			if cardIsTrump && !winnerIsTrump {
+				// Trump beats non-trump
+				beats = true
+			} else if cardIsTrump && winnerIsTrump {
+				// Both trump - compare ranks
+				if highCardWins {
+					beats = card.Rank > winningCard.Rank
+				} else {
+					beats = card.Rank < winningCard.Rank
+				}
+			} else if !cardIsTrump && !winnerIsTrump && card.Suit == leadSuit {
+				// Neither trump - must follow suit to win
+				if winningCard.Suit == leadSuit {
+					if highCardWins {
+						beats = card.Rank > winningCard.Rank
+					} else {
+						beats = card.Rank < winningCard.Rank
+					}
+				} else {
+					// Current winner didn't follow suit, this card does
+					beats = true
+				}
+			}
+		} else {
+			// No trump - only lead suit counts
+			if card.Suit == leadSuit {
+				if winningCard.Suit != leadSuit {
+					beats = true
+				} else if highCardWins {
+					beats = card.Rank > winningCard.Rank
+				} else {
+					beats = card.Rank < winningCard.Rank
+				}
+			}
+		}
+
+		if beats {
+			winnerIdx = i
+			winningCard = card
+		}
+	}
+
+	winner := state.CurrentTrick[winnerIdx].PlayerID
+
+	// Score points for Hearts-style games
+	points := int32(0)
+	for _, tc := range state.CurrentTrick {
+		if breakingSuit != 255 && tc.Card.Suit == breakingSuit {
+			points++ // Each Heart = 1 point
+		}
+		// Queen of Spades = 13 points in Hearts
+		if tc.Card.Suit == 3 && tc.Card.Rank == 10 { // Spades (3), Queen (10)
+			points += 13
+		}
+	}
+	state.Players[winner].Score += points
+
+	// Track tricks won
+	if len(state.TricksWon) <= int(winner) {
+		// Extend TricksWon slice if needed
+		for len(state.TricksWon) <= int(winner) {
+			state.TricksWon = append(state.TricksWon, 0)
+		}
+	}
+	state.TricksWon[winner]++
+
+	// Clear current trick
+	state.CurrentTrick = state.CurrentTrick[:0]
+
+	// Winner leads next trick
+	state.CurrentPlayer = winner
+	state.TrickLeader = winner
 	state.TurnNumber++
 }
 
@@ -163,8 +397,22 @@ func CheckWinConditions(state *GameState, genome *Genome) int8 {
 					return int8(playerID)
 				}
 			}
-		case 1: // high_score
-			// TODO: Implement score-based win
+		case 1: // high_score (highest score wins, triggers when anyone reaches threshold)
+			maxScore := int32(-1)
+			winner := int8(-1)
+			triggered := false
+			for playerID, player := range state.Players {
+				if player.Score >= wc.Threshold {
+					triggered = true
+				}
+				if player.Score > maxScore {
+					maxScore = player.Score
+					winner = int8(playerID)
+				}
+			}
+			if triggered && winner >= 0 {
+				return winner
+			}
 		case 2: // first_to_score
 			for playerID, player := range state.Players {
 				if player.Score >= wc.Threshold {
@@ -176,6 +424,42 @@ func CheckWinConditions(state *GameState, genome *Genome) int8 {
 				if len(player.Hand) == 52 {
 					return int8(playerID)
 				}
+			}
+		case 4: // low_score (Hearts: lowest score wins when anyone reaches threshold)
+			minScore := int32(999999)
+			winner := int8(-1)
+			triggered := false
+			for playerID, player := range state.Players {
+				if player.Score >= wc.Threshold {
+					triggered = true
+				}
+				if player.Score < minScore {
+					minScore = player.Score
+					winner = int8(playerID)
+				}
+			}
+			if triggered && winner >= 0 {
+				return winner
+			}
+		case 5: // all_hands_empty (trick-taking: hand ends when all empty)
+			allEmpty := true
+			for _, player := range state.Players {
+				if len(player.Hand) > 0 {
+					allEmpty = false
+					break
+				}
+			}
+			if allEmpty {
+				// In trick-taking games, lowest score wins when hand ends
+				minScore := int32(999999)
+				winner := int8(-1)
+				for playerID, player := range state.Players {
+					if player.Score < minScore {
+						minScore = player.Score
+						winner = int8(playerID)
+					}
+				}
+				return winner
 			}
 		}
 	}

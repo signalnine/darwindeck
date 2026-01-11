@@ -170,9 +170,11 @@ func (g *Genome) parseTurnStructure() error {
 			phaseLen = 8 + conditionLen
 		case 3: // DiscardPhase: target:1 + count:4 + mandatory:1 = 6 bytes
 			phaseLen = 6
-		case 4: // BettingPhase (optional)
+		case 4: // TrickPhase: lead_suit_required:1 + trump_suit:1 + high_card_wins:1 + breaking_suit:1 = 4 bytes
+			phaseLen = 4
+		case 5: // BettingPhase (optional)
 			phaseLen = 21
-		case 5: // ClaimPhase (optional)
+		case 6: // ClaimPhase (optional)
 			phaseLen = 10
 		default:
 			return fmt.Errorf("unknown phase type: %d", phaseType)

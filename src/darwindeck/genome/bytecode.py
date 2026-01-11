@@ -165,8 +165,7 @@ class BytecodeCompiler:
             elif isinstance(phase, DiscardPhase):
                 result += self._compile_discard_phase(phase)
             elif isinstance(phase, TrickPhase):
-                # TrickPhase not fully supported yet, skip with placeholder
-                result += self._compile_trick_phase_placeholder(phase)
+                result += self._compile_trick_phase(phase)
             else:
                 # Unknown phase type, skip
                 pass
@@ -240,17 +239,30 @@ class BytecodeCompiler:
 
         return struct.pack("!BBIB", phase_type, target, count, mandatory)
 
-    def _compile_trick_phase_placeholder(self, phase: TrickPhase) -> bytes:
-        """Encode TrickPhase placeholder (not fully supported in Go yet)."""
-        # For now, encode as a DrawPhase with minimal data
-        # This allows evolution to continue while TrickPhase is being developed
-        phase_type = 1  # Pretend it's a DrawPhase
-        source = 0  # DECK
-        count = 0  # Draw nothing
-        mandatory = 0  # Optional
-        has_condition = 0
+    def _compile_trick_phase(self, phase: TrickPhase) -> bytes:
+        """Encode TrickPhase to bytecode.
 
-        return struct.pack("!BBIB", phase_type, source, count, mandatory) + struct.pack("!B", has_condition)
+        Go format: phase_type:1 + lead_suit_required:1 + trump_suit:1 + high_card_wins:1 + breaking_suit:1
+        Total: 5 bytes
+        """
+        phase_type = 4  # TrickPhase
+        lead_suit_required = 1 if phase.lead_suit_required else 0
+        trump_suit = self._suit_to_code(phase.trump_suit) if phase.trump_suit else 255  # 255 = None
+        high_card_wins = 1 if phase.high_card_wins else 0
+        breaking_suit = self._suit_to_code(phase.breaking_suit) if phase.breaking_suit else 255  # 255 = None
+
+        return struct.pack("!BBBBB", phase_type, lead_suit_required, trump_suit, high_card_wins, breaking_suit)
+
+    def _suit_to_code(self, suit) -> int:
+        """Map Suit enum to code."""
+        from darwindeck.genome.schema import Suit
+        mapping = {
+            Suit.HEARTS: 0,
+            Suit.DIAMONDS: 1,
+            Suit.CLUBS: 2,
+            Suit.SPADES: 3,
+        }
+        return mapping.get(suit, 255)
 
     def _compile_win_conditions(self, conditions: List[WinCondition]) -> bytes:
         """Encode win conditions."""
@@ -320,5 +332,7 @@ class BytecodeCompiler:
             "high_score": 1,
             "first_to_score": 2,
             "capture_all": 3,
+            "low_score": 4,        # Hearts: lowest score wins
+            "all_hands_empty": 5,  # Trick-taking: hand ends when all empty
         }
         return mapping.get(win_type, 0)
