@@ -101,10 +101,19 @@ func SimulateBatch(requestPtr unsafe.Pointer, requestLen C.int, responseLen *C.i
 		}
 
 		// Convert to AggStats
+		// Use Wins slice for N-player support while maintaining FlatBuffers compatibility
+		player0Wins := uint32(0)
+		player1Wins := uint32(0)
+		if len(simStats.Wins) > 0 {
+			player0Wins = simStats.Wins[0]
+		}
+		if len(simStats.Wins) > 1 {
+			player1Wins = simStats.Wins[1]
+		}
 		stats := &AggStats{
 			TotalGames:        simStats.TotalGames,
-			Player0Wins:       simStats.Player0Wins,
-			Player1Wins:       simStats.Player1Wins,
+			Player0Wins:       player0Wins,
+			Player1Wins:       player1Wins,
 			Draws:             simStats.Draws,
 			AvgTurns:          simStats.AvgTurns,
 			MedianTurns:       simStats.MedianTurns,
