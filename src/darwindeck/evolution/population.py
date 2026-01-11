@@ -1,9 +1,12 @@
 """Population management with diversity tracking (Phase 4)."""
 
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional, TYPE_CHECKING
 import random
 from darwindeck.genome.schema import GameGenome
+
+if TYPE_CHECKING:
+    from darwindeck.evolution.fitness_full import FitnessMetrics
 
 
 # Diversity threshold for warning
@@ -16,6 +19,7 @@ class Individual:
     genome: GameGenome
     fitness: float = 0.0
     evaluated: bool = False
+    fitness_metrics: Optional["FitnessMetrics"] = None  # Full metrics breakdown
 
 
 def genome_distance(g1: GameGenome, g2: GameGenome) -> float:

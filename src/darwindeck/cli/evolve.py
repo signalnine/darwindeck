@@ -378,6 +378,23 @@ def main() -> int:
         genome_data = json.loads(genome_to_json(individual.genome))
         genome_data['fitness'] = individual.fitness
         genome_data['fitness_rank'] = i
+
+        # Include full fitness metrics breakdown if available
+        if individual.fitness_metrics:
+            fm = individual.fitness_metrics
+            genome_data['fitness_metrics'] = {
+                'decision_density': fm.decision_density,
+                'comeback_potential': fm.comeback_potential,
+                'tension_curve': fm.tension_curve,
+                'interaction_frequency': fm.interaction_frequency,
+                'rules_complexity': fm.rules_complexity,
+                'session_length': fm.session_length,
+                'skill_vs_luck': fm.skill_vs_luck,
+                'bluffing_depth': fm.bluffing_depth,
+                'games_simulated': fm.games_simulated,
+                'valid': fm.valid,
+            }
+
         if skill:
             genome_data['mcts_win_rate'] = skill.mcts_win_rate
             genome_data['skill_rank'] = i
