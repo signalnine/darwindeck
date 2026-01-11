@@ -118,5 +118,8 @@ func (n *MCTSNode) IsFullyExpanded() bool {
 
 // IsTerminal checks if this node represents a terminal game state
 func (n *MCTSNode) IsTerminal() bool {
+	if n.State == nil {
+		return true // Treat nil state as terminal to prevent crashes
+	}
 	return n.State.WinnerID >= 0
 }
