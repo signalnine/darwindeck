@@ -5,8 +5,12 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+import json
 from pathlib import Path
+from typing import List, Optional
 from darwindeck.evolution.engine import EvolutionEngine, EvolutionConfig
+from darwindeck.genome.serialization import genome_to_json, genome_from_json
+from darwindeck.genome.schema import GameGenome
 
 
 def setup_logging(verbose: bool = False) -> None:
@@ -23,6 +27,30 @@ def setup_logging(verbose: bool = False) -> None:
             logging.StreamHandler(sys.stdout)
         ]
     )
+
+
+def load_seed_genomes(seed_dir: Path) -> List[GameGenome]:
+    """Load genomes from JSON files in a directory.
+
+    Args:
+        seed_dir: Directory containing .json genome files
+
+    Returns:
+        List of loaded GameGenome objects
+    """
+    genomes = []
+    json_files = sorted(seed_dir.glob("*.json"))
+
+    for json_file in json_files:
+        try:
+            with open(json_file) as f:
+                genome = genome_from_json(f.read())
+                genomes.append(genome)
+                logging.debug(f"  Loaded {genome.genome_id} from {json_file.name}")
+        except Exception as e:
+            logging.warning(f"  Failed to load {json_file.name}: {e}")
+
+    return genomes
 
 
 def main() -> int:
@@ -81,6 +109,12 @@ def main() -> int:
         default=None,
         help='Random seed for reproducibility'
     )
+    parser.add_argument(
+        '--seed-from',
+        type=Path,
+        default=None,
+        help='Directory containing JSON genomes to use as seeds (replaces default seeds)'
+    )
 
     # Output options
     parser.add_argument(
@@ -108,6 +142,19 @@ def main() -> int:
     # Setup logging
     setup_logging(args.verbose)
 
+    # Load seed genomes if specified
+    seed_genomes = None
+    if args.seed_from:
+        if not args.seed_from.exists():
+            logging.error(f"Seed directory not found: {args.seed_from}")
+            return 1
+        logging.info(f"Loading seed genomes from {args.seed_from}")
+        seed_genomes = load_seed_genomes(args.seed_from)
+        if not seed_genomes:
+            logging.error("No valid genomes found in seed directory")
+            return 1
+        logging.info(f"  Loaded {len(seed_genomes)} seed genomes")
+
     # Create configuration
     config = EvolutionConfig(
         population_size=args.population_size,
@@ -117,7 +164,8 @@ def main() -> int:
         tournament_size=args.tournament_size,
         plateau_threshold=args.plateau_threshold,
         seed_ratio=args.seed_ratio,
-        random_seed=args.random_seed
+        random_seed=args.random_seed,
+        seed_genomes=seed_genomes
     )
 
     # Create evolution engine
@@ -138,18 +186,16 @@ def main() -> int:
         logging.info("\n\nEvolution interrupted by user")
         return 1
 
-    # Save best genomes
+    # Save best genomes as JSON (can be reused as seeds)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     best_genomes = engine.get_best_genomes(n=args.save_top_n)
 
     logging.info(f"\nSaving top {len(best_genomes)} genomes to {args.output_dir}")
     for i, individual in enumerate(best_genomes, 1):
-        output_file = args.output_dir / f"genome_rank{i:02d}_fitness{individual.fitness:.4f}.txt"
-        with open(output_file, 'w') as f:
-            f.write(f"Genome ID: {individual.genome.genome_id}\n")
-            f.write(f"Fitness: {individual.fitness:.4f}\n")
-            f.write(f"Generation: {individual.genome.generation}\n")
-            f.write(f"\n{individual.genome}\n")
+        # Save as JSON for reuse as seeds
+        json_file = args.output_dir / f"rank{i:02d}_{individual.genome.genome_id}.json"
+        with open(json_file, 'w') as f:
+            f.write(genome_to_json(individual.genome))
         logging.info(f"  {i}. {individual.genome.genome_id} (fitness={individual.fitness:.4f})")
 
     logging.info(f"\n✅ Evolution complete! Best fitness: {engine.best_ever.fitness:.4f}")

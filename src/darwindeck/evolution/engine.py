@@ -6,16 +6,17 @@ import random
 import logging
 import os
 from typing import List, Optional, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from darwindeck.evolution.population import Population, Individual
 from darwindeck.evolution.operators import (
     MutationPipeline,
     CrossoverOperator,
     create_default_pipeline
 )
-from darwindeck.evolution.seeding import create_seed_population
+from darwindeck.evolution.seeding import create_seed_population, create_seed_population_from_genomes
 from darwindeck.evolution.parallel_fitness import ParallelFitnessEvaluator, _create_evaluator
 from darwindeck.evolution.fitness_full import FitnessEvaluator
+from darwindeck.genome.schema import GameGenome
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,7 @@ class EvolutionConfig:
     diversity_threshold: float = 0.1  # Warn if diversity < 0.1
     seed_ratio: float = 0.7  # 70% known games, 30% mutants
     random_seed: Optional[int] = None
+    seed_genomes: Optional[List[GameGenome]] = None  # Custom genomes to seed from
 
 
 @dataclass
@@ -117,11 +119,24 @@ class EvolutionEngine:
     def initialize_population(self) -> None:
         """Create initial population with seeding."""
         logger.info(f"Initializing population of size {self.config.population_size}")
-        individuals = create_seed_population(
-            size=self.config.population_size,
-            seed_ratio=self.config.seed_ratio,
-            random_seed=self.config.random_seed
-        )
+
+        if self.config.seed_genomes:
+            # Use custom seed genomes
+            logger.info(f"Using {len(self.config.seed_genomes)} custom seed genomes")
+            individuals = create_seed_population_from_genomes(
+                base_genomes=self.config.seed_genomes,
+                size=self.config.population_size,
+                seed_ratio=self.config.seed_ratio,
+                random_seed=self.config.random_seed
+            )
+        else:
+            # Use default example games
+            individuals = create_seed_population(
+                size=self.config.population_size,
+                seed_ratio=self.config.seed_ratio,
+                random_seed=self.config.random_seed
+            )
+
         self.population = Population(individuals=individuals)
         logger.info(f"Population initialized with {len(individuals)} individuals")
 

@@ -132,3 +132,84 @@ def create_minimal_seed_population(size: int = 10) -> List[Individual]:
         List of Individual objects
     """
     return create_seed_population(size=size, seed_ratio=1.0)
+
+
+def create_seed_population_from_genomes(
+    base_genomes: List[GameGenome],
+    size: int = 100,
+    seed_ratio: float = 0.3,
+    random_seed: int | None = None
+) -> List[Individual]:
+    """Create initial population from custom genomes.
+
+    Args:
+        base_genomes: List of genomes to use as seeds
+        size: Population size (default: 100)
+        seed_ratio: Ratio of seeds to mutants (default: 0.3 for 30%)
+        random_seed: Random seed for reproducibility
+
+    Returns:
+        List of Individual objects with seeded genomes
+    """
+    if random_seed is not None:
+        random.seed(random_seed)
+
+    if not base_genomes:
+        raise ValueError("No base genomes provided")
+
+    # Calculate counts
+    n_seeds = int(size * seed_ratio)
+    n_mutants = size - n_seeds
+
+    population: List[Individual] = []
+    used_names: Set[str] = set()
+
+    # 1. Add seed genomes (replicated to fill n_seeds slots)
+    for i in range(n_seeds):
+        genome = base_genomes[i % len(base_genomes)]
+        new_name = generate_unique_name(used_names)
+        used_names.add(new_name)
+        genome_copy = genome.__class__(
+            schema_version=genome.schema_version,
+            genome_id=new_name,
+            generation=genome.generation,
+            setup=genome.setup,
+            turn_structure=genome.turn_structure,
+            special_effects=genome.special_effects,
+            win_conditions=genome.win_conditions,
+            scoring_rules=genome.scoring_rules,
+            max_turns=genome.max_turns,
+            min_turns=genome.min_turns,
+            player_count=genome.player_count,
+        )
+        population.append(Individual(genome=genome_copy, fitness=0.0, evaluated=False))
+
+    # 2. Add mutated variants
+    mutation_pipeline = create_default_pipeline()
+
+    for i in range(n_mutants):
+        base_genome = random.choice(base_genomes)
+        mutated = base_genome
+        num_rounds = random.randint(2, 6)
+        for _ in range(num_rounds):
+            mutated = mutation_pipeline.apply(mutated)
+
+        new_name = generate_unique_name(used_names)
+        used_names.add(new_name)
+        mutated_copy = mutated.__class__(
+            schema_version=mutated.schema_version,
+            genome_id=new_name,
+            generation=0,
+            setup=mutated.setup,
+            turn_structure=mutated.turn_structure,
+            special_effects=mutated.special_effects,
+            win_conditions=mutated.win_conditions,
+            scoring_rules=mutated.scoring_rules,
+            max_turns=mutated.max_turns,
+            min_turns=mutated.min_turns,
+            player_count=mutated.player_count,
+        )
+        population.append(Individual(genome=mutated_copy, fitness=0.0, evaluated=False))
+
+    random.shuffle(population)
+    return population
