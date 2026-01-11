@@ -37,9 +37,9 @@ STYLE_PRESETS = {
         # Favor quick, interactive, accessible games
         'decision_density': 0.10,
         'comeback_potential': 0.25,  # Everyone can win
-        'tension_curve': 0.20,
-        'interaction_frequency': 0.30,  # High interaction
-        'rules_complexity': 0.10,  # Simple rules
+        'tension_curve': 0.15,
+        'interaction_frequency': 0.25,  # High interaction
+        'rules_complexity': 0.20,  # Simple rules
         'skill_vs_luck': 0.05,  # Luck-friendly
     },
     'trick-taking': {
