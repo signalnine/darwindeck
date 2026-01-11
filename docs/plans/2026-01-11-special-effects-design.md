@@ -52,14 +52,15 @@ special_effects = [
 
 ### Go State (src/gosim/engine/types.go)
 
-Add two fields to GameState:
+Add fields to GameState:
 
 ```go
 type GameState struct {
     // ... existing fields ...
 
-    PlayDirection    int8   // 1 = clockwise, -1 = counter-clockwise
-    SkipCount        uint8  // Number of players to skip (usually 0 or 1)
+    PlayDirection    int8       // 1 = clockwise, -1 = counter-clockwise
+    SkipCount        uint8      // Number of players to skip (capped at NumPlayers-1)
+    RNG              *rand.Rand // Seeded RNG for deterministic random effects
 }
 ```
 
@@ -67,7 +68,10 @@ Initialize in `NewGameState`:
 ```go
 PlayDirection: 1,
 SkipCount:     0,
+RNG:           rand.New(rand.NewSource(seed)),  // seed passed as parameter
 ```
+
+**Note:** The RNG ensures reproducible games when the same seed is used. This is critical for debugging and testing.
 
 ### Turn Advancement (src/gosim/engine/movegen.go)
 
@@ -118,30 +122,55 @@ func ApplyEffect(state *GameState, effect *SpecialEffect) {
     switch effect.EffectType {
     case EFFECT_SKIP_NEXT:
         state.SkipCount += effect.Value
+        // Cap at NumPlayers-1 to prevent degenerate infinite turns
+        if state.SkipCount > state.NumPlayers-1 {
+            state.SkipCount = state.NumPlayers - 1
+        }
 
     case EFFECT_REVERSE:
         state.PlayDirection *= -1
 
     case EFFECT_DRAW_CARDS:
-        targetID := resolveTarget(state, effect.Target)
-        for i := uint8(0); i < effect.Value && len(state.Deck) > 0; i++ {
-            card := state.DrawCard()
-            state.Players[targetID].Hand = append(state.Players[targetID].Hand, card)
-        }
+        applyToTargets(state, effect.Target, func(targetID int) {
+            for i := uint8(0); i < effect.Value && len(state.Deck) > 0; i++ {
+                card := state.DrawCard()
+                state.Players[targetID].Hand = append(state.Players[targetID].Hand, card)
+            }
+        })
 
     case EFFECT_EXTRA_TURN:
         // Skip everyone else = current player goes again
         state.SkipCount = state.NumPlayers - 1
 
     case EFFECT_FORCE_DISCARD:
-        targetID := resolveTarget(state, effect.Target)
-        hand := &state.Players[targetID].Hand
-        toDiscard := min(int(effect.Value), len(*hand))
-        for i := 0; i < toDiscard; i++ {
-            card := (*hand)[len(*hand)-1]
-            *hand = (*hand)[:len(*hand)-1]
-            state.Discard = append(state.Discard, card)
+        applyToTargets(state, effect.Target, func(targetID int) {
+            hand := &state.Players[targetID].Hand
+            toDiscard := min(int(effect.Value), len(*hand))
+            for i := 0; i < toDiscard; i++ {
+                card := (*hand)[len(*hand)-1]
+                *hand = (*hand)[:len(*hand)-1]
+                state.Discard = append(state.Discard, card)
+            }
+        })
+
+    default:
+        // Unknown effect type - log warning but don't crash
+        // This allows forward compatibility with new effect types
+    }
+}
+
+// applyToTargets handles single target or ALL_OPPONENTS
+func applyToTargets(state *GameState, target uint8, action func(int)) {
+    targetID := resolveTarget(state, target)
+    if targetID == -1 {
+        // ALL_OPPONENTS: apply to everyone except current player
+        for i := 0; i < int(state.NumPlayers); i++ {
+            if i != int(state.CurrentPlayer) {
+                action(i)
+            }
         }
+    } else {
+        action(targetID)
     }
 }
 
@@ -156,9 +185,12 @@ func resolveTarget(state *GameState, target uint8) int {
     case TARGET_PREV_PLAYER:
         return (current - direction + numPlayers) % numPlayers
     case TARGET_RANDOM_OPPONENT:
-        // Pick random opponent
-        offset := rand.Intn(numPlayers-1) + 1
+        // Pick random opponent using state's seeded RNG (deterministic)
+        offset := state.RNG.Intn(numPlayers-1) + 1
         return (current + offset) % numPlayers
+    case TARGET_ALL_OPPONENTS:
+        // Returns -1 to signal caller must loop over all opponents
+        return -1
     default:
         return (current + 1) % numPlayers
     }
@@ -242,19 +274,36 @@ def compile_effects(effects: list[SpecialEffect]) -> bytes:
 ```go
 type ParsedGenome struct {
     // ... existing fields ...
-    Effects map[uint8]SpecialEffect  // rank -> effect lookup
+    Effects map[uint8]SpecialEffect  // rank -> effect lookup (one effect per rank)
 }
 
-func parseEffects(data []byte, offset int) (map[uint8]SpecialEffect, int) {
+func parseEffects(data []byte, offset int) (map[uint8]SpecialEffect, int, error) {
     effects := make(map[uint8]SpecialEffect)
 
+    // Bounds check: need at least 2 bytes for header
+    if offset >= len(data) {
+        return effects, offset, nil  // No effects section
+    }
+
     if data[offset] != OP_EFFECT_HEADER {
-        return effects, offset
+        return effects, offset, nil  // No effects section
     }
     offset++
 
+    // Bounds check: need count byte
+    if offset >= len(data) {
+        return nil, offset, fmt.Errorf("truncated effects section: missing count")
+    }
+
     count := int(data[offset])
     offset++
+
+    // Bounds check: need 4 bytes per effect
+    requiredBytes := count * 4
+    if offset+requiredBytes > len(data) {
+        return nil, offset, fmt.Errorf("truncated effects section: expected %d bytes, have %d",
+            requiredBytes, len(data)-offset)
+    }
 
     for i := 0; i < count; i++ {
         effect := SpecialEffect{
@@ -263,13 +312,16 @@ func parseEffects(data []byte, offset int) (map[uint8]SpecialEffect, int) {
             Target:      data[offset+2],
             Value:       data[offset+3],
         }
+        // Note: Later effects with same rank overwrite earlier ones
         effects[effect.TriggerRank] = effect
         offset += 4
     }
 
-    return effects, offset
+    return effects, offset, nil
 }
 ```
+
+**Note:** The map allows only one effect per rank. This is an intentional simplification - if a genome defines multiple effects for the same rank, the last one wins. This keeps the lookup O(1) and evolution simple.
 
 ---
 
@@ -557,9 +609,22 @@ def test_draw_effect_never_overdraws(deck_size, draw_count):
 |----------|--------|-----------|
 | Trigger mechanism | By rank only | Simple, evolvable, matches real games |
 | Effect timing | Immediate | No stacking complexity |
-| State storage | PlayDirection + SkipCount | Minimal state, handles all turn effects |
+| State storage | PlayDirection + SkipCount + RNG | Minimal state, deterministic random |
 | Bytecode format | 4 bytes per effect | Compact, fixed-size entries |
 | Effect lookup | Map by rank | O(1) lookup during play |
+| One effect per rank | Last wins | Keeps lookup simple, evolution straightforward |
+| SkipCount capping | NumPlayers-1 max | Prevents degenerate infinite turns |
+
+---
+
+## Known Limitations
+
+| Limitation | Rationale | Future Extension |
+|------------|-----------|------------------|
+| One effect per rank | Simplicity - O(1) lookup, simple evolution | Could use `[]SpecialEffect` per rank |
+| No effect stacking | Complexity - would need accumulator state | Add `stackable: bool` flag |
+| Force discard from end | Simplicity - no selection logic | Add random or player-choice modes |
+| Reverse meaningless for 2 players | Math works, just has no effect | Document as expected behavior |
 
 ---
 
