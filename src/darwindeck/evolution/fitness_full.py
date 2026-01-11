@@ -224,8 +224,22 @@ class FitnessEvaluator:
             ))
 
         # 2. Comeback potential (how balanced is the game?)
-        win_rate_p0 = results.player0_wins / results.total_games if results.total_games > 0 else 0.5
-        comeback_potential = 1.0 - abs(win_rate_p0 - 0.5) * 2
+        # Expected win rate: 1/N for N players (50% for 2, 33% for 3, 25% for 4)
+        expected_rate = 1.0 / results.player_count if results.player_count > 0 else 0.5
+        max_deviation = 1.0 - expected_rate  # Maximum possible deviation from expected
+
+        # Calculate average deviation from expected across all players
+        if results.total_games > 0:
+            deviations = []
+            for wins in results.wins:
+                actual_rate = wins / results.total_games
+                deviation = abs(actual_rate - expected_rate) / max_deviation if max_deviation > 0 else 0
+                deviations.append(deviation)
+            avg_deviation = sum(deviations) / len(deviations) if deviations else 0
+        else:
+            avg_deviation = 0
+
+        comeback_potential = 1.0 - avg_deviation
 
         # 3. Tension curve - improved with game length variance proxy
         # Games with variable length tend to have more tension
