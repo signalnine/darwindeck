@@ -262,13 +262,13 @@ def main() -> int:
     parser.add_argument(
         '--skill-eval-frequency',
         type=int,
-        default=5,
+        default=10,
         help='Run skill evaluation every N generations during evolution (0 = disabled)'
     )
     parser.add_argument(
         '--skill-eval-games',
         type=int,
-        default=50,
+        default=10,
         help='Games per genome for in-evolution skill evaluation'
     )
     parser.add_argument(
