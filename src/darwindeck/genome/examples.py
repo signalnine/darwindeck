@@ -118,16 +118,22 @@ def create_crazy_eights_genome() -> GameGenome:
 
     Crazy 8s is a shedding game with:
     - Match suit or rank of discard pile top card
-    - 8s are wild (can be played on anything, change suit)
+    - 8s are wild (can be played on anything)
     - Draw if unable to play
     - First to empty hand wins
+
+    Modified for better simulation:
+    - 2 players for more direct competition
+    - Can play multiple cards of same rank (speeds up game, adds decisions)
+    - More cards per player for longer games
+    - Tableau used for "attack" plays that affect opponent
     """
     return GameGenome(
         schema_version="1.0",
         genome_id="crazy-eights",
         generation=0,
         setup=SetupRules(
-            cards_per_player=7,
+            cards_per_player=10,  # More cards = longer game
             initial_deck="standard_52",
             initial_discard_count=1  # Start with one card in discard
         ),
@@ -141,11 +147,11 @@ def create_crazy_eights_genome() -> GameGenome:
                     condition=Condition(
                         type=ConditionType.HAND_SIZE,
                         operator=Operator.EQ,
-                        value=0,  # Has 0 playable cards (simplified - assumes no valid plays)
+                        value=0,
                         reference="valid_plays"
                     )
                 ),
-                # Try to play a matching card
+                # Play matching card(s) - can play multiple of same rank
                 PlayPhase(
                     target=Location.DISCARD,
                     valid_play_condition=CompoundCondition(
@@ -166,19 +172,31 @@ def create_crazy_eights_genome() -> GameGenome:
                         ]
                     ),
                     min_cards=1,
-                    max_cards=1,
+                    max_cards=4,  # Can play multiple cards of same rank
                     mandatory=True,
-                    pass_if_unable=False  # Must draw if can't play
+                    pass_if_unable=True
+                ),
+                # Optional: play to tableau (represents "attack" cards)
+                PlayPhase(
+                    target=Location.TABLEAU,
+                    valid_play_condition=Condition(
+                        type=ConditionType.CARD_IS_RANK,
+                        value=Rank.TWO  # 2s go to tableau (attack cards)
+                    ),
+                    min_cards=0,
+                    max_cards=1,
+                    mandatory=False,
+                    pass_if_unable=True
                 )
             ]
         ),
-        special_effects=[],  # TODO: Add CHOOSE_SUIT action for 8s when SpecialEffect class is implemented
+        special_effects=[],
         win_conditions=[
             WinCondition(type="empty_hand")
         ],
         scoring_rules=[],
         max_turns=200,
-        player_count=4
+        player_count=2
     )
 
 
@@ -294,33 +312,45 @@ def create_old_maid_genome() -> GameGenome:
 def create_go_fish_genome() -> GameGenome:
     """Create Go Fish card game genome.
 
-    Simplified Go Fish features:
-    - Draw from deck (instead of asking opponent)
-    - Play "books" (4 of a kind) to discard pile
-    - Score 1 point per book
-    - First to empty hand wins (or highest score at deck exhaustion)
+    Modified Go Fish for better simulation:
+    - Draw from deck
+    - Can play pairs OR books (2+ cards of same rank)
+    - Multiple decision points per turn
+    - Play to tableau for "asking" simulation (opponent interaction)
+    - More cards for longer games
 
-    Multi-card plays now supported - when you have 4 cards of the same rank,
-    you can play them all at once and score a point.
+    The tableau play simulates the "asking" mechanic - playing there
+    represents revealing what you're looking for.
     """
     return GameGenome(
         schema_version="1.0",
         genome_id="go-fish",
         generation=0,
         setup=SetupRules(
-            cards_per_player=7,
+            cards_per_player=10,  # More cards = longer game
             initial_deck="standard_52",
             initial_discard_count=0
         ),
         turn_structure=TurnStructure(
             phases=[
-                # Simplified: draw from deck instead of asking opponent
+                # Draw from deck
                 DrawPhase(
                     source=Location.DECK,
                     count=1,
                     mandatory=True
                 ),
-                # Play books (sets of 4) to discard pile for scoring
+                # Play pairs or sets to tableau ("asking" simulation)
+                PlayPhase(
+                    target=Location.TABLEAU,
+                    valid_play_condition=Condition(
+                        type=ConditionType.HAS_MATCHING_PAIR,
+                        value=2  # At least a pair
+                    ),
+                    min_cards=2,
+                    max_cards=4,
+                    mandatory=False
+                ),
+                # Play completed books to discard for scoring
                 PlayPhase(
                     target=Location.DISCARD,
                     valid_play_condition=Condition(
@@ -330,15 +360,21 @@ def create_go_fish_genome() -> GameGenome:
                     min_cards=4,
                     max_cards=4,
                     mandatory=False
+                ),
+                # Optional discard to cycle cards
+                DiscardPhase(
+                    target=Location.DISCARD,
+                    count=1,
+                    mandatory=False
                 )
             ]
         ),
         special_effects=[],
         win_conditions=[
-            WinCondition(type="empty_hand"),  # First to empty hand wins
+            WinCondition(type="empty_hand"),
             WinCondition(
-                type="high_score",  # Or highest score when deck depletes
-                threshold=1  # At least 1 book needed to trigger score win
+                type="high_score",
+                threshold=1
             )
         ],
         scoring_rules=[],
@@ -501,57 +537,65 @@ def create_scopa_genome() -> GameGenome:
 def create_draw_poker_genome() -> GameGenome:
     """Create Draw Poker card game genome.
 
-    Simplified Draw Poker features:
-    - Deal 5 cards to each player
-    - Discard and draw to improve hand
-    - Best poker hand wins (compared after drawing phase)
+    Modified Draw Poker for better simulation:
+    - Multiple draw/discard rounds for more decisions
+    - Play cards to tableau to "bet" (simulates raising)
+    - Longer game with more strategic depth
+    - Scoring based on final hand + tableau cards
 
-    Hand rankings (high to low):
-    - Royal Flush, Straight Flush, Four of a Kind, Full House, Flush
-    - Straight, Three of a Kind, Two Pair, One Pair, High Card
-
-    Simplifications:
-    - No betting rounds
-    - Single draw phase
-    - Winner determined immediately after draw
+    The tableau represents your "bet" - committing cards there
+    shows confidence and creates interaction.
     """
     return GameGenome(
         schema_version="1.0",
         genome_id="draw-poker",
         generation=0,
         setup=SetupRules(
-            cards_per_player=5,
+            cards_per_player=7,  # More cards for longer game
             initial_deck="standard_52",
             initial_discard_count=0
         ),
         turn_structure=TurnStructure(
             phases=[
-                # Discard unwanted cards
-                DiscardPhase(
-                    target=Location.DISCARD,
-                    count=3,  # Can discard up to 3
-                    mandatory=False
-                ),
-                # Draw replacement cards
+                # Draw a card
                 DrawPhase(
                     source=Location.DECK,
-                    count=3,  # Draw same number as discarded
-                    mandatory=False,
+                    count=1,
+                    mandatory=True,
                     condition=Condition(
-                        type=ConditionType.LOCATION_SIZE,
-                        reference="discard",
-                        operator=Operator.GT,
-                        value=0
+                        type=ConditionType.HAND_SIZE,
+                        operator=Operator.LT,
+                        value=7
                     )
+                ),
+                # Optional: play to tableau ("bet" - shows confidence)
+                PlayPhase(
+                    target=Location.TABLEAU,
+                    valid_play_condition=Condition(
+                        type=ConditionType.HAND_SIZE,
+                        operator=Operator.GT,
+                        value=3  # Keep at least 3 cards
+                    ),
+                    min_cards=1,
+                    max_cards=2,
+                    mandatory=False,
+                    pass_if_unable=True
+                ),
+                # Discard to improve hand
+                DiscardPhase(
+                    target=Location.DISCARD,
+                    count=2,
+                    mandatory=False
                 )
             ]
         ),
         special_effects=[],
         win_conditions=[
-            WinCondition(type="best_hand")  # Compare poker hands after drawing
+            WinCondition(type="best_hand"),
+            WinCondition(type="high_score", threshold=10)
         ],
         scoring_rules=[],
-        max_turns=20,
+        max_turns=100,
         player_count=2
     )
 
@@ -660,51 +704,70 @@ def create_knockout_whist_genome() -> GameGenome:
 def create_blackjack_genome() -> GameGenome:
     """Create Blackjack/21 card game genome.
 
-    Classic hand-value game:
-    - Goal: Get hand value as close to 21 as possible without going over
-    - Card values: Number cards = face value, Face cards = 10, Ace = 1 or 11
-    - Players choose to "hit" (draw) or "stand" (stop)
-    - Going over 21 = "bust" = lose
-    - Highest hand value under 21 wins
+    Reimagined as a multi-round card comparison game:
+    - Each round, players draw cards trying to get close to target value
+    - Play cards to tableau to "lock in" your hand
+    - Discard to signal you're done drawing
+    - Compare hand values when both players stand
+    - Win by having better hand more often
 
-    Simplified version:
-    - 2 players (no dealer distinction)
-    - Draw until satisfied or bust
-    - Compare final hand values
+    This version creates more tension and decisions than single-hand blackjack.
     """
     return GameGenome(
         schema_version="1.0",
         genome_id="blackjack",
         generation=0,
         setup=SetupRules(
-            cards_per_player=2,  # Start with 2 cards each
+            cards_per_player=5,  # More cards = more rounds
             initial_deck="standard_52",
             initial_discard_count=0
         ),
         turn_structure=TurnStructure(
             phases=[
-                # Optional draw (hit)
+                # Draw a card
                 DrawPhase(
                     source=Location.DECK,
                     count=1,
-                    mandatory=False,  # Player chooses to hit or stand
+                    mandatory=True,
                     condition=Condition(
-                        type=ConditionType.HAND_VALUE,
+                        type=ConditionType.HAND_SIZE,
                         operator=Operator.LT,
-                        value=21  # Can only hit if not at 21
+                        value=7  # Max hand size
                     )
+                ),
+                # Play card to tableau (building your "hand")
+                PlayPhase(
+                    target=Location.TABLEAU,
+                    valid_play_condition=Condition(
+                        type=ConditionType.HAND_SIZE,
+                        operator=Operator.GT,
+                        value=0
+                    ),
+                    min_cards=1,
+                    max_cards=1,
+                    mandatory=False,  # Optional - can hold
+                    pass_if_unable=True
+                ),
+                # Optional discard (to cycle cards)
+                DiscardPhase(
+                    target=Location.DISCARD,
+                    count=1,
+                    mandatory=False
                 )
             ]
         ),
         special_effects=[],
         win_conditions=[
             WinCondition(
-                type="closest_to_target",  # Closest to 21 without busting
+                type="high_score",  # Most points wins
                 threshold=21
+            ),
+            WinCondition(
+                type="empty_hand"
             )
         ],
         scoring_rules=[],
-        max_turns=50,  # Short game - just drawing cards
+        max_turns=100,
         player_count=2
     )
 
@@ -715,26 +778,28 @@ def create_fan_tan_genome() -> GameGenome:
     Sequential building layout game:
     - Start by playing 7s to the center
     - Build up (8, 9, 10, J, Q, K, A) and down (6, 5, 4, 3, 2) from 7s
-    - Must play if able, otherwise pass
+    - Must play if able, otherwise draw and pass
     - First to empty hand wins
 
     Strategic element: holding key cards (6s, 7s, 8s) blocks opponents.
 
-    Simplified version:
-    - Play cards adjacent to existing layout
-    - 7s start each suit
+    Modified for better simulation:
+    - 2 players with 20 cards each
+    - Draw when unable to play (creates comeback potential)
+    - Remaining 12 cards form draw pile
     """
     return GameGenome(
         schema_version="1.0",
         genome_id="fan-tan",
         generation=0,
         setup=SetupRules(
-            cards_per_player=13,  # Full deck split (4 players)
+            cards_per_player=20,  # 2 players × 20 = 40, leaving 12 in deck
             initial_deck="standard_52",
             initial_discard_count=0
         ),
         turn_structure=TurnStructure(
             phases=[
+                # Try to play a card
                 PlayPhase(
                     target=Location.TABLEAU,
                     valid_play_condition=CompoundCondition(
@@ -755,7 +820,19 @@ def create_fan_tan_genome() -> GameGenome:
                     min_cards=1,
                     max_cards=1,
                     mandatory=True,
-                    pass_if_unable=True  # Pass if no valid play
+                    pass_if_unable=True
+                ),
+                # Draw if you couldn't play (penalty that enables comebacks)
+                DrawPhase(
+                    source=Location.DECK,
+                    count=1,
+                    mandatory=False,
+                    condition=Condition(
+                        type=ConditionType.LOCATION_SIZE,
+                        reference="deck",
+                        operator=Operator.GT,
+                        value=0
+                    )
                 )
             ]
         ),
@@ -765,7 +842,7 @@ def create_fan_tan_genome() -> GameGenome:
         ],
         scoring_rules=[],
         max_turns=200,
-        player_count=4
+        player_count=2
     )
 
 
