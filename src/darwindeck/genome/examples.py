@@ -65,27 +65,23 @@ def create_war_genome() -> GameGenome:
 
 
 def create_hearts_genome() -> GameGenome:
-    """Create simplified 2-player Hearts genome using trick-taking extension.
+    """Create classic 4-player Hearts genome using trick-taking extension.
 
-    Two-player Hearts variant:
-    - 2 players, 13 cards each (26 total, rest in unused pile)
+    Classic 4-player Hearts:
+    - 4 players, 13 cards each (full 52-card deck)
     - Must follow suit if able
     - Hearts cannot be led until "broken" (Hearts played when unable to follow suit)
     - Each Heart counts as 1 point (scored automatically)
     - Lowest score at end of tricks wins
-
-    Balance fix: Converted from 4-player to proper 2-player format.
-    With 13 cards each and 13 tricks, both players have equal opportunity.
-    Using most_tricks as alternate win condition for balance.
     """
     return GameGenome(
         schema_version="1.0",
-        genome_id="hearts-simplified",
+        genome_id="hearts-classic",
         generation=0,
         setup=SetupRules(
-            cards_per_player=13,  # 2 players × 13 = 26 cards
+            cards_per_player=13,  # 4 players × 13 = 52 cards (full deck)
             initial_deck="standard_52",
-            initial_discard_count=26,  # Remove half the deck for 2-player
+            initial_discard_count=0,  # Full deck distribution
         ),
         turn_structure=TurnStructure(
             phases=[
@@ -103,7 +99,7 @@ def create_hearts_genome() -> GameGenome:
         win_conditions=[
             WinCondition(
                 type="low_score",  # Lowest score wins (avoid hearts)
-                threshold=13  # Max possible hearts in 2-player
+                threshold=13  # Max possible hearts
             ),
             WinCondition(
                 type="all_hands_empty",
@@ -111,9 +107,9 @@ def create_hearts_genome() -> GameGenome:
             )
         ],
         scoring_rules=[],  # Simplified: scoring handled by trick-taking logic
-        max_turns=200,     # 13 tricks × 2 players
-        player_count=2,    # Proper 2-player format
-        min_turns=26       # At least one full hand
+        max_turns=200,     # 13 tricks × 4 players
+        player_count=4,    # Classic 4-player format
+        min_turns=52       # At least one full hand (13 tricks × 4 players)
     )
 
 
@@ -660,7 +656,7 @@ def create_knockout_whist_genome() -> GameGenome:
     """Create Knock-Out Whist card game genome.
 
     Simple elimination trick-taking game:
-    - Players start with 7 cards
+    - Players start with 7 cards (4 players × 7 = 28 cards dealt)
     - Must follow suit if able
     - Trump suit rotates each round
     - Player who wins most tricks in a round stays in
@@ -671,13 +667,14 @@ def create_knockout_whist_genome() -> GameGenome:
     - Fixed trump (Hearts)
     - Single round for simulation
     - Most tricks wins
+    - 4 players with 7 cards each (24 cards remaining in deck)
     """
     return GameGenome(
         schema_version="1.0",
         genome_id="knockout-whist",
         generation=0,
         setup=SetupRules(
-            cards_per_player=7,
+            cards_per_player=7,  # 4 players × 7 = 28 cards dealt
             initial_deck="standard_52",
             initial_discard_count=0,
             trump_suit=Suit.HEARTS
@@ -706,7 +703,7 @@ def create_knockout_whist_genome() -> GameGenome:
         ],
         scoring_rules=[],
         max_turns=100,
-        player_count=2
+        player_count=4
     )
 
 
@@ -870,33 +867,22 @@ def create_president_genome() -> GameGenome:
     - When all pass, last player to play starts fresh
     - First to empty hand wins (becomes President)
 
-    Balance fix: Smaller starting hands (8 cards) with draw pile.
-    This reduces the impact of initial card distribution and gives
-    both players chances to improve their hands. The responder advantage
-    in climbing games is offset by the leader being able to draw.
+    4-player format (classic):
+    - 4 players × 13 cards = 52 cards (full deck dealt)
+    - No draw pile in traditional President
+    - Rank hierarchy creates interesting dynamics with 4 players
     """
     return GameGenome(
         schema_version="1.0",
         genome_id="president",
         generation=0,
         setup=SetupRules(
-            cards_per_player=8,  # Smaller hands, more draw pile
+            cards_per_player=13,  # 4 players × 13 = 52 cards (full deck)
             initial_deck="standard_52",
             initial_discard_count=0
         ),
         turn_structure=TurnStructure(
             phases=[
-                # Optional draw to get more options
-                DrawPhase(
-                    source=Location.DECK,
-                    count=1,
-                    mandatory=False,
-                    condition=Condition(
-                        type=ConditionType.HAND_SIZE,
-                        operator=Operator.LT,
-                        value=10  # Cap hand size
-                    )
-                ),
                 # Play to beat top card or start new round
                 PlayPhase(
                     target=Location.TABLEAU,
@@ -922,12 +908,6 @@ def create_president_genome() -> GameGenome:
                     max_cards=1,
                     mandatory=True,
                     pass_if_unable=True  # Pass starts new round
-                ),
-                # Optional discard to cycle bad cards
-                DiscardPhase(
-                    target=Location.DISCARD,
-                    count=1,
-                    mandatory=False
                 )
             ]
         ),
@@ -936,8 +916,8 @@ def create_president_genome() -> GameGenome:
             WinCondition(type="empty_hand")
         ],
         scoring_rules=[],
-        max_turns=200,
-        player_count=2
+        max_turns=300,  # Longer for 4 players
+        player_count=4
     )
 
 
