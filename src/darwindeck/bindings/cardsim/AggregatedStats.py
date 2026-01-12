@@ -216,7 +216,28 @@ class AggregatedStats(object):
             return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
         return 0
 
-def AggregatedStatsStart(builder): builder.StartObject(24)
+    # AggregatedStats
+    def LeadChanges(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(52))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint32Flags, o + self._tab.Pos)
+        return 0
+
+    # AggregatedStats
+    def DecisiveTurnPct(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(54))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Float32Flags, o + self._tab.Pos)
+        return 1.0
+
+    # AggregatedStats
+    def ClosestMargin(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(56))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Float32Flags, o + self._tab.Pos)
+        return 1.0
+
+def AggregatedStatsStart(builder): builder.StartObject(27)
 def AggregatedStatsAddTotalGames(builder, totalGames): builder.PrependUint32Slot(0, totalGames, 0)
 def AggregatedStatsAddPlayer0Wins(builder, player0Wins): builder.PrependUint32Slot(1, player0Wins, 0)
 def AggregatedStatsAddPlayer1Wins(builder, player1Wins): builder.PrependUint32Slot(2, player1Wins, 0)
@@ -243,4 +264,7 @@ def AggregatedStatsAddAvgFinalChips(builder, avgFinalChips): builder.PrependUOff
 def AggregatedStatsStartAvgFinalChipsVector(builder, numElems): return builder.StartVector(4, numElems, 4)
 def AggregatedStatsAddFoldRate(builder, foldRate): builder.PrependFloat32Slot(22, foldRate, 0.0)
 def AggregatedStatsAddTotalPotsWon(builder, totalPotsWon): builder.PrependUint64Slot(23, totalPotsWon, 0)
+def AggregatedStatsAddLeadChanges(builder, leadChanges): builder.PrependUint32Slot(24, leadChanges, 0)
+def AggregatedStatsAddDecisiveTurnPct(builder, decisiveTurnPct): builder.PrependFloat32Slot(25, decisiveTurnPct, 1.0)
+def AggregatedStatsAddClosestMargin(builder, closestMargin): builder.PrependFloat32Slot(26, closestMargin, 1.0)
 def AggregatedStatsEnd(builder): return builder.EndObject()
