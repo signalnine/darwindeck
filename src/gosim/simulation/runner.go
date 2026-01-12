@@ -107,6 +107,13 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 		cardsPerPlayer = int(int32(binary.BigEndian.Uint32(genome.Bytecode[setupOffset : setupOffset+4])))
 	}
 
+	// Read starting_chips from genome setup section (offset +8)
+	startingChips := 0
+	if genome.Header.SetupOffset > 0 && genome.Header.SetupOffset+12 <= int32(len(genome.Bytecode)) {
+		setupOffset := genome.Header.SetupOffset
+		startingChips = int(int32(binary.BigEndian.Uint32(genome.Bytecode[setupOffset+8 : setupOffset+12])))
+	}
+
 	// Determine number of players from genome header
 	numPlayers := int(genome.Header.PlayerCount)
 	if numPlayers == 0 || numPlayers > 4 {
@@ -130,6 +137,11 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 		for p := 0; p < numPlayers; p++ {
 			state.DrawCard(uint8(p), engine.LocationDeck)
 		}
+	}
+
+	// Initialize chips if this genome uses betting
+	if startingChips > 0 {
+		state.InitializeChips(startingChips)
 	}
 
 	// Game loop with turn limit protection
@@ -253,6 +265,13 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 		cardsPerPlayer = int(int32(binary.BigEndian.Uint32(genome.Bytecode[setupOffset : setupOffset+4])))
 	}
 
+	// Read starting_chips from genome setup section (offset +8)
+	startingChips := 0
+	if genome.Header.SetupOffset > 0 && genome.Header.SetupOffset+12 <= int32(len(genome.Bytecode)) {
+		setupOffset := genome.Header.SetupOffset
+		startingChips = int(int32(binary.BigEndian.Uint32(genome.Bytecode[setupOffset+8 : setupOffset+12])))
+	}
+
 	numPlayers := int(genome.Header.PlayerCount)
 	if numPlayers == 0 || numPlayers > 4 {
 		numPlayers = 2
@@ -273,6 +292,11 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 		for p := 0; p < numPlayers; p++ {
 			state.DrawCard(uint8(p), engine.LocationDeck)
 		}
+	}
+
+	// Initialize chips if this genome uses betting
+	if startingChips > 0 {
+		state.InitializeChips(startingChips)
 	}
 
 	maxTurns := genome.Header.MaxTurns
