@@ -123,7 +123,7 @@ type WinCondition struct {
 }
 
 // ParseBettingPhaseData extracts betting phase parameters from raw phase data.
-// Expected format: min_bet:4 + max_raises:4 + reserved:13 = 21 bytes
+// Expected format: min_bet:4 + max_raises:4 = 8 bytes
 func ParseBettingPhaseData(data []byte) (*BettingPhaseData, error) {
 	if len(data) < 8 {
 		return nil, errors.New("betting phase data too short: need at least 8 bytes")
@@ -210,8 +210,8 @@ func (g *Genome) parseTurnStructure() error {
 			phaseLen = 6
 		case PhaseTypeTrick: // TrickPhase: lead_suit_required:1 + trump_suit:1 + high_card_wins:1 + breaking_suit:1 = 4 bytes
 			phaseLen = 4
-		case PhaseTypeBetting: // BettingPhase: min_bet:4 + max_raises:4 + reserved:13 = 21 bytes
-			phaseLen = 21
+		case PhaseTypeBetting: // BettingPhase: min_bet:4 + max_raises:4 = 8 bytes
+			phaseLen = 8
 		case PhaseTypeClaim: // ClaimPhase
 			phaseLen = 10
 		default:
