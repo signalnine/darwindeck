@@ -1,8 +1,18 @@
 """Tests for genome bytecode compiler."""
 
+import struct
 import pytest
 from darwindeck.genome.bytecode import BytecodeCompiler, BytecodeHeader, OpCode
 from darwindeck.genome.examples import create_war_genome
+from darwindeck.genome.schema import (
+    BettingPhase,
+    SetupRules,
+    GameGenome,
+    TurnStructure,
+    DrawPhase,
+    Location,
+    WinCondition,
+)
 
 
 def test_header_serialization() -> None:
@@ -97,3 +107,91 @@ def test_compile_effects():
     assert bytecode[7] == 0   # EffectType.SKIP_NEXT -> 0
     assert bytecode[8] == 0   # TARGET_NEXT_PLAYER -> 0
     assert bytecode[9] == 1   # value
+
+
+def test_compile_betting_phase() -> None:
+    """Test BettingPhase compilation produces correct bytes."""
+    compiler = BytecodeCompiler()
+    phase = BettingPhase(min_bet=25, max_raises=4)
+
+    bytecode = compiler._compile_betting_phase(phase)
+
+    # Should be 9 bytes: phase_type:1 + min_bet:4 + max_raises:4
+    assert len(bytecode) == 9
+
+    # Parse the bytecode
+    phase_type = bytecode[0]
+    min_bet = struct.unpack("!I", bytecode[1:5])[0]
+    max_raises = struct.unpack("!I", bytecode[5:9])[0]
+
+    assert phase_type == 5  # PhaseTypeBetting
+    assert min_bet == 25
+    assert max_raises == 4
+
+
+def test_compile_setup_includes_starting_chips() -> None:
+    """Test that starting_chips is included in setup bytes."""
+    compiler = BytecodeCompiler()
+    setup = SetupRules(
+        cards_per_player=5,
+        initial_discard_count=1,
+        starting_chips=1000,
+    )
+
+    bytecode = compiler._compile_setup(setup)
+
+    # Should be 12 bytes: cards_per_player:4 + initial_discard_count:4 + starting_chips:4
+    assert len(bytecode) == 12
+
+    # Parse the bytecode
+    cards_per_player, initial_discard_count, starting_chips = struct.unpack("!iii", bytecode)
+
+    assert cards_per_player == 5
+    assert initial_discard_count == 1
+    assert starting_chips == 1000
+
+
+def test_compile_genome_with_betting_phase() -> None:
+    """Test genome with BettingPhase compiles correctly."""
+    from darwindeck.genome.conditions import Condition, ConditionType, Operator
+
+    # Create a simple genome with a betting phase
+    genome = GameGenome(
+        schema_version="1.0",
+        genome_id="test-betting-genome",
+        generation=0,
+        player_count=2,
+        max_turns=100,
+        setup=SetupRules(
+            cards_per_player=5,
+            initial_discard_count=0,
+            starting_chips=500,
+        ),
+        turn_structure=TurnStructure(
+            phases=[
+                DrawPhase(source=Location.DECK, count=1),
+                BettingPhase(min_bet=10, max_raises=3),
+            ]
+        ),
+        special_effects=[],
+        win_conditions=[WinCondition(type="empty_hand")],
+        scoring_rules=[],
+    )
+
+    compiler = BytecodeCompiler()
+    bytecode = compiler.compile_genome(genome)
+
+    # Should compile without error
+    assert len(bytecode) > 36  # Header + data
+
+    # Header should parse
+    header = BytecodeHeader.from_bytes(bytecode)
+    assert header.version == 1
+    assert header.player_count == 2
+    assert header.max_turns == 100
+
+    # Setup should contain starting_chips
+    setup_start = header.setup_offset
+    setup_bytes = bytecode[setup_start:setup_start + 12]
+    _, _, starting_chips = struct.unpack("!iii", setup_bytes)
+    assert starting_chips == 500
