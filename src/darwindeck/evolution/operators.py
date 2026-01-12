@@ -969,6 +969,11 @@ def create_default_pipeline(
 
         # Win condition mutations
         ModifyWinConditionMutation(probability=min(0.15 * mult, 0.3)),  # 15% (30% aggressive)
+
+        # Special effect mutations
+        AddEffectMutation(probability=min(0.10 * mult, 0.2)),           # 10% (20% aggressive)
+        RemoveEffectMutation(probability=min(0.10 * mult, 0.2)),        # 10% (20% aggressive)
+        MutateEffectMutation(probability=min(0.15 * mult, 0.3)),        # 15% (30% aggressive)
     ]
     return MutationPipeline(operators)
 
