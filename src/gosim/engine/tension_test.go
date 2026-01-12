@@ -228,3 +228,56 @@ func TestTrickAvoidanceLeaderDetector_GetMargin(t *testing.T) {
 		t.Errorf("expected margin≈0.538, got %f", margin)
 	}
 }
+
+func TestChipLeaderDetector_GetLeader(t *testing.T) {
+	detector := &ChipLeaderDetector{}
+
+	state := &GameState{
+		NumPlayers: 3,
+		Players: []PlayerState{
+			{Chips: 500},
+			{Chips: 1200}, // Most chips = leader
+			{Chips: 300},
+		},
+	}
+
+	leader := detector.GetLeader(state)
+	if leader != 1 {
+		t.Errorf("expected leader=1 (most chips), got %d", leader)
+	}
+}
+
+func TestChipLeaderDetector_Tie(t *testing.T) {
+	detector := &ChipLeaderDetector{}
+
+	state := &GameState{
+		NumPlayers: 2,
+		Players: []PlayerState{
+			{Chips: 1000},
+			{Chips: 1000},
+		},
+	}
+
+	leader := detector.GetLeader(state)
+	if leader != -1 {
+		t.Errorf("expected leader=-1 (tie), got %d", leader)
+	}
+}
+
+func TestChipLeaderDetector_GetMargin(t *testing.T) {
+	detector := &ChipLeaderDetector{}
+
+	state := &GameState{
+		NumPlayers: 2,
+		Players: []PlayerState{
+			{Chips: 1500},
+			{Chips: 500},
+		},
+	}
+
+	margin := detector.GetMargin(state)
+	// (1500-500)/2000 = 0.5
+	if margin < 0.49 || margin > 0.51 {
+		t.Errorf("expected margin=0.5, got %f", margin)
+	}
+}
