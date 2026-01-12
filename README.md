@@ -20,7 +20,7 @@ DarwinDeck combines:
 - ⚖️ **First-Player Advantage Detection**: Filters out unbalanced games (>30% FPA)
 - 🔄 **In-Evolution Skill Penalties**: Penalizes unfit games during breeding, not just at the end
 - ⚡ **Parallel Execution**: 360x speedup on 256-core systems
-- 🎮 **16 Seed Games**: War, Hearts, Spades, President, Blackjack, and more
+- 🎮 **18 Seed Games**: Including 4 betting/poker variants for evolution
 - 🚀 **High Throughput**: 800,000+ games/second on large servers
 - 📝 **LLM Descriptions**: Auto-generated game summaries using Claude
 - 📊 **Comprehensive Testing**: 100+ unit/integration tests
@@ -148,33 +148,37 @@ Presets optimize for different game types:
 
 ## Example Games
 
-DarwinDeck includes 16 seed games from Hoyle's Encyclopedia and classic card game collections:
+DarwinDeck includes 18 seed games from Hoyle's Encyclopedia and classic card game collections:
 
-**Luck-based:**
-- **War**: Pure luck baseline
-- **Betting War**: War variant
+| Game | Category | Players | Key Mechanic |
+|------|----------|---------|--------------|
+| **War** | Luck | 2 | Pure luck baseline - card comparison |
+| **Hearts** | Trick-taking | 4 | Avoid penalty cards (hearts, Queen of Spades) |
+| **Spades** | Trick-taking | 4 | Fixed trump suit (spades always trump) |
+| **Scotch Whist** | Trick-taking | 2-4 | Trump-based trick capture |
+| **Knock-Out Whist** | Trick-taking | 2-4 | Elimination - lose a life each round |
+| **Crazy 8s** | Shedding | 2-4 | Match suit/rank, 8s are wild |
+| **Old Maid** | Shedding | 2-4 | Pair matching, avoid the odd card |
+| **President** | Climbing | 4 | Beat previous play, 2 is highest |
+| **Fan Tan** | Sequencing | 2-4 | Build sequences from 7s outward |
+| **Gin Rummy** | Set Collection | 2 | Form melds (sets and runs) |
+| **Go Fish** | Set Collection | 2-4 | Ask for cards, collect books |
+| **Cheat** | Bluffing | 2-4 | Claim cards, challenge lies |
+| **Scopa** | Capturing | 2 | Capture cards summing to target |
+| **Uno** | Shedding | 2-4 | Special effects on cards (skip, reverse, draw) |
 
-**Trick-taking:**
-- **Hearts**: Trick-taking with penalty cards
-- **Scotch Whist**: Trump-based trick-taking
-- **Knock-Out Whist**: Elimination trick-taking
-- **Spades**: Fixed trump (spades always trump)
+### Betting Games
 
-**Shedding/Matching:**
-- **Crazy 8s**: Shedding with wildcards
-- **Old Maid**: Pairing and avoidance
-- **President/Daifugō**: Climbing game (2 is high)
-- **Fan Tan/Sevens**: Sequential building from 7s
+These games use the betting/wagering system with chip management:
 
-**Set Collection:**
-- **Gin Rummy**: Set collection and melds
-- **Go Fish**: Book collection
+| Game | Starting Chips | Min Bet | Description |
+|------|---------------|---------|-------------|
+| **Simple Poker** | 1000 | 10 | 5-card showdown with one betting round |
+| **Draw Poker** | 1000 | 20 | 5-card draw with betting |
+| **Betting War** | 500 | 10 | War variant with wagering |
+| **Blackjack** | 500 | 25 | Beat the dealer to 21 |
 
-**Other Mechanics:**
-- **I Doubt It/Cheat**: Bluffing
-- **Scopa**: Italian capturing game
-- **Draw Poker**: Hand improvement
-- **Blackjack/21**: Hand value targeting
+Betting games support: CHECK, BET, CALL, RAISE, ALL-IN, and FOLD actions with pot management and showdown resolution.
 
 ## Documentation
 
