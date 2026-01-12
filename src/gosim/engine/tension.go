@@ -216,3 +216,50 @@ func (d *TrickAvoidanceLeaderDetector) GetMargin(state *GameState) float32 {
 	}
 	return float32(second-first) / float32(totalTricks)
 }
+
+// ChipLeaderDetector - for betting games (Poker variants)
+// More chips = winning
+type ChipLeaderDetector struct{}
+
+func (d *ChipLeaderDetector) GetLeader(state *GameState) int {
+	if len(state.Players) < 2 {
+		return -1
+	}
+	maxChips := state.Players[0].Chips
+	leader := 0
+	tied := false
+	for i := 1; i < len(state.Players); i++ {
+		if state.Players[i].Chips > maxChips {
+			maxChips = state.Players[i].Chips
+			leader = i
+			tied = false
+		} else if state.Players[i].Chips == maxChips {
+			tied = true
+		}
+	}
+	if tied {
+		return -1
+	}
+	return leader
+}
+
+func (d *ChipLeaderDetector) GetMargin(state *GameState) float32 {
+	if len(state.Players) < 2 {
+		return 0
+	}
+	var first, second int64 = 0, 0
+	var totalChips int64 = 0
+	for _, p := range state.Players {
+		totalChips += p.Chips
+		if p.Chips > first {
+			second = first
+			first = p.Chips
+		} else if p.Chips > second {
+			second = p.Chips
+		}
+	}
+	if totalChips == 0 {
+		return 0
+	}
+	return float32(first-second) / float32(totalChips)
+}
