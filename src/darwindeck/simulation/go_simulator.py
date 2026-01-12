@@ -152,6 +152,10 @@ class GoSimulator:
                 total_challenges=result.TotalChallenges(),
                 successful_bluffs=result.SuccessfulBluffs(),
                 successful_catches=result.SuccessfulCatches(),
+                # Tension curve metrics
+                lead_changes=result.LeadChanges(),
+                decisive_turn_pct=result.DecisiveTurnPct(),
+                closest_margin=result.ClosestMargin(),
             )
         except Exception as e:
             # Return error results for simulation failures
@@ -298,6 +302,10 @@ class GoSimulator:
                 total_challenges=result.TotalChallenges(),
                 successful_bluffs=result.SuccessfulBluffs(),
                 successful_catches=result.SuccessfulCatches(),
+                # Tension curve metrics
+                lead_changes=result.LeadChanges(),
+                decisive_turn_pct=result.DecisiveTurnPct(),
+                closest_margin=result.ClosestMargin(),
             )
         except Exception as e:
             return SimulationResults(
