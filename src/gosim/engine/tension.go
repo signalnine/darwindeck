@@ -71,3 +71,54 @@ func (d *ScoreLeaderDetector) GetMargin(state *GameState) float32 {
 	}
 	return float32(first-second) / float32(first)
 }
+
+// HandSizeLeaderDetector - for shedding games (Crazy 8s, President)
+// Fewer cards = winning
+type HandSizeLeaderDetector struct{}
+
+func (d *HandSizeLeaderDetector) GetLeader(state *GameState) int {
+	if len(state.Players) < 2 {
+		return -1
+	}
+	minCards := len(state.Players[0].Hand)
+	leader := 0
+	tied := false
+	for i := 1; i < len(state.Players); i++ {
+		cards := len(state.Players[i].Hand)
+		if cards < minCards {
+			minCards = cards
+			leader = i
+			tied = false
+		} else if cards == minCards {
+			tied = true
+		}
+	}
+	if tied {
+		return -1
+	}
+	return leader
+}
+
+func (d *HandSizeLeaderDetector) GetMargin(state *GameState) float32 {
+	if len(state.Players) < 2 {
+		return 0
+	}
+	first, second := 999, 999
+	maxCards := 0
+	for _, p := range state.Players {
+		cards := len(p.Hand)
+		if cards > maxCards {
+			maxCards = cards
+		}
+		if cards < first {
+			second = first
+			first = cards
+		} else if cards < second {
+			second = cards
+		}
+	}
+	if maxCards == 0 || second == 999 {
+		return 0
+	}
+	return float32(second-first) / float32(maxCards)
+}
