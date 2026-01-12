@@ -12,6 +12,7 @@ This document tracks planned features, known limitations, and future work.
 - Parallel execution (360x speedup on 256 cores)
 - LLM-powered game description generation
 - Multiplayer support (2-4 players)
+- Card-triggered special effects
 
 ---
 
@@ -26,13 +27,6 @@ This document tracks planned features, known limitations, and future work.
 - [ ] Actions: `BET`, `CALL`, `RAISE`, `FOLD`, `CHECK`
 
 **Use cases:** Poker, Blackjack with betting
-
-**Special Effects System**
-- [ ] `SpecialEffect` - Card-triggered actions
-- [ ] `ActionType` enum for effect actions
-- [ ] Trigger conditions (rank, suit, location)
-
-**Use cases:** Slapjack (Jack triggers pile capture), Uno (Draw 4, Skip, Reverse)
 
 **Team Play**
 - [ ] Partnership tracking
@@ -154,6 +148,13 @@ This document tracks planned features, known limitations, and future work.
 - [x] CGo bridge for N-player serialization
 - [x] Python fitness metrics for N-player games
 - [x] 4-player seed games (Hearts, Spades, President, Knock-Out Whist)
+
+### Special Effects System (Complete)
+- [x] EffectType enum and SpecialEffect dataclass
+- [x] Go execution (ApplyEffect, AdvanceTurn)
+- [x] Bytecode encoding and parsing
+- [x] Evolution mutation operators
+- [x] Uno-style seed game
 
 ---
 
