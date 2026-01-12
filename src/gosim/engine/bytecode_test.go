@@ -129,3 +129,72 @@ func TestParseInvalidOffsets(t *testing.T) {
 		t.Error("Expected error for invalid offset")
 	}
 }
+
+func TestParseEffects(t *testing.T) {
+	// Bytecode: HEADER(60), count(2), effect1(4 bytes), effect2(4 bytes)
+	data := []byte{
+		60, 2,          // Header, count=2
+		0, 2, 0, 2,     // TWO, DRAW_CARDS, NEXT_PLAYER, value=2
+		9, 0, 0, 1,     // JACK, SKIP_NEXT, NEXT_PLAYER, value=1
+	}
+
+	effects, offset, err := parseEffects(data, 0)
+	if err != nil {
+		t.Fatalf("parseEffects failed: %v", err)
+	}
+
+	if offset != 10 {
+		t.Errorf("offset should be 10, got %d", offset)
+	}
+
+	if len(effects) != 2 {
+		t.Fatalf("should have 2 effects, got %d", len(effects))
+	}
+
+	// Check effect for rank 0 (TWO)
+	e1, ok := effects[0]
+	if !ok {
+		t.Fatal("missing effect for rank 0")
+	}
+	if e1.EffectType != EFFECT_DRAW_CARDS || e1.Value != 2 {
+		t.Errorf("effect 1: expected DRAW_CARDS/2, got %d/%d", e1.EffectType, e1.Value)
+	}
+
+	// Check effect for rank 9 (JACK)
+	e2, ok := effects[9]
+	if !ok {
+		t.Fatal("missing effect for rank 9")
+	}
+	if e2.EffectType != EFFECT_SKIP_NEXT || e2.Value != 1 {
+		t.Errorf("effect 2: expected SKIP_NEXT/1, got %d/%d", e2.EffectType, e2.Value)
+	}
+}
+
+func TestParseEffectsBoundsCheck(t *testing.T) {
+	// Truncated bytecode - says 2 effects but only has 1
+	data := []byte{
+		60, 2,          // Header, count=2
+		0, 2, 0, 2,     // Only 1 effect
+	}
+
+	_, _, err := parseEffects(data, 0)
+	if err == nil {
+		t.Error("should fail on truncated data")
+	}
+}
+
+func TestParseEffectsEmpty(t *testing.T) {
+	// No effects section - different opcode
+	data := []byte{99, 0, 0}
+
+	effects, offset, err := parseEffects(data, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if offset != 0 {
+		t.Errorf("offset should be 0 (no effects), got %d", offset)
+	}
+	if len(effects) != 0 {
+		t.Errorf("should have 0 effects, got %d", len(effects))
+	}
+}
