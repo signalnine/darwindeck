@@ -763,3 +763,273 @@ func TestAwardPot_ThreeWayOddSplit(t *testing.T) {
 		t.Errorf("Expected pot to be 0 after award, got %d", gs.Pot)
 	}
 }
+
+// ============================================================================
+// AI Betting Selection Tests
+// ============================================================================
+
+func TestSelectRandomBettingAction(t *testing.T) {
+	moves := []BettingAction{BettingCheck, BettingBet, BettingFold}
+
+	// Test with deterministic rng that always returns 0
+	result := SelectRandomBettingAction(moves, func(n int) int { return 0 })
+	if result != BettingCheck {
+		t.Errorf("Expected BettingCheck (first element), got %d", result)
+	}
+
+	// Test with deterministic rng that returns 1
+	result = SelectRandomBettingAction(moves, func(n int) int { return 1 })
+	if result != BettingBet {
+		t.Errorf("Expected BettingBet (second element), got %d", result)
+	}
+
+	// Test with deterministic rng that returns last index
+	result = SelectRandomBettingAction(moves, func(n int) int { return n - 1 })
+	if result != BettingFold {
+		t.Errorf("Expected BettingFold (last element), got %d", result)
+	}
+}
+
+func TestSelectRandomBettingAction_EmptyMoves(t *testing.T) {
+	moves := []BettingAction{}
+
+	result := SelectRandomBettingAction(moves, func(n int) int { return 0 })
+	if result != BettingFold {
+		t.Errorf("Expected BettingFold as fallback for empty moves, got %d", result)
+	}
+}
+
+func TestSelectGreedyBettingAction_StrongHand(t *testing.T) {
+	gs := GetState()
+	defer PutState(gs)
+
+	// Strong hand (0.8 > 0.7) should prefer Raise > Bet > AllIn
+	strongHandStrength := 0.8
+
+	// Test with Raise available
+	moves := []BettingAction{BettingCall, BettingRaise, BettingFold}
+	result := SelectGreedyBettingAction(gs, moves, strongHandStrength)
+	if result != BettingRaise {
+		t.Errorf("Strong hand with Raise available: expected BettingRaise, got %d", result)
+	}
+
+	// Test without Raise but with Bet
+	moves = []BettingAction{BettingCheck, BettingBet}
+	result = SelectGreedyBettingAction(gs, moves, strongHandStrength)
+	if result != BettingBet {
+		t.Errorf("Strong hand with Bet available: expected BettingBet, got %d", result)
+	}
+
+	// Test without Raise or Bet but with AllIn
+	moves = []BettingAction{BettingCheck, BettingAllIn}
+	result = SelectGreedyBettingAction(gs, moves, strongHandStrength)
+	if result != BettingAllIn {
+		t.Errorf("Strong hand with only AllIn: expected BettingAllIn, got %d", result)
+	}
+}
+
+func TestSelectGreedyBettingAction_MediumHand(t *testing.T) {
+	gs := GetState()
+	defer PutState(gs)
+
+	// Medium hand (0.5 > 0.3 but <= 0.7) should prefer Call > Check
+	mediumHandStrength := 0.5
+
+	// Test with Call available
+	moves := []BettingAction{BettingCall, BettingRaise, BettingFold}
+	result := SelectGreedyBettingAction(gs, moves, mediumHandStrength)
+	if result != BettingCall {
+		t.Errorf("Medium hand with Call available: expected BettingCall, got %d", result)
+	}
+
+	// Test without Call but with Check
+	moves = []BettingAction{BettingCheck, BettingBet}
+	result = SelectGreedyBettingAction(gs, moves, mediumHandStrength)
+	if result != BettingCheck {
+		t.Errorf("Medium hand with Check available: expected BettingCheck, got %d", result)
+	}
+}
+
+func TestSelectGreedyBettingAction_WeakHand(t *testing.T) {
+	gs := GetState()
+	defer PutState(gs)
+
+	// Weak hand (<= 0.3) should prefer Check > Fold
+	weakHandStrength := 0.2
+
+	// Test with Check available
+	moves := []BettingAction{BettingCheck, BettingBet, BettingFold}
+	result := SelectGreedyBettingAction(gs, moves, weakHandStrength)
+	if result != BettingCheck {
+		t.Errorf("Weak hand with Check available: expected BettingCheck, got %d", result)
+	}
+
+	// Test without Check - should Fold
+	moves = []BettingAction{BettingCall, BettingRaise, BettingFold}
+	result = SelectGreedyBettingAction(gs, moves, weakHandStrength)
+	if result != BettingFold {
+		t.Errorf("Weak hand without Check: expected BettingFold, got %d", result)
+	}
+}
+
+func TestSelectGreedyBettingAction_VeryWeakHand(t *testing.T) {
+	gs := GetState()
+	defer PutState(gs)
+
+	// Very weak hand (0.0) should check if possible, otherwise fold
+	veryWeakHandStrength := 0.0
+
+	// With check available
+	moves := []BettingAction{BettingCheck, BettingBet}
+	result := SelectGreedyBettingAction(gs, moves, veryWeakHandStrength)
+	if result != BettingCheck {
+		t.Errorf("Very weak hand with Check: expected BettingCheck, got %d", result)
+	}
+
+	// Without check available
+	moves = []BettingAction{BettingCall, BettingFold}
+	result = SelectGreedyBettingAction(gs, moves, veryWeakHandStrength)
+	if result != BettingFold {
+		t.Errorf("Very weak hand without Check: expected BettingFold, got %d", result)
+	}
+}
+
+func TestEvaluateHandStrength_HighCard(t *testing.T) {
+	// Low card only - should have low score
+	hand := []Card{
+		{Rank: 2, Suit: 0}, // 4 (rank 2 = "4" in real card)
+	}
+	strength := EvaluateHandStrength(hand)
+
+	// High card of 4 (rank 2) -> 2/13 * 0.4 = ~0.062
+	// No pairs -> 0
+	// Total ~0.062
+	if strength >= 0.2 {
+		t.Errorf("High card 4 should have low strength (< 0.2), got %f", strength)
+	}
+}
+
+func TestEvaluateHandStrength_HighCardAce(t *testing.T) {
+	// Ace high card - should have higher score
+	hand := []Card{
+		{Rank: 0, Suit: 0}, // Ace
+		{Rank: 2, Suit: 1}, // 4
+	}
+	strength := EvaluateHandStrength(hand)
+
+	// Ace (rank 0 -> effective 13) -> 13/13 * 0.4 = 0.4
+	// No pairs -> 0
+	// Total 0.4
+	if strength < 0.35 || strength > 0.45 {
+		t.Errorf("Ace high should have strength around 0.4, got %f", strength)
+	}
+}
+
+func TestEvaluateHandStrength_Pair(t *testing.T) {
+	// Pair of 7s
+	hand := []Card{
+		{Rank: 5, Suit: 0}, // 7
+		{Rank: 5, Suit: 1}, // 7
+		{Rank: 2, Suit: 2}, // 4
+	}
+	strength := EvaluateHandStrength(hand)
+
+	// Pair (maxCount=2) -> (2-1) * 0.2 = 0.2
+	// High card 7 (rank 5) -> 5/13 * 0.4 = ~0.154
+	// Total ~0.354
+	if strength < 0.3 || strength > 0.45 {
+		t.Errorf("Pair of 7s should have medium strength (0.3-0.45), got %f", strength)
+	}
+}
+
+func TestEvaluateHandStrength_Trips(t *testing.T) {
+	// Three of a kind (trips)
+	hand := []Card{
+		{Rank: 8, Suit: 0}, // 10
+		{Rank: 8, Suit: 1}, // 10
+		{Rank: 8, Suit: 2}, // 10
+		{Rank: 2, Suit: 3}, // 4
+	}
+	strength := EvaluateHandStrength(hand)
+
+	// Trips (maxCount=3) -> (3-1) * 0.2 = 0.4
+	// High card 10 (rank 8) -> 8/13 * 0.4 = ~0.246
+	// Total ~0.646
+	if strength < 0.55 || strength > 0.75 {
+		t.Errorf("Trips should have high strength (0.55-0.75), got %f", strength)
+	}
+}
+
+func TestEvaluateHandStrength_Quads(t *testing.T) {
+	// Four of a kind (quads)
+	hand := []Card{
+		{Rank: 10, Suit: 0}, // Jack
+		{Rank: 10, Suit: 1}, // Jack
+		{Rank: 10, Suit: 2}, // Jack
+		{Rank: 10, Suit: 3}, // Jack
+	}
+	strength := EvaluateHandStrength(hand)
+
+	// Quads (maxCount=4) -> (4-1) * 0.2 = 0.6
+	// High card Jack (rank 10) -> 10/13 * 0.4 = ~0.308
+	// Total ~0.908
+	if strength < 0.8 || strength > 1.0 {
+		t.Errorf("Quads should have very high strength (0.8-1.0), got %f", strength)
+	}
+}
+
+func TestEvaluateHandStrength_EmptyHand(t *testing.T) {
+	hand := []Card{}
+	strength := EvaluateHandStrength(hand)
+
+	if strength != 0.0 {
+		t.Errorf("Empty hand should have strength 0.0, got %f", strength)
+	}
+}
+
+func TestEvaluateHandStrength_PairOfAces(t *testing.T) {
+	// Pair of Aces - should be strong
+	hand := []Card{
+		{Rank: 0, Suit: 0}, // Ace
+		{Rank: 0, Suit: 1}, // Ace
+	}
+	strength := EvaluateHandStrength(hand)
+
+	// Pair (maxCount=2) -> (2-1) * 0.2 = 0.2
+	// Ace high (rank 0 -> effective 13) -> 13/13 * 0.4 = 0.4
+	// Total 0.6
+	if strength < 0.55 || strength > 0.65 {
+		t.Errorf("Pair of Aces should have strength around 0.6, got %f", strength)
+	}
+}
+
+func TestContainsBettingAction(t *testing.T) {
+	moves := []BettingAction{BettingCheck, BettingBet, BettingFold}
+
+	if !containsBettingAction(moves, BettingCheck) {
+		t.Error("Expected containsBettingAction to find BettingCheck")
+	}
+	if !containsBettingAction(moves, BettingBet) {
+		t.Error("Expected containsBettingAction to find BettingBet")
+	}
+	if !containsBettingAction(moves, BettingFold) {
+		t.Error("Expected containsBettingAction to find BettingFold")
+	}
+	if containsBettingAction(moves, BettingRaise) {
+		t.Error("Expected containsBettingAction to NOT find BettingRaise")
+	}
+	if containsBettingAction(moves, BettingCall) {
+		t.Error("Expected containsBettingAction to NOT find BettingCall")
+	}
+	if containsBettingAction(moves, BettingAllIn) {
+		t.Error("Expected containsBettingAction to NOT find BettingAllIn")
+	}
+}
+
+func TestContainsBettingAction_EmptySlice(t *testing.T) {
+	moves := []BettingAction{}
+
+	if containsBettingAction(moves, BettingCheck) {
+		t.Error("Expected containsBettingAction to return false for empty slice")
+	}
+}
