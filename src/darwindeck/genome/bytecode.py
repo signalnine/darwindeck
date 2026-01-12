@@ -14,6 +14,7 @@ from darwindeck.genome.schema import (
     DiscardPhase,
     TrickPhase,
     ClaimPhase,
+    BettingPhase,
     WinCondition,
     Location,
     EffectType,
@@ -206,8 +207,11 @@ class BytecodeCompiler:
         return header.to_bytes() + setup_bytes + turn_bytes + win_bytes + score_bytes
 
     def _compile_setup(self, setup: SetupRules) -> bytes:
-        """Encode setup rules."""
-        return struct.pack("!ii", setup.cards_per_player, setup.initial_discard_count)
+        """Encode setup rules.
+
+        Format: cards_per_player:4 + initial_discard_count:4 + starting_chips:4
+        """
+        return struct.pack("!iii", setup.cards_per_player, setup.initial_discard_count, setup.starting_chips)
 
     def _compile_turn_structure(self, turn: TurnStructure) -> bytes:
         """Encode turn phases.
@@ -229,6 +233,8 @@ class BytecodeCompiler:
                 result += self._compile_trick_phase(phase)
             elif isinstance(phase, ClaimPhase):
                 result += self._compile_claim_phase(phase)
+            elif isinstance(phase, BettingPhase):
+                result += self._compile_betting_phase(phase)
             else:
                 # Unknown phase type, skip
                 pass
@@ -334,6 +340,18 @@ class BytecodeCompiler:
         return struct.pack("!BBBBBBBBBBB", phase_type, min_cards, max_cards,
                           sequential_rank, allow_challenge, pile_penalty,
                           0, 0, 0, 0, 0)  # 5 reserved bytes
+
+    def _compile_betting_phase(self, phase: BettingPhase) -> bytes:
+        """Encode BettingPhase to bytecode.
+
+        Go format: phase_type:1 + min_bet:4 + max_raises:4
+        Total: 9 bytes (1 type + 8 data)
+        """
+        phase_type = 5  # BettingPhase (matches PhaseTypeBetting in Go)
+        min_bet = phase.min_bet
+        max_raises = phase.max_raises
+
+        return struct.pack("!BII", phase_type, min_bet, max_raises)
 
     def _suit_to_code(self, suit) -> int:
         """Map Suit enum to code."""
