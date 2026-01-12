@@ -36,6 +36,11 @@ type GameMetrics struct {
 	TotalChallenges    uint64 // Number of challenges made
 	SuccessfulBluffs   uint64 // Bluffs that weren't challenged (opponent passed)
 	SuccessfulCatches  uint64 // Challenges that caught a bluff
+
+	// Tension curve metrics
+	LeadChanges     uint32  // Number of times the lead changed hands
+	DecisiveTurnPct float32 // Fraction of turns with margin >= 50% of max possible
+	ClosestMargin   float32 // Smallest margin observed (normalized 0-1)
 }
 
 // GameResult holds the outcome of a single game
