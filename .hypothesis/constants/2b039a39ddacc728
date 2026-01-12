@@ -1,4 +1,0 @@
-# file: /home/gabe/cards-playtest/src/darwindeck/evolution/operators.py
-# hypothesis_version: 6.150.0
-
-[-0.2, 0.05, 0.1, 0.12, 0.15, 0.2, 0.25, 0.3, 0.4, 0.6, 0.7, 1.0, 2.0, 100, 200, 500, 1000, 'add_condition', 'all_hands_empty', 'best_hand', 'capture_all', 'cards_per_player', 'change_threshold', 'change_type', 'claim', 'discard', 'draw', 'empty_hand', 'first_to_score', 'high_score', 'low_score', 'max_turns', 'most_captured', 'operator', 'play', 'player_count', 'rank', 'target', 'trick', 'type', 'value']

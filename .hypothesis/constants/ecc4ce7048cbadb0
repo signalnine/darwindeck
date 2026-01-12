@@ -1,4 +1,0 @@
-# file: /home/gabe/cards-playtest/src/darwindeck/genome/bytecode.py
-# hypothesis_version: 6.150.0
-
-[255, 18446744073709551615, '!B', '!BBBBB', '!BBBBBBBBBBB', '!BBBBBI', '!BBIB', '!BBiB', '!BI', '!BII', '!Bi', '!I', '!IQIIiiii', '!i', '!iii', 'AND', 'BytecodeHeader', 'all_hands_empty', 'best_hand', 'capture_all', 'empty_hand', 'first_to_score', 'high_score', 'last_played', 'low_score', 'most_captured', 'top_discard', 'valid_plays']

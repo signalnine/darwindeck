@@ -1,4 +1,0 @@
-# file: /home/gabe/cards-playtest/src/darwindeck/simulation/engine.py
-# hypothesis_version: 6.150.0
-
-[1000, 'history', 'turn_count', 'winner']

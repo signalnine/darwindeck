@@ -1,4 +1,0 @@
-# file: /home/gabe/cards-playtest/src/darwindeck/evolution/skill_evaluation.py
-# hypothesis_version: 6.150.0
-
-[0.0, 0.5, 60.0, 100, 500, 1000, 2000, 'EVOLUTION_WORKERS', 'greedy', 'mcts', 'mcts1000', 'mcts2000', 'mcts500', 'random', 'spawn']
