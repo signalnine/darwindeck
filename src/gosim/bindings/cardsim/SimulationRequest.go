@@ -178,8 +178,20 @@ func (rcv *SimulationRequest) MutatePlayerCount(n byte) bool {
 	return rcv._tab.MutateByteSlot(20, n)
 }
 
+func (rcv *SimulationRequest) StartingChips() uint32 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(22))
+	if o != 0 {
+		return rcv._tab.GetUint32(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *SimulationRequest) MutateStartingChips(n uint32) bool {
+	return rcv._tab.MutateUint32Slot(22, n)
+}
+
 func SimulationRequestStart(builder *flatbuffers.Builder) {
-	builder.StartObject(9)
+	builder.StartObject(10)
 }
 func SimulationRequestAddGenomeBytecode(builder *flatbuffers.Builder, genomeBytecode flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(genomeBytecode), 0)
@@ -213,6 +225,9 @@ func SimulationRequestStartAiTypesVector(builder *flatbuffers.Builder, numElems 
 }
 func SimulationRequestAddPlayerCount(builder *flatbuffers.Builder, playerCount byte) {
 	builder.PrependByteSlot(8, playerCount, 0)
+}
+func SimulationRequestAddStartingChips(builder *flatbuffers.Builder, startingChips uint32) {
+	builder.PrependUint32Slot(9, startingChips, 0)
 }
 func SimulationRequestEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
