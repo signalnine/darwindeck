@@ -85,6 +85,11 @@ class SimulationResults:
     successful_bluffs: int = 0
     successful_catches: int = 0
 
+    # Tension curve metrics
+    lead_changes: int = 0
+    decisive_turn_pct: float = 1.0
+    closest_margin: float = 1.0
+
     @property
     def player0_wins(self) -> int:
         """Backward compatibility property."""
