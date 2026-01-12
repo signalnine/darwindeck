@@ -342,8 +342,44 @@ func (rcv *AggregatedStats) MutateTotalPotsWon(n uint64) bool {
 	return rcv._tab.MutateUint64Slot(50, n)
 }
 
+func (rcv *AggregatedStats) LeadChanges() uint32 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(52))
+	if o != 0 {
+		return rcv._tab.GetUint32(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *AggregatedStats) MutateLeadChanges(n uint32) bool {
+	return rcv._tab.MutateUint32Slot(52, n)
+}
+
+func (rcv *AggregatedStats) DecisiveTurnPct() float32 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(54))
+	if o != 0 {
+		return rcv._tab.GetFloat32(o + rcv._tab.Pos)
+	}
+	return 1.0
+}
+
+func (rcv *AggregatedStats) MutateDecisiveTurnPct(n float32) bool {
+	return rcv._tab.MutateFloat32Slot(54, n)
+}
+
+func (rcv *AggregatedStats) ClosestMargin() float32 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(56))
+	if o != 0 {
+		return rcv._tab.GetFloat32(o + rcv._tab.Pos)
+	}
+	return 1.0
+}
+
+func (rcv *AggregatedStats) MutateClosestMargin(n float32) bool {
+	return rcv._tab.MutateFloat32Slot(56, n)
+}
+
 func AggregatedStatsStart(builder *flatbuffers.Builder) {
-	builder.StartObject(24)
+	builder.StartObject(27)
 }
 func AggregatedStatsAddTotalGames(builder *flatbuffers.Builder, totalGames uint32) {
 	builder.PrependUint32Slot(0, totalGames, 0)
@@ -422,6 +458,15 @@ func AggregatedStatsAddFoldRate(builder *flatbuffers.Builder, foldRate float32) 
 }
 func AggregatedStatsAddTotalPotsWon(builder *flatbuffers.Builder, totalPotsWon uint64) {
 	builder.PrependUint64Slot(23, totalPotsWon, 0)
+}
+func AggregatedStatsAddLeadChanges(builder *flatbuffers.Builder, leadChanges uint32) {
+	builder.PrependUint32Slot(24, leadChanges, 0)
+}
+func AggregatedStatsAddDecisiveTurnPct(builder *flatbuffers.Builder, decisiveTurnPct float32) {
+	builder.PrependFloat32Slot(25, decisiveTurnPct, 1.0)
+}
+func AggregatedStatsAddClosestMargin(builder *flatbuffers.Builder, closestMargin float32) {
+	builder.PrependFloat32Slot(26, closestMargin, 1.0)
 }
 func AggregatedStatsEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
