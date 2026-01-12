@@ -1,5 +1,15 @@
 # Betting/Wagering System Implementation Plan
 
+**Status:** ✅ **COMPLETE** (2026-01-12)
+
+All 18 tasks implemented:
+- Tasks 1-12: Core betting system (schema, serialization, Go simulation, mutations, tests)
+- Tasks 13-18: Simulation integration (movegen, runner loop, chip init)
+
+Commits: ca907d9, 52ef1e9, ed03863, b043c0b, fe3d242
+
+---
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Add betting/wagering mechanics to enable poker-style games through evolution.
