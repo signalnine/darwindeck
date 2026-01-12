@@ -8,6 +8,16 @@ const (
 	MovePass      = -2 // Accept the claim without challenging
 )
 
+// Special CardIndex values for BettingPhase
+const (
+	MoveBettingCheck = -10
+	MoveBettingBet   = -11
+	MoveBettingCall  = -12
+	MoveBettingRaise = -13
+	MoveBettingAllIn = -14
+	MoveBettingFold  = -15
+)
+
 // LegalMove represents a possible action
 type LegalMove struct {
 	PhaseIndex int
@@ -201,6 +211,26 @@ func GenerateLegalMoves(state *GameState, genome *Genome) []LegalMove {
 				}
 			}
 
+		case 5: // BettingPhase
+			// Parse betting phase data
+			bettingPhase, err := ParseBettingPhaseData(phase.Data)
+			if err != nil || bettingPhase == nil {
+				continue
+			}
+
+			// Generate betting moves for current player
+			bettingMoves := GenerateBettingMoves(state, bettingPhase, int(currentPlayer))
+
+			// Map BettingAction to LegalMove using negative CardIndex encoding
+			// -10=Check, -11=Bet, -12=Call, -13=Raise, -14=AllIn, -15=Fold
+			for _, action := range bettingMoves {
+				moves = append(moves, LegalMove{
+					PhaseIndex: phaseIdx,
+					CardIndex:  -10 - int(action), // BettingCheck=0 -> -10, etc.
+					TargetLoc:  LocationDeck,      // Unused but required
+				})
+			}
+
 		case 6: // ClaimPhase - Bluffing/Cheat
 			if state.CurrentClaim == nil {
 				// No active claim - current player makes a claim
@@ -355,6 +385,19 @@ func ApplyMove(state *GameState, move *LegalMove, genome *Genome) {
 				return // Don't advance turn normally - resolveTrick sets next player
 			}
 		}
+
+	case 5: // BettingPhase
+		// Decode betting action from CardIndex
+		// -10=Check, -11=Bet, -12=Call, -13=Raise, -14=AllIn, -15=Fold
+		if move.CardIndex <= MoveBettingCheck && move.CardIndex >= MoveBettingFold {
+			action := BettingAction(-(move.CardIndex + 10))
+
+			bettingPhase, err := ParseBettingPhaseData(phase.Data)
+			if err == nil && bettingPhase != nil {
+				ApplyBettingAction(state, bettingPhase, int(currentPlayer), action)
+			}
+		}
+		// Note: Turn advancement handled by caller for betting rounds
 
 	case 6: // ClaimPhase - Bluffing/Cheat
 		if move.CardIndex >= 0 {
