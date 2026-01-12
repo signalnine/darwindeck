@@ -157,14 +157,12 @@ class TestBettingSimulation:
         except OSError as e:
             return False, f"Library loading error: {e}"
 
-    @pytest.mark.skipif(True, reason="CGo BettingPhase support not yet implemented")
     def test_betting_simulation_completes(self):
         """Game with BettingPhase runs without infinite loop.
 
-        NOTE: This test is skipped until the Go simulator implements
-        BettingPhase support. The betting mutations and serialization
-        work correctly in Python, but the Go bytecode interpreter
-        doesn't yet handle BettingPhase opcodes.
+        This test verifies that the Go simulator can execute games
+        with BettingPhase. The test uses the CGo bridge to run
+        100 poker games and verifies they complete successfully.
         """
         available, reason = self._check_cgo_betting_support()
         if not available:
