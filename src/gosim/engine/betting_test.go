@@ -463,3 +463,303 @@ func TestBettingActionString(t *testing.T) {
 		t.Errorf("Expected BettingFold to be 5, got %d", BettingFold)
 	}
 }
+
+// Tests for round resolution functions
+
+func TestCountActivePlayers(t *testing.T) {
+	gs := GetState()
+	defer PutState(gs)
+
+	// All players active by default (4 players in pool)
+	count := CountActivePlayers(gs)
+	if count != 4 {
+		t.Errorf("Expected 4 active players by default, got %d", count)
+	}
+
+	// Fold one player
+	gs.Players[0].HasFolded = true
+	count = CountActivePlayers(gs)
+	if count != 3 {
+		t.Errorf("Expected 3 active players after one fold, got %d", count)
+	}
+
+	// Fold another
+	gs.Players[2].HasFolded = true
+	count = CountActivePlayers(gs)
+	if count != 2 {
+		t.Errorf("Expected 2 active players after two folds, got %d", count)
+	}
+}
+
+func TestCountActingPlayers(t *testing.T) {
+	gs := GetState()
+	defer PutState(gs)
+
+	// Give players chips so they can act
+	gs.Players[0].Chips = 100
+	gs.Players[1].Chips = 100
+	gs.Players[2].Chips = 100
+	gs.Players[3].Chips = 100
+
+	count := CountActingPlayers(gs)
+	if count != 4 {
+		t.Errorf("Expected 4 acting players, got %d", count)
+	}
+
+	// Fold one player
+	gs.Players[0].HasFolded = true
+	count = CountActingPlayers(gs)
+	if count != 3 {
+		t.Errorf("Expected 3 acting players after one fold, got %d", count)
+	}
+
+	// One player goes all-in
+	gs.Players[1].IsAllIn = true
+	count = CountActingPlayers(gs)
+	if count != 2 {
+		t.Errorf("Expected 2 acting players after one all-in, got %d", count)
+	}
+
+	// One player has no chips
+	gs.Players[2].Chips = 0
+	count = CountActingPlayers(gs)
+	if count != 1 {
+		t.Errorf("Expected 1 acting player after one has no chips, got %d", count)
+	}
+}
+
+func TestAllBetsMatched(t *testing.T) {
+	gs := GetState()
+	defer PutState(gs)
+
+	gs.Players[0].Chips = 100
+	gs.Players[1].Chips = 100
+	gs.CurrentBet = 20
+
+	// Both players have matched the current bet
+	gs.Players[0].CurrentBet = 20
+	gs.Players[1].CurrentBet = 20
+	// Fold other players so they don't affect the test
+	gs.Players[2].HasFolded = true
+	gs.Players[3].HasFolded = true
+
+	if !AllBetsMatched(gs) {
+		t.Error("Expected bets to be matched when all players have CurrentBet == gs.CurrentBet")
+	}
+}
+
+func TestAllBetsMatched_UnmatchedBet(t *testing.T) {
+	gs := GetState()
+	defer PutState(gs)
+
+	gs.Players[0].Chips = 100
+	gs.Players[1].Chips = 100
+	gs.CurrentBet = 20
+
+	// Player 0 has matched, player 1 has not
+	gs.Players[0].CurrentBet = 20
+	gs.Players[1].CurrentBet = 10
+
+	if AllBetsMatched(gs) {
+		t.Error("Expected bets to NOT be matched when player 1 hasn't matched")
+	}
+}
+
+func TestAllBetsMatched_FoldedPlayerIgnored(t *testing.T) {
+	gs := GetState()
+	defer PutState(gs)
+
+	gs.Players[0].Chips = 100
+	gs.Players[1].Chips = 100
+	gs.CurrentBet = 20
+
+	// Player 0 matched, player 1 folded with unmatched bet
+	gs.Players[0].CurrentBet = 20
+	gs.Players[1].CurrentBet = 10
+	gs.Players[1].HasFolded = true
+	// Fold other players so they don't affect the test
+	gs.Players[2].HasFolded = true
+	gs.Players[3].HasFolded = true
+
+	if !AllBetsMatched(gs) {
+		t.Error("Expected bets to be matched when unmatched player has folded")
+	}
+}
+
+func TestAllBetsMatched_AllInPlayerIgnored(t *testing.T) {
+	gs := GetState()
+	defer PutState(gs)
+
+	gs.Players[0].Chips = 100
+	gs.Players[1].Chips = 0
+	gs.CurrentBet = 20
+
+	// Player 0 matched, player 1 is all-in with less than current bet
+	gs.Players[0].CurrentBet = 20
+	gs.Players[1].CurrentBet = 15
+	gs.Players[1].IsAllIn = true
+	// Fold other players so they don't affect the test
+	gs.Players[2].HasFolded = true
+	gs.Players[3].HasFolded = true
+
+	if !AllBetsMatched(gs) {
+		t.Error("Expected bets to be matched when unmatched player is all-in")
+	}
+}
+
+func TestResolveShowdown_SingleWinner(t *testing.T) {
+	gs := GetState()
+	defer PutState(gs)
+
+	// All but one player folded
+	gs.Players[0].HasFolded = true
+	gs.Players[1].HasFolded = false
+	gs.Players[2].HasFolded = true
+	gs.Players[3].HasFolded = true
+
+	winners := ResolveShowdown(gs)
+
+	if len(winners) != 1 {
+		t.Errorf("Expected 1 winner, got %d", len(winners))
+	}
+	if winners[0] != 1 {
+		t.Errorf("Expected player 1 to be winner, got player %d", winners[0])
+	}
+}
+
+func TestResolveShowdown_MultipleActive(t *testing.T) {
+	gs := GetState()
+	defer PutState(gs)
+
+	// Two players still active
+	gs.Players[0].HasFolded = true
+	gs.Players[1].HasFolded = false
+	gs.Players[2].HasFolded = false
+	gs.Players[3].HasFolded = true
+
+	winners := ResolveShowdown(gs)
+
+	if len(winners) != 2 {
+		t.Errorf("Expected 2 active players, got %d", len(winners))
+	}
+	// Should contain players 1 and 2
+	foundPlayer1 := false
+	foundPlayer2 := false
+	for _, w := range winners {
+		if w == 1 {
+			foundPlayer1 = true
+		}
+		if w == 2 {
+			foundPlayer2 = true
+		}
+	}
+	if !foundPlayer1 || !foundPlayer2 {
+		t.Errorf("Expected winners to contain players 1 and 2, got %v", winners)
+	}
+}
+
+func TestAwardPot_SingleWinner(t *testing.T) {
+	gs := GetState()
+	defer PutState(gs)
+
+	gs.Players[0].Chips = 50
+	gs.Players[1].Chips = 50
+	gs.Pot = 100
+
+	AwardPot(gs, []int{0})
+
+	if gs.Players[0].Chips != 150 {
+		t.Errorf("Expected winner to have 150 chips, got %d", gs.Players[0].Chips)
+	}
+	if gs.Players[1].Chips != 50 {
+		t.Errorf("Expected loser to still have 50 chips, got %d", gs.Players[1].Chips)
+	}
+	if gs.Pot != 0 {
+		t.Errorf("Expected pot to be 0 after award, got %d", gs.Pot)
+	}
+}
+
+func TestAwardPot_SplitEven(t *testing.T) {
+	gs := GetState()
+	defer PutState(gs)
+
+	gs.Players[0].Chips = 50
+	gs.Players[1].Chips = 50
+	gs.Pot = 100
+
+	AwardPot(gs, []int{0, 1})
+
+	// Each should get 50
+	if gs.Players[0].Chips != 100 {
+		t.Errorf("Expected player 0 to have 100 chips, got %d", gs.Players[0].Chips)
+	}
+	if gs.Players[1].Chips != 100 {
+		t.Errorf("Expected player 1 to have 100 chips, got %d", gs.Players[1].Chips)
+	}
+	if gs.Pot != 0 {
+		t.Errorf("Expected pot to be 0 after award, got %d", gs.Pot)
+	}
+}
+
+func TestAwardPot_OddRemainder(t *testing.T) {
+	gs := GetState()
+	defer PutState(gs)
+
+	gs.Players[0].Chips = 50
+	gs.Players[1].Chips = 50
+	gs.Pot = 101 // Odd pot
+
+	AwardPot(gs, []int{0, 1})
+
+	// 101 / 2 = 50 each, remainder 1 goes to first winner
+	if gs.Players[0].Chips != 101 { // 50 + 50 + 1
+		t.Errorf("Expected player 0 (first winner) to have 101 chips, got %d", gs.Players[0].Chips)
+	}
+	if gs.Players[1].Chips != 100 { // 50 + 50
+		t.Errorf("Expected player 1 to have 100 chips, got %d", gs.Players[1].Chips)
+	}
+	if gs.Pot != 0 {
+		t.Errorf("Expected pot to be 0 after award, got %d", gs.Pot)
+	}
+}
+
+func TestAwardPot_EmptyWinners(t *testing.T) {
+	gs := GetState()
+	defer PutState(gs)
+
+	gs.Pot = 100
+	initialPot := gs.Pot
+
+	AwardPot(gs, []int{})
+
+	// Pot should remain unchanged
+	if gs.Pot != initialPot {
+		t.Errorf("Expected pot to remain %d with no winners, got %d", initialPot, gs.Pot)
+	}
+}
+
+func TestAwardPot_ThreeWayOddSplit(t *testing.T) {
+	gs := GetState()
+	defer PutState(gs)
+
+	gs.Players[0].Chips = 0
+	gs.Players[1].Chips = 0
+	gs.Players[2].Chips = 0
+	gs.Pot = 100 // 100 / 3 = 33 each, remainder 1
+
+	AwardPot(gs, []int{0, 1, 2})
+
+	// 100 / 3 = 33 each, remainder 1 goes to first winner
+	if gs.Players[0].Chips != 34 {
+		t.Errorf("Expected player 0 to have 34 chips, got %d", gs.Players[0].Chips)
+	}
+	if gs.Players[1].Chips != 33 {
+		t.Errorf("Expected player 1 to have 33 chips, got %d", gs.Players[1].Chips)
+	}
+	if gs.Players[2].Chips != 33 {
+		t.Errorf("Expected player 2 to have 33 chips, got %d", gs.Players[2].Chips)
+	}
+	if gs.Pot != 0 {
+		t.Errorf("Expected pot to be 0 after award, got %d", gs.Pot)
+	}
+}

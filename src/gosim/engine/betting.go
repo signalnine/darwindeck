@@ -89,3 +89,72 @@ func ApplyBettingAction(gs *GameState, phase *BettingPhaseData, playerID int, ac
 		player.HasFolded = true
 	}
 }
+
+// CountActivePlayers returns the number of players who haven't folded
+func CountActivePlayers(gs *GameState) int {
+	count := 0
+	for _, p := range gs.Players {
+		if !p.HasFolded {
+			count++
+		}
+	}
+	return count
+}
+
+// CountActingPlayers returns the number of players who can still act
+// (not folded, not all-in, and have chips)
+func CountActingPlayers(gs *GameState) int {
+	count := 0
+	for _, p := range gs.Players {
+		if !p.HasFolded && !p.IsAllIn && p.Chips > 0 {
+			count++
+		}
+	}
+	return count
+}
+
+// AllBetsMatched returns true if all active players have matched the current bet
+// or are all-in/folded
+func AllBetsMatched(gs *GameState) bool {
+	for _, p := range gs.Players {
+		if !p.HasFolded && !p.IsAllIn && p.CurrentBet != gs.CurrentBet {
+			return false
+		}
+	}
+	return true
+}
+
+// ResolveShowdown determines which players are eligible to win the pot
+// Returns a slice of player IDs that are still in the hand (not folded)
+// If only one player remains, they win automatically
+// If multiple players remain, actual hand comparison is done elsewhere
+func ResolveShowdown(gs *GameState) []int {
+	activePlayers := []int{}
+	for i, p := range gs.Players {
+		if !p.HasFolded {
+			activePlayers = append(activePlayers, i)
+		}
+	}
+
+	return activePlayers
+}
+
+// AwardPot distributes the pot to the winner(s)
+// If multiple winners, pot is split evenly with remainder going to first winner
+func AwardPot(gs *GameState, winnerIDs []int) {
+	if len(winnerIDs) == 0 {
+		return
+	}
+
+	// Split pot evenly among winners
+	share := gs.Pot / int64(len(winnerIDs))
+	remainder := gs.Pot % int64(len(winnerIDs))
+
+	for i, winnerID := range winnerIDs {
+		gs.Players[winnerID].Chips += share
+		if i == 0 {
+			gs.Players[winnerID].Chips += remainder
+		}
+	}
+	gs.Pot = 0
+}
