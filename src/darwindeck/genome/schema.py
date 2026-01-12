@@ -79,6 +79,16 @@ class EffectType(Enum):
     FORCE_DISCARD = "force_discard"
 
 
+class BettingAction(Enum):
+    """Actions available during a betting phase."""
+    CHECK = "check"      # Pass without betting (only if no current bet)
+    BET = "bet"          # Place initial bet (min_bet amount)
+    CALL = "call"        # Match current bet
+    RAISE = "raise"      # Increase bet by min_bet
+    ALL_IN = "all_in"    # Bet all remaining chips
+    FOLD = "fold"        # Surrender hand, forfeit pot
+
+
 @dataclass(frozen=True)
 class SpecialEffect:
     """A card-triggered immediate effect."""
@@ -105,6 +115,8 @@ class SetupRules:
     trump_suit: Optional[Suit] = None        # Fixed trump (e.g., Spades in some variants)
     rotate_trump: bool = False               # Trump changes each hand
     random_trump: bool = False               # Trump selected randomly
+    # NEW: Betting support
+    starting_chips: int = 0                  # 0 means no betting enabled
 
     def __post_init__(self):
         """Convert lists to tuples for immutability."""
@@ -142,6 +154,13 @@ class DiscardPhase:
     count: int = 1
     mandatory: bool = False
     matching_condition: Optional["ConditionOrCompound"] = None  # type: ignore
+
+
+@dataclass(frozen=True)
+class BettingPhase:
+    """A betting round within the turn structure."""
+    min_bet: int = 10       # Minimum bet/raise amount
+    max_raises: int = 3     # Maximum raises per round (prevents infinite loops)
 
 
 @dataclass(frozen=True)
