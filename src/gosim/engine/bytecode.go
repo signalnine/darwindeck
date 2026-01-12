@@ -198,6 +198,52 @@ func (g *Genome) parseTurnStructure() error {
 	return nil
 }
 
+const OP_EFFECT_HEADER = 60
+
+// parseEffects extracts special effects from bytecode
+func parseEffects(data []byte, offset int) (map[uint8]SpecialEffect, int, error) {
+	effects := make(map[uint8]SpecialEffect)
+
+	// Bounds check: need at least 1 byte
+	if offset >= len(data) {
+		return effects, offset, nil // No effects section
+	}
+
+	if data[offset] != OP_EFFECT_HEADER {
+		return effects, offset, nil // No effects section
+	}
+	offset++
+
+	// Bounds check: need count byte
+	if offset >= len(data) {
+		return nil, offset, fmt.Errorf("truncated effects section: missing count")
+	}
+
+	count := int(data[offset])
+	offset++
+
+	// Bounds check: need 4 bytes per effect
+	requiredBytes := count * 4
+	if offset+requiredBytes > len(data) {
+		return nil, offset, fmt.Errorf("truncated effects section: expected %d bytes, have %d",
+			requiredBytes, len(data)-offset)
+	}
+
+	for i := 0; i < count; i++ {
+		effect := SpecialEffect{
+			TriggerRank: data[offset],
+			EffectType:  data[offset+1],
+			Target:      data[offset+2],
+			Value:       data[offset+3],
+		}
+		// Note: Later effects with same rank overwrite earlier ones
+		effects[effect.TriggerRank] = effect
+		offset += 4
+	}
+
+	return effects, offset, nil
+}
+
 func (g *Genome) parseWinConditions() error {
 	offset := g.Header.WinConditionsOffset
 	if offset < 0 || offset >= int32(len(g.Bytecode)) {
