@@ -7,7 +7,8 @@ from dataclasses import asdict
 
 from darwindeck.genome.schema import (
     GameGenome, SetupRules, TurnStructure, WinCondition,
-    PlayPhase, DrawPhase, DiscardPhase, TrickPhase, ClaimPhase, Location, Suit, Rank
+    PlayPhase, DrawPhase, DiscardPhase, TrickPhase, ClaimPhase, Location, Suit, Rank,
+    SpecialEffect, EffectType, TargetSelector
 )
 from darwindeck.genome.conditions import (
     Condition, CompoundCondition, ConditionType, Operator
@@ -33,7 +34,7 @@ def genome_to_dict(genome: GameGenome) -> Dict[str, Any]:
         "generation": genome.generation,
         "setup": _setup_to_dict(genome.setup),
         "turn_structure": _turn_structure_to_dict(genome.turn_structure),
-        "special_effects": list(genome.special_effects),
+        "special_effects": [_special_effect_to_dict(e) for e in genome.special_effects],
         "win_conditions": [_win_condition_to_dict(wc) for wc in genome.win_conditions],
         "scoring_rules": list(genome.scoring_rules),
         "max_turns": genome.max_turns,
@@ -55,7 +56,7 @@ def genome_from_dict(data: Dict[str, Any]) -> GameGenome:
         generation=data["generation"],
         setup=_setup_from_dict(data["setup"]),
         turn_structure=_turn_structure_from_dict(data["turn_structure"]),
-        special_effects=data.get("special_effects", []),
+        special_effects=[_special_effect_from_dict(e) for e in data.get("special_effects", [])],
         win_conditions=[_win_condition_from_dict(wc) for wc in data["win_conditions"]],
         scoring_rules=data.get("scoring_rules", []),
         max_turns=data["max_turns"],
@@ -265,4 +266,24 @@ def _win_condition_from_dict(data: Dict[str, Any]) -> WinCondition:
     return WinCondition(
         type=data["type"],
         threshold=data.get("threshold"),
+    )
+
+
+def _special_effect_to_dict(effect: SpecialEffect) -> Dict[str, Any]:
+    """Convert SpecialEffect to dict."""
+    return {
+        "trigger_rank": effect.trigger_rank.name,
+        "effect_type": effect.effect_type.name,
+        "target": effect.target.name,
+        "value": effect.value,
+    }
+
+
+def _special_effect_from_dict(data: Dict[str, Any]) -> SpecialEffect:
+    """Create SpecialEffect from dict."""
+    return SpecialEffect(
+        trigger_rank=Rank[data["trigger_rank"]],
+        effect_type=EffectType[data["effect_type"]],
+        target=TargetSelector[data["target"]],
+        value=data.get("value", 1),
     )
