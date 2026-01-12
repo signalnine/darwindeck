@@ -124,3 +124,107 @@ func TestHandSizeLeaderDetector_GetMargin(t *testing.T) {
 		t.Errorf("expected margin=0.75, got %f", margin)
 	}
 }
+
+func TestTrickLeaderDetector_GetLeader(t *testing.T) {
+	detector := &TrickLeaderDetector{}
+
+	state := &GameState{
+		NumPlayers: 4,
+		Players: []PlayerState{
+			{}, {}, {}, {},
+		},
+		TricksWon: []uint8{3, 5, 2, 3}, // Player 1 has most tricks = leader
+	}
+
+	leader := detector.GetLeader(state)
+	if leader != 1 {
+		t.Errorf("expected leader=1 (most tricks), got %d", leader)
+	}
+}
+
+func TestTrickLeaderDetector_Tie(t *testing.T) {
+	detector := &TrickLeaderDetector{}
+
+	state := &GameState{
+		NumPlayers: 2,
+		Players: []PlayerState{
+			{}, {},
+		},
+		TricksWon: []uint8{5, 5}, // Tied
+	}
+
+	leader := detector.GetLeader(state)
+	if leader != -1 {
+		t.Errorf("expected leader=-1 (tie), got %d", leader)
+	}
+}
+
+func TestTrickLeaderDetector_GetMargin(t *testing.T) {
+	detector := &TrickLeaderDetector{}
+
+	state := &GameState{
+		NumPlayers: 2,
+		Players: []PlayerState{
+			{}, {},
+		},
+		TricksWon: []uint8{7, 6}, // Total 13 tricks
+	}
+
+	margin := detector.GetMargin(state)
+	// (7-6)/13 ≈ 0.077
+	if margin < 0.07 || margin > 0.08 {
+		t.Errorf("expected margin≈0.077, got %f", margin)
+	}
+}
+
+func TestTrickAvoidanceLeaderDetector_GetLeader(t *testing.T) {
+	detector := &TrickAvoidanceLeaderDetector{}
+
+	state := &GameState{
+		NumPlayers: 4,
+		Players: []PlayerState{
+			{}, {}, {}, {},
+		},
+		TricksWon: []uint8{3, 5, 1, 4}, // Player 2 has fewest tricks = leader in Hearts
+	}
+
+	leader := detector.GetLeader(state)
+	if leader != 2 {
+		t.Errorf("expected leader=2 (fewest tricks), got %d", leader)
+	}
+}
+
+func TestTrickAvoidanceLeaderDetector_Tie(t *testing.T) {
+	detector := &TrickAvoidanceLeaderDetector{}
+
+	state := &GameState{
+		NumPlayers: 3,
+		Players: []PlayerState{
+			{}, {}, {},
+		},
+		TricksWon: []uint8{2, 5, 2}, // Players 0 and 2 tied for fewest
+	}
+
+	leader := detector.GetLeader(state)
+	if leader != -1 {
+		t.Errorf("expected leader=-1 (tie), got %d", leader)
+	}
+}
+
+func TestTrickAvoidanceLeaderDetector_GetMargin(t *testing.T) {
+	detector := &TrickAvoidanceLeaderDetector{}
+
+	state := &GameState{
+		NumPlayers: 2,
+		Players: []PlayerState{
+			{}, {},
+		},
+		TricksWon: []uint8{3, 10}, // Total 13 tricks, player 0 leads (fewer is better)
+	}
+
+	margin := detector.GetMargin(state)
+	// (10-3)/13 ≈ 0.538
+	if margin < 0.53 || margin > 0.55 {
+		t.Errorf("expected margin≈0.538, got %f", margin)
+	}
+}

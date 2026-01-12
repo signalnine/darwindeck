@@ -122,3 +122,97 @@ func (d *HandSizeLeaderDetector) GetMargin(state *GameState) float32 {
 	}
 	return float32(second-first) / float32(maxCards)
 }
+
+// TrickLeaderDetector - for trick-COLLECTING games (Spades, Whist)
+// More tricks = winning
+type TrickLeaderDetector struct{}
+
+func (d *TrickLeaderDetector) GetLeader(state *GameState) int {
+	if len(state.TricksWon) < 2 {
+		return -1
+	}
+	maxTricks := state.TricksWon[0]
+	leader := 0
+	tied := false
+	for i := 1; i < len(state.TricksWon); i++ {
+		if state.TricksWon[i] > maxTricks {
+			maxTricks = state.TricksWon[i]
+			leader = i
+			tied = false
+		} else if state.TricksWon[i] == maxTricks {
+			tied = true
+		}
+	}
+	if tied {
+		return -1
+	}
+	return leader
+}
+
+func (d *TrickLeaderDetector) GetMargin(state *GameState) float32 {
+	if len(state.TricksWon) < 2 {
+		return 0
+	}
+	var first, second uint8 = 0, 0
+	var totalTricks uint8 = 0
+	for _, tricks := range state.TricksWon {
+		totalTricks += tricks
+		if tricks > first {
+			second = first
+			first = tricks
+		} else if tricks > second {
+			second = tricks
+		}
+	}
+	if totalTricks == 0 {
+		return 0
+	}
+	return float32(first-second) / float32(totalTricks)
+}
+
+// TrickAvoidanceLeaderDetector - for trick-AVOIDANCE games (Hearts)
+// Fewer tricks = winning
+type TrickAvoidanceLeaderDetector struct{}
+
+func (d *TrickAvoidanceLeaderDetector) GetLeader(state *GameState) int {
+	if len(state.TricksWon) < 2 {
+		return -1
+	}
+	minTricks := state.TricksWon[0]
+	leader := 0
+	tied := false
+	for i := 1; i < len(state.TricksWon); i++ {
+		if state.TricksWon[i] < minTricks {
+			minTricks = state.TricksWon[i]
+			leader = i
+			tied = false
+		} else if state.TricksWon[i] == minTricks {
+			tied = true
+		}
+	}
+	if tied {
+		return -1
+	}
+	return leader
+}
+
+func (d *TrickAvoidanceLeaderDetector) GetMargin(state *GameState) float32 {
+	if len(state.TricksWon) < 2 {
+		return 0
+	}
+	var first, second uint8 = 255, 255
+	var totalTricks uint8 = 0
+	for _, tricks := range state.TricksWon {
+		totalTricks += tricks
+		if tricks < first {
+			second = first
+			first = tricks
+		} else if tricks < second {
+			second = tricks
+		}
+	}
+	if totalTricks == 0 || second == 255 {
+		return 0
+	}
+	return float32(second-first) / float32(totalTricks)
+}
