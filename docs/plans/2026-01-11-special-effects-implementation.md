@@ -12,6 +12,14 @@
 
 ---
 
+## Implementation Status: COMPLETE
+
+All 12 tasks completed on 2026-01-11. Effects are fully integrated and evolvable.
+
+**Post-implementation addition:** Effect mutation operators added to `create_default_pipeline()` so effects are automatically evolvable during genetic algorithm runs.
+
+---
+
 ## Task 1: Add Python Schema Types
 
 **Files:**
@@ -1390,12 +1398,18 @@ git commit -m "docs: mark special effects system as complete"
 **Files Modified:**
 - `src/darwindeck/genome/schema.py` - EffectType, SpecialEffect
 - `src/darwindeck/genome/bytecode.py` - Opcodes, compile_effects
-- `src/darwindeck/evolution/operators.py` - 3 mutation operators
+- `src/darwindeck/evolution/operators.py` - 3 mutation operators + pipeline integration
 - `src/darwindeck/genome/examples.py` - Uno genome
 - `src/gosim/engine/types.go` - PlayDirection, SkipCount
 - `src/gosim/engine/bytecode.go` - parseEffects, ParsedGenome.Effects
 - `src/gosim/engine/movegen.go` - Hook effects into ApplyMove
 - `ROADMAP.md` - Documentation update
+
+**Evolution Integration:**
+Effect mutations are included in `create_default_pipeline()` with rates:
+- AddEffectMutation: 10% (20% aggressive)
+- RemoveEffectMutation: 10% (20% aggressive)
+- MutateEffectMutation: 15% (30% aggressive)
 
 **Test Commands:**
 ```bash
