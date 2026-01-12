@@ -423,6 +423,18 @@ def crossover_effects(parent1: GameGenome, parent2: GameGenome) -> list[SpecialE
     return list(effects_by_rank.values())
 ```
 
+### Default Pipeline Integration
+
+All three mutation operators are included in `create_default_pipeline()`:
+
+| Operator | Default Rate | Aggressive Rate |
+|----------|--------------|-----------------|
+| AddEffectMutation | 10% | 20% |
+| RemoveEffectMutation | 10% | 20% |
+| MutateEffectMutation | 15% | 30% |
+
+This means effects are fully evolvable - evolution can spontaneously add Skip, Reverse, Draw N, Extra Turn, and Force Discard effects to any game, creating novel Uno-like variants.
+
 ---
 
 ## Testing Strategy
