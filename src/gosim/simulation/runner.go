@@ -160,6 +160,41 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 
 		// Generate legal moves
 		moves := engine.GenerateLegalMoves(state, genome)
+
+		// Check if this is a betting phase
+		if hasBettingPhase(moves) {
+			bettingPhase := getBettingPhaseData(genome)
+			if bettingPhase != nil {
+				err := runBettingRound(state, genome, bettingPhase, aiType, &metrics)
+				if err != "" {
+					return GameResult{
+						WinnerID:   -1,
+						TurnCount:  state.TurnNumber,
+						DurationNs: uint64(time.Since(start).Nanoseconds()),
+						Error:      err,
+						Metrics:    metrics,
+					}
+				}
+
+				// After betting round, resolve showdown
+				winners := engine.ResolveShowdown(state)
+				if len(winners) == 1 {
+					// Single winner (others folded)
+					engine.AwardPot(state, winners)
+				} else if len(winners) > 1 {
+					// Multiple players - use poker hand comparison
+					winner := engine.FindBestPokerWinner(state, int(state.NumPlayers))
+					if winner >= 0 {
+						engine.AwardPot(state, []int{int(winner)})
+					}
+				}
+
+				// Reset for next hand
+				state.ResetHand()
+				continue // Skip normal move application
+			}
+		}
+
 		if len(moves) == 0 {
 			// No legal moves - game stuck
 			return GameResult{
@@ -312,6 +347,41 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 		}
 
 		moves := engine.GenerateLegalMoves(state, genome)
+
+		// Check if this is a betting phase
+		if hasBettingPhase(moves) {
+			bettingPhase := getBettingPhaseData(genome)
+			if bettingPhase != nil {
+				err := runBettingRoundAsymmetric(state, genome, bettingPhase, p0AIType, p1AIType, &metrics)
+				if err != "" {
+					return GameResult{
+						WinnerID:   -1,
+						TurnCount:  state.TurnNumber,
+						DurationNs: uint64(time.Since(start).Nanoseconds()),
+						Error:      err,
+						Metrics:    metrics,
+					}
+				}
+
+				// After betting round, resolve showdown
+				winners := engine.ResolveShowdown(state)
+				if len(winners) == 1 {
+					// Single winner (others folded)
+					engine.AwardPot(state, winners)
+				} else if len(winners) > 1 {
+					// Multiple players - use poker hand comparison
+					winner := engine.FindBestPokerWinner(state, int(state.NumPlayers))
+					if winner >= 0 {
+						engine.AwardPot(state, []int{int(winner)})
+					}
+				}
+
+				// Reset for next hand
+				state.ResetHand()
+				continue // Skip normal move application
+			}
+		}
+
 		if len(moves) == 0 {
 			return GameResult{
 				WinnerID:   -1,
@@ -632,4 +702,223 @@ func median(values []uint32) uint32 {
 		return (sorted[mid-1] + sorted[mid]) / 2
 	}
 	return sorted[mid]
+}
+
+// hasBettingPhase checks if moves are from a betting phase
+func hasBettingPhase(moves []engine.LegalMove) bool {
+	for _, m := range moves {
+		if m.CardIndex <= engine.MoveBettingCheck && m.CardIndex >= engine.MoveBettingFold {
+			return true
+		}
+	}
+	return false
+}
+
+// getBettingPhaseData finds and parses the betting phase from genome
+func getBettingPhaseData(genome *engine.Genome) *engine.BettingPhaseData {
+	for _, phase := range genome.TurnPhases {
+		if phase.PhaseType == 5 { // BettingPhase
+			data, _ := engine.ParseBettingPhaseData(phase.Data)
+			return data
+		}
+	}
+	return nil
+}
+
+// anyNeedsToAct checks if any player still needs to act in betting round
+func anyNeedsToAct(needsToAct []bool) bool {
+	for _, needs := range needsToAct {
+		if needs {
+			return true
+		}
+	}
+	return false
+}
+
+// runBettingRound executes a complete betting round
+// Returns error string if round fails, empty string on success
+func runBettingRound(state *engine.GameState, genome *engine.Genome, bettingPhase *engine.BettingPhaseData, aiType AIPlayerType, metrics *GameMetrics) string {
+	// Track who needs to act
+	needsToAct := make([]bool, state.NumPlayers)
+	for i := 0; i < int(state.NumPlayers); i++ {
+		p := &state.Players[i]
+		needsToAct[i] = !p.HasFolded && !p.IsAllIn && p.Chips > 0
+	}
+
+	currentPlayer := state.BettingStartPlayer
+	maxActions := int(state.NumPlayers) * (bettingPhase.MaxRaises + 2) * 2 // Safety limit
+
+	for actionCount := 0; actionCount < maxActions; actionCount++ {
+		// Check termination: only one player remains
+		if engine.CountActivePlayers(state) <= 1 {
+			break
+		}
+
+		// Check termination: all remaining players are all-in
+		if engine.CountActingPlayers(state) == 0 {
+			break
+		}
+
+		// Check termination: round complete (all acted and matched)
+		if !anyNeedsToAct(needsToAct) && engine.AllBetsMatched(state) {
+			break
+		}
+
+		// Find next player who needs to act
+		startSearch := currentPlayer
+		for !needsToAct[currentPlayer] {
+			currentPlayer = (currentPlayer + 1) % int(state.NumPlayers)
+			if currentPlayer == startSearch {
+				// Wrapped around, no one needs to act
+				break
+			}
+		}
+		if !needsToAct[currentPlayer] {
+			break
+		}
+
+		// Generate betting moves
+		moves := engine.GenerateBettingMoves(state, bettingPhase, currentPlayer)
+		if len(moves) == 0 {
+			needsToAct[currentPlayer] = false
+			currentPlayer = (currentPlayer + 1) % int(state.NumPlayers)
+			continue
+		}
+
+		// Metrics tracking
+		metrics.TotalDecisions++
+		metrics.TotalValidMoves += uint64(len(moves))
+		if len(moves) == 1 {
+			metrics.ForcedDecisions++
+		}
+
+		// Select betting action based on AI type
+		var action engine.BettingAction
+		switch aiType {
+		case GreedyAI:
+			handStrength := engine.EvaluateHandStrength(state.Players[currentPlayer].Hand)
+			action = engine.SelectGreedyBettingAction(state, moves, handStrength)
+		default: // RandomAI and MCTS use random for betting
+			action = engine.SelectRandomBettingAction(moves, rand.Intn)
+		}
+
+		oldCurrentBet := state.CurrentBet
+		engine.ApplyBettingAction(state, bettingPhase, currentPlayer, action)
+		metrics.TotalActions++
+		metrics.TotalInteractions++ // Betting is always interactive
+
+		// If bet increased, everyone else needs to act again
+		if state.CurrentBet > oldCurrentBet {
+			for i := 0; i < int(state.NumPlayers); i++ {
+				p := &state.Players[i]
+				if !p.HasFolded && !p.IsAllIn && p.Chips > 0 && i != currentPlayer {
+					needsToAct[i] = true
+				}
+			}
+		}
+
+		needsToAct[currentPlayer] = false
+		currentPlayer = (currentPlayer + 1) % int(state.NumPlayers)
+		state.TurnNumber++
+	}
+
+	return "" // Success
+}
+
+// runBettingRoundAsymmetric executes a complete betting round with different AI per player
+// Returns error string if round fails, empty string on success
+func runBettingRoundAsymmetric(state *engine.GameState, genome *engine.Genome, bettingPhase *engine.BettingPhaseData, p0AIType AIPlayerType, p1AIType AIPlayerType, metrics *GameMetrics) string {
+	// Track who needs to act
+	needsToAct := make([]bool, state.NumPlayers)
+	for i := 0; i < int(state.NumPlayers); i++ {
+		p := &state.Players[i]
+		needsToAct[i] = !p.HasFolded && !p.IsAllIn && p.Chips > 0
+	}
+
+	currentPlayer := state.BettingStartPlayer
+	maxActions := int(state.NumPlayers) * (bettingPhase.MaxRaises + 2) * 2 // Safety limit
+
+	for actionCount := 0; actionCount < maxActions; actionCount++ {
+		// Check termination: only one player remains
+		if engine.CountActivePlayers(state) <= 1 {
+			break
+		}
+
+		// Check termination: all remaining players are all-in
+		if engine.CountActingPlayers(state) == 0 {
+			break
+		}
+
+		// Check termination: round complete (all acted and matched)
+		if !anyNeedsToAct(needsToAct) && engine.AllBetsMatched(state) {
+			break
+		}
+
+		// Find next player who needs to act
+		startSearch := currentPlayer
+		for !needsToAct[currentPlayer] {
+			currentPlayer = (currentPlayer + 1) % int(state.NumPlayers)
+			if currentPlayer == startSearch {
+				// Wrapped around, no one needs to act
+				break
+			}
+		}
+		if !needsToAct[currentPlayer] {
+			break
+		}
+
+		// Generate betting moves
+		moves := engine.GenerateBettingMoves(state, bettingPhase, currentPlayer)
+		if len(moves) == 0 {
+			needsToAct[currentPlayer] = false
+			currentPlayer = (currentPlayer + 1) % int(state.NumPlayers)
+			continue
+		}
+
+		// Metrics tracking
+		metrics.TotalDecisions++
+		metrics.TotalValidMoves += uint64(len(moves))
+		if len(moves) == 1 {
+			metrics.ForcedDecisions++
+		}
+
+		// Select AI based on current player
+		var aiType AIPlayerType
+		if currentPlayer == 0 {
+			aiType = p0AIType
+		} else {
+			aiType = p1AIType
+		}
+
+		// Select betting action based on AI type
+		var action engine.BettingAction
+		switch aiType {
+		case GreedyAI:
+			handStrength := engine.EvaluateHandStrength(state.Players[currentPlayer].Hand)
+			action = engine.SelectGreedyBettingAction(state, moves, handStrength)
+		default: // RandomAI and MCTS use random for betting
+			action = engine.SelectRandomBettingAction(moves, rand.Intn)
+		}
+
+		oldCurrentBet := state.CurrentBet
+		engine.ApplyBettingAction(state, bettingPhase, currentPlayer, action)
+		metrics.TotalActions++
+		metrics.TotalInteractions++ // Betting is always interactive
+
+		// If bet increased, everyone else needs to act again
+		if state.CurrentBet > oldCurrentBet {
+			for i := 0; i < int(state.NumPlayers); i++ {
+				p := &state.Players[i]
+				if !p.HasFolded && !p.IsAllIn && p.Chips > 0 && i != currentPlayer {
+					needsToAct[i] = true
+				}
+			}
+		}
+
+		needsToAct[currentPlayer] = false
+		currentPlayer = (currentPlayer + 1) % int(state.NumPlayers)
+		state.TurnNumber++
+	}
+
+	return "" // Success
 }
