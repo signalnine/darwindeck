@@ -149,12 +149,20 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 		state.InitializeChips(startingChips)
 	}
 
+	// Initialize tension tracking
+	detector := engine.SelectLeaderDetector(genome)
+	tensionMetrics := engine.NewTensionMetrics(int(state.NumPlayers))
+
 	// Game loop with turn limit protection
 	maxTurns := genome.Header.MaxTurns
 	for state.TurnNumber < maxTurns {
 		// Check win conditions
 		winner := engine.CheckWinConditions(state, genome)
 		if winner >= 0 {
+			tensionMetrics.Finalize(int(winner))
+			metrics.LeadChanges = uint32(tensionMetrics.LeadChanges)
+			metrics.DecisiveTurnPct = tensionMetrics.DecisiveTurnPct()
+			metrics.ClosestMargin = tensionMetrics.ClosestMargin
 			return GameResult{
 				WinnerID:   winner,
 				TurnCount:  state.TurnNumber,
@@ -172,6 +180,10 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 			if bettingPhase != nil {
 				err := runBettingRound(state, genome, bettingPhase, aiType, &metrics)
 				if err != "" {
+					tensionMetrics.Finalize(-1)
+					metrics.LeadChanges = uint32(tensionMetrics.LeadChanges)
+					metrics.DecisiveTurnPct = tensionMetrics.DecisiveTurnPct()
+					metrics.ClosestMargin = tensionMetrics.ClosestMargin
 					return GameResult{
 						WinnerID:   -1,
 						TurnCount:  state.TurnNumber,
@@ -202,6 +214,10 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 
 		if len(moves) == 0 {
 			// No legal moves - game stuck
+			tensionMetrics.Finalize(-1)
+			metrics.LeadChanges = uint32(tensionMetrics.LeadChanges)
+			metrics.DecisiveTurnPct = tensionMetrics.DecisiveTurnPct()
+			metrics.ClosestMargin = tensionMetrics.ClosestMargin
 			return GameResult{
 				WinnerID:   -1,
 				TurnCount:  state.TurnNumber,
@@ -245,6 +261,10 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 		}
 
 		if move == nil {
+			tensionMetrics.Finalize(-1)
+			metrics.LeadChanges = uint32(tensionMetrics.LeadChanges)
+			metrics.DecisiveTurnPct = tensionMetrics.DecisiveTurnPct()
+			metrics.ClosestMargin = tensionMetrics.ClosestMargin
 			return GameResult{
 				WinnerID:   -1,
 				TurnCount:  state.TurnNumber,
@@ -264,9 +284,16 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 		trackBluffingMetrics(state, move, genome, &metrics)
 
 		engine.ApplyMove(state, move, genome)
+
+		// Update tension tracking after move
+		tensionMetrics.Update(state, detector)
 	}
 
 	// Max turns reached - draw
+	tensionMetrics.Finalize(-1)
+	metrics.LeadChanges = uint32(tensionMetrics.LeadChanges)
+	metrics.DecisiveTurnPct = tensionMetrics.DecisiveTurnPct()
+	metrics.ClosestMargin = tensionMetrics.ClosestMargin
 	return GameResult{
 		WinnerID:   -1,
 		TurnCount:  state.TurnNumber,
@@ -339,10 +366,18 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 		state.InitializeChips(startingChips)
 	}
 
+	// Initialize tension tracking
+	detector := engine.SelectLeaderDetector(genome)
+	tensionMetrics := engine.NewTensionMetrics(int(state.NumPlayers))
+
 	maxTurns := genome.Header.MaxTurns
 	for state.TurnNumber < maxTurns {
 		winner := engine.CheckWinConditions(state, genome)
 		if winner >= 0 {
+			tensionMetrics.Finalize(int(winner))
+			metrics.LeadChanges = uint32(tensionMetrics.LeadChanges)
+			metrics.DecisiveTurnPct = tensionMetrics.DecisiveTurnPct()
+			metrics.ClosestMargin = tensionMetrics.ClosestMargin
 			return GameResult{
 				WinnerID:   winner,
 				TurnCount:  state.TurnNumber,
@@ -359,6 +394,10 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 			if bettingPhase != nil {
 				err := runBettingRoundAsymmetric(state, genome, bettingPhase, p0AIType, p1AIType, &metrics)
 				if err != "" {
+					tensionMetrics.Finalize(-1)
+					metrics.LeadChanges = uint32(tensionMetrics.LeadChanges)
+					metrics.DecisiveTurnPct = tensionMetrics.DecisiveTurnPct()
+					metrics.ClosestMargin = tensionMetrics.ClosestMargin
 					return GameResult{
 						WinnerID:   -1,
 						TurnCount:  state.TurnNumber,
@@ -388,6 +427,10 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 		}
 
 		if len(moves) == 0 {
+			tensionMetrics.Finalize(-1)
+			metrics.LeadChanges = uint32(tensionMetrics.LeadChanges)
+			metrics.DecisiveTurnPct = tensionMetrics.DecisiveTurnPct()
+			metrics.ClosestMargin = tensionMetrics.ClosestMargin
 			return GameResult{
 				WinnerID:   -1,
 				TurnCount:  state.TurnNumber,
@@ -437,6 +480,10 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 		}
 
 		if move == nil {
+			tensionMetrics.Finalize(-1)
+			metrics.LeadChanges = uint32(tensionMetrics.LeadChanges)
+			metrics.DecisiveTurnPct = tensionMetrics.DecisiveTurnPct()
+			metrics.ClosestMargin = tensionMetrics.ClosestMargin
 			return GameResult{
 				WinnerID:   -1,
 				TurnCount:  state.TurnNumber,
@@ -455,8 +502,16 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 		trackBluffingMetrics(state, move, genome, &metrics)
 
 		engine.ApplyMove(state, move, genome)
+
+		// Update tension tracking after move
+		tensionMetrics.Update(state, detector)
 	}
 
+	// Max turns reached - draw
+	tensionMetrics.Finalize(-1)
+	metrics.LeadChanges = uint32(tensionMetrics.LeadChanges)
+	metrics.DecisiveTurnPct = tensionMetrics.DecisiveTurnPct()
+	metrics.ClosestMargin = tensionMetrics.ClosestMargin
 	return GameResult{
 		WinnerID:   -1,
 		TurnCount:  state.TurnNumber,
