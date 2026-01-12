@@ -93,6 +93,7 @@ type Genome struct {
 	Bytecode      []byte
 	TurnPhases    []PhaseDescriptor
 	WinConditions []WinCondition
+	Effects       map[uint8]SpecialEffect // rank -> effect lookup
 }
 
 type PhaseDescriptor struct {
@@ -123,9 +124,17 @@ func ParseGenome(bytecode []byte) (*Genome, error) {
 	}
 
 	// Parse win conditions
-	if err := genome.parseWinConditions(); err != nil {
+	offset, err := genome.parseWinConditions()
+	if err != nil {
 		return nil, err
 	}
+
+	// Parse effects section (at end of bytecode)
+	effects, _, err := parseEffects(bytecode, offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse effects: %w", err)
+	}
+	genome.Effects = effects
 
 	return genome, nil
 }
@@ -244,10 +253,10 @@ func parseEffects(data []byte, offset int) (map[uint8]SpecialEffect, int, error)
 	return effects, offset, nil
 }
 
-func (g *Genome) parseWinConditions() error {
+func (g *Genome) parseWinConditions() (int, error) {
 	offset := g.Header.WinConditionsOffset
 	if offset < 0 || offset >= int32(len(g.Bytecode)) {
-		return errors.New("invalid win conditions offset")
+		return 0, errors.New("invalid win conditions offset")
 	}
 
 	count := int(binary.BigEndian.Uint32(g.Bytecode[offset : offset+4]))
@@ -257,7 +266,7 @@ func (g *Genome) parseWinConditions() error {
 
 	for i := 0; i < count; i++ {
 		if offset+5 > int32(len(g.Bytecode)) {
-			return errors.New("win condition data exceeds bytecode length")
+			return 0, errors.New("win condition data exceeds bytecode length")
 		}
 
 		winType := g.Bytecode[offset]
@@ -271,5 +280,5 @@ func (g *Genome) parseWinConditions() error {
 		offset += 5
 	}
 
-	return nil
+	return int(offset), nil
 }
