@@ -247,13 +247,30 @@ class FitnessEvaluator:
 
         comeback_potential = 1.0 - avg_deviation
 
-        # 3. Tension curve - improved with game length variance proxy
-        # Games with variable length tend to have more tension
-        # Use average turns as proxy for variability (longer games = more room for variance)
-        turn_score = min(1.0, results.avg_turns / 100.0)
-        # Bonus if game isn't too short (too short = less room for tension)
-        length_bonus = min(1.0, max(0.0, (results.avg_turns - 20) / 50.0))
-        tension_curve = min(1.0, turn_score * 0.6 + length_bonus * 0.4)
+        # 3. Tension curve - use real instrumentation if available
+        has_tension_data = (
+            results.lead_changes > 0 or
+            results.decisive_turn_pct < 1.0 or
+            results.closest_margin < 1.0
+        )
+
+        if has_tension_data:
+            turns_per_expected_change = 20
+            expected_changes = max(1, results.avg_turns / turns_per_expected_change)
+            lead_change_score = min(1.0, results.lead_changes / expected_changes)
+            decisive_turn_score = results.decisive_turn_pct
+            margin_score = 1.0 - results.closest_margin
+
+            tension_curve = (
+                lead_change_score * 0.4 +
+                decisive_turn_score * 0.4 +
+                margin_score * 0.2
+            )
+        else:
+            # Fallback to heuristic (for backward compatibility)
+            turn_score = min(1.0, results.avg_turns / 100.0)
+            length_bonus = min(1.0, max(0.0, (results.avg_turns - 20) / 50.0))
+            tension_curve = min(1.0, turn_score * 0.6 + length_bonus * 0.4)
 
         # 4. Interaction frequency - use real data if available, else heuristic
         if hasattr(results, 'total_actions') and results.total_actions > 0:
