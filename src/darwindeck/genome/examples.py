@@ -9,6 +9,7 @@ from darwindeck.genome.schema import (
     DrawPhase,
     DiscardPhase,
     TrickPhase,
+    BettingPhase,
     WinCondition,
     Location,
     Suit,
@@ -1040,10 +1041,49 @@ def create_uno_genome() -> GameGenome:
     )
 
 
+def create_simple_poker_genome() -> GameGenome:
+    """Create Simple Poker card game genome with betting.
+
+    Simplified 5-card draw poker with betting:
+    - Deal 5 cards to each player
+    - One betting round
+    - Best poker hand wins (or last player standing if others fold)
+    - Uses starting chips for betting
+
+    This is the first seed genome to use the betting system.
+    """
+    return GameGenome(
+        schema_version="1.0",
+        genome_id="simple-poker",
+        generation=0,
+        setup=SetupRules(
+            cards_per_player=5,
+            initial_deck="standard_52",
+            initial_discard_count=0,
+            starting_chips=1000,  # Enable betting
+        ),
+        turn_structure=TurnStructure(
+            phases=[
+                BettingPhase(
+                    min_bet=10,
+                    max_raises=3,
+                ),
+            ],
+        ),
+        special_effects=[],
+        win_conditions=[
+            WinCondition(type="best_hand"),  # Best poker hand wins at showdown
+        ],
+        scoring_rules=[],
+        max_turns=10,  # Poker hands are quick
+        player_count=2,
+    )
+
+
 def get_seed_genomes() -> List[GameGenome]:
     """Get all seed genomes for initial population in Phase 4.
 
-    Returns a diverse set of 17 games to seed the genetic algorithm:
+    Returns a diverse set of 18 games to seed the genetic algorithm:
 
     Luck-based:
     - War: Pure luck baseline
@@ -1065,6 +1105,9 @@ def get_seed_genomes() -> List[GameGenome]:
     Set Collection:
     - Gin Rummy: Set collection and melds
     - Go Fish: Book collection
+
+    Betting:
+    - Simple Poker: First betting game with BettingPhase
 
     Other Mechanics:
     - Cheat/I Doubt It: Bluffing
@@ -1090,6 +1133,8 @@ def get_seed_genomes() -> List[GameGenome]:
         # Set Collection
         create_gin_rummy_genome(),
         create_go_fish_genome(),
+        # Betting
+        create_simple_poker_genome(),
         # Other Mechanics
         create_cheat_genome(),
         create_scopa_genome(),
