@@ -270,6 +270,13 @@ func ApplyMove(state *GameState, move *LegalMove, genome *Genome) {
 					resolveWarBattle(state)
 				}
 			}
+
+			// Check for special effect after playing a card
+			if genome != nil && genome.Effects != nil {
+				if effect, ok := genome.Effects[playedCard.Rank]; ok {
+					ApplyEffect(state, &effect, nil) // nil RNG for now
+				}
+			}
 		} else if move.CardIndex <= -100 {
 			// Multi-card play (Go Fish sets)
 			// CardIndex encodes rank as -(rank + 100)
@@ -298,6 +305,13 @@ func ApplyMove(state *GameState, move *LegalMove, genome *Genome) {
 					state.Tableau = make([][]Card, 1)
 				}
 				state.Tableau[0] = append(state.Tableau[0], cardsToPlay...)
+			}
+
+			// Check for special effect after playing cards (multi-card play)
+			if genome != nil && genome.Effects != nil {
+				if effect, ok := genome.Effects[targetRank]; ok {
+					ApplyEffect(state, &effect, nil) // nil RNG for now
+				}
 			}
 		}
 
