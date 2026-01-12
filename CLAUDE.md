@@ -227,6 +227,74 @@ When implementing, follow this sequence:
 
 See `PHASE3_FINAL_RESULTS.md` for comprehensive analysis and `benchmarks/compare_genome_implementations.py` for fair benchmark.
 
+## Betting System
+
+**Status:** ✅ **COMPLETE** - Poker-style games are now evolvable
+
+The betting system enables poker, blackjack, and other betting card games through evolution.
+
+### Architecture
+
+```
+GameGenome
+├── setup
+│   └── starting_chips: int (0 = no betting)
+├── turn_structure
+│   └── phases: [..., BettingPhase(min_bet, max_raises), ...]
+└── win_conditions (used for showdown)
+```
+
+### BettingPhase
+
+```python
+BettingPhase(
+    min_bet: int = 10,      # Minimum bet/raise amount
+    max_raises: int = 3     # Max raises per round (prevents infinite loops)
+)
+```
+
+### Betting Actions
+
+| Action | Description |
+|--------|-------------|
+| CHECK | Pass without betting (only if no current bet) |
+| BET | Place initial bet (min_bet amount) |
+| CALL | Match current bet |
+| RAISE | Increase bet by min_bet |
+| ALL_IN | Bet all remaining chips |
+| FOLD | Surrender hand, forfeit pot |
+
+### Key Features
+
+- **Short-stack support:** Players can go ALL_IN instead of forced fold
+- **Round termination:** Ends when all bets matched or one player remains
+- **Split pot support:** Ties divide pot evenly
+- **Position rotation:** Starting player rotates each hand for fairness
+- **AI support:** Random and Greedy AI betting strategies
+
+### Seed Genomes with Betting
+
+| Genome | Starting Chips | Min Bet | Max Raises |
+|--------|----------------|---------|------------|
+| `simple_poker` | 1000 | 10 | 3 |
+| `betting_war` | 500 | 10 | 2 |
+| `draw_poker` | 1000 | 20 | 3 |
+| `blackjack` | 500 | 25 | 1 |
+
+### Mutation Operators
+
+- `AddBettingPhaseMutation` - Insert betting round
+- `RemoveBettingPhaseMutation` - Remove betting round
+- `MutateBettingPhaseMutation` - Modify min_bet/max_raises
+- `MutateStartingChipsMutation` - Change starting chips
+
+**Constraint:** All mutations ensure `min_bet <= starting_chips`
+
+### Documentation
+
+- **Design:** `docs/plans/2026-01-11-betting-system-design.md`
+- **Implementation:** `docs/plans/2026-01-11-betting-system-implementation.md`
+
 ## Development Commands
 
 ### Run Tests

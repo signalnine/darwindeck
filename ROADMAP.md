@@ -5,7 +5,7 @@ This document tracks planned features, known limitations, and future work.
 ## Current Status
 
 **Core System: Complete**
-- Genome schema with 16 seed games
+- Genome schema with 18 seed games (including 4 betting games)
 - Go simulation engine (39x speedup over Python)
 - Genetic algorithm with mutation, crossover, selection
 - Two-tier skill evaluation (Greedy + MCTS)
@@ -13,20 +13,13 @@ This document tracks planned features, known limitations, and future work.
 - LLM-powered game description generation
 - Multiplayer support (2-4 players)
 - Card-triggered special effects
+- Betting/wagering system for poker-style games
 
 ---
 
 ## Planned Features
 
 ### Schema Extensions
-
-**Betting/Wagering System**
-- [ ] `ResourceRules` - Chip/resource tracking
-- [ ] `BettingPhase` - Betting round mechanics
-- [ ] Conditions: `CHIP_COUNT`, `POT_SIZE`, `CAN_AFFORD`
-- [ ] Actions: `BET`, `CALL`, `RAISE`, `FOLD`, `CHECK`
-
-**Use cases:** Poker, Blackjack with betting
 
 **Team Play**
 - [ ] Partnership tracking
@@ -156,6 +149,16 @@ This document tracks planned features, known limitations, and future work.
 - [x] Evolution mutation operators
 - [x] Uno-style seed game
 
+### Betting/Wagering System (Complete)
+- [x] `BettingPhase` with min_bet and max_raises
+- [x] `BettingAction` enum (CHECK, BET, CALL, RAISE, ALL_IN, FOLD)
+- [x] Go simulation with betting round loop
+- [x] Player chip tracking and pot management
+- [x] Showdown resolution with split pot support
+- [x] AI betting strategies (Random, Greedy)
+- [x] Mutation operators for betting evolution
+- [x] 4 betting seed games (simple_poker, draw_poker, betting_war, blackjack)
+
 ---
 
 ## Contributing
@@ -175,3 +178,4 @@ To work on a roadmap item:
 | 2026-01-10 | 0.1.0 | Initial release with full evolution pipeline |
 | 2026-01-11 | 0.1.1 | Diversity-based seeding, documentation updates |
 | 2026-01-11 | 0.1.2 | Confirmed multiplayer (2-4 players) fully functional |
+| 2026-01-12 | 0.2.0 | Betting/wagering system complete - poker-style games now evolvable |
