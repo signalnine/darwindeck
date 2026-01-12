@@ -1,0 +1,4 @@
+# file: /home/gabe/cards-playtest/src/darwindeck/simulation/go_simulator.py
+# hypothesis_version: 6.150.0
+
+[0.0, 100, 500, 2048, 'greedy', 'mcts', 'mcts100', 'mcts1000', 'mcts2000', 'mcts500', 'random']

@@ -1,0 +1,4 @@
+# file: /home/gabe/cards-playtest/src/darwindeck/evolution/parallel_fitness.py
+# hypothesis_version: 6.150.0
+
+[100, 'balanced', 'spawn']
