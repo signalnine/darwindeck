@@ -76,6 +76,11 @@ type AggregatedStats struct {
 	TotalChallenges   uint64
 	SuccessfulBluffs  uint64
 	SuccessfulCatches uint64
+
+	// Tension metrics: aggregated across all games
+	LeadChanges     uint32  // Sum of lead changes across all games
+	DecisiveTurnPct float32 // Average decisive turn percentage
+	ClosestMargin   float32 // Average closest margin
 }
 
 // RunBatch simulates multiple games with the same genome and AI configuration
@@ -717,10 +722,22 @@ func aggregateResults(results []GameResult) AggregatedStats {
 		stats.TotalChallenges += result.Metrics.TotalChallenges
 		stats.SuccessfulBluffs += result.Metrics.SuccessfulBluffs
 		stats.SuccessfulCatches += result.Metrics.SuccessfulCatches
+
+		// Tension metrics (aggregate for averaging later)
+		stats.LeadChanges += result.Metrics.LeadChanges
+		stats.DecisiveTurnPct += result.Metrics.DecisiveTurnPct
+		stats.ClosestMargin += result.Metrics.ClosestMargin
 	}
 
 	// Calculate averages
-	if len(turnCounts) > 0 {
+	validGames := len(turnCounts) // Games without errors
+	if validGames > 0 {
+		// Tension metrics: compute averages
+		stats.DecisiveTurnPct = stats.DecisiveTurnPct / float32(validGames)
+		stats.ClosestMargin = stats.ClosestMargin / float32(validGames)
+	}
+
+	if validGames > 0 {
 		sum := uint64(0)
 		for _, tc := range turnCounts {
 			sum += uint64(tc)
