@@ -292,8 +292,58 @@ func (rcv *AggregatedStats) MutateSuccessfulCatches(n uint64) bool {
 	return rcv._tab.MutateUint64Slot(44, n)
 }
 
+func (rcv *AggregatedStats) AvgFinalChips(j int) float32 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(46))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.GetFloat32(a + flatbuffers.UOffsetT(j*4))
+	}
+	return 0
+}
+
+func (rcv *AggregatedStats) AvgFinalChipsLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(46))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
+func (rcv *AggregatedStats) MutateAvgFinalChips(j int, n float32) bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(46))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.MutateFloat32(a+flatbuffers.UOffsetT(j*4), n)
+	}
+	return false
+}
+
+func (rcv *AggregatedStats) FoldRate() float32 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(48))
+	if o != 0 {
+		return rcv._tab.GetFloat32(o + rcv._tab.Pos)
+	}
+	return 0.0
+}
+
+func (rcv *AggregatedStats) MutateFoldRate(n float32) bool {
+	return rcv._tab.MutateFloat32Slot(48, n)
+}
+
+func (rcv *AggregatedStats) TotalPotsWon() uint64 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(50))
+	if o != 0 {
+		return rcv._tab.GetUint64(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *AggregatedStats) MutateTotalPotsWon(n uint64) bool {
+	return rcv._tab.MutateUint64Slot(50, n)
+}
+
 func AggregatedStatsStart(builder *flatbuffers.Builder) {
-	builder.StartObject(21)
+	builder.StartObject(24)
 }
 func AggregatedStatsAddTotalGames(builder *flatbuffers.Builder, totalGames uint32) {
 	builder.PrependUint32Slot(0, totalGames, 0)
@@ -360,6 +410,18 @@ func AggregatedStatsAddSuccessfulBluffs(builder *flatbuffers.Builder, successful
 }
 func AggregatedStatsAddSuccessfulCatches(builder *flatbuffers.Builder, successfulCatches uint64) {
 	builder.PrependUint64Slot(20, successfulCatches, 0)
+}
+func AggregatedStatsAddAvgFinalChips(builder *flatbuffers.Builder, avgFinalChips flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(21, flatbuffers.UOffsetT(avgFinalChips), 0)
+}
+func AggregatedStatsStartAvgFinalChipsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(4, numElems, 4)
+}
+func AggregatedStatsAddFoldRate(builder *flatbuffers.Builder, foldRate float32) {
+	builder.PrependFloat32Slot(22, foldRate, 0.0)
+}
+func AggregatedStatsAddTotalPotsWon(builder *flatbuffers.Builder, totalPotsWon uint64) {
+	builder.PrependUint64Slot(23, totalPotsWon, 0)
 }
 func AggregatedStatsEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

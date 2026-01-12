@@ -180,7 +180,43 @@ class AggregatedStats(object):
             return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
         return 0
 
-def AggregatedStatsStart(builder): builder.StartObject(21)
+    # AggregatedStats
+    def AvgFinalChips(self, j):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(46))
+        if o != 0:
+            a = self._tab.Vector(o)
+            return self._tab.Get(flatbuffers.number_types.Float32Flags, a + flatbuffers.number_types.UOffsetTFlags.py_type(j * 4))
+        return 0
+
+    # AggregatedStats
+    def AvgFinalChipsAsNumpy(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(46))
+        if o != 0:
+            return self._tab.GetVectorAsNumpy(flatbuffers.number_types.Float32Flags, o)
+        return 0
+
+    # AggregatedStats
+    def AvgFinalChipsLength(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(46))
+        if o != 0:
+            return self._tab.VectorLen(o)
+        return 0
+
+    # AggregatedStats
+    def FoldRate(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(48))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Float32Flags, o + self._tab.Pos)
+        return 0.0
+
+    # AggregatedStats
+    def TotalPotsWon(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(50))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
+        return 0
+
+def AggregatedStatsStart(builder): builder.StartObject(24)
 def AggregatedStatsAddTotalGames(builder, totalGames): builder.PrependUint32Slot(0, totalGames, 0)
 def AggregatedStatsAddPlayer0Wins(builder, player0Wins): builder.PrependUint32Slot(1, player0Wins, 0)
 def AggregatedStatsAddPlayer1Wins(builder, player1Wins): builder.PrependUint32Slot(2, player1Wins, 0)
@@ -203,4 +239,8 @@ def AggregatedStatsAddTotalBluffs(builder, totalBluffs): builder.PrependUint64Sl
 def AggregatedStatsAddTotalChallenges(builder, totalChallenges): builder.PrependUint64Slot(18, totalChallenges, 0)
 def AggregatedStatsAddSuccessfulBluffs(builder, successfulBluffs): builder.PrependUint64Slot(19, successfulBluffs, 0)
 def AggregatedStatsAddSuccessfulCatches(builder, successfulCatches): builder.PrependUint64Slot(20, successfulCatches, 0)
+def AggregatedStatsAddAvgFinalChips(builder, avgFinalChips): builder.PrependUOffsetTRelativeSlot(21, flatbuffers.number_types.UOffsetTFlags.py_type(avgFinalChips), 0)
+def AggregatedStatsStartAvgFinalChipsVector(builder, numElems): return builder.StartVector(4, numElems, 4)
+def AggregatedStatsAddFoldRate(builder, foldRate): builder.PrependFloat32Slot(22, foldRate, 0.0)
+def AggregatedStatsAddTotalPotsWon(builder, totalPotsWon): builder.PrependUint64Slot(23, totalPotsWon, 0)
 def AggregatedStatsEnd(builder): return builder.EndObject()

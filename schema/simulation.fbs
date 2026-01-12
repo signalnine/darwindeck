@@ -15,6 +15,9 @@ table SimulationRequest {
   // N-player support (2-4 players)
   ai_types: [ubyte];                     // AI type per player (index = player ID), 0 = use ai_player_type
   player_count: ubyte;                   // Number of players (2-4), 0 = use default (2)
+
+  // Betting game parameters
+  starting_chips: uint32;                // Starting chip count for betting games (0 = no betting)
 }
 
 // Batch of simulation requests
@@ -63,6 +66,11 @@ table AggregatedStats {
   total_challenges: uint64;      // Number of challenges made
   successful_bluffs: uint64;     // Bluffs that weren't challenged
   successful_catches: uint64;    // Challenges that caught a bluff
+
+  // Betting metrics
+  avg_final_chips: [float];       // Average final chips per player (index = player ID)
+  fold_rate: float;               // Percentage of hands ending in fold (0-1)
+  total_pots_won: uint64;         // Total pots won across all games
 }
 
 // Batch response

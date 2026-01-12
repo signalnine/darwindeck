@@ -111,7 +111,14 @@ class SimulationRequest(object):
             return self._tab.Get(flatbuffers.number_types.Uint8Flags, o + self._tab.Pos)
         return 0
 
-def SimulationRequestStart(builder): builder.StartObject(9)
+    # SimulationRequest
+    def StartingChips(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(22))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint32Flags, o + self._tab.Pos)
+        return 0
+
+def SimulationRequestStart(builder): builder.StartObject(10)
 def SimulationRequestAddGenomeBytecode(builder, genomeBytecode): builder.PrependUOffsetTRelativeSlot(0, flatbuffers.number_types.UOffsetTFlags.py_type(genomeBytecode), 0)
 def SimulationRequestStartGenomeBytecodeVector(builder, numElems): return builder.StartVector(1, numElems, 1)
 def SimulationRequestAddNumGames(builder, numGames): builder.PrependUint32Slot(1, numGames, 0)
@@ -123,4 +130,5 @@ def SimulationRequestAddPlayer1AiType(builder, player1AiType): builder.PrependUi
 def SimulationRequestAddAiTypes(builder, aiTypes): builder.PrependUOffsetTRelativeSlot(7, flatbuffers.number_types.UOffsetTFlags.py_type(aiTypes), 0)
 def SimulationRequestStartAiTypesVector(builder, numElems): return builder.StartVector(1, numElems, 1)
 def SimulationRequestAddPlayerCount(builder, playerCount): builder.PrependUint8Slot(8, playerCount, 0)
+def SimulationRequestAddStartingChips(builder, startingChips): builder.PrependUint32Slot(9, startingChips, 0)
 def SimulationRequestEnd(builder): return builder.EndObject()
