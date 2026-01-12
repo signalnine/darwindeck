@@ -9,6 +9,16 @@ import (
 // OpCode matches Python bytecode.py
 type OpCode uint8
 
+// Phase type constants
+const (
+	PhaseTypeDraw    = 1
+	PhaseTypePlay    = 2
+	PhaseTypeDiscard = 3
+	PhaseTypeTrick   = 4
+	PhaseTypeBetting = 5
+	PhaseTypeClaim   = 6
+)
+
 const (
 	// Conditions
 	OpCheckHandSize OpCode = 0
@@ -97,13 +107,32 @@ type Genome struct {
 }
 
 type PhaseDescriptor struct {
-	PhaseType uint8  // 1=Draw, 2=Play, 3=Discard, 4=Betting, 5=Claim
+	PhaseType uint8  // 1=Draw, 2=Play, 3=Discard, 4=Trick, 5=Betting, 6=Claim
 	Data      []byte // Raw bytes for this phase
+}
+
+// BettingPhaseData holds parsed betting phase parameters
+type BettingPhaseData struct {
+	MinBet    int // Minimum bet/raise amount
+	MaxRaises int // Maximum raises per round (prevents infinite loops)
 }
 
 type WinCondition struct {
 	WinType   uint8
 	Threshold int32
+}
+
+// ParseBettingPhaseData extracts betting phase parameters from raw phase data.
+// Expected format: min_bet:4 + max_raises:4 + reserved:13 = 21 bytes
+func ParseBettingPhaseData(data []byte) (*BettingPhaseData, error) {
+	if len(data) < 8 {
+		return nil, errors.New("betting phase data too short: need at least 8 bytes")
+	}
+
+	return &BettingPhaseData{
+		MinBet:    int(binary.BigEndian.Uint32(data[0:4])),
+		MaxRaises: int(binary.BigEndian.Uint32(data[4:8])),
+	}, nil
 }
 
 // ParseGenome parses full bytecode into structured Genome
@@ -161,7 +190,7 @@ func (g *Genome) parseTurnStructure() error {
 		// Python bytecode format (phase_type already read):
 		var phaseLen int
 		switch phaseType {
-		case 1: // DrawPhase: source:1 + count:4 + mandatory:1 + has_condition:1 = 7 bytes
+		case PhaseTypeDraw: // DrawPhase: source:1 + count:4 + mandatory:1 + has_condition:1 = 7 bytes
 			baseLen := 7
 			if offset+int32(baseLen) > int32(len(g.Bytecode)) {
 				return errors.New("invalid draw phase data")
@@ -171,19 +200,19 @@ func (g *Genome) parseTurnStructure() error {
 			if hasCondition == 1 {
 				phaseLen += 7 // Add condition bytes
 			}
-		case 2: // PlayPhase: target:1 + min:1 + max:1 + mandatory:1 + conditionLen:4 + condition
+		case PhaseTypePlay: // PlayPhase: target:1 + min:1 + max:1 + mandatory:1 + conditionLen:4 + condition
 			if offset+8 > int32(len(g.Bytecode)) {
 				return errors.New("invalid play phase header")
 			}
 			conditionLen := int(binary.BigEndian.Uint32(g.Bytecode[offset+4 : offset+8]))
 			phaseLen = 8 + conditionLen
-		case 3: // DiscardPhase: target:1 + count:4 + mandatory:1 = 6 bytes
+		case PhaseTypeDiscard: // DiscardPhase: target:1 + count:4 + mandatory:1 = 6 bytes
 			phaseLen = 6
-		case 4: // TrickPhase: lead_suit_required:1 + trump_suit:1 + high_card_wins:1 + breaking_suit:1 = 4 bytes
+		case PhaseTypeTrick: // TrickPhase: lead_suit_required:1 + trump_suit:1 + high_card_wins:1 + breaking_suit:1 = 4 bytes
 			phaseLen = 4
-		case 5: // BettingPhase (optional)
+		case PhaseTypeBetting: // BettingPhase: min_bet:4 + max_raises:4 + reserved:13 = 21 bytes
 			phaseLen = 21
-		case 6: // ClaimPhase (optional)
+		case PhaseTypeClaim: // ClaimPhase
 			phaseLen = 10
 		default:
 			return fmt.Errorf("unknown phase type: %d", phaseType)
