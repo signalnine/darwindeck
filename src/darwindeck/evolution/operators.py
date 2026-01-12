@@ -9,6 +9,7 @@ from dataclasses import replace
 from darwindeck.genome.schema import (
     GameGenome, WinCondition, SetupRules, TurnStructure,
     PlayPhase, DrawPhase, DiscardPhase, TrickPhase, ClaimPhase,
+    BettingPhase,
     Location, Suit, SpecialEffect, EffectType, TargetSelector, Rank
 )
 from darwindeck.genome.conditions import Condition, ConditionType, Operator
@@ -823,6 +824,135 @@ class MutateEffectMutation(MutationOperator):
         return replace(genome, special_effects=new_effects, generation=genome.generation + 1)
 
 
+class AddBettingPhaseMutation(MutationOperator):
+    """Insert a BettingPhase at random position in turn structure."""
+
+    def __init__(self, probability: float = 0.05):
+        super().__init__(probability)
+
+    def mutate(self, genome: GameGenome) -> GameGenome:
+        phases = list(genome.turn_structure.phases)
+
+        # Don't add too many phases (max 5)
+        if len(phases) >= 5:
+            return genome
+
+        # Validate min_bet <= starting_chips
+        starting_chips = genome.setup.starting_chips or 1000
+        min_bet_options = [b for b in [5, 10, 20, 50] if b <= starting_chips]
+        if not min_bet_options:
+            min_bet_options = [max(1, starting_chips // 10)]
+
+        new_phase = BettingPhase(
+            min_bet=random.choice(min_bet_options),
+            max_raises=random.choice([1, 2, 3, 4]),
+        )
+
+        insert_pos = random.randint(0, len(phases))
+        phases.insert(insert_pos, new_phase)
+
+        new_turn = replace(genome.turn_structure, phases=tuple(phases))
+        return replace(genome, turn_structure=new_turn, generation=genome.generation + 1)
+
+
+class RemoveBettingPhaseMutation(MutationOperator):
+    """Remove a random BettingPhase from turn structure."""
+
+    def __init__(self, probability: float = 0.05):
+        super().__init__(probability)
+
+    def mutate(self, genome: GameGenome) -> GameGenome:
+        phases = list(genome.turn_structure.phases)
+
+        # Find BettingPhase indices
+        betting_indices = [i for i, p in enumerate(phases) if isinstance(p, BettingPhase)]
+
+        if not betting_indices:
+            return genome
+
+        # Don't remove if only 1 phase left total
+        if len(phases) <= 1:
+            return genome
+
+        idx = random.choice(betting_indices)
+        phases.pop(idx)
+
+        new_turn = replace(genome.turn_structure, phases=tuple(phases))
+        return replace(genome, turn_structure=new_turn, generation=genome.generation + 1)
+
+
+class MutateBettingPhaseMutation(MutationOperator):
+    """Mutate parameters of a random BettingPhase."""
+
+    def __init__(self, probability: float = 0.10):
+        super().__init__(probability)
+
+    def mutate(self, genome: GameGenome) -> GameGenome:
+        phases = list(genome.turn_structure.phases)
+
+        # Find BettingPhase indices
+        betting_indices = [i for i, p in enumerate(phases) if isinstance(p, BettingPhase)]
+
+        if not betting_indices:
+            return genome
+
+        idx = random.choice(betting_indices)
+        phase = phases[idx]
+
+        # Randomly mutate min_bet or max_raises
+        starting_chips = genome.setup.starting_chips or 1000
+
+        if random.random() < 0.5:
+            # Mutate min_bet (+-50%, stay within bounds)
+            delta = random.uniform(-0.5, 0.5)
+            new_min_bet = max(1, min(starting_chips, int(phase.min_bet * (1 + delta))))
+            new_phase = replace(phase, min_bet=new_min_bet)
+        else:
+            # Mutate max_raises (+-1, range 1-5)
+            delta = random.choice([-1, 1])
+            new_max_raises = max(1, min(5, phase.max_raises + delta))
+            new_phase = replace(phase, max_raises=new_max_raises)
+
+        phases[idx] = new_phase
+        new_turn = replace(genome.turn_structure, phases=tuple(phases))
+        return replace(genome, turn_structure=new_turn, generation=genome.generation + 1)
+
+
+class MutateStartingChipsMutation(MutationOperator):
+    """Mutate starting_chips in setup, ensuring min_bet <= starting_chips."""
+
+    def __init__(self, probability: float = 0.10):
+        super().__init__(probability)
+
+    def mutate(self, genome: GameGenome) -> GameGenome:
+        current_chips = genome.setup.starting_chips or 0
+
+        if current_chips == 0:
+            # Enable betting by adding starting chips
+            new_chips = random.choice([100, 500, 1000, 2000])
+        else:
+            # Mutate by +-50%
+            delta = random.uniform(-0.5, 0.5)
+            new_chips = max(10, int(current_chips * (1 + delta)))
+
+        # Ensure all BettingPhases have valid min_bet
+        phases = list(genome.turn_structure.phases)
+        phases_modified = False
+
+        for i, phase in enumerate(phases):
+            if isinstance(phase, BettingPhase) and phase.min_bet > new_chips:
+                phases[i] = replace(phase, min_bet=max(1, new_chips // 10))
+                phases_modified = True
+
+        new_setup = replace(genome.setup, starting_chips=new_chips)
+
+        if phases_modified:
+            new_turn = replace(genome.turn_structure, phases=tuple(phases))
+            return replace(genome, setup=new_setup, turn_structure=new_turn, generation=genome.generation + 1)
+        else:
+            return replace(genome, setup=new_setup, generation=genome.generation + 1)
+
+
 class CrossoverOperator:
     """Semantic crossover operator for game genomes.
 
@@ -974,6 +1104,12 @@ def create_default_pipeline(
         AddEffectMutation(probability=min(0.10 * mult, 0.2)),           # 10% (20% aggressive)
         RemoveEffectMutation(probability=min(0.10 * mult, 0.2)),        # 10% (20% aggressive)
         MutateEffectMutation(probability=min(0.15 * mult, 0.3)),        # 15% (30% aggressive)
+
+        # Betting mutations
+        AddBettingPhaseMutation(probability=min(0.05 * mult, 0.15)),    # 5% (10% aggressive)
+        RemoveBettingPhaseMutation(probability=min(0.05 * mult, 0.15)), # 5% (10% aggressive)
+        MutateBettingPhaseMutation(probability=min(0.10 * mult, 0.2)),  # 10% (20% aggressive)
+        MutateStartingChipsMutation(probability=min(0.10 * mult, 0.2)), # 10% (20% aggressive)
     ]
     return MutationPipeline(operators)
 

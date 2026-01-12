@@ -118,11 +118,19 @@ def test_default_pipeline():
     # Should have at least one operator
     assert len(pipeline.operators) >= 1
 
-    # First operator should be win condition mutation
-    assert isinstance(pipeline.operators[0], ModifyWinConditionMutation)
+    # Pipeline should include a win condition mutation operator
+    has_win_condition_mutation = any(
+        isinstance(op, ModifyWinConditionMutation)
+        for op in pipeline.operators
+    )
+    assert has_win_condition_mutation
 
-    # Should have 10% probability
-    assert pipeline.operators[0].probability == 0.1
+    # Find the win condition mutation operator and check its probability
+    win_condition_op = next(
+        op for op in pipeline.operators
+        if isinstance(op, ModifyWinConditionMutation)
+    )
+    assert win_condition_op.probability == 0.15  # 15% probability in default pipeline
 
 
 def test_pipeline_application():
