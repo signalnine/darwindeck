@@ -390,10 +390,11 @@ def create_go_fish_genome() -> GameGenome:
 def create_betting_war_genome() -> GameGenome:
     """Create Betting War card game genome.
 
-    Simplified version of War with betting (betting mechanics not implemented):
-    - Similar to regular War
-    - Players compare top cards
-    - Higher card wins
+    War with betting mechanics:
+    - Players bet before revealing cards
+    - Compare top cards - higher wins the pot
+    - Winner takes opponent's chips over time
+    - Starting chips: 500, min bet: 10
     """
     return GameGenome(
         schema_version="1.0",
@@ -402,10 +403,12 @@ def create_betting_war_genome() -> GameGenome:
         setup=SetupRules(
             cards_per_player=26,
             initial_deck="standard_52",
-            initial_discard_count=0
+            initial_discard_count=0,
+            starting_chips=500,
         ),
         turn_structure=TurnStructure(
             phases=[
+                BettingPhase(min_bet=10, max_raises=2),
                 PlayPhase(
                     target=Location.TABLEAU,
                     valid_play_condition=Condition(
@@ -541,65 +544,53 @@ def create_scopa_genome() -> GameGenome:
 def create_draw_poker_genome() -> GameGenome:
     """Create Draw Poker card game genome.
 
-    Modified Draw Poker for better simulation:
-    - Multiple draw/discard rounds for more decisions
-    - Play cards to tableau to "bet" (simulates raising)
-    - Longer game with more strategic depth
-    - Scoring based on final hand + tableau cards
-
-    The tableau represents your "bet" - committing cards there
-    shows confidence and creates interaction.
+    Classic 5-card draw poker with betting:
+    - Deal 5 cards to each player
+    - Betting round before the draw
+    - Players can discard and draw new cards
+    - Final betting round
+    - Best poker hand wins
+    - Starting chips: 1000, min bet: 20
     """
     return GameGenome(
         schema_version="1.0",
         genome_id="draw-poker",
         generation=0,
         setup=SetupRules(
-            cards_per_player=7,  # More cards for longer game
+            cards_per_player=5,
             initial_deck="standard_52",
-            initial_discard_count=0
+            initial_discard_count=0,
+            starting_chips=1000,
         ),
         turn_structure=TurnStructure(
             phases=[
-                # Draw a card
+                # Pre-draw betting round
+                BettingPhase(min_bet=20, max_raises=3),
+                # Discard up to 3 cards to improve hand
+                DiscardPhase(
+                    target=Location.DISCARD,
+                    count=3,
+                    mandatory=False
+                ),
+                # Draw replacements
                 DrawPhase(
                     source=Location.DECK,
-                    count=1,
-                    mandatory=True,
+                    count=3,
+                    mandatory=False,
                     condition=Condition(
                         type=ConditionType.HAND_SIZE,
                         operator=Operator.LT,
-                        value=7
+                        value=5
                     )
                 ),
-                # Optional: play to tableau ("bet" - shows confidence)
-                PlayPhase(
-                    target=Location.TABLEAU,
-                    valid_play_condition=Condition(
-                        type=ConditionType.HAND_SIZE,
-                        operator=Operator.GT,
-                        value=3  # Keep at least 3 cards
-                    ),
-                    min_cards=1,
-                    max_cards=2,
-                    mandatory=False,
-                    pass_if_unable=True
-                ),
-                # Discard to improve hand
-                DiscardPhase(
-                    target=Location.DISCARD,
-                    count=2,
-                    mandatory=False
-                )
             ]
         ),
         special_effects=[],
         win_conditions=[
             WinCondition(type="best_hand"),
-            WinCondition(type="high_score", threshold=10)
         ],
         scoring_rules=[],
-        max_turns=100,
+        max_turns=20,
         player_count=2
     )
 
@@ -714,70 +705,48 @@ def create_knockout_whist_genome() -> GameGenome:
 def create_blackjack_genome() -> GameGenome:
     """Create Blackjack/21 card game genome.
 
-    Reimagined as a multi-round card comparison game:
-    - Each round, players draw cards trying to get close to target value
-    - Play cards to tableau to "lock in" your hand
-    - Discard to signal you're done drawing
-    - Compare hand values when both players stand
-    - Win by having better hand more often
-
-    This version creates more tension and decisions than single-hand blackjack.
+    Casino-style blackjack with betting:
+    - Players bet before seeing cards
+    - Draw cards to get close to 21 without going over
+    - Higher hand wins the pot
+    - Starting chips: 500, min bet: 25
     """
     return GameGenome(
         schema_version="1.0",
         genome_id="blackjack",
         generation=0,
         setup=SetupRules(
-            cards_per_player=5,  # More cards = more rounds
+            cards_per_player=2,  # Initial deal
             initial_deck="standard_52",
-            initial_discard_count=0
+            initial_discard_count=0,
+            starting_chips=500,
         ),
         turn_structure=TurnStructure(
             phases=[
-                # Draw a card
+                # Bet before seeing full hand
+                BettingPhase(min_bet=25, max_raises=1),
+                # Hit - draw a card
                 DrawPhase(
                     source=Location.DECK,
                     count=1,
-                    mandatory=True,
+                    mandatory=False,
                     condition=Condition(
                         type=ConditionType.HAND_SIZE,
                         operator=Operator.LT,
-                        value=7  # Max hand size
+                        value=5  # Max 5 cards (5-card charlie)
                     )
                 ),
-                # Play card to tableau (building your "hand")
-                PlayPhase(
-                    target=Location.TABLEAU,
-                    valid_play_condition=Condition(
-                        type=ConditionType.HAND_SIZE,
-                        operator=Operator.GT,
-                        value=0
-                    ),
-                    min_cards=1,
-                    max_cards=1,
-                    mandatory=False,  # Optional - can hold
-                    pass_if_unable=True
-                ),
-                # Optional discard (to cycle cards)
-                DiscardPhase(
-                    target=Location.DISCARD,
-                    count=1,
-                    mandatory=False
-                )
             ]
         ),
         special_effects=[],
         win_conditions=[
             WinCondition(
-                type="high_score",  # Most points wins
+                type="high_score",
                 threshold=21
             ),
-            WinCondition(
-                type="empty_hand"
-            )
         ],
         scoring_rules=[],
-        max_turns=100,
+        max_turns=20,
         player_count=2
     )
 
