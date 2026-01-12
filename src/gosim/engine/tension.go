@@ -26,3 +26,48 @@ func NewTensionMetrics(numPlayers int) *TensionMetrics {
 		leaderHistory: make([]int, 0, 100),
 	}
 }
+
+// ScoreLeaderDetector - for score-based games (Gin Rummy, Scopa)
+// Higher score = winning
+type ScoreLeaderDetector struct{}
+
+func (d *ScoreLeaderDetector) GetLeader(state *GameState) int {
+	if len(state.Players) < 2 {
+		return -1
+	}
+	maxScore := state.Players[0].Score
+	leader := 0
+	tied := false
+	for i := 1; i < len(state.Players); i++ {
+		if state.Players[i].Score > maxScore {
+			maxScore = state.Players[i].Score
+			leader = i
+			tied = false
+		} else if state.Players[i].Score == maxScore {
+			tied = true
+		}
+	}
+	if tied {
+		return -1
+	}
+	return leader
+}
+
+func (d *ScoreLeaderDetector) GetMargin(state *GameState) float32 {
+	if len(state.Players) < 2 {
+		return 0
+	}
+	var first, second int32 = 0, 0
+	for _, p := range state.Players {
+		if p.Score > first {
+			second = first
+			first = p.Score
+		} else if p.Score > second {
+			second = p.Score
+		}
+	}
+	if first == 0 {
+		return 0
+	}
+	return float32(first-second) / float32(first)
+}
