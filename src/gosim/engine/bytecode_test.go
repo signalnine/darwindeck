@@ -198,3 +198,63 @@ func TestParseEffectsEmpty(t *testing.T) {
 		t.Errorf("should have 0 effects, got %d", len(effects))
 	}
 }
+
+func TestParseBettingPhaseData(t *testing.T) {
+	// Create betting phase data: min_bet=100, max_raises=3, plus reserved bytes
+	// Format: min_bet:4 + max_raises:4 + reserved:13 = 21 bytes
+	data := make([]byte, 21)
+	// min_bet = 100 (big-endian)
+	data[0] = 0
+	data[1] = 0
+	data[2] = 0
+	data[3] = 100
+	// max_raises = 3 (big-endian)
+	data[4] = 0
+	data[5] = 0
+	data[6] = 0
+	data[7] = 3
+
+	betting, err := ParseBettingPhaseData(data)
+	if err != nil {
+		t.Fatalf("Failed to parse betting phase data: %v", err)
+	}
+
+	if betting.MinBet != 100 {
+		t.Errorf("Expected MinBet=100, got %d", betting.MinBet)
+	}
+
+	if betting.MaxRaises != 3 {
+		t.Errorf("Expected MaxRaises=3, got %d", betting.MaxRaises)
+	}
+}
+
+func TestParseBettingPhaseDataTooShort(t *testing.T) {
+	// Data too short (need at least 8 bytes)
+	data := make([]byte, 4)
+	_, err := ParseBettingPhaseData(data)
+	if err == nil {
+		t.Error("Expected error for short data")
+	}
+}
+
+func TestPhaseTypeConstants(t *testing.T) {
+	// Verify phase type constants match expected values
+	if PhaseTypeDraw != 1 {
+		t.Errorf("PhaseTypeDraw should be 1, got %d", PhaseTypeDraw)
+	}
+	if PhaseTypePlay != 2 {
+		t.Errorf("PhaseTypePlay should be 2, got %d", PhaseTypePlay)
+	}
+	if PhaseTypeDiscard != 3 {
+		t.Errorf("PhaseTypeDiscard should be 3, got %d", PhaseTypeDiscard)
+	}
+	if PhaseTypeTrick != 4 {
+		t.Errorf("PhaseTypeTrick should be 4, got %d", PhaseTypeTrick)
+	}
+	if PhaseTypeBetting != 5 {
+		t.Errorf("PhaseTypeBetting should be 5, got %d", PhaseTypeBetting)
+	}
+	if PhaseTypeClaim != 6 {
+		t.Errorf("PhaseTypeClaim should be 6, got %d", PhaseTypeClaim)
+	}
+}
