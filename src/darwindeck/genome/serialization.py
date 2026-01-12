@@ -7,8 +7,8 @@ from dataclasses import asdict
 
 from darwindeck.genome.schema import (
     GameGenome, SetupRules, TurnStructure, WinCondition,
-    PlayPhase, DrawPhase, DiscardPhase, TrickPhase, ClaimPhase, Location, Suit, Rank,
-    SpecialEffect, EffectType, TargetSelector
+    PlayPhase, DrawPhase, DiscardPhase, TrickPhase, ClaimPhase, BettingPhase,
+    Location, Suit, Rank, SpecialEffect, EffectType, TargetSelector
 )
 from darwindeck.genome.conditions import (
     Condition, CompoundCondition, ConditionType, Operator
@@ -76,6 +76,7 @@ def _setup_to_dict(setup: SetupRules) -> Dict[str, Any]:
         "cards_per_player": setup.cards_per_player,
         "initial_deck": setup.initial_deck,
         "initial_discard_count": setup.initial_discard_count,
+        "starting_chips": setup.starting_chips,
     }
     if setup.trump_suit is not None:
         d["trump_suit"] = setup.trump_suit.name
@@ -92,6 +93,7 @@ def _setup_from_dict(data: Dict[str, Any]) -> SetupRules:
         initial_deck=data.get("initial_deck", "standard_52"),
         initial_discard_count=data.get("initial_discard_count", 0),
         trump_suit=trump_suit,
+        starting_chips=data.get("starting_chips", 0),
     )
 
 
@@ -156,6 +158,12 @@ def _phase_to_dict(phase) -> Dict[str, Any]:
             "allow_challenge": phase.allow_challenge,
             "pile_penalty": phase.pile_penalty,
         }
+    elif isinstance(phase, BettingPhase):
+        return {
+            "type": "BettingPhase",
+            "min_bet": phase.min_bet,
+            "max_raises": phase.max_raises,
+        }
     else:
         return {"type": "Unknown"}
 
@@ -202,6 +210,11 @@ def _phase_from_dict(data: Dict[str, Any]):
             sequential_rank=data.get("sequential_rank", True),
             allow_challenge=data.get("allow_challenge", True),
             pile_penalty=data.get("pile_penalty", True),
+        )
+    elif phase_type == "BettingPhase":
+        return BettingPhase(
+            min_bet=data.get("min_bet", 10),
+            max_raises=data.get("max_raises", 3),
         )
     elif phase_type == "Unknown":
         # Graceful fallback for corrupted old saves - convert to simple ClaimPhase
