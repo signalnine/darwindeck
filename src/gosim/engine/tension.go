@@ -280,6 +280,63 @@ func (d *ChipLeaderDetector) GetMargin(state *GameState) float32 {
 	return float32(first-second) / float32(totalChips)
 }
 
+// Update called after each turn in the game loop
+func (tm *TensionMetrics) Update(state *GameState, detector LeaderDetector) {
+	newLeader := detector.GetLeader(state)
+	margin := detector.GetMargin(state)
+
+	// Track closest margin seen (smaller = more tension)
+	if margin < tm.ClosestMargin {
+		tm.ClosestMargin = margin
+	}
+
+	// Track lead changes (ignore ties)
+	if newLeader != -1 && tm.currentLeader != -1 && newLeader != tm.currentLeader {
+		tm.LeadChanges++
+	}
+
+	// Update current leader
+	if newLeader != -1 {
+		tm.currentLeader = newLeader
+	}
+
+	// Record leader for permanent lead calculation
+	tm.leaderHistory = append(tm.leaderHistory, tm.currentLeader)
+	tm.TotalTurns++
+}
+
+// Finalize computes DecisiveTurn based on winner
+// DecisiveTurn = first turn where winner took lead and NEVER lost it
+func (tm *TensionMetrics) Finalize(winnerID int) {
+	// Handle invalid winner (draw or error)
+	if winnerID < 0 {
+		tm.DecisiveTurn = tm.TotalTurns
+		return
+	}
+
+	// Scan backwards to find when winner took permanent lead
+	tm.DecisiveTurn = tm.TotalTurns
+
+	for i := len(tm.leaderHistory) - 1; i >= 0; i-- {
+		if tm.leaderHistory[i] != winnerID && tm.leaderHistory[i] != -1 {
+			// Found a turn where someone else was leading
+			if i+1 < len(tm.leaderHistory) {
+				tm.DecisiveTurn = i + 1
+			}
+			break
+		}
+		tm.DecisiveTurn = i
+	}
+}
+
+// DecisiveTurnPct returns decisive turn as percentage of game
+func (tm *TensionMetrics) DecisiveTurnPct() float32 {
+	if tm.TotalTurns == 0 {
+		return 0
+	}
+	return float32(tm.DecisiveTurn) / float32(tm.TotalTurns)
+}
+
 // SelectLeaderDetector chooses the appropriate detector based on genome's win conditions and phases.
 // Priority: WinConditions first (most reliable), then phase types, then default to ScoreLeaderDetector.
 func SelectLeaderDetector(genome *Genome) LeaderDetector {

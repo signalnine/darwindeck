@@ -403,3 +403,99 @@ func TestSelectLeaderDetector_WinConditionTakesPrecedence(t *testing.T) {
 		t.Errorf("expected HandSizeLeaderDetector - WinCondition should take precedence over phase type")
 	}
 }
+
+// TensionMetrics Update and Finalize tests
+
+func TestTensionMetrics_Update_LeadChanges(t *testing.T) {
+	tm := NewTensionMetrics(2)
+	detector := &ScoreLeaderDetector{}
+
+	// Player 0 leads
+	state := &GameState{Players: []PlayerState{{Score: 10}, {Score: 5}}}
+	tm.Update(state, detector)
+
+	// Player 1 takes lead
+	state = &GameState{Players: []PlayerState{{Score: 10}, {Score: 15}}}
+	tm.Update(state, detector)
+
+	// Player 0 takes lead back
+	state = &GameState{Players: []PlayerState{{Score: 20}, {Score: 15}}}
+	tm.Update(state, detector)
+
+	if tm.LeadChanges != 2 {
+		t.Errorf("expected 2 lead changes, got %d", tm.LeadChanges)
+	}
+}
+
+func TestTensionMetrics_Update_ClosestMargin(t *testing.T) {
+	tm := NewTensionMetrics(2)
+	detector := &ScoreLeaderDetector{}
+
+	// Big lead
+	state := &GameState{Players: []PlayerState{{Score: 100}, {Score: 10}}}
+	tm.Update(state, detector)
+
+	// Close game
+	state = &GameState{Players: []PlayerState{{Score: 100}, {Score: 95}}}
+	tm.Update(state, detector)
+
+	// Big lead again - should keep the closest margin
+	state = &GameState{Players: []PlayerState{{Score: 200}, {Score: 95}}}
+	tm.Update(state, detector)
+
+	// Closest margin was 5/100 = 0.05
+	if tm.ClosestMargin < 0.04 || tm.ClosestMargin > 0.06 {
+		t.Errorf("expected ClosestMargin~0.05, got %f", tm.ClosestMargin)
+	}
+}
+
+func TestTensionMetrics_Finalize_PermanentLead(t *testing.T) {
+	tm := NewTensionMetrics(2)
+	detector := &ScoreLeaderDetector{}
+
+	// Player 0 leads turn 0
+	state := &GameState{Players: []PlayerState{{Score: 10}, {Score: 5}}}
+	tm.Update(state, detector)
+
+	// Player 1 leads turn 1
+	state = &GameState{Players: []PlayerState{{Score: 10}, {Score: 15}}}
+	tm.Update(state, detector)
+
+	// Player 1 still leads turn 2
+	state = &GameState{Players: []PlayerState{{Score: 10}, {Score: 20}}}
+	tm.Update(state, detector)
+
+	// Player 1 still leads turn 3
+	state = &GameState{Players: []PlayerState{{Score: 10}, {Score: 25}}}
+	tm.Update(state, detector)
+
+	// Player 1 wins - took permanent lead at turn 1
+	tm.Finalize(1)
+
+	if tm.DecisiveTurn != 1 {
+		t.Errorf("expected DecisiveTurn=1 (permanent lead), got %d", tm.DecisiveTurn)
+	}
+}
+
+func TestTensionMetrics_Finalize_Draw(t *testing.T) {
+	tm := NewTensionMetrics(2)
+	tm.TotalTurns = 50
+
+	// Draw game - decisive turn should be at end (max tension)
+	tm.Finalize(-1)
+
+	if tm.DecisiveTurn != 50 {
+		t.Errorf("expected DecisiveTurn=50 (draw), got %d", tm.DecisiveTurn)
+	}
+}
+
+func TestTensionMetrics_DecisiveTurnPct(t *testing.T) {
+	tm := NewTensionMetrics(2)
+	tm.TotalTurns = 100
+	tm.DecisiveTurn = 75
+
+	pct := tm.DecisiveTurnPct()
+	if pct < 0.74 || pct > 0.76 {
+		t.Errorf("expected DecisiveTurnPct=0.75, got %f", pct)
+	}
+}
