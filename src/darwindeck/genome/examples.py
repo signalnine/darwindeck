@@ -13,6 +13,9 @@ from darwindeck.genome.schema import (
     Location,
     Suit,
     Rank,
+    SpecialEffect,
+    EffectType,
+    TargetSelector,
 )
 from darwindeck.genome.conditions import Condition, ConditionType, Operator, CompoundCondition
 
@@ -977,10 +980,70 @@ def create_spades_genome() -> GameGenome:
     )
 
 
+def create_uno_genome() -> GameGenome:
+    """
+    Uno-style game with special effects.
+
+    Mechanics:
+    - Match rank or suit of top discard
+    - 2s force next player to draw 2
+    - Jacks skip next player
+    - Queens reverse direction
+    - Kings give extra turn
+    """
+    return GameGenome(
+        schema_version="1.0",
+        genome_id="uno-style",
+        generation=0,
+        setup=SetupRules(
+            cards_per_player=7,
+            initial_discard_count=1,  # Start with one card face up
+        ),
+        turn_structure=TurnStructure(phases=[
+            PlayPhase(
+                target=Location.DISCARD,
+                valid_play_condition=CompoundCondition(
+                    logic="OR",
+                    conditions=[
+                        Condition(type=ConditionType.CARD_MATCHES_RANK, reference="top_discard"),
+                        Condition(type=ConditionType.CARD_MATCHES_SUIT, reference="top_discard"),
+                    ]
+                ),
+                min_cards=1,
+                max_cards=1,
+                mandatory=False,  # Can choose not to play
+                pass_if_unable=True,
+            ),
+            DrawPhase(
+                source=Location.DECK,
+                count=1,
+                mandatory=False,  # Only draw if didn't play
+                condition=Condition(
+                    type=ConditionType.HAND_SIZE,
+                    operator=Operator.EQ,
+                    value=0,  # Dummy - controlled by pass_if_unable
+                ),
+            ),
+        ]),
+        special_effects=[
+            SpecialEffect(Rank.TWO, EffectType.DRAW_CARDS, TargetSelector.NEXT_PLAYER, 2),
+            SpecialEffect(Rank.JACK, EffectType.SKIP_NEXT, TargetSelector.NEXT_PLAYER, 1),
+            SpecialEffect(Rank.QUEEN, EffectType.REVERSE_DIRECTION, TargetSelector.ALL_OPPONENTS, 1),
+            SpecialEffect(Rank.KING, EffectType.EXTRA_TURN, TargetSelector.NEXT_PLAYER, 1),
+        ],
+        win_conditions=[
+            WinCondition(type="empty_hand"),
+        ],
+        scoring_rules=[],
+        max_turns=200,
+        player_count=2,
+    )
+
+
 def get_seed_genomes() -> List[GameGenome]:
     """Get all seed genomes for initial population in Phase 4.
 
-    Returns a diverse set of 16 games to seed the genetic algorithm:
+    Returns a diverse set of 17 games to seed the genetic algorithm:
 
     Luck-based:
     - War: Pure luck baseline
@@ -997,6 +1060,7 @@ def get_seed_genomes() -> List[GameGenome]:
     - Old Maid: Pairing and avoidance
     - President/Daifugō: Climbing game (2 is high)
     - Fan Tan/Sevens: Sequential building
+    - Uno-style: Matching with special effects
 
     Set Collection:
     - Gin Rummy: Set collection and melds
@@ -1022,6 +1086,7 @@ def get_seed_genomes() -> List[GameGenome]:
         create_old_maid_genome(),
         create_president_genome(),
         create_fan_tan_genome(),
+        create_uno_genome(),
         # Set Collection
         create_gin_rummy_genome(),
         create_go_fish_genome(),
