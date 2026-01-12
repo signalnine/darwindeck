@@ -9,7 +9,7 @@ from dataclasses import replace
 from darwindeck.genome.schema import (
     GameGenome, WinCondition, SetupRules, TurnStructure,
     PlayPhase, DrawPhase, DiscardPhase, TrickPhase, ClaimPhase,
-    Location, Suit
+    Location, Suit, SpecialEffect, EffectType, TargetSelector, Rank
 )
 from darwindeck.genome.conditions import Condition, ConditionType, Operator
 from darwindeck.evolution.naming import generate_name
@@ -699,6 +699,128 @@ class ModifyWinConditionMutation(MutationOperator):
             min_turns=genome.min_turns,
             player_count=genome.player_count,
         )
+
+
+class AddEffectMutation(MutationOperator):
+    """Add a random special effect to the genome."""
+
+    def __init__(self, probability: float = 0.1):
+        """Initialize effect addition mutation.
+
+        Args:
+            probability: Mutation probability (default: 10%)
+        """
+        super().__init__(probability)
+
+    def mutate(self, genome: GameGenome) -> GameGenome:
+        """Add a new random special effect.
+
+        Args:
+            genome: Genome to mutate
+
+        Returns:
+            New genome with additional special effect
+        """
+        new_effect = SpecialEffect(
+            trigger_rank=random.choice(list(Rank)),
+            effect_type=random.choice(list(EffectType)),
+            target=random.choice([
+                TargetSelector.NEXT_PLAYER,
+                TargetSelector.ALL_OPPONENTS,
+            ]),
+            value=random.randint(1, 3),
+        )
+        new_effects = list(genome.special_effects) + [new_effect]
+        return replace(genome, special_effects=new_effects, generation=genome.generation + 1)
+
+
+class RemoveEffectMutation(MutationOperator):
+    """Remove a random special effect from the genome."""
+
+    def __init__(self, probability: float = 0.1):
+        """Initialize effect removal mutation.
+
+        Args:
+            probability: Mutation probability (default: 10%)
+        """
+        super().__init__(probability)
+
+    def mutate(self, genome: GameGenome) -> GameGenome:
+        """Remove a random special effect.
+
+        Args:
+            genome: Genome to mutate
+
+        Returns:
+            New genome with removed special effect, or original if no effects
+        """
+        if not genome.special_effects:
+            return genome
+        idx = random.randrange(len(genome.special_effects))
+        new_effects = [e for i, e in enumerate(genome.special_effects) if i != idx]
+        return replace(genome, special_effects=new_effects, generation=genome.generation + 1)
+
+
+class MutateEffectMutation(MutationOperator):
+    """Mutate one field of a random special effect."""
+
+    def __init__(self, probability: float = 0.15):
+        """Initialize effect mutation operator.
+
+        Args:
+            probability: Mutation probability (default: 15%)
+        """
+        super().__init__(probability)
+
+    def mutate(self, genome: GameGenome) -> GameGenome:
+        """Mutate one field of a random effect.
+
+        Args:
+            genome: Genome to mutate
+
+        Returns:
+            New genome with mutated effect, or original if no effects
+        """
+        if not genome.special_effects:
+            return genome
+
+        idx = random.randrange(len(genome.special_effects))
+        effect = genome.special_effects[idx]
+
+        field = random.choice(['rank', 'type', 'target', 'value'])
+        if field == 'rank':
+            mutated = SpecialEffect(
+                random.choice(list(Rank)),
+                effect.effect_type,
+                effect.target,
+                effect.value,
+            )
+        elif field == 'type':
+            mutated = SpecialEffect(
+                effect.trigger_rank,
+                random.choice(list(EffectType)),
+                effect.target,
+                effect.value,
+            )
+        elif field == 'target':
+            mutated = SpecialEffect(
+                effect.trigger_rank,
+                effect.effect_type,
+                random.choice([TargetSelector.NEXT_PLAYER, TargetSelector.ALL_OPPONENTS]),
+                effect.value,
+            )
+        else:  # value
+            new_value = max(1, min(4, effect.value + random.randint(-1, 1)))
+            mutated = SpecialEffect(
+                effect.trigger_rank,
+                effect.effect_type,
+                effect.target,
+                new_value,
+            )
+
+        new_effects = list(genome.special_effects)
+        new_effects[idx] = mutated
+        return replace(genome, special_effects=new_effects, generation=genome.generation + 1)
 
 
 class CrossoverOperator:
