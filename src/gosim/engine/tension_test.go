@@ -281,3 +281,125 @@ func TestChipLeaderDetector_GetMargin(t *testing.T) {
 		t.Errorf("expected margin=0.5, got %f", margin)
 	}
 }
+
+// SelectLeaderDetector tests
+
+func TestSelectLeaderDetector_EmptyHand(t *testing.T) {
+	genome := &Genome{
+		WinConditions: []WinCondition{{WinType: WinTypeEmptyHand}},
+	}
+
+	detector := SelectLeaderDetector(genome)
+	_, ok := detector.(*HandSizeLeaderDetector)
+	if !ok {
+		t.Errorf("expected HandSizeLeaderDetector for WinTypeEmptyHand")
+	}
+}
+
+func TestSelectLeaderDetector_HighScore(t *testing.T) {
+	genome := &Genome{
+		WinConditions: []WinCondition{{WinType: WinTypeHighScore}},
+	}
+
+	detector := SelectLeaderDetector(genome)
+	_, ok := detector.(*ScoreLeaderDetector)
+	if !ok {
+		t.Errorf("expected ScoreLeaderDetector for WinTypeHighScore")
+	}
+}
+
+func TestSelectLeaderDetector_LowScore(t *testing.T) {
+	genome := &Genome{
+		WinConditions: []WinCondition{{WinType: WinTypeLowScore}},
+	}
+
+	detector := SelectLeaderDetector(genome)
+	_, ok := detector.(*TrickAvoidanceLeaderDetector)
+	if !ok {
+		t.Errorf("expected TrickAvoidanceLeaderDetector for WinTypeLowScore")
+	}
+}
+
+func TestSelectLeaderDetector_MostTricks(t *testing.T) {
+	genome := &Genome{
+		WinConditions: []WinCondition{{WinType: WinTypeMostTricks}},
+	}
+
+	detector := SelectLeaderDetector(genome)
+	_, ok := detector.(*TrickLeaderDetector)
+	if !ok {
+		t.Errorf("expected TrickLeaderDetector for WinTypeMostTricks")
+	}
+}
+
+func TestSelectLeaderDetector_FewestTricks(t *testing.T) {
+	genome := &Genome{
+		WinConditions: []WinCondition{{WinType: WinTypeFewestTricks}},
+	}
+
+	detector := SelectLeaderDetector(genome)
+	_, ok := detector.(*TrickAvoidanceLeaderDetector)
+	if !ok {
+		t.Errorf("expected TrickAvoidanceLeaderDetector for WinTypeFewestTricks")
+	}
+}
+
+func TestSelectLeaderDetector_MostChips(t *testing.T) {
+	genome := &Genome{
+		WinConditions: []WinCondition{{WinType: WinTypeMostChips}},
+	}
+
+	detector := SelectLeaderDetector(genome)
+	_, ok := detector.(*ChipLeaderDetector)
+	if !ok {
+		t.Errorf("expected ChipLeaderDetector for WinTypeMostChips")
+	}
+}
+
+func TestSelectLeaderDetector_BettingPhase(t *testing.T) {
+	genome := &Genome{
+		TurnPhases: []PhaseDescriptor{{PhaseType: PhaseTypeBetting}},
+	}
+
+	detector := SelectLeaderDetector(genome)
+	_, ok := detector.(*ChipLeaderDetector)
+	if !ok {
+		t.Errorf("expected ChipLeaderDetector for betting game")
+	}
+}
+
+func TestSelectLeaderDetector_TrickPhase(t *testing.T) {
+	genome := &Genome{
+		TurnPhases: []PhaseDescriptor{{PhaseType: PhaseTypeTrick}},
+	}
+
+	detector := SelectLeaderDetector(genome)
+	_, ok := detector.(*TrickLeaderDetector)
+	if !ok {
+		t.Errorf("expected TrickLeaderDetector for trick-taking game")
+	}
+}
+
+func TestSelectLeaderDetector_Default(t *testing.T) {
+	genome := &Genome{}
+
+	detector := SelectLeaderDetector(genome)
+	_, ok := detector.(*ScoreLeaderDetector)
+	if !ok {
+		t.Errorf("expected ScoreLeaderDetector as default")
+	}
+}
+
+func TestSelectLeaderDetector_WinConditionTakesPrecedence(t *testing.T) {
+	// WinCondition should take precedence over phase type
+	genome := &Genome{
+		WinConditions: []WinCondition{{WinType: WinTypeEmptyHand}},
+		TurnPhases:    []PhaseDescriptor{{PhaseType: PhaseTypeBetting}},
+	}
+
+	detector := SelectLeaderDetector(genome)
+	_, ok := detector.(*HandSizeLeaderDetector)
+	if !ok {
+		t.Errorf("expected HandSizeLeaderDetector - WinCondition should take precedence over phase type")
+	}
+}

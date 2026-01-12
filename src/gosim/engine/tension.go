@@ -1,5 +1,21 @@
 package engine
 
+// WinType constants for tension detection
+// These map to win condition types in bytecode
+const (
+	WinTypeEmptyHand    uint8 = 0 // Shedding games - empty hand wins
+	WinTypeHighScore    uint8 = 1 // Score-based - highest score wins
+	WinTypeFirstToScore uint8 = 2 // Race to threshold
+	WinTypeCaptureAll   uint8 = 3 // War-style capture
+	WinTypeLowScore     uint8 = 4 // Avoidance games (Hearts) - lowest score wins
+	WinTypeAllHandEmpty uint8 = 5 // Trick-taking hand end
+	WinTypeBestHand     uint8 = 6 // Poker-style hand comparison
+	WinTypeMostCaptured uint8 = 7 // Scopa-style most cards
+	WinTypeMostTricks   uint8 = 8 // Trick-collecting games (Spades)
+	WinTypeFewestTricks uint8 = 9 // Trick-avoidance games (Hearts)
+	WinTypeMostChips    uint8 = 10 // Poker cash games
+)
+
 // TensionMetrics tracks tension curve data during simulation
 type TensionMetrics struct {
 	LeadChanges   int     // Number of times leader switched
@@ -262,4 +278,41 @@ func (d *ChipLeaderDetector) GetMargin(state *GameState) float32 {
 		return 0
 	}
 	return float32(first-second) / float32(totalChips)
+}
+
+// SelectLeaderDetector chooses the appropriate detector based on genome's win conditions and phases.
+// Priority: WinConditions first (most reliable), then phase types, then default to ScoreLeaderDetector.
+func SelectLeaderDetector(genome *Genome) LeaderDetector {
+	// Check win conditions first - most reliable indicator of game type
+	for _, wc := range genome.WinConditions {
+		switch wc.WinType {
+		case WinTypeEmptyHand:
+			return &HandSizeLeaderDetector{}
+		case WinTypeHighScore, WinTypeFirstToScore:
+			return &ScoreLeaderDetector{}
+		case WinTypeLowScore, WinTypeFewestTricks:
+			return &TrickAvoidanceLeaderDetector{}
+		case WinTypeMostTricks:
+			return &TrickLeaderDetector{}
+		case WinTypeMostChips, WinTypeBestHand:
+			return &ChipLeaderDetector{}
+		}
+	}
+
+	// Check for betting games (have BettingPhase)
+	for _, phase := range genome.TurnPhases {
+		if phase.PhaseType == PhaseTypeBetting {
+			return &ChipLeaderDetector{}
+		}
+	}
+
+	// Check phases for trick-taking hints
+	for _, phase := range genome.TurnPhases {
+		if phase.PhaseType == PhaseTypeTrick {
+			return &TrickLeaderDetector{}
+		}
+	}
+
+	// Default to score-based
+	return &ScoreLeaderDetector{}
 }
