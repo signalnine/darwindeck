@@ -60,6 +60,14 @@ class Visibility(Enum):
     FACE_UP = "face_up"
     OWNER_ONLY = "owner_only"
     REVEALED = "revealed"
+
+class EffectType(Enum):
+    """Types of immediate effects a card can trigger."""
+    SKIP_NEXT = "skip_next"           # Skip the next player's turn
+    REVERSE_DIRECTION = "reverse"      # Reverse play direction
+    DRAW_CARDS = "draw_cards"          # Force target to draw N cards
+    EXTRA_TURN = "extra_turn"          # Current player goes again
+    FORCE_DISCARD = "force_discard"    # Force target to discard N cards
 ```
 
 ### Condition System
@@ -176,6 +184,35 @@ class ClaimPhase:
     pile_penalty: bool = True      # Loser takes discard pile
 ```
 
+### Special Effects
+
+```python
+@dataclass(frozen=True)
+class SpecialEffect:
+    """Card-triggered immediate effect."""
+    trigger_rank: Rank              # Which rank triggers this effect
+    effect_type: EffectType         # What happens
+    target: TargetSelector          # Who is affected
+    value: int = 1                  # Magnitude (cards to draw, turns to skip)
+```
+
+Effects are triggered immediately when a card of the matching rank is played. They modify game state (turn order, player hands) before the turn advances.
+
+**Example effects:**
+```python
+# Draw 2: Next player draws 2 cards
+SpecialEffect(Rank.TWO, EffectType.DRAW_CARDS, TargetSelector.NEXT_PLAYER, value=2)
+
+# Skip: Next player loses their turn
+SpecialEffect(Rank.JACK, EffectType.SKIP_NEXT, TargetSelector.NEXT_PLAYER)
+
+# Reverse: Play direction reverses
+SpecialEffect(Rank.QUEEN, EffectType.REVERSE_DIRECTION, TargetSelector.ALL_OPPONENTS)
+
+# Extra turn: Current player goes again
+SpecialEffect(Rank.KING, EffectType.EXTRA_TURN, TargetSelector.NEXT_PLAYER)
+```
+
 ### Game Structure
 
 ```python
@@ -214,7 +251,7 @@ class GameGenome:
     generation: int
     setup: SetupRules
     turn_structure: TurnStructure
-    special_effects: list       # Reserved for future use
+    special_effects: list[SpecialEffect]  # Card-triggered effects
     win_conditions: list[WinCondition]
     scoring_rules: list         # Reserved for future use
     max_turns: int = 100
@@ -429,11 +466,59 @@ GameGenome(
 )
 ```
 
+### Uno-Style (Matching with Special Effects)
+
+```python
+GameGenome(
+    schema_version="1.0",
+    genome_id="uno-style",
+    generation=0,
+    setup=SetupRules(
+        cards_per_player=7,
+        initial_deck="standard_52",
+        initial_discard_count=1
+    ),
+    turn_structure=TurnStructure(
+        phases=[
+            PlayPhase(
+                target=Location.DISCARD,
+                valid_play_condition=CompoundCondition(
+                    logic="OR",
+                    conditions=[
+                        Condition(type=ConditionType.CARD_MATCHES_RANK, reference="top_discard"),
+                        Condition(type=ConditionType.CARD_MATCHES_SUIT, reference="top_discard"),
+                    ]
+                ),
+                min_cards=1,
+                max_cards=1,
+                mandatory=False,
+                pass_if_unable=True
+            ),
+            DrawPhase(
+                source=Location.DECK,
+                count=1,
+                mandatory=False
+            )
+        ]
+    ),
+    special_effects=[
+        SpecialEffect(Rank.TWO, EffectType.DRAW_CARDS, TargetSelector.NEXT_PLAYER, 2),
+        SpecialEffect(Rank.JACK, EffectType.SKIP_NEXT, TargetSelector.NEXT_PLAYER, 1),
+        SpecialEffect(Rank.QUEEN, EffectType.REVERSE_DIRECTION, TargetSelector.ALL_OPPONENTS, 1),
+        SpecialEffect(Rank.KING, EffectType.EXTRA_TURN, TargetSelector.NEXT_PLAYER, 1),
+    ],
+    win_conditions=[WinCondition(type="empty_hand")],
+    scoring_rules=[],
+    max_turns=200,
+    player_count=2
+)
+```
+
 ---
 
 ## Complete Seed Game List
 
-The following 16 games are used to seed the genetic algorithm:
+The following 17 games are used to seed the genetic algorithm:
 
 | Game | Category | Players | Key Mechanics |
 |------|----------|---------|---------------|
@@ -444,6 +529,7 @@ The following 16 games are used to seed the genetic algorithm:
 | **Knock-Out Whist** | Trick-taking | 4 | Trump suit, elimination |
 | **Spades** | Trick-taking | 4 | Fixed trump, suit breaking |
 | **Crazy 8s** | Shedding | 2 | Matching, wildcards |
+| **Uno-Style** | Shedding | 2 | Matching, special effects (Skip, Reverse, Draw 2) |
 | **Old Maid** | Shedding | 2 | Pairing, avoidance |
 | **President** | Climbing | 4 | Beat-or-pass, special rankings |
 | **Fan Tan** | Building | 2 | Sequential play |
@@ -467,6 +553,7 @@ The following 16 games are used to seed the genetic algorithm:
 | Discard cards | DiscardPhase | Gin Rummy, Poker |
 | Trick-taking | TrickPhase | Hearts, Spades, Whist variants |
 | Bluffing/claims | ClaimPhase | Cheat/I Doubt It |
+| Special effects | SpecialEffect | Uno-Style (Skip, Reverse, Draw N) |
 
 ### Condition Types
 
@@ -486,7 +573,6 @@ The following features are reserved for future development:
 - **Team play**: Partnership scoring, shared captures
 - **Bidding**: Contract declarations
 - **Complex scoring**: ScoringRule dataclass, end-game evaluation
-- **Special effects**: Card-triggered actions beyond basic play
 
 ---
 
