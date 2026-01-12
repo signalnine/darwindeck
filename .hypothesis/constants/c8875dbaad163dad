@@ -1,4 +1,0 @@
-# file: /home/gabe/cards-playtest/src/darwindeck/genome/serialization.py
-# hypothesis_version: 6.150.0
-
-['BettingPhase', 'ClaimPhase', 'DiscardPhase', 'DrawPhase', 'PlayPhase', 'TrickPhase', 'Unknown', 'allow_challenge', 'breaking_suit', 'cards_per_player', 'compound', 'condition', 'condition_type', 'conditions', 'count', 'effect_type', 'generation', 'genome_id', 'high_card_wins', 'initial_deck', 'is_trick_based', 'lead_suit_required', 'logic', 'mandatory', 'max_cards', 'max_raises', 'max_turns', 'min_bet', 'min_cards', 'min_turns', 'operator', 'phases', 'pile_penalty', 'player_count', 'reference', 'schema_version', 'scoring_rules', 'sequential_rank', 'setup', 'simple', 'source', 'special_effects', 'standard_52', 'starting_chips', 'target', 'threshold', 'tricks_per_hand', 'trigger_rank', 'trump_suit', 'turn_structure', 'type', 'valid_play_condition', 'value', 'win_conditions']

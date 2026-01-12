@@ -1,4 +1,0 @@
-# file: /home/gabe/cards-playtest/src/darwindeck/genome/examples.py
-# hypothesis_version: 6.150.0
-
-[100, 150, 200, 300, 1000, 2000, '1.0', 'OR', 'all_hands_empty', 'best_hand', 'betting-war', 'blackjack', 'capture_all', 'cheat', 'crazy-eights', 'deck', 'draw-poker', 'empty_hand', 'fan-tan', 'gin-rummy-simplified', 'go-fish', 'hand', 'hearts-classic', 'high_score', 'knockout-whist', 'low_score', 'most_captured', 'most_tricks', 'old-maid', 'president', 'scopa', 'scotch-whist', 'spades', 'standard_52', 'tableau', 'top_discard', 'two_high', 'valid_plays', 'war-baseline']

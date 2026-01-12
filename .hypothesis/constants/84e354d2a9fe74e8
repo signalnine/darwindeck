@@ -1,4 +1,0 @@
-# file: /home/gabe/cards-playtest/src/darwindeck/simulation/state.py
-# hypothesis_version: 6.150.0
-
-['GameState', 'PlayerState', 'active_player', 'community', 'deck', 'discard', 'hand', 'player_id', 'players', 'score', 'tableau', 'turn']
