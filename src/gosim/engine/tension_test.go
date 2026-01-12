@@ -18,3 +18,56 @@ func TestNewTensionMetrics(t *testing.T) {
 		t.Errorf("expected leaderHistory capacity >= 100, got %d", cap(tm.leaderHistory))
 	}
 }
+
+func TestScoreLeaderDetector_GetLeader(t *testing.T) {
+	detector := &ScoreLeaderDetector{}
+
+	state := &GameState{
+		NumPlayers: 3,
+		Players: []PlayerState{
+			{Score: 10},
+			{Score: 25},
+			{Score: 15},
+		},
+	}
+
+	leader := detector.GetLeader(state)
+	if leader != 1 {
+		t.Errorf("expected leader=1 (highest score), got %d", leader)
+	}
+}
+
+func TestScoreLeaderDetector_Tie(t *testing.T) {
+	detector := &ScoreLeaderDetector{}
+
+	state := &GameState{
+		NumPlayers: 2,
+		Players: []PlayerState{
+			{Score: 20},
+			{Score: 20},
+		},
+	}
+
+	leader := detector.GetLeader(state)
+	if leader != -1 {
+		t.Errorf("expected leader=-1 (tie), got %d", leader)
+	}
+}
+
+func TestScoreLeaderDetector_GetMargin(t *testing.T) {
+	detector := &ScoreLeaderDetector{}
+
+	state := &GameState{
+		NumPlayers: 2,
+		Players: []PlayerState{
+			{Score: 100},
+			{Score: 75},
+		},
+	}
+
+	margin := detector.GetMargin(state)
+	// (100-75)/100 = 0.25
+	if margin < 0.24 || margin > 0.26 {
+		t.Errorf("expected margin=0.25, got %f", margin)
+	}
+}
