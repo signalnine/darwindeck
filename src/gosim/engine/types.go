@@ -32,6 +32,7 @@ type PlayerState struct {
 	Chips      int64 // Chip/token count for betting games (int64 for precision)
 	CurrentBet int64 // Current bet in this round (int64 for precision)
 	HasFolded  bool  // Folded this round
+	IsAllIn    bool  // Track all-in status (can't act but still in hand)
 }
 
 // Claim represents a bluffing claim for games like I Doubt It, Cheat, BS
@@ -60,8 +61,10 @@ type GameState struct {
 	TurnNumber    uint32
 	WinnerID      int8 // -1 = no winner yet, 0/1 = player ID
 	// Optional extensions for betting games
-	Pot        int64 // Current pot size (int64 for precision)
-	CurrentBet int64 // Highest bet in current round (int64 for precision)
+	Pot                int64 // Current pot size (int64 for precision)
+	CurrentBet         int64 // Highest bet in current round (int64 for precision)
+	RaiseCount         int   // Raises this round
+	BettingStartPlayer int   // Rotates each hand for position fairness
 	// Optional extensions for bluffing games
 	CurrentClaim *Claim // nil if no active claim
 	// Trick-taking game state
@@ -114,6 +117,7 @@ func (s *GameState) Reset() {
 		s.Players[i].Chips = 0
 		s.Players[i].CurrentBet = 0
 		s.Players[i].HasFolded = false
+		s.Players[i].IsAllIn = false
 	}
 
 	s.Deck = s.Deck[:0]
@@ -124,6 +128,8 @@ func (s *GameState) Reset() {
 	s.WinnerID = -1
 	s.Pot = 0
 	s.CurrentBet = 0
+	s.RaiseCount = 0
+	s.BettingStartPlayer = 0
 	s.CurrentClaim = nil
 	// Trick-taking state
 	s.CurrentTrick = s.CurrentTrick[:0]
@@ -153,6 +159,7 @@ func (s *GameState) Clone() *GameState {
 		clone.Players[i].Chips = s.Players[i].Chips
 		clone.Players[i].CurrentBet = s.Players[i].CurrentBet
 		clone.Players[i].HasFolded = s.Players[i].HasFolded
+		clone.Players[i].IsAllIn = s.Players[i].IsAllIn
 	}
 
 	clone.Deck = append(clone.Deck, s.Deck...)
@@ -169,6 +176,8 @@ func (s *GameState) Clone() *GameState {
 	clone.WinnerID = s.WinnerID
 	clone.Pot = s.Pot
 	clone.CurrentBet = s.CurrentBet
+	clone.RaiseCount = s.RaiseCount
+	clone.BettingStartPlayer = s.BettingStartPlayer
 
 	// Clone claim if present
 	if s.CurrentClaim != nil {
@@ -194,4 +203,31 @@ func (s *GameState) Clone() *GameState {
 	clone.SkipCount = s.SkipCount
 
 	return clone
+}
+
+// InitializeChips sets up starting chips for all players
+func (gs *GameState) InitializeChips(startingChips int) {
+	for i := range gs.Players {
+		gs.Players[i].Chips = int64(startingChips)
+		gs.Players[i].CurrentBet = 0
+		gs.Players[i].HasFolded = false
+		gs.Players[i].IsAllIn = false
+	}
+	gs.Pot = 0
+	gs.CurrentBet = 0
+	gs.RaiseCount = 0
+	gs.BettingStartPlayer = 0
+}
+
+// ResetHand resets betting state for a new hand while preserving chips
+func (gs *GameState) ResetHand() {
+	for i := range gs.Players {
+		gs.Players[i].CurrentBet = 0
+		gs.Players[i].HasFolded = false
+		gs.Players[i].IsAllIn = false
+	}
+	gs.Pot = 0
+	gs.CurrentBet = 0
+	gs.RaiseCount = 0
+	gs.BettingStartPlayer = (gs.BettingStartPlayer + 1) % len(gs.Players)
 }
