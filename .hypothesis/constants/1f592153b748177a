@@ -1,0 +1,4 @@
+# file: /home/gabe/cards-playtest/src/darwindeck/genome/actions.py
+# hypothesis_version: 6.150.0
+
+['add_score', 'card_indices', 'choose_suit', 'collect_trick', 'discard_card', 'draw_cards', 'follow_suit', 'lead_card', 'pass', 'play_card', 'play_trump', 'primitive', 'reverse_order', 'score_trick', 'skip_turn', 'transfer_cards']

@@ -745,7 +745,8 @@ func runBettingRound(state *engine.GameState, genome *engine.Genome, bettingPhas
 		needsToAct[i] = !p.HasFolded && !p.IsAllIn && p.Chips > 0
 	}
 
-	currentPlayer := state.BettingStartPlayer
+	// Ensure starting player is in bounds (BettingStartPlayer may exceed NumPlayers after rotation)
+	currentPlayer := state.BettingStartPlayer % int(state.NumPlayers)
 	maxActions := int(state.NumPlayers) * (bettingPhase.MaxRaises + 2) * 2 // Safety limit
 
 	for actionCount := 0; actionCount < maxActions; actionCount++ {
@@ -835,7 +836,8 @@ func runBettingRoundAsymmetric(state *engine.GameState, genome *engine.Genome, b
 		needsToAct[i] = !p.HasFolded && !p.IsAllIn && p.Chips > 0
 	}
 
-	currentPlayer := state.BettingStartPlayer
+	// Ensure starting player is in bounds (BettingStartPlayer may exceed NumPlayers after rotation)
+	currentPlayer := state.BettingStartPlayer % int(state.NumPlayers)
 	maxActions := int(state.NumPlayers) * (bettingPhase.MaxRaises + 2) * 2 // Safety limit
 
 	for actionCount := 0; actionCount < maxActions; actionCount++ {
