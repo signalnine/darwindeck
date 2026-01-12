@@ -1,4 +1,0 @@
-# file: /home/gabe/cards-playtest/src/darwindeck/genome/conditions.py
-# hypothesis_version: 6.150.0
-
-['!=', '<', '<=', '==', '>', '>=', 'AND', 'ConditionOrCompound', 'OR', 'card_beats_top', 'card_is_rank', 'card_matches_color', 'card_matches_rank', 'card_matches_suit', 'conditions', 'hand_size', 'hand_value', 'has_matching_pair', 'has_run_of_n', 'has_set_of_n', 'has_trump', 'is_trick_winner', 'location_empty', 'location_size', 'logic', 'matches_or_wild', 'must_follow_suit', 'player_has_card', 'score_compare', 'sequence_adjacent', 'suit_broken', 'trick_contains_card']
