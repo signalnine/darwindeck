@@ -1,0 +1,4 @@
+# file: /home/gabe/cards-playtest/src/darwindeck/genome/schema.py
+# hypothesis_version: 6.150.0
+
+[100, '10', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'C', 'ConditionOrCompound', 'D', 'H', 'J', 'K', 'Phase', 'Q', 'S', 'all_in', 'all_opponents', 'bet', 'call', 'check', 'deck', 'discard', 'draw_cards', 'extra_turn', 'face_down', 'face_up', 'fold', 'force_discard', 'hand', 'is_trick_based', 'left_opponent', 'next_player', 'opponent_discard', 'opponent_hand', 'owner_only', 'phases', 'player_choice', 'prev_player', 'raise', 'random_opponent', 'revealed', 'reverse', 'right_opponent', 'skip_next', 'standard_52', 'tableau', 'tricks_per_hand', 'wild_cards']

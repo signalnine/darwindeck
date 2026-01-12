@@ -1,0 +1,4 @@
+# file: /home/gabe/cards-playtest/src/darwindeck/evolution/engine.py
+# hypothesis_version: 6.150.0
+
+[0.0, 0.005, 0.1, 0.2, 0.3, 0.5, 0.6, 0.7, 0.85, 1.0, 1.5, 30.0, 60.0, 100, 500, ' [AGGRESSIVE]', '=', 'EVOLUTION_WORKERS', 'Evolution complete!', 'balanced', 'high-skill', 'low-skill', 'party']
