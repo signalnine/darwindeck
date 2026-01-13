@@ -1,0 +1,119 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "PearlSuit",
+  "generation": 3,
+  "setup": {
+    "cards_per_player": 17,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 0
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "HAND_SIZE",
+          "operator": "GE",
+          "value": 3,
+          "reference": null
+        },
+        "min_cards": 2,
+        "max_cards": 1,
+        "mandatory": false
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "LOCATION_SIZE",
+          "operator": "LE",
+          "value": 8,
+          "reference": null
+        },
+        "min_cards": 1,
+        "max_cards": 1,
+        "mandatory": false
+      },
+      {
+        "type": "TrickPhase",
+        "lead_suit_required": true,
+        "trump_suit": null,
+        "high_card_wins": false,
+        "breaking_suit": null
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "LOCATION_SIZE",
+          "operator": "LE",
+          "value": 4,
+          "reference": null
+        },
+        "min_cards": 1,
+        "max_cards": 5,
+        "mandatory": false
+      },
+      {
+        "type": "ClaimPhase",
+        "min_cards": 1,
+        "max_cards": 4,
+        "sequential_rank": true,
+        "allow_challenge": true,
+        "pile_penalty": true
+      }
+    ],
+    "is_trick_based": true,
+    "tricks_per_hand": 13
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "best_hand",
+      "threshold": null
+    },
+    {
+      "type": "empty_hand",
+      "threshold": null
+    },
+    {
+      "type": "first_to_score",
+      "threshold": 500
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 612,
+  "min_turns": 52,
+  "player_count": 2,
+  "fitness": 0.88275,
+  "fitness_rank": 19,
+  "fitness_metrics": {
+    "decision_density": 0.65,
+    "comeback_potential": 1.0,
+    "tension_curve": 1.0,
+    "interaction_frequency": 1.0,
+    "rules_complexity": 0.5049999999999999,
+    "session_length": 0.23164443969726561,
+    "skill_vs_luck": 0.9249999999999999,
+    "bluffing_depth": 0.7873837209302326,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "skill_evaluation": {
+    "greedy_win_rate": 0.76,
+    "greedy_wins_as_p0": 28,
+    "greedy_wins_as_p1": 48,
+    "mcts_win_rate": 0.97,
+    "mcts_wins_as_p0": 49,
+    "mcts_wins_as_p1": 48,
+    "skill_score": 0.865,
+    "first_player_advantage": -0.18999999999999995,
+    "total_games": 200,
+    "timed_out": false
+  },
+  "skill_rank": 19
+}

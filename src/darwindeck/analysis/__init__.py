@@ -9,6 +9,7 @@ from darwindeck.analysis.mutation_sampler import (
     SamplingConfig,
     FitnessTrajectory,
     sample_trajectories,
+    sample_trajectories_parallel,
 )
 from darwindeck.analysis.random_baseline import (
     BaselineConfig,
@@ -40,6 +41,7 @@ __all__ = [
     "SamplingConfig",
     "FitnessTrajectory",
     "sample_trajectories",
+    "sample_trajectories_parallel",
     # Baseline
     "BaselineConfig",
     "BaselineStatistics",

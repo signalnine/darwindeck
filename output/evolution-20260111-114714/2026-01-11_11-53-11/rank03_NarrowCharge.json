@@ -1,0 +1,85 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "NarrowCharge",
+  "generation": 33,
+  "setup": {
+    "cards_per_player": 11,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 1
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "HAND_SIZE",
+          "operator": "LE",
+          "value": 8,
+          "reference": null
+        },
+        "min_cards": 1,
+        "max_cards": 4,
+        "mandatory": true
+      },
+      {
+        "type": "Unknown"
+      },
+      {
+        "type": "Unknown"
+      },
+      {
+        "type": "Unknown"
+      }
+    ],
+    "is_trick_based": true,
+    "tricks_per_hand": 13
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "empty_hand",
+      "threshold": null
+    },
+    {
+      "type": "empty_hand",
+      "threshold": null
+    },
+    {
+      "type": "all_hands_empty",
+      "threshold": null
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 501,
+  "min_turns": 52,
+  "player_count": 2,
+  "fitness": 0.8409583060539844,
+  "fitness_rank": 3,
+  "fitness_metrics": {
+    "decision_density": 0.6483992885726989,
+    "comeback_potential": 0.98,
+    "tension_curve": 1.0,
+    "interaction_frequency": 1.0,
+    "rules_complexity": 0.58,
+    "session_length": 0.3998222181532118,
+    "skill_vs_luck": 0.8815,
+    "bluffing_depth": 0.7618280425602653,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "skill_evaluation": {
+    "greedy_win_rate": 0.24,
+    "greedy_wins_as_p0": 3,
+    "greedy_wins_as_p1": 21,
+    "mcts_win_rate": 1.0,
+    "mcts_wins_as_p0": 50,
+    "mcts_wins_as_p1": 50,
+    "skill_score": 0.62,
+    "first_player_advantage": -0.17999999999999994,
+    "total_games": 200,
+    "timed_out": false
+  },
+  "skill_rank": 3
+}

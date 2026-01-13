@@ -1,0 +1,69 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "GlowingStag",
+  "generation": 241,
+  "setup": {
+    "cards_per_player": 19,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 1
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "compound",
+          "logic": "OR",
+          "conditions": [
+            {
+              "type": "simple",
+              "condition_type": "HAND_SIZE",
+              "operator": "GE",
+              "value": 3,
+              "reference": null
+            }
+          ]
+        },
+        "min_cards": 0,
+        "max_cards": 10,
+        "mandatory": false
+      },
+      {
+        "type": "DrawPhase",
+        "source": "DECK",
+        "count": 6,
+        "mandatory": false,
+        "condition": null
+      }
+    ],
+    "is_trick_based": true,
+    "tricks_per_hand": 13
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "high_score",
+      "threshold": 200
+    },
+    {
+      "type": "capture_all",
+      "threshold": null
+    },
+    {
+      "type": "capture_all",
+      "threshold": null
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 831,
+  "min_turns": 52,
+  "player_count": 2,
+  "fitness": 0.9353473193473194,
+  "fitness_rank": 6,
+  "mcts_win_rate": 0.0,
+  "skill_rank": 6,
+  "mcts_wins_as_p1": 0,
+  "mcts_wins_as_p2": 0,
+  "skill_eval_timed_out": true
+}

@@ -1,0 +1,455 @@
+🖥️  Detected 256 CPU cores
+🔧 Using 256 parallel workers
+
+🧬 Evolution Configuration:
+  Population size: 100
+  Generations: 50
+  Workers: 256
+  Output directory: output/evolution-phase1b
+
+🚀 Starting evolution...
+Creating evolution engine...
+  Population size: 100
+  Max generations: 50
+  Elitism rate: 10%
+  Crossover rate: 70%
+  Tournament size: 3
+  Plateau threshold: 30
+Evolution engine initialized with 256 parallel workers
+Starting evolutionary loop...
+Initializing population of size 100
+Population initialized with 100 individuals
+Evaluating 100 individuals using 256 workers...
+Evaluation complete. Avg fitness: 0.297
+
+============================================================
+Generation 1/50
+============================================================
+🏆 New best fitness: 0.6692 (genome: hearts-simplified-mutant-4)
+Best fitness: 0.6692
+Avg fitness: 0.2969
+Diversity: 0.1055
+Preserved 10 elite individuals
+Evaluating 90 individuals using 256 workers...
+Evaluation complete. Avg fitness: 0.418
+
+============================================================
+Generation 2/50
+============================================================
+🏆 New best fitness: 0.7029 (genome: hearts-simplified-mutant-3-x-war-baseline-seed-36)
+Best fitness: 0.7029
+Avg fitness: 0.4178
+Diversity: 0.0974
+⚠️  Low diversity: 0.0974 (threshold: 0.1)
+Preserved 10 elite individuals
+Evaluating 90 individuals using 256 workers...
+Evaluation complete. Avg fitness: 0.454
+
+============================================================
+Generation 3/50
+============================================================
+🏆 New best fitness: 0.7679 (genome: hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36)
+Best fitness: 0.7679
+Avg fitness: 0.4543
+Diversity: 0.0889
+⚠️  Low diversity: 0.0889 (threshold: 0.1)
+Preserved 10 elite individuals
+Evaluating 90 individuals using 256 workers...
+Evaluation complete. Avg fitness: 0.472
+
+============================================================
+Generation 4/50
+============================================================
+🏆 New best fitness: 0.8265 (genome: hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-mutant-4)
+Best fitness: 0.8265
+Avg fitness: 0.4718
+Diversity: 0.0676
+⚠️  Low diversity: 0.0676 (threshold: 0.1)
+Preserved 10 elite individuals
+Evaluating 90 individuals using 256 workers...
+Evaluation complete. Avg fitness: 0.549
+
+============================================================
+Generation 5/50
+============================================================
+🏆 New best fitness: 0.8313 (genome: hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-mutant-9-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36)
+Best fitness: 0.8313
+Avg fitness: 0.5486
+Diversity: 0.0798
+⚠️  Low diversity: 0.0798 (threshold: 0.1)
+Preserved 10 elite individuals
+Evaluating 90 individuals using 256 workers...
+Evaluation complete. Avg fitness: 0.530
+
+============================================================
+Generation 6/50
+============================================================
+Best fitness: 0.8313
+Avg fitness: 0.5297
+Diversity: 0.0766
+⚠️  Low diversity: 0.0766 (threshold: 0.1)
+Preserved 10 elite individuals
+Evaluating 90 individuals using 256 workers...
+Evaluation complete. Avg fitness: 0.546
+
+============================================================
+Generation 7/50
+============================================================
+🏆 New best fitness: 0.8361 (genome: hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-seed-9-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-seed-21-x-hearts-simplified-seed-45-x-war-baseline-seed-36-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-6)
+Best fitness: 0.8361
+Avg fitness: 0.5460
+Diversity: 0.0612
+⚠️  Low diversity: 0.0612 (threshold: 0.1)
+Preserved 10 elite individuals
+Evaluating 90 individuals using 256 workers...
+Evaluation complete. Avg fitness: 0.586
+
+============================================================
+Generation 8/50
+============================================================
+Best fitness: 0.8361
+Avg fitness: 0.5857
+Diversity: 0.0549
+⚠️  Low diversity: 0.0549 (threshold: 0.1)
+Preserved 10 elite individuals
+Evaluating 90 individuals using 256 workers...
+Evaluation complete. Avg fitness: 0.580
+
+============================================================
+Generation 9/50
+============================================================
+Best fitness: 0.8361
+Avg fitness: 0.5798
+Diversity: 0.0657
+⚠️  Low diversity: 0.0657 (threshold: 0.1)
+Preserved 10 elite individuals
+Evaluating 90 individuals using 256 workers...
+Evaluation complete. Avg fitness: 0.570
+
+============================================================
+Generation 10/50
+============================================================
+Best fitness: 0.8361
+Avg fitness: 0.5696
+Diversity: 0.0567
+⚠️  Low diversity: 0.0567 (threshold: 0.1)
+Preserved 10 elite individuals
+Evaluating 90 individuals using 256 workers...
+Evaluation complete. Avg fitness: 0.600
+
+============================================================
+Generation 11/50
+============================================================
+Best fitness: 0.8361
+Avg fitness: 0.5995
+Diversity: 0.0682
+⚠️  Low diversity: 0.0682 (threshold: 0.1)
+Preserved 10 elite individuals
+Evaluating 90 individuals using 256 workers...
+Evaluation complete. Avg fitness: 0.580
+
+============================================================
+Generation 12/50
+============================================================
+Best fitness: 0.8361
+Avg fitness: 0.5798
+Diversity: 0.0705
+⚠️  Low diversity: 0.0705 (threshold: 0.1)
+Preserved 10 elite individuals
+Evaluating 90 individuals using 256 workers...
+Evaluation complete. Avg fitness: 0.614
+
+============================================================
+Generation 13/50
+============================================================
+Best fitness: 0.8361
+Avg fitness: 0.6144
+Diversity: 0.0774
+⚠️  Low diversity: 0.0774 (threshold: 0.1)
+Preserved 10 elite individuals
+Evaluating 90 individuals using 256 workers...
+Evaluation complete. Avg fitness: 0.666
+
+============================================================
+Generation 14/50
+============================================================
+Best fitness: 0.8361
+Avg fitness: 0.6662
+Diversity: 0.0783
+⚠️  Low diversity: 0.0783 (threshold: 0.1)
+Preserved 10 elite individuals
+Evaluating 90 individuals using 256 workers...
+Evaluation complete. Avg fitness: 0.685
+
+============================================================
+Generation 15/50
+============================================================
+Best fitness: 0.8361
+Avg fitness: 0.6851
+Diversity: 0.0757
+⚠️  Low diversity: 0.0757 (threshold: 0.1)
+Preserved 10 elite individuals
+Evaluating 90 individuals using 256 workers...
+Evaluation complete. Avg fitness: 0.572
+
+============================================================
+Generation 16/50
+============================================================
+Best fitness: 0.8361
+Avg fitness: 0.5715
+Diversity: 0.0673
+⚠️  Low diversity: 0.0673 (threshold: 0.1)
+Preserved 10 elite individuals
+Evaluating 90 individuals using 256 workers...
+Evaluation complete. Avg fitness: 0.556
+
+============================================================
+Generation 17/50
+============================================================
+Best fitness: 0.8361
+Avg fitness: 0.5556
+Diversity: 0.0876
+⚠️  Low diversity: 0.0876 (threshold: 0.1)
+Preserved 10 elite individuals
+Evaluating 90 individuals using 256 workers...
+Evaluation complete. Avg fitness: 0.658
+
+============================================================
+Generation 18/50
+============================================================
+Best fitness: 0.8361
+Avg fitness: 0.6584
+Diversity: 0.0894
+⚠️  Low diversity: 0.0894 (threshold: 0.1)
+Preserved 10 elite individuals
+Evaluating 90 individuals using 256 workers...
+Evaluation complete. Avg fitness: 0.503
+
+============================================================
+Generation 19/50
+============================================================
+Best fitness: 0.8361
+Avg fitness: 0.5030
+Diversity: 0.0847
+⚠️  Low diversity: 0.0847 (threshold: 0.1)
+Preserved 10 elite individuals
+Evaluating 90 individuals using 256 workers...
+Evaluation complete. Avg fitness: 0.627
+
+============================================================
+Generation 20/50
+============================================================
+Best fitness: 0.8361
+Avg fitness: 0.6266
+Diversity: 0.0719
+⚠️  Low diversity: 0.0719 (threshold: 0.1)
+Preserved 10 elite individuals
+Evaluating 90 individuals using 256 workers...
+Evaluation complete. Avg fitness: 0.656
+
+============================================================
+Generation 21/50
+============================================================
+Best fitness: 0.8361
+Avg fitness: 0.6559
+Diversity: 0.0522
+⚠️  Low diversity: 0.0522 (threshold: 0.1)
+Preserved 10 elite individuals
+Evaluating 90 individuals using 256 workers...
+Evaluation complete. Avg fitness: 0.597
+
+============================================================
+Generation 22/50
+============================================================
+Best fitness: 0.8361
+Avg fitness: 0.5966
+Diversity: 0.0673
+⚠️  Low diversity: 0.0673 (threshold: 0.1)
+Preserved 10 elite individuals
+Evaluating 90 individuals using 256 workers...
+Evaluation complete. Avg fitness: 0.603
+
+============================================================
+Generation 23/50
+============================================================
+Best fitness: 0.8361
+Avg fitness: 0.6029
+Diversity: 0.0860
+⚠️  Low diversity: 0.0860 (threshold: 0.1)
+Preserved 10 elite individuals
+Evaluating 90 individuals using 256 workers...
+Evaluation complete. Avg fitness: 0.647
+
+============================================================
+Generation 24/50
+============================================================
+Best fitness: 0.8361
+Avg fitness: 0.6468
+Diversity: 0.0468
+⚠️  Low diversity: 0.0468 (threshold: 0.1)
+Preserved 10 elite individuals
+Evaluating 90 individuals using 256 workers...
+Evaluation complete. Avg fitness: 0.531
+
+============================================================
+Generation 25/50
+============================================================
+Best fitness: 0.8361
+Avg fitness: 0.5312
+Diversity: 0.0587
+⚠️  Low diversity: 0.0587 (threshold: 0.1)
+Preserved 10 elite individuals
+Evaluating 90 individuals using 256 workers...
+Evaluation complete. Avg fitness: 0.606
+
+============================================================
+Generation 26/50
+============================================================
+Best fitness: 0.8361
+Avg fitness: 0.6062
+Diversity: 0.0719
+⚠️  Low diversity: 0.0719 (threshold: 0.1)
+Preserved 10 elite individuals
+Evaluating 90 individuals using 256 workers...
+Evaluation complete. Avg fitness: 0.558
+
+============================================================
+Generation 27/50
+============================================================
+Best fitness: 0.8361
+Avg fitness: 0.5575
+Diversity: 0.0614
+⚠️  Low diversity: 0.0614 (threshold: 0.1)
+Preserved 10 elite individuals
+Evaluating 90 individuals using 256 workers...
+Evaluation complete. Avg fitness: 0.590
+
+============================================================
+Generation 28/50
+============================================================
+Best fitness: 0.8361
+Avg fitness: 0.5902
+Diversity: 0.0722
+⚠️  Low diversity: 0.0722 (threshold: 0.1)
+Preserved 10 elite individuals
+Evaluating 90 individuals using 256 workers...
+Evaluation complete. Avg fitness: 0.646
+
+============================================================
+Generation 29/50
+============================================================
+Best fitness: 0.8361
+Avg fitness: 0.6455
+Diversity: 0.0843
+⚠️  Low diversity: 0.0843 (threshold: 0.1)
+Preserved 10 elite individuals
+Evaluating 90 individuals using 256 workers...
+Evaluation complete. Avg fitness: 0.621
+
+============================================================
+Generation 30/50
+============================================================
+Best fitness: 0.8361
+Avg fitness: 0.6212
+Diversity: 0.0651
+⚠️  Low diversity: 0.0651 (threshold: 0.1)
+Preserved 10 elite individuals
+Evaluating 90 individuals using 256 workers...
+Evaluation complete. Avg fitness: 0.572
+
+============================================================
+Generation 31/50
+============================================================
+Best fitness: 0.8361
+Avg fitness: 0.5718
+Diversity: 0.0748
+⚠️  Low diversity: 0.0748 (threshold: 0.1)
+Preserved 10 elite individuals
+Evaluating 90 individuals using 256 workers...
+Evaluation complete. Avg fitness: 0.655
+
+============================================================
+Generation 32/50
+============================================================
+Best fitness: 0.8361
+Avg fitness: 0.6548
+Diversity: 0.0979
+⚠️  Low diversity: 0.0979 (threshold: 0.1)
+Preserved 10 elite individuals
+Evaluating 90 individuals using 256 workers...
+Evaluation complete. Avg fitness: 0.649
+
+============================================================
+Generation 33/50
+============================================================
+Best fitness: 0.8361
+Avg fitness: 0.6492
+Diversity: 0.0657
+⚠️  Low diversity: 0.0657 (threshold: 0.1)
+Preserved 10 elite individuals
+Evaluating 90 individuals using 256 workers...
+Evaluation complete. Avg fitness: 0.622
+
+============================================================
+Generation 34/50
+============================================================
+Best fitness: 0.8361
+Avg fitness: 0.6217
+Diversity: 0.0679
+⚠️  Low diversity: 0.0679 (threshold: 0.1)
+Preserved 10 elite individuals
+Evaluating 90 individuals using 256 workers...
+Evaluation complete. Avg fitness: 0.620
+
+============================================================
+Generation 35/50
+============================================================
+Best fitness: 0.8361
+Avg fitness: 0.6203
+Diversity: 0.0639
+⚠️  Low diversity: 0.0639 (threshold: 0.1)
+Preserved 10 elite individuals
+Evaluating 90 individuals using 256 workers...
+Evaluation complete. Avg fitness: 0.652
+
+============================================================
+Generation 36/50
+============================================================
+Best fitness: 0.8361
+Avg fitness: 0.6522
+Diversity: 0.0529
+⚠️  Low diversity: 0.0529 (threshold: 0.1)
+Plateau detected: 0.00% improvement in last 30 generations
+Stopping due to plateau
+
+============================================================
+Evolution complete!
+Best fitness: 0.8361
+Best genome: hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-seed-9-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-seed-21-x-hearts-simplified-seed-45-x-war-baseline-seed-36-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-6
+============================================================
+
+Saving top 20 genomes to output/evolution-phase1b
+  1. hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-seed-9-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-seed-21-x-hearts-simplified-seed-45-x-war-baseline-seed-36-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-6 (fitness=0.8361)
+  2. hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-seed-9-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-seed-21-x-hearts-simplified-seed-45-x-war-baseline-seed-36-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-6 (fitness=0.8361)
+  3. hearts-simplified-seed-49-x-hearts-simplified-mutant-4-x-war-baseline-seed-36-x-war-baseline-seed-14-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-4-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-3-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-seed-37-x-war-baseline-mutant-28-x-hearts-simplified-mutant-4-x-hearts-simplified-seed-45-x-war-baseline-seed-36-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-6-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-mutant-9-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-seed-9-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-seed-21-x-hearts-simplified-seed-45-x-war-baseline-seed-36-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-6 (fitness=0.8361)
+  4. hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-seed-9-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-seed-21-x-hearts-simplified-seed-45-x-war-baseline-seed-36-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-6 (fitness=0.8361)
+  5. hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-seed-9-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-seed-21-x-hearts-simplified-seed-45-x-war-baseline-seed-36-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-6 (fitness=0.8361)
+  6. hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-mutant-9-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-mutant-9-x-war-baseline-mutant-11-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-mutant-9-x-war-baseline-mutant-11-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-seed-9-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-seed-21-x-hearts-simplified-seed-45-x-war-baseline-seed-36-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-6 (fitness=0.8361)
+  7. hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-mutant-4-x-hearts-simplified-seed-37-x-war-baseline-mutant-28-x-war-baseline-seed-36-x-hearts-simplified-seed-45-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-seed-9-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-3-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-mutant-9-x-hearts-simplified-seed-35-x-hearts-simplified-seed-3-x-hearts-simplified-mutant-9-x-war-baseline-mutant-11-x-hearts-simplified-mutant-9-x-hearts-simplified-seed-37-x-war-baseline-mutant-28-x-hearts-simplified-mutant-4-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-3-x-hearts-simplified-seed-49-x-hearts-simplified-mutant-4-x-war-baseline-seed-36-x-war-baseline-seed-14-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-seed-9-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-seed-21-x-hearts-simplified-seed-45-x-war-baseline-seed-36-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-6 (fitness=0.8361)
+  8. hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-mutant-9-x-hearts-simplified-seed-35-x-hearts-simplified-seed-3-x-hearts-simplified-mutant-9-x-war-baseline-mutant-11-x-hearts-simplified-mutant-9-x-hearts-simplified-seed-37-x-war-baseline-mutant-28-x-hearts-simplified-mutant-4-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-3-x-hearts-simplified-seed-49-x-hearts-simplified-mutant-4-x-war-baseline-seed-36-x-war-baseline-seed-14-x-hearts-simplified-mutant-9 (fitness=0.8361)
+  9. hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-seed-9-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-seed-21-x-hearts-simplified-seed-45-x-war-baseline-seed-36-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-6 (fitness=0.8361)
+  10. hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-mutant-9-x-hearts-simplified-seed-35-x-hearts-simplified-seed-3-x-hearts-simplified-mutant-9-x-war-baseline-mutant-11-x-hearts-simplified-mutant-9-x-hearts-simplified-seed-37-x-war-baseline-mutant-28-x-hearts-simplified-mutant-4-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-3-x-hearts-simplified-seed-49-x-hearts-simplified-mutant-4-x-war-baseline-seed-36-x-war-baseline-seed-14-x-hearts-simplified-mutant-9 (fitness=0.8361)
+  11. hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-seed-9-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-seed-21-x-hearts-simplified-seed-45-x-war-baseline-seed-36-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-6 (fitness=0.8361)
+  12. hearts-simplified-seed-49-x-hearts-simplified-mutant-4-x-war-baseline-seed-36-x-war-baseline-seed-14-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-4-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-3-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-seed-37-x-war-baseline-mutant-28-x-hearts-simplified-mutant-4-x-hearts-simplified-seed-45-x-war-baseline-seed-36-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-6-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-mutant-9-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-seed-9-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-seed-21-x-hearts-simplified-seed-45-x-war-baseline-seed-36-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-6 (fitness=0.8361)
+  13. hearts-simplified-seed-49-x-hearts-simplified-mutant-4-x-war-baseline-seed-36-x-war-baseline-seed-14-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-4-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-3-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-seed-37-x-war-baseline-mutant-28-x-hearts-simplified-mutant-4-x-hearts-simplified-seed-45-x-war-baseline-seed-36-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-6-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-mutant-9-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-seed-9-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-seed-21-x-hearts-simplified-seed-45-x-war-baseline-seed-36-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-6 (fitness=0.8361)
+  14. hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-seed-9-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-seed-21-x-hearts-simplified-seed-45-x-war-baseline-seed-36-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-6 (fitness=0.8361)
+  15. hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-mutant-9-x-hearts-simplified-seed-35-x-hearts-simplified-seed-3-x-hearts-simplified-mutant-9-x-war-baseline-mutant-11-x-hearts-simplified-mutant-9-x-hearts-simplified-seed-37-x-war-baseline-mutant-28-x-hearts-simplified-mutant-4-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-3-x-hearts-simplified-seed-49-x-hearts-simplified-mutant-4-x-war-baseline-seed-36-x-war-baseline-seed-14-x-hearts-simplified-mutant-9 (fitness=0.8361)
+  16. hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-seed-9-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-seed-21-x-hearts-simplified-seed-45-x-war-baseline-seed-36-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-6 (fitness=0.8361)
+  17. hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-mutant-9-x-hearts-simplified-seed-35-x-hearts-simplified-seed-3-x-hearts-simplified-mutant-9-x-war-baseline-mutant-11-x-hearts-simplified-mutant-9-x-hearts-simplified-seed-37-x-war-baseline-mutant-28-x-hearts-simplified-mutant-4-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-3-x-hearts-simplified-seed-49-x-hearts-simplified-mutant-4-x-war-baseline-seed-36-x-war-baseline-seed-14-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-seed-9-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-seed-21-x-hearts-simplified-seed-45-x-war-baseline-seed-36-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-6-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-seed-9-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-seed-21-x-hearts-simplified-seed-45-x-war-baseline-seed-36-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-6-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-seed-9-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-seed-21-x-hearts-simplified-seed-45-x-war-baseline-seed-36-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-6-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-mutant-9-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-mutant-9-x-war-baseline-mutant-11-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-mutant-9-x-war-baseline-mutant-11-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-seed-9-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-seed-21-x-hearts-simplified-seed-45-x-war-baseline-seed-36-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-6-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-seed-9-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-seed-21-x-hearts-simplified-seed-45-x-war-baseline-seed-36-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-6-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-seed-9-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-seed-21-x-hearts-simplified-seed-45-x-war-baseline-seed-36-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-6-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-seed-9-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-seed-21-x-hearts-simplified-seed-45-x-war-baseline-seed-36-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-6-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-mutant-9-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-mutant-9-x-war-baseline-mutant-11-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-mutant-9-x-war-baseline-mutant-11-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-seed-9-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-seed-21-x-hearts-simplified-seed-45-x-war-baseline-seed-36-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-6-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-seed-9-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-seed-21-x-hearts-simplified-seed-45-x-war-baseline-seed-36-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-6 (fitness=0.8361)
+  18. hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-seed-9-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-seed-21-x-hearts-simplified-seed-45-x-war-baseline-seed-36-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-6 (fitness=0.8361)
+  19. hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-mutant-4-x-hearts-simplified-seed-37-x-war-baseline-mutant-28-x-war-baseline-seed-36-x-hearts-simplified-seed-45-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-seed-9-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-3-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-mutant-9-x-hearts-simplified-seed-35-x-hearts-simplified-seed-3-x-hearts-simplified-mutant-9-x-war-baseline-mutant-11-x-hearts-simplified-mutant-9-x-hearts-simplified-seed-37-x-war-baseline-mutant-28-x-hearts-simplified-mutant-4-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-3-x-hearts-simplified-seed-49-x-hearts-simplified-mutant-4-x-war-baseline-seed-36-x-war-baseline-seed-14-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-seed-9-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-seed-21-x-hearts-simplified-seed-45-x-war-baseline-seed-36-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-6 (fitness=0.8361)
+  20. hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-9-x-hearts-simplified-mutant-6-x-hearts-simplified-seed-9-x-hearts-simplified-seed-21-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-3-x-war-baseline-seed-36-x-hearts-simplified-seed-21-x-hearts-simplified-seed-45-x-war-baseline-seed-36-x-hearts-simplified-mutant-4-x-hearts-simplified-mutant-6 (fitness=0.8361)
+
+✅ Evolution complete! Best fitness: 0.8361
+
+✅ Evolution complete! Results saved to output/evolution-phase1b

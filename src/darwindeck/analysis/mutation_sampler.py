@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import random
+import multiprocessing as mp
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
@@ -10,6 +11,9 @@ from darwindeck.genome.schema import GameGenome
 from darwindeck.evolution.operators import create_default_pipeline, MutationPipeline
 from darwindeck.evolution.fitness_full import FitnessEvaluator, FitnessMetrics
 from darwindeck.simulation.go_simulator import GoSimulator
+
+# Use 'spawn' context for CGo safety (Go runtime is not fork-safe)
+_mp_context = mp.get_context('spawn')
 
 
 @dataclass
@@ -201,6 +205,94 @@ def sample_trajectories(
 
             if progress_callback:
                 progress_callback(current_path, total_paths)
+
+    return trajectories
+
+
+# Worker function for parallel sampling (must be at module level for pickling)
+def _sample_trajectory_worker(args: tuple) -> FitnessTrajectory:
+    """Worker function that samples a single trajectory."""
+    genome, seed_type, config_dict, random_seed, style = args
+
+    # Recreate objects in worker process
+    config = SamplingConfig(**config_dict)
+    simulator = GoSimulator(seed=random_seed)
+    evaluator = FitnessEvaluator(style=style)
+    mutation_pipeline = create_default_pipeline()
+
+    return sample_single_trajectory(
+        seed_genome=genome,
+        seed_type=seed_type,
+        config=config,
+        simulator=simulator,
+        evaluator=evaluator,
+        mutation_pipeline=mutation_pipeline,
+        random_seed=random_seed,
+    )
+
+
+def sample_trajectories_parallel(
+    seed_genomes: list[GameGenome],
+    config: SamplingConfig,
+    evaluator: FitnessEvaluator,
+    seed_type: str = "known",
+    progress_callback: Callable[[int, int], None] | None = None,
+    base_random_seed: int = 42,
+    num_workers: int | None = None,
+) -> list[FitnessTrajectory]:
+    """
+    Sample mutation paths from each seed genome IN PARALLEL.
+
+    Args:
+        seed_genomes: Starting genomes
+        config: Sampling parameters
+        evaluator: Fitness evaluator instance (style is extracted)
+        seed_type: "known" or "baseline" for trajectory labeling
+        progress_callback: Optional (current, total) progress reporter
+        base_random_seed: Base seed for reproducibility
+        num_workers: Number of parallel workers (default: cpu_count)
+
+    Returns:
+        List of trajectories (len = seeds * paths_per_genome)
+    """
+    config.validate()
+
+    total_paths = len(seed_genomes) * config.paths_per_genome
+    num_workers = num_workers or mp.cpu_count()
+
+    # Generate random seeds
+    rng = random.Random(base_random_seed)
+    random_seeds = [rng.randint(0, 2**31) for _ in range(total_paths)]
+
+    # Prepare work items (must be picklable)
+    config_dict = {
+        'steps_per_path': config.steps_per_path,
+        'paths_per_genome': config.paths_per_genome,
+        'games_per_eval': config.games_per_eval,
+    }
+    style = getattr(evaluator, 'style', 'balanced')
+
+    work_items = []
+    seed_idx = 0
+    for genome in seed_genomes:
+        for _ in range(config.paths_per_genome):
+            work_items.append((
+                genome,
+                seed_type,
+                config_dict,
+                random_seeds[seed_idx],
+                style,
+            ))
+            seed_idx += 1
+
+    # Run in parallel
+    trajectories: list[FitnessTrajectory] = []
+
+    with _mp_context.Pool(num_workers) as pool:
+        for i, result in enumerate(pool.imap_unordered(_sample_trajectory_worker, work_items)):
+            trajectories.append(result)
+            if progress_callback:
+                progress_callback(i + 1, total_paths)
 
     return trajectories
 

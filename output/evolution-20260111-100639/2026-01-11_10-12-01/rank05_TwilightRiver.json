@@ -1,0 +1,92 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "TwilightRiver",
+  "generation": 12,
+  "setup": {
+    "cards_per_player": 26,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 0
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "TrickPhase",
+        "lead_suit_required": false,
+        "trump_suit": "CLUBS",
+        "high_card_wins": false,
+        "breaking_suit": "HEARTS"
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "LOCATION_SIZE",
+          "operator": "GT",
+          "value": 3,
+          "reference": "hand"
+        },
+        "min_cards": 1,
+        "max_cards": 1,
+        "mandatory": true
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "LOCATION_SIZE",
+          "operator": "GT",
+          "value": 0,
+          "reference": "hand"
+        },
+        "min_cards": 1,
+        "max_cards": 1,
+        "mandatory": true
+      },
+      {
+        "type": "Unknown"
+      }
+    ],
+    "is_trick_based": false,
+    "tricks_per_hand": null
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "empty_hand",
+      "threshold": null
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 844,
+  "min_turns": 10,
+  "player_count": 2,
+  "fitness": 0.854300608828006,
+  "fitness_rank": 5,
+  "fitness_metrics": {
+    "decision_density": 0.65,
+    "comeback_potential": 1.0,
+    "tension_curve": 1.0,
+    "interaction_frequency": 1.0,
+    "rules_complexity": 0.58,
+    "session_length": 0.2893555704752604,
+    "skill_vs_luck": 0.85,
+    "bluffing_depth": 0.8093353627600202,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "skill_evaluation": {
+    "greedy_win_rate": 0.98,
+    "greedy_wins_as_p0": 49,
+    "greedy_wins_as_p1": 49,
+    "mcts_win_rate": 0.93,
+    "mcts_wins_as_p0": 45,
+    "mcts_wins_as_p1": 48,
+    "skill_score": 0.9550000000000001,
+    "first_player_advantage": -0.030000000000000027,
+    "total_games": 200,
+    "timed_out": false
+  },
+  "skill_rank": 5
+}

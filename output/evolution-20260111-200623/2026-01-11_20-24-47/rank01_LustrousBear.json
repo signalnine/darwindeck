@@ -1,0 +1,82 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "LustrousBear",
+  "generation": 83,
+  "setup": {
+    "cards_per_player": 21,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 0
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "TrickPhase",
+        "lead_suit_required": true,
+        "trump_suit": "SPADES",
+        "high_card_wins": true,
+        "breaking_suit": "HEARTS"
+      }
+    ],
+    "is_trick_based": true,
+    "tricks_per_hand": 13
+  },
+  "special_effects": [
+    {
+      "trigger_rank": "TEN",
+      "effect_type": "REVERSE_DIRECTION",
+      "target": "NEXT_PLAYER",
+      "value": 2
+    },
+    {
+      "trigger_rank": "TWO",
+      "effect_type": "EXTRA_TURN",
+      "target": "NEXT_PLAYER",
+      "value": 1
+    }
+  ],
+  "win_conditions": [
+    {
+      "type": "low_score",
+      "threshold": 10
+    },
+    {
+      "type": "all_hands_empty",
+      "threshold": 0
+    },
+    {
+      "type": "most_captured",
+      "threshold": null
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 354,
+  "min_turns": 52,
+  "player_count": 4,
+  "fitness": 0.7645838114371436,
+  "fitness_rank": 1,
+  "fitness_metrics": {
+    "decision_density": 0.546978110900061,
+    "comeback_potential": 0.96,
+    "tension_curve": 0.15416000747680664,
+    "interaction_frequency": 1.0,
+    "rules_complexity": 0.925,
+    "session_length": 0.049866667853461374,
+    "skill_vs_luck": 0.4497999973297119,
+    "bluffing_depth": 0.0,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "skill_evaluation": {
+    "greedy_win_rate": 0.35,
+    "greedy_wins_as_p0": 23,
+    "greedy_wins_as_p1": 12,
+    "mcts_win_rate": 0.66,
+    "mcts_wins_as_p0": 41,
+    "mcts_wins_as_p1": 25,
+    "skill_score": 0.505,
+    "first_player_advantage": 0.27,
+    "total_games": 200,
+    "timed_out": false
+  },
+  "skill_rank": 1
+}

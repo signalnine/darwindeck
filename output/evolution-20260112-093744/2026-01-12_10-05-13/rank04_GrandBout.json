@@ -1,0 +1,88 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "GrandBout",
+  "generation": 145,
+  "setup": {
+    "cards_per_player": 15,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 0,
+    "starting_chips": 792
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "BettingPhase",
+        "min_bet": 65,
+        "max_raises": 3
+      },
+      {
+        "type": "TrickPhase",
+        "lead_suit_required": false,
+        "trump_suit": null,
+        "high_card_wins": true,
+        "breaking_suit": null
+      }
+    ],
+    "is_trick_based": true,
+    "tricks_per_hand": 13
+  },
+  "special_effects": [
+    {
+      "trigger_rank": "SIX",
+      "effect_type": "SKIP_NEXT",
+      "target": "NEXT_PLAYER",
+      "value": 3
+    },
+    {
+      "trigger_rank": "SIX",
+      "effect_type": "FORCE_DISCARD",
+      "target": "ALL_OPPONENTS",
+      "value": 1
+    }
+  ],
+  "win_conditions": [
+    {
+      "type": "low_score",
+      "threshold": 10
+    },
+    {
+      "type": "capture_all",
+      "threshold": null
+    },
+    {
+      "type": "most_captured",
+      "threshold": null
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 687,
+  "min_turns": 52,
+  "player_count": 4,
+  "fitness": 0.7912119101508702,
+  "fitness_rank": 4,
+  "fitness_metrics": {
+    "decision_density": 0.5620291051708123,
+    "comeback_potential": 1.0,
+    "tension_curve": 0.9813399963378906,
+    "interaction_frequency": 1.0,
+    "rules_complexity": 0.85,
+    "session_length": 0.2153111097547743,
+    "skill_vs_luck": 0.11250000000000004,
+    "bluffing_depth": 0.0,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "skill_evaluation": {
+    "greedy_win_rate": 0.26,
+    "greedy_wins_as_p0": 16,
+    "greedy_wins_as_p1": 10,
+    "mcts_win_rate": 0.71,
+    "mcts_wins_as_p0": 46,
+    "mcts_wins_as_p1": 25,
+    "skill_score": 0.485,
+    "first_player_advantage": 0.27,
+    "total_games": 200,
+    "timed_out": false
+  },
+  "skill_rank": 4
+}

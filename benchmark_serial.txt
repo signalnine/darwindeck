@@ -1,0 +1,51 @@
+goos: linux
+goarch: amd64
+pkg: github.com/signalnine/cards-evolve/gosim/simulation
+cpu: Intel(R) N100
+BenchmarkSerial_Batch10-4              	     289	   4367906 ns/op	10103790 B/op	   17616 allocs/op
+BenchmarkSerial_Batch10-4              	     261	   4489157 ns/op	10099297 B/op	   17626 allocs/op
+BenchmarkSerial_Batch10-4              	     240	   4732540 ns/op	10252755 B/op	   17916 allocs/op
+BenchmarkSerial_Batch10-4              	     268	   4413658 ns/op	10096962 B/op	   17626 allocs/op
+BenchmarkSerial_Batch10-4              	     256	   4528003 ns/op	10280311 B/op	   17964 allocs/op
+BenchmarkSerial_Batch100-4             	      28	  42453228 ns/op	97798864 B/op	  170397 allocs/op
+BenchmarkSerial_Batch100-4             	      27	  42932724 ns/op	97069990 B/op	  168986 allocs/op
+BenchmarkSerial_Batch100-4             	      36	  45947543 ns/op	96439927 B/op	  167974 allocs/op
+BenchmarkSerial_Batch100-4             	      33	  42695182 ns/op	97578216 B/op	  169842 allocs/op
+BenchmarkSerial_Batch100-4             	      27	  42749952 ns/op	97151859 B/op	  169036 allocs/op
+BenchmarkSerial_Batch1000-4            	       3	 439046548 ns/op	1005595506 B/op	 1756758 allocs/op
+BenchmarkSerial_Batch1000-4            	       3	 452156551 ns/op	1000340261 B/op	 1747608 allocs/op
+BenchmarkSerial_Batch1000-4            	       3	 437370764 ns/op	1007199661 B/op	 1760315 allocs/op
+BenchmarkSerial_Batch1000-4            	       3	 450392346 ns/op	1002885357 B/op	 1751450 allocs/op
+BenchmarkSerial_Batch1000-4            	       3	 460559769 ns/op	997776328 B/op	 1741637 allocs/op
+BenchmarkSerial_Batch10000-4           	       1	4855109837 ns/op	10185816920 B/op	17800158 allocs/op
+BenchmarkSerial_Batch10000-4           	       1	4919822554 ns/op	10150457280 B/op	17731310 allocs/op
+BenchmarkSerial_Batch10000-4           	       1	4899428981 ns/op	10125771720 B/op	17692137 allocs/op
+BenchmarkSerial_Batch10000-4           	       1	4908320567 ns/op	10097044336 B/op	17655522 allocs/op
+BenchmarkSerial_Batch10000-4           	       1	4855925021 ns/op	10132744984 B/op	17705951 allocs/op
+BenchmarkSerial_AIRandom_Batch1000-4   	       3	 476899968 ns/op	1010830885 B/op	 1767250 allocs/op
+BenchmarkSerial_AIRandom_Batch1000-4   	       3	 463791769 ns/op	1002629168 B/op	 1751292 allocs/op
+BenchmarkSerial_AIRandom_Batch1000-4   	       3	 453828999 ns/op	1009078402 B/op	 1759722 allocs/op
+BenchmarkSerial_AIRandom_Batch1000-4   	       3	 437714593 ns/op	1009911797 B/op	 1761102 allocs/op
+BenchmarkSerial_AIRandom_Batch1000-4   	       3	 458708378 ns/op	1007102469 B/op	 1759102 allocs/op
+BenchmarkSerial_AIGreedy_Batch1000-4   	      30	  44872230 ns/op	80380230 B/op	  132316 allocs/op
+BenchmarkSerial_AIGreedy_Batch1000-4   	      33	  43980594 ns/op	80381097 B/op	  132320 allocs/op
+BenchmarkSerial_AIGreedy_Batch1000-4   	      37	  42521029 ns/op	80380446 B/op	  132318 allocs/op
+BenchmarkSerial_AIGreedy_Batch1000-4   	      28	  46776280 ns/op	80380356 B/op	  132317 allocs/op
+BenchmarkSerial_AIGreedy_Batch1000-4   	      26	  44087350 ns/op	80380484 B/op	  132316 allocs/op
+BenchmarkSerial_Batch50-4              	      57	  22563066 ns/op	47733950 B/op	   82976 allocs/op
+BenchmarkSerial_Batch50-4              	      57	  22880423 ns/op	48537211 B/op	   84426 allocs/op
+BenchmarkSerial_Batch50-4              	      54	  21913510 ns/op	48223966 B/op	   83936 allocs/op
+BenchmarkSerial_Batch50-4              	      48	  21329338 ns/op	48290104 B/op	   83994 allocs/op
+BenchmarkSerial_Batch50-4              	      52	  22494046 ns/op	47984258 B/op	   83642 allocs/op
+BenchmarkSerial_Batch500-4             	       5	 235867653 ns/op	503315387 B/op	  879141 allocs/op
+BenchmarkSerial_Batch500-4             	       5	 447403130 ns/op	503383251 B/op	  879445 allocs/op
+BenchmarkSerial_Batch500-4             	       5	 235735902 ns/op	503595771 B/op	  880220 allocs/op
+BenchmarkSerial_Batch500-4             	       5	 239829202 ns/op	505853585 B/op	  883419 allocs/op
+BenchmarkSerial_Batch500-4             	       5	 220809499 ns/op	502147568 B/op	  877365 allocs/op
+BenchmarkSerial_Batch5000-4            	       1	2581423886 ns/op	5070698584 B/op	 8851498 allocs/op
+BenchmarkSerial_Batch5000-4            	       1	2430514412 ns/op	5060033024 B/op	 8838345 allocs/op
+BenchmarkSerial_Batch5000-4            	       1	2472218766 ns/op	5069832920 B/op	 8867606 allocs/op
+BenchmarkSerial_Batch5000-4            	       1	2481832788 ns/op	5046922464 B/op	 8825664 allocs/op
+BenchmarkSerial_Batch5000-4            	       1	2502471490 ns/op	5057888960 B/op	 8846340 allocs/op
+PASS
+ok  	github.com/signalnine/cards-evolve/gosim/simulation	112.356s

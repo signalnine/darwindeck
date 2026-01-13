@@ -1,0 +1,89 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "LunarOath",
+  "generation": 151,
+  "setup": {
+    "cards_per_player": 14,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 1,
+    "starting_chips": 593
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "DrawPhase",
+        "source": "DISCARD",
+        "count": 5,
+        "mandatory": true,
+        "condition": null
+      }
+    ],
+    "is_trick_based": true,
+    "tricks_per_hand": 13
+  },
+  "special_effects": [
+    {
+      "trigger_rank": "FOUR",
+      "effect_type": "FORCE_DISCARD",
+      "target": "ALL_OPPONENTS",
+      "value": 2
+    },
+    {
+      "trigger_rank": "SIX",
+      "effect_type": "SKIP_NEXT",
+      "target": "ALL_OPPONENTS",
+      "value": 1
+    },
+    {
+      "trigger_rank": "QUEEN",
+      "effect_type": "FORCE_DISCARD",
+      "target": "NEXT_PLAYER",
+      "value": 3
+    }
+  ],
+  "win_conditions": [
+    {
+      "type": "low_score",
+      "threshold": 10
+    },
+    {
+      "type": "empty_hand",
+      "threshold": null
+    },
+    {
+      "type": "high_score",
+      "threshold": 66
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 583,
+  "min_turns": 52,
+  "player_count": 4,
+  "fitness": 0.8013750000000001,
+  "fitness_rank": 1,
+  "fitness_metrics": {
+    "decision_density": 0.65,
+    "comeback_potential": 0.8999999999999999,
+    "tension_curve": 1.0,
+    "interaction_frequency": 1.0,
+    "rules_complexity": 0.925,
+    "session_length": 0.24502222696940104,
+    "skill_vs_luck": 0.14250000000000007,
+    "bluffing_depth": 0.0,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "skill_evaluation": {
+    "greedy_win_rate": 0.0,
+    "greedy_wins_as_p0": 0,
+    "greedy_wins_as_p1": 0,
+    "mcts_win_rate": 0.0,
+    "mcts_wins_as_p0": 0,
+    "mcts_wins_as_p1": 0,
+    "skill_score": 0.0,
+    "first_player_advantage": 0.0,
+    "total_games": 200,
+    "timed_out": false
+  },
+  "skill_rank": 1
+}

@@ -1,0 +1,84 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "VastFox",
+  "generation": 112,
+  "setup": {
+    "cards_per_player": 14,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 0,
+    "starting_chips": 1000
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "ClaimPhase",
+        "min_cards": 1,
+        "max_cards": 3,
+        "sequential_rank": true,
+        "allow_challenge": true,
+        "pile_penalty": true
+      }
+    ],
+    "is_trick_based": true,
+    "tricks_per_hand": 13
+  },
+  "special_effects": [
+    {
+      "trigger_rank": "TEN",
+      "effect_type": "FORCE_DISCARD",
+      "target": "NEXT_PLAYER",
+      "value": 1
+    },
+    {
+      "trigger_rank": "SIX",
+      "effect_type": "FORCE_DISCARD",
+      "target": "ALL_OPPONENTS",
+      "value": 2
+    }
+  ],
+  "win_conditions": [
+    {
+      "type": "low_score",
+      "threshold": 10
+    },
+    {
+      "type": "all_hands_empty",
+      "threshold": 0
+    },
+    {
+      "type": "high_score",
+      "threshold": 82
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 550,
+  "min_turns": 52,
+  "player_count": 4,
+  "fitness": 0.7914979815780817,
+  "fitness_rank": 3,
+  "fitness_metrics": {
+    "decision_density": 0.5104798157808167,
+    "comeback_potential": 0.89,
+    "tension_curve": 1.0,
+    "interaction_frequency": 1.0,
+    "rules_complexity": 0.925,
+    "session_length": 0.4728666517469618,
+    "skill_vs_luck": 0.18299999999999994,
+    "bluffing_depth": 0.0,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "skill_evaluation": {
+    "greedy_win_rate": 0.0,
+    "greedy_wins_as_p0": 0,
+    "greedy_wins_as_p1": 0,
+    "mcts_win_rate": 0.0,
+    "mcts_wins_as_p0": 0,
+    "mcts_wins_as_p1": 0,
+    "skill_score": 0.0,
+    "first_player_advantage": 0.0,
+    "total_games": 200,
+    "timed_out": false
+  },
+  "skill_rank": 3
+}

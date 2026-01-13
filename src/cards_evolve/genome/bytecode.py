@@ -1,0 +1,257 @@
+"""Bytecode compiler for genome serialization."""
+
+from enum import IntEnum
+from dataclasses import dataclass
+from typing import List, Union
+import struct
+
+from cards_evolve.genome.schema import (
+    GameGenome,
+    SetupRules,
+    TurnStructure,
+    PlayPhase,
+    WinCondition,
+    Location,
+)
+from cards_evolve.genome.conditions import Condition, ConditionType, Operator, CompoundCondition, ConditionOrCompound
+
+
+class OpCode(IntEnum):
+    """Bytecode instructions for genome execution."""
+    # Conditions (0-19)
+    CHECK_HAND_SIZE = 0
+    CHECK_CARD_RANK = 1
+    CHECK_CARD_SUIT = 2
+    CHECK_LOCATION_SIZE = 3
+    CHECK_SEQUENCE = 4
+    # Optional extensions: set/collection detection
+    CHECK_HAS_SET_OF_N = 5
+    CHECK_HAS_RUN_OF_N = 6
+    CHECK_HAS_MATCHING_PAIR = 7
+    # Optional extensions: betting conditions
+    CHECK_CHIP_COUNT = 8
+    CHECK_POT_SIZE = 9
+    CHECK_CURRENT_BET = 10
+    CHECK_CAN_AFFORD = 11
+    # Actions (20-39)
+    DRAW_CARDS = 20
+    PLAY_CARD = 21
+    DISCARD_CARD = 22
+    SKIP_TURN = 23
+    REVERSE_ORDER = 24
+    # Optional extensions: opponent interaction
+    DRAW_FROM_OPPONENT = 25
+    DISCARD_PAIRS = 26
+    # Optional extensions: betting actions
+    BET = 27
+    CALL = 28
+    RAISE = 29
+    FOLD = 30
+    CHECK = 31
+    ALL_IN = 32
+    # Optional extensions: bluffing actions
+    CLAIM = 33
+    CHALLENGE = 34
+    REVEAL = 35
+    # Control flow (40-49)
+    AND = 40
+    OR = 41
+    # Operators (50-55)
+    OP_EQ = 50
+    OP_NE = 51
+    OP_LT = 52
+    OP_GT = 53
+    OP_LE = 54
+    OP_GE = 55
+
+
+@dataclass
+class BytecodeHeader:
+    """Fixed-size header for bytecode blob."""
+    version: int  # 4 bytes
+    genome_id_hash: int  # 8 bytes (hash of genome_id)
+    player_count: int  # 4 bytes
+    max_turns: int  # 4 bytes
+    setup_offset: int  # 4 bytes (offset to setup section)
+    turn_structure_offset: int  # 4 bytes
+    win_conditions_offset: int  # 4 bytes
+    scoring_offset: int  # 4 bytes
+
+    STRUCT_FORMAT = "!IQIIiiii"  # Big-endian, 36 bytes total
+
+    def to_bytes(self) -> bytes:
+        return struct.pack(
+            self.STRUCT_FORMAT,
+            self.version,
+            self.genome_id_hash,
+            self.player_count,
+            self.max_turns,
+            self.setup_offset,
+            self.turn_structure_offset,
+            self.win_conditions_offset,
+            self.scoring_offset
+        )
+
+    @classmethod
+    def from_bytes(cls, data: bytes) -> "BytecodeHeader":
+        unpacked = struct.unpack(cls.STRUCT_FORMAT, data[:36])
+        return cls(*unpacked)
+
+
+class BytecodeCompiler:
+    """Compiles GameGenome to bytecode."""
+
+    def __init__(self):
+        self.offset = 36  # After header
+
+    def compile_genome(self, genome: GameGenome) -> bytes:
+        """Convert genome to bytecode blob."""
+        # Compile sections
+        setup_offset = self.offset
+        setup_bytes = self._compile_setup(genome.setup)
+        self.offset += len(setup_bytes)
+
+        turn_offset = self.offset
+        turn_bytes = self._compile_turn_structure(genome.turn_structure)
+        self.offset += len(turn_bytes)
+
+        win_offset = self.offset
+        win_bytes = self._compile_win_conditions(genome.win_conditions)
+        self.offset += len(win_bytes)
+
+        score_offset = self.offset
+        score_bytes = self._compile_scoring(genome.scoring_rules)
+        self.offset += len(score_bytes)
+
+        # Create header
+        header = BytecodeHeader(
+            version=1,
+            genome_id_hash=hash(genome.genome_id) & 0xFFFFFFFFFFFFFFFF,
+            player_count=genome.player_count,
+            max_turns=genome.max_turns,
+            setup_offset=setup_offset,
+            turn_structure_offset=turn_offset,
+            win_conditions_offset=win_offset,
+            scoring_offset=score_offset
+        )
+
+        # Combine all sections
+        return header.to_bytes() + setup_bytes + turn_bytes + win_bytes + score_bytes
+
+    def _compile_setup(self, setup: SetupRules) -> bytes:
+        """Encode setup rules."""
+        return struct.pack("!ii", setup.cards_per_player, setup.initial_discard_count)
+
+    def _compile_turn_structure(self, turn: TurnStructure) -> bytes:
+        """Encode turn phases."""
+        phase_count = len(turn.phases)
+        result = struct.pack("!i", phase_count)
+
+        for phase in turn.phases:
+            if isinstance(phase, PlayPhase):
+                result += self._compile_play_phase(phase)
+            # TODO: Add support for DrawPhase, DiscardPhase when they're added to schema
+
+        return result
+
+    def _compile_condition(self, cond: ConditionOrCompound) -> bytes:
+        """Encode condition to bytecode."""
+        if isinstance(cond, CompoundCondition):
+            # Compound condition: logic + count + nested conditions
+            logic_op = OpCode.AND if cond.logic == "AND" else OpCode.OR
+            count = len(cond.conditions)
+            result = struct.pack("!BI", logic_op, count)
+            for nested in cond.conditions:
+                result += self._compile_condition(nested)
+            return result
+        else:
+            # Simple condition: [OpCode:1][Operator:1][Value:4][Reference:1]
+            opcode = self._condition_type_to_opcode(cond.type)
+            operator = self._operator_to_code(cond.operator) if cond.operator else 0
+            value = cond.value if isinstance(cond.value, int) else 0
+            ref = self._reference_to_code(cond.reference) if cond.reference else 0
+            return struct.pack("!BBiB", opcode, operator, value, ref)
+
+    def _compile_play_phase(self, phase: PlayPhase) -> bytes:
+        """Encode PlayPhase to bytecode."""
+        phase_type = 2  # PlayPhase
+        target = self._location_to_code(phase.target)
+        min_cards = phase.min_cards
+        max_cards = phase.max_cards
+        mandatory = 1 if phase.mandatory else 0
+
+        condition_bytes = self._compile_condition(phase.valid_play_condition)
+
+        header = struct.pack("!BBBBBi", phase_type, target, min_cards, max_cards, mandatory, len(condition_bytes))
+        return header + condition_bytes
+
+    def _compile_win_conditions(self, conditions: List[WinCondition]) -> bytes:
+        """Encode win conditions."""
+        result = struct.pack("!i", len(conditions))
+
+        for cond in conditions:
+            win_type = self._win_type_to_code(cond.type)
+            threshold = cond.threshold if cond.threshold else 0
+            result += struct.pack("!Bi", win_type, threshold)
+
+        return result
+
+    def _compile_scoring(self, rules: List) -> bytes:
+        """Encode scoring rules."""
+        # For now, just encode count (War has no scoring rules)
+        result = struct.pack("!i", len(rules))
+        # TODO: Implement when ScoringRule class is added to schema
+        return result
+
+    # Helper mappings
+    def _condition_type_to_opcode(self, cond_type: ConditionType) -> int:
+        """Map ConditionType to OpCode."""
+        mapping = {
+            ConditionType.HAND_SIZE: OpCode.CHECK_HAND_SIZE,
+            ConditionType.CARD_MATCHES_RANK: OpCode.CHECK_CARD_RANK,
+            ConditionType.CARD_MATCHES_SUIT: OpCode.CHECK_CARD_SUIT,
+            ConditionType.LOCATION_SIZE: OpCode.CHECK_LOCATION_SIZE,
+            ConditionType.SEQUENCE_ADJACENT: OpCode.CHECK_SEQUENCE,
+        }
+        return mapping.get(cond_type, 0)
+
+    def _operator_to_code(self, op: Operator) -> int:
+        """Map Operator to code."""
+        mapping = {
+            Operator.EQ: OpCode.OP_EQ - 50,
+            Operator.NE: OpCode.OP_NE - 50,
+            Operator.LT: OpCode.OP_LT - 50,
+            Operator.GT: OpCode.OP_GT - 50,
+            Operator.LE: OpCode.OP_LE - 50,
+            Operator.GE: OpCode.OP_GE - 50,
+        }
+        return mapping.get(op, 0)
+
+    def _location_to_code(self, loc: Location) -> int:
+        """Map Location to code."""
+        mapping = {
+            Location.DECK: 0,
+            Location.HAND: 1,
+            Location.DISCARD: 2,
+            Location.TABLEAU: 3,
+        }
+        return mapping.get(loc, 0)
+
+    def _reference_to_code(self, ref: str) -> int:
+        """Map reference string to code."""
+        mapping = {
+            "top_discard": 1,
+            "last_played": 2,
+            "valid_plays": 3,
+        }
+        return mapping.get(ref, 0)
+
+    def _win_type_to_code(self, win_type: str) -> int:
+        """Map win condition type to code."""
+        mapping = {
+            "empty_hand": 0,
+            "high_score": 1,
+            "first_to_score": 2,
+            "capture_all": 3,
+        }
+        return mapping.get(win_type, 0)

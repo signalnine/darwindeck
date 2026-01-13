@@ -1,0 +1,83 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "VividWager",
+  "generation": 47,
+  "setup": {
+    "cards_per_player": 14,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 0,
+    "starting_chips": 1168
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "TrickPhase",
+        "lead_suit_required": true,
+        "trump_suit": "SPADES",
+        "high_card_wins": true,
+        "breaking_suit": "HEARTS"
+      }
+    ],
+    "is_trick_based": true,
+    "tricks_per_hand": 13
+  },
+  "special_effects": [
+    {
+      "trigger_rank": "FIVE",
+      "effect_type": "SKIP_NEXT",
+      "target": "ALL_OPPONENTS",
+      "value": 2
+    },
+    {
+      "trigger_rank": "JACK",
+      "effect_type": "REVERSE_DIRECTION",
+      "target": "NEXT_PLAYER",
+      "value": 3
+    }
+  ],
+  "win_conditions": [
+    {
+      "type": "low_score",
+      "threshold": 13
+    },
+    {
+      "type": "best_hand",
+      "threshold": null
+    },
+    {
+      "type": "low_score",
+      "threshold": 500
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 213,
+  "min_turns": 52,
+  "player_count": 4,
+  "fitness": 0.8257627303557833,
+  "fitness_rank": 4,
+  "fitness_metrics": {
+    "decision_density": 0.5671356415323807,
+    "comeback_potential": 0.8999999999999999,
+    "tension_curve": 0.8222916603088379,
+    "interaction_frequency": 1.0,
+    "rules_complexity": 0.925,
+    "session_length": 0.044977777269151475,
+    "skill_vs_luck": 0.47880000114440924,
+    "bluffing_depth": 0.0,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "skill_evaluation": {
+    "greedy_win_rate": 0.4,
+    "greedy_wins_as_p0": 22,
+    "greedy_wins_as_p1": 18,
+    "mcts_win_rate": 0.59,
+    "mcts_wins_as_p0": 41,
+    "mcts_wins_as_p1": 18,
+    "skill_score": 0.495,
+    "first_player_advantage": 0.27,
+    "total_games": 200,
+    "timed_out": false
+  },
+  "skill_rank": 4
+}

@@ -1,0 +1,5 @@
+Genome ID: war-baseline-seed-2-x-war-baseline-seed-2-x-hearts-simplified-seed-5-x-hearts-simplified-seed-1
+Fitness: 0.0000
+Generation: 3
+
+GameGenome(schema_version='1.0', genome_id='war-baseline-seed-2-x-war-baseline-seed-2-x-hearts-simplified-seed-5-x-hearts-simplified-seed-1', generation=3, setup=SetupRules(cards_per_player=26, initial_deck='standard_52', initial_discard_count=0, wild_cards=(), hand_visibility=<Visibility.OWNER_ONLY: 'owner_only'>, deck_visibility=<Visibility.FACE_DOWN: 'face_down'>, discard_visibility=<Visibility.FACE_UP: 'face_up'>, trump_suit=None, rotate_trump=False, random_trump=False), turn_structure=TurnStructure(phases=(TrickPhase(lead_suit_required=True, trump_suit=None, high_card_wins=True, breaking_suit=<Suit.HEARTS: 'H'>),), is_trick_based=False, tricks_per_hand=None), special_effects=[], win_conditions=[WinCondition(type='capture_all', threshold=None)], scoring_rules=[], max_turns=1000, player_count=2, min_turns=10)

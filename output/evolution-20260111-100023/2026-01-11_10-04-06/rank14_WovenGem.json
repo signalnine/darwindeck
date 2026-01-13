@@ -1,0 +1,121 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "WovenGem",
+  "generation": 251,
+  "setup": {
+    "cards_per_player": 10,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 1
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "LOCATION_SIZE",
+          "operator": "LE",
+          "value": 4,
+          "reference": null
+        },
+        "min_cards": 1,
+        "max_cards": 6,
+        "mandatory": true
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "LOCATION_SIZE",
+          "operator": "LT",
+          "value": 6,
+          "reference": null
+        },
+        "min_cards": 0,
+        "max_cards": 10,
+        "mandatory": false
+      },
+      {
+        "type": "Unknown"
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "LOCATION_SIZE",
+          "operator": "LE",
+          "value": 4,
+          "reference": null
+        },
+        "min_cards": 1,
+        "max_cards": 6,
+        "mandatory": true
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "LOCATION_SIZE",
+          "operator": "EQ",
+          "value": 6,
+          "reference": null
+        },
+        "min_cards": 0,
+        "max_cards": 5,
+        "mandatory": true
+      }
+    ],
+    "is_trick_based": true,
+    "tricks_per_hand": 13
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "high_score",
+      "threshold": 50
+    },
+    {
+      "type": "first_to_score",
+      "threshold": 90
+    },
+    {
+      "type": "empty_hand",
+      "threshold": null
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 903,
+  "min_turns": 52,
+  "player_count": 2,
+  "fitness": 0.8556313664596273,
+  "fitness_rank": 14,
+  "fitness_metrics": {
+    "decision_density": 0.65,
+    "comeback_potential": 0.98,
+    "tension_curve": 1.0,
+    "interaction_frequency": 1.0,
+    "rules_complexity": 0.5049999999999999,
+    "session_length": 0.34428887261284724,
+    "skill_vs_luck": 0.9189999999999999,
+    "bluffing_depth": 0.8099378881987578,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "skill_evaluation": {
+    "greedy_win_rate": 0.19,
+    "greedy_wins_as_p0": 7,
+    "greedy_wins_as_p1": 12,
+    "mcts_win_rate": 0.95,
+    "mcts_wins_as_p0": 46,
+    "mcts_wins_as_p1": 49,
+    "skill_score": 0.57,
+    "first_player_advantage": -0.07999999999999996,
+    "total_games": 200,
+    "timed_out": false
+  },
+  "skill_rank": 14
+}

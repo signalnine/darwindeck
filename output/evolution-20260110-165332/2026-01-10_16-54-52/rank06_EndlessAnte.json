@@ -1,0 +1,103 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "EndlessAnte",
+  "generation": 36,
+  "setup": {
+    "cards_per_player": 3,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 4
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "HAND_SIZE",
+          "operator": "GT",
+          "value": 0,
+          "reference": null
+        },
+        "min_cards": 1,
+        "max_cards": 1,
+        "mandatory": true
+      },
+      {
+        "type": "DrawPhase",
+        "source": "DECK",
+        "count": 3,
+        "mandatory": true,
+        "condition": {
+          "type": "simple",
+          "condition_type": "HAND_SIZE",
+          "operator": "EQ",
+          "value": 0,
+          "reference": null
+        }
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "HAND_SIZE",
+          "operator": "GT",
+          "value": 0,
+          "reference": null
+        },
+        "min_cards": 1,
+        "max_cards": 1,
+        "mandatory": true
+      },
+      {
+        "type": "DrawPhase",
+        "source": "DECK",
+        "count": 3,
+        "mandatory": true,
+        "condition": {
+          "type": "simple",
+          "condition_type": "HAND_SIZE",
+          "operator": "EQ",
+          "value": 0,
+          "reference": null
+        }
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "HAND_SIZE",
+          "operator": "GT",
+          "value": 0,
+          "reference": null
+        },
+        "min_cards": 1,
+        "max_cards": 1,
+        "mandatory": true
+      }
+    ],
+    "is_trick_based": false,
+    "tricks_per_hand": null
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "low_score",
+      "threshold": 95
+    },
+    {
+      "type": "all_hands_empty",
+      "threshold": null
+    },
+    {
+      "type": "high_score",
+      "threshold": 200
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 82,
+  "min_turns": 10,
+  "player_count": 4
+}

@@ -1,0 +1,71 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "TriplePanther",
+  "generation": 26,
+  "setup": {
+    "cards_per_player": 10,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 0
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "Unknown"
+      },
+      {
+        "type": "Unknown"
+      },
+      {
+        "type": "Unknown"
+      }
+    ],
+    "is_trick_based": true,
+    "tricks_per_hand": 13
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "low_score",
+      "threshold": 118
+    },
+    {
+      "type": "empty_hand",
+      "threshold": null
+    },
+    {
+      "type": "capture_all",
+      "threshold": null
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 540,
+  "min_turns": 52,
+  "player_count": 2,
+  "fitness": 0.8390002393405138,
+  "fitness_rank": 12,
+  "fitness_metrics": {
+    "decision_density": 0.65,
+    "comeback_potential": 0.99,
+    "tension_curve": 1.0,
+    "interaction_frequency": 1.0,
+    "rules_complexity": 0.655,
+    "session_length": 0.4192222086588542,
+    "skill_vs_luck": 0.8470000000000001,
+    "bluffing_depth": 0.7501674644683793,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "skill_evaluation": {
+    "greedy_win_rate": 1.0,
+    "greedy_wins_as_p0": 50,
+    "greedy_wins_as_p1": 50,
+    "mcts_win_rate": 1.0,
+    "mcts_wins_as_p0": 50,
+    "mcts_wins_as_p1": 50,
+    "skill_score": 1.0,
+    "first_player_advantage": 0.0,
+    "total_games": 200,
+    "timed_out": false
+  },
+  "skill_rank": 12
+}

@@ -1,0 +1,110 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "FlameHound",
+  "generation": 32,
+  "setup": {
+    "cards_per_player": 8,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 1
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "Unknown"
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "HAND_SIZE",
+          "operator": "EQ",
+          "value": 1,
+          "reference": null
+        },
+        "min_cards": 2,
+        "max_cards": 1,
+        "mandatory": false
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "LOCATION_SIZE",
+          "operator": "GT",
+          "value": 8,
+          "reference": null
+        },
+        "min_cards": 1,
+        "max_cards": 6,
+        "mandatory": true
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "HAND_SIZE",
+          "operator": "LE",
+          "value": 7,
+          "reference": null
+        },
+        "min_cards": 1,
+        "max_cards": 4,
+        "mandatory": true
+      },
+      {
+        "type": "Unknown"
+      }
+    ],
+    "is_trick_based": true,
+    "tricks_per_hand": 13
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "capture_all",
+      "threshold": null
+    },
+    {
+      "type": "empty_hand",
+      "threshold": null
+    },
+    {
+      "type": "empty_hand",
+      "threshold": null
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 359,
+  "min_turns": 52,
+  "player_count": 2,
+  "fitness": 0.8401746750793803,
+  "fitness_rank": 6,
+  "fitness_metrics": {
+    "decision_density": 0.65,
+    "comeback_potential": 0.99,
+    "tension_curve": 0.9764800109863281,
+    "interaction_frequency": 1.0,
+    "rules_complexity": 0.5049999999999999,
+    "session_length": 0.21351111518012153,
+    "skill_vs_luck": 0.922,
+    "bluffing_depth": 0.7619222466024915,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "skill_evaluation": {
+    "greedy_win_rate": 0.54,
+    "greedy_wins_as_p0": 25,
+    "greedy_wins_as_p1": 29,
+    "mcts_win_rate": 0.99,
+    "mcts_wins_as_p0": 49,
+    "mcts_wins_as_p1": 50,
+    "skill_score": 0.765,
+    "first_player_advantage": -0.050000000000000044,
+    "total_games": 200,
+    "timed_out": false
+  },
+  "skill_rank": 6
+}

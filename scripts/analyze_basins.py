@@ -12,7 +12,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from darwindeck.genome.examples import get_seed_genomes
 from darwindeck.evolution.fitness_full import FitnessEvaluator
 from darwindeck.analysis.genome_distance import compute_distance_matrix
-from darwindeck.analysis.mutation_sampler import SamplingConfig, sample_trajectories
+from darwindeck.analysis.mutation_sampler import (
+    SamplingConfig, sample_trajectories, sample_trajectories_parallel
+)
 from darwindeck.analysis.random_baseline import (
     BaselineConfig, generate_random_genomes, compute_baseline_statistics
 )
@@ -72,6 +74,10 @@ def main():
                         help="Validate config without running")
     parser.add_argument("-v", "--verbose", action="store_true",
                         help="Verbose output")
+    parser.add_argument("--parallel", "-p", action="store_true",
+                        help="Use parallel trajectory sampling (recommended for multicore)")
+    parser.add_argument("--workers", "-w", type=int, default=None,
+                        help="Number of parallel workers (default: cpu_count)")
 
     # Style preset
     parser.add_argument("--style", type=str, default="balanced",
@@ -106,6 +112,9 @@ def main():
 
     # Dry run - just print config and exit
     if args.dry_run:
+        import multiprocessing as mp
+        num_workers = args.workers or mp.cpu_count()
+
         print("=== Basin Analysis Config (Dry Run) ===")
         print(f"Sampling: {args.steps} steps x {args.paths} paths x {args.games} games/eval")
         print(f"Linkage method: {args.linkage}")
@@ -113,6 +122,7 @@ def main():
         print(f"Output directory: {args.output_dir}")
         print(f"Random seed: {args.seed}")
         print(f"Fitness style: {args.style}")
+        print(f"Parallel: {args.parallel} ({num_workers} workers)")
 
         # Load genomes to show count
         genomes = get_seed_genomes()
@@ -122,7 +132,11 @@ def main():
         total_baseline_evals = baseline_config.num_random_genomes * args.paths * (args.steps + 1) * args.games
         total_evals = total_known_evals + total_baseline_evals
         print(f"Estimated evaluations: {total_evals:,}")
-        print(f"Estimated time: ~{total_evals / 2000:.0f} minutes")
+
+        # Adjust time estimate for parallelism
+        speedup = num_workers * 0.8 if args.parallel else 1  # ~80% efficiency
+        est_minutes = total_evals / 2000 / speedup
+        print(f"Estimated time: ~{est_minutes:.0f} minutes" + (" (parallel)" if args.parallel else ""))
         return
 
     # Run analysis
@@ -140,17 +154,23 @@ def main():
     print(f"   Matrix shape: {distance_matrix.shape}")
 
     # 3. Sample mutation trajectories for known genomes
-    print("\n3. Sampling mutation trajectories (known games)...")
+    sample_fn = sample_trajectories_parallel if args.parallel else sample_trajectories
+    mode_str = f"parallel, {args.workers or 'auto'} workers" if args.parallel else "sequential"
+    print(f"\n3. Sampling mutation trajectories (known games, {mode_str})...")
     evaluator = FitnessEvaluator(style=args.style)
 
-    known_trajectories = sample_trajectories(
-        seed_genomes=known_genomes,
-        config=sampling_config,
-        evaluator=evaluator,
-        seed_type="known",
-        progress_callback=progress_reporter if args.verbose else None,
-        base_random_seed=args.seed,
-    )
+    sample_kwargs = {
+        "seed_genomes": known_genomes,
+        "config": sampling_config,
+        "evaluator": evaluator,
+        "seed_type": "known",
+        "progress_callback": progress_reporter if args.verbose else None,
+        "base_random_seed": args.seed,
+    }
+    if args.parallel:
+        sample_kwargs["num_workers"] = args.workers
+
+    known_trajectories = sample_fn(**sample_kwargs)
     print(f"   Sampled {len(known_trajectories)} trajectories")
 
     # 4. Generate and sample random baseline (if enabled)
@@ -165,15 +185,18 @@ def main():
         print(f"   Generated {len(random_genomes)} playable random genomes")
 
         if random_genomes:
-            print("\n5. Sampling mutation trajectories (random baseline)...")
-            random_trajectories = sample_trajectories(
-                seed_genomes=random_genomes,
-                config=sampling_config,
-                evaluator=evaluator,
-                seed_type="baseline",
-                progress_callback=progress_reporter if args.verbose else None,
-                base_random_seed=args.seed + 2000,
-            )
+            print(f"\n5. Sampling mutation trajectories (random baseline, {mode_str})...")
+            baseline_kwargs = {
+                "seed_genomes": random_genomes,
+                "config": sampling_config,
+                "evaluator": evaluator,
+                "seed_type": "baseline",
+                "progress_callback": progress_reporter if args.verbose else None,
+                "base_random_seed": args.seed + 2000,
+            }
+            if args.parallel:
+                baseline_kwargs["num_workers"] = args.workers
+            random_trajectories = sample_fn(**baseline_kwargs)
             print(f"   Sampled {len(random_trajectories)} baseline trajectories")
 
             print("\n6. Computing baseline statistics...")
