@@ -37,10 +37,10 @@ This document tracks planned features, known limitations, and future work.
 
 ### Fitness Improvements
 
-**Tension Curve Analysis**
-- [ ] Track uncertainty over game progression
-- [ ] Measure dramatic moments (lead changes)
-- [ ] Penalize anticlimactic endings
+**Tension Curve Analysis** ✅ Complete
+- [x] Track uncertainty over game progression
+- [x] Measure dramatic moments (lead changes)
+- [x] Penalize anticlimactic endings
 
 **Interaction Metrics**
 - [ ] Measure player-to-player effects
@@ -159,6 +159,14 @@ This document tracks planned features, known limitations, and future work.
 - [x] Mutation operators for betting evolution
 - [x] 4 betting seed games (simple_poker, draw_poker, betting_war, blackjack)
 
+### Tension Curve Analysis (Complete)
+- [x] Game-type-specific leader detectors (Score, HandSize, Trick, TrickAvoidance, Chip)
+- [x] TensionMetrics tracking (lead changes, decisive turn, closest margin)
+- [x] Go simulation integration with per-turn tracking
+- [x] FlatBuffers serialization through CGo bridge
+- [x] Python fitness calculation using real tension data
+- [x] Integration tests for complete pipeline
+
 ---
 
 ## Contributing
@@ -179,3 +187,4 @@ To work on a roadmap item:
 | 2026-01-11 | 0.1.1 | Diversity-based seeding, documentation updates |
 | 2026-01-11 | 0.1.2 | Confirmed multiplayer (2-4 players) fully functional |
 | 2026-01-12 | 0.2.0 | Betting/wagering system complete - poker-style games now evolvable |
+| 2026-01-12 | 0.2.1 | Tension curve analysis complete - real game tension tracking in fitness |
