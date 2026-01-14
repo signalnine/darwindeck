@@ -326,7 +326,55 @@ def apply_betting_move(state: GameState, move: BettingMove, phase: BettingPhase)
             current_bet=phase.min_bet,
         )
 
-    # Other actions in Task 7
+    elif move.action == BettingAction.CALL:
+        to_call = state.current_bet - player.current_bet
+        new_player = player.copy_with(
+            chips=player.chips - to_call,
+            current_bet=state.current_bet,
+        )
+        new_players = _update_player_tuple(state.players, state.active_player, new_player)
+        return state.copy_with(
+            players=new_players,
+            pot=state.pot + to_call,
+        )
+
+    elif move.action == BettingAction.RAISE:
+        to_call = state.current_bet - player.current_bet
+        raise_amount = to_call + phase.min_bet
+        new_current_bet = state.current_bet + phase.min_bet
+        new_player = player.copy_with(
+            chips=player.chips - raise_amount,
+            current_bet=new_current_bet,
+        )
+        new_players = _update_player_tuple(state.players, state.active_player, new_player)
+        return state.copy_with(
+            players=new_players,
+            pot=state.pot + raise_amount,
+            current_bet=new_current_bet,
+            raise_count=state.raise_count + 1,
+        )
+
+    elif move.action == BettingAction.ALL_IN:
+        amount = player.chips
+        new_current_bet = player.current_bet + amount
+        new_player = player.copy_with(
+            chips=0,
+            current_bet=new_current_bet,
+            is_all_in=True,
+        )
+        new_players = _update_player_tuple(state.players, state.active_player, new_player)
+        game_current_bet = max(state.current_bet, new_current_bet)
+        return state.copy_with(
+            players=new_players,
+            pot=state.pot + amount,
+            current_bet=game_current_bet,
+        )
+
+    elif move.action == BettingAction.FOLD:
+        new_player = player.copy_with(has_folded=True)
+        new_players = _update_player_tuple(state.players, state.active_player, new_player)
+        return state.copy_with(players=new_players)
+
     return state
 
 
