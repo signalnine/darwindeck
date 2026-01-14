@@ -5,7 +5,7 @@ from darwindeck.evolution.coherence import SemanticCoherenceChecker, CoherenceRe
 from darwindeck.genome.examples import create_war_genome
 from darwindeck.genome.schema import (
     GameGenome, SetupRules, TurnStructure, PlayPhase, DiscardPhase,
-    WinCondition, Location
+    WinCondition, Location, BettingPhase
 )
 
 
@@ -128,6 +128,46 @@ class TestScoringWinConditions:
         genome = _make_genome(
             phases=[DiscardPhase(target=Location.DISCARD, count=1)],
             win_conditions=[WinCondition(type="empty_hand")],
+        )
+        checker = SemanticCoherenceChecker()
+        result = checker.check(genome)
+        assert result.coherent is True
+
+
+class TestResourceCoherence:
+    def test_chips_without_betting_is_incoherent(self):
+        """starting_chips > 0 but no BettingPhase = invalid."""
+        genome = _make_genome(
+            phases=[DiscardPhase(target=Location.DISCARD, count=1)],
+            win_conditions=[WinCondition(type="empty_hand")],
+            starting_chips=1000,
+        )
+        checker = SemanticCoherenceChecker()
+        result = checker.check(genome)
+        assert result.coherent is False
+        assert "starting_chips" in result.violations[0]
+        assert "BettingPhase" in result.violations[0]
+
+    def test_chips_with_betting_is_coherent(self):
+        """starting_chips > 0 + BettingPhase = valid."""
+        genome = _make_genome(
+            phases=[
+                BettingPhase(min_bet=10, max_raises=3),
+                PlayPhase(target=Location.TABLEAU, min_cards=1, max_cards=1),
+            ],
+            win_conditions=[WinCondition(type="empty_hand")],
+            starting_chips=1000,
+        )
+        checker = SemanticCoherenceChecker()
+        result = checker.check(genome)
+        assert result.coherent is True
+
+    def test_zero_chips_without_betting_is_coherent(self):
+        """No chips + no betting = valid (not a betting game)."""
+        genome = _make_genome(
+            phases=[DiscardPhase(target=Location.DISCARD, count=1)],
+            win_conditions=[WinCondition(type="empty_hand")],
+            starting_chips=0,
         )
         checker = SemanticCoherenceChecker()
         result = checker.check(genome)
