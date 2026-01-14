@@ -97,3 +97,138 @@ class PlaytestSession:
             turn=1,
             active_player=0,
         )
+
+    def run(self, output_fn: Callable[[str], None] = print) -> PlaytestResult:
+        """Run the playtest session.
+
+        Args:
+            output_fn: Function to output text (default: print)
+
+        Returns:
+            PlaytestResult with game outcome and feedback
+        """
+        # Initialize state
+        self.state = self._initialize_state()
+
+        # Show rules if configured
+        if self.config.show_rules:
+            output_fn(self.explainer.explain_rules(self.genome))
+            output_fn("")
+            output_fn(f"You are Player {self.human_player_idx}")
+            output_fn(f"Seed: {self.seed} (use --seed {self.seed} to replay)")
+            output_fn("")
+
+        # Main game loop
+        winner: Optional[str] = None
+        quit_early = False
+        felt_broken = False
+        stuck_reason: Optional[str] = None
+
+        while True:
+            # Check for stuck
+            stuck_reason = self.stuck_detector.check(self.state)
+            if stuck_reason:
+                output_fn(f"\nGame stuck: {stuck_reason}")
+                winner = "stuck"
+                break
+
+            # Check win conditions
+            win_id = check_win_conditions(self.state, self.genome)
+            if win_id is not None:
+                if win_id == self.human_player_idx:
+                    winner = "human"
+                    output_fn("\n=== You Win! ===")
+                else:
+                    winner = "ai"
+                    output_fn("\n=== AI Wins ===")
+                break
+
+            # Display state
+            output_fn("")
+            output_fn(self.renderer.render(
+                self.state, self.genome, self.human_player_idx, self.config.debug
+            ))
+
+            # Generate legal moves
+            moves = generate_legal_moves(self.state, self.genome)
+
+            # Get move based on current player
+            if self.state.active_player == self.human_player_idx:
+                # Human turn
+                output_fn("")
+                output_fn(self.presenter.present(moves, self.state, self.genome))
+
+                result = self.human_input.get_move(moves)
+
+                if result.quit:
+                    quit_early = True
+                    fb = self.human_input.get_yes_no("Did the game feel broken? [y/n]: ")
+                    felt_broken = fb if fb is not None else False
+                    winner = "quit"
+                    break
+
+                if result.error:
+                    output_fn(result.error)
+                    continue
+
+                if result.is_pass:
+                    self.stuck_detector.record_pass()
+                    self._advance_turn()
+                    continue
+
+                if result.move:
+                    self._record_move(self.state.turn, "human", {"card_index": result.move.card_index})
+                    self.state = apply_move(self.state, result.move, self.genome)
+                    self.stuck_detector.record_action()
+            else:
+                # AI turn
+                move = self._ai_select_move(moves)
+                if move:
+                    output_fn(f"AI plays: card {move.card_index + 1}")
+                    self._record_move(self.state.turn, "ai", {"card_index": move.card_index})
+                    self.state = apply_move(self.state, move, self.genome)
+                    self.stuck_detector.record_action()
+                else:
+                    output_fn("AI passes")
+                    self.stuck_detector.record_pass()
+                    self._advance_turn()
+
+        # Collect feedback
+        output_fn("")
+        rating = self.human_input.get_rating()
+        comment = self.human_input.get_comment()
+
+        return PlaytestResult(
+            genome_id=self.genome.genome_id,
+            genome_path="",  # Set by caller
+            difficulty=self.config.difficulty,
+            seed=self.seed,
+            winner=winner or "unknown",
+            turns=self.state.turn if self.state else 0,
+            rating=rating,
+            comment=comment,
+            quit_early=quit_early,
+            felt_broken=felt_broken,
+            stuck_reason=stuck_reason,
+        )
+
+    def _advance_turn(self) -> None:
+        """Advance to next turn without applying a move."""
+        if self.state:
+            next_player = (self.state.active_player + 1) % len(self.state.players)
+            self.state = self.state.copy_with(
+                active_player=next_player,
+                turn=self.state.turn + 1,
+            )
+
+    def _ai_select_move(self, moves: list[LegalMove]) -> Optional[LegalMove]:
+        """Select move using AI strategy."""
+        if not moves:
+            return None
+
+        if self.config.difficulty == "random":
+            return self.rng.choice(moves)
+
+        # Greedy: prefer moves that play cards (reduce hand size)
+        # Simple heuristic for now
+        return self.rng.choice(moves)
