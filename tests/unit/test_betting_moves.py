@@ -187,3 +187,74 @@ class TestGenerateBettingMoves:
 
         assert BettingAction.BET not in actions
         assert BettingAction.ALL_IN in actions  # Can still go all-in
+
+    def test_call_available_when_facing_bet(self):
+        """CALL should be available when there's a bet to match."""
+        from darwindeck.simulation.movegen import generate_betting_moves, BettingAction
+        from darwindeck.genome.schema import BettingPhase
+
+        player = self._make_player(chips=500, current_bet=0)
+        state = self._make_state(player, current_bet=50)
+        phase = BettingPhase(min_bet=10, max_raises=3)
+
+        moves = generate_betting_moves(state, phase, player_id=0)
+        actions = [m.action for m in moves]
+
+        assert BettingAction.CALL in actions
+
+    def test_raise_available_when_can_afford(self):
+        """RAISE should be available when player can afford call + min_bet."""
+        from darwindeck.simulation.movegen import generate_betting_moves, BettingAction
+        from darwindeck.genome.schema import BettingPhase
+
+        player = self._make_player(chips=500, current_bet=0)
+        state = self._make_state(player, current_bet=50, raise_count=0)
+        phase = BettingPhase(min_bet=10, max_raises=3)
+
+        moves = generate_betting_moves(state, phase, player_id=0)
+        actions = [m.action for m in moves]
+
+        assert BettingAction.RAISE in actions
+
+    def test_raise_not_available_at_max_raises(self):
+        """RAISE should not be available when max_raises reached."""
+        from darwindeck.simulation.movegen import generate_betting_moves, BettingAction
+        from darwindeck.genome.schema import BettingPhase
+
+        player = self._make_player(chips=500, current_bet=0)
+        state = self._make_state(player, current_bet=50, raise_count=3)
+        phase = BettingPhase(min_bet=10, max_raises=3)
+
+        moves = generate_betting_moves(state, phase, player_id=0)
+        actions = [m.action for m in moves]
+
+        assert BettingAction.RAISE not in actions
+
+    def test_fold_available_when_facing_bet(self):
+        """FOLD should be available when there's a bet to match."""
+        from darwindeck.simulation.movegen import generate_betting_moves, BettingAction
+        from darwindeck.genome.schema import BettingPhase
+
+        player = self._make_player(chips=500, current_bet=0)
+        state = self._make_state(player, current_bet=50)
+        phase = BettingPhase(min_bet=10, max_raises=3)
+
+        moves = generate_betting_moves(state, phase, player_id=0)
+        actions = [m.action for m in moves]
+
+        assert BettingAction.FOLD in actions
+
+    def test_all_in_when_short_stacked(self):
+        """ALL_IN should be available when can't afford call."""
+        from darwindeck.simulation.movegen import generate_betting_moves, BettingAction
+        from darwindeck.genome.schema import BettingPhase
+
+        player = self._make_player(chips=30, current_bet=0)  # Can't afford 50 call
+        state = self._make_state(player, current_bet=50)
+        phase = BettingPhase(min_bet=10, max_raises=3)
+
+        moves = generate_betting_moves(state, phase, player_id=0)
+        actions = [m.action for m in moves]
+
+        assert BettingAction.ALL_IN in actions
+        assert BettingAction.CALL not in actions  # Can't afford
