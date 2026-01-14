@@ -247,6 +247,35 @@ class GenomeExtractor:
             return ("Unknown", "Perform the phase action")
 
     def _extract_special_rules(self, genome: "GameGenome") -> list[str]:
-        """Extract special card effects."""
-        # Placeholder - will implement in Task 5
-        return []
+        """Extract special card effects as rules."""
+        from darwindeck.genome.schema import EffectType, Rank
+
+        rules = []
+
+        rank_names = {
+            Rank.ACE: "Ace", Rank.TWO: "2", Rank.THREE: "3", Rank.FOUR: "4",
+            Rank.FIVE: "5", Rank.SIX: "6", Rank.SEVEN: "7", Rank.EIGHT: "8",
+            Rank.NINE: "9", Rank.TEN: "10", Rank.JACK: "Jack",
+            Rank.QUEEN: "Queen", Rank.KING: "King"
+        }
+
+        for effect in genome.special_effects:
+            rank_name = rank_names.get(effect.trigger_rank, str(effect.trigger_rank))
+
+            if effect.effect_type == EffectType.SKIP_NEXT:
+                rules.append(f"**{rank_name}:** Playing this card skips the next player's turn")
+            elif effect.effect_type == EffectType.REVERSE_DIRECTION:
+                rules.append(f"**{rank_name}:** Playing this card reverses the turn order")
+            elif effect.effect_type == EffectType.DRAW_CARDS:
+                rules.append(f"**{rank_name}:** Next player must draw {effect.value} cards")
+            elif effect.effect_type == EffectType.EXTRA_TURN:
+                rules.append(f"**{rank_name}:** Playing this card gives you an extra turn")
+            elif effect.effect_type == EffectType.FORCE_DISCARD:
+                rules.append(f"**{rank_name}:** Next player must discard {effect.value} cards")
+
+        # Add wild card rules if any
+        if genome.setup.wild_cards:
+            wild_names = [rank_names.get(r, str(r)) for r in genome.setup.wild_cards]
+            rules.append(f"**Wild cards ({', '.join(wild_names)}):** Can be played on any card")
+
+        return rules
