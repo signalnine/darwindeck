@@ -100,3 +100,82 @@ class TestGenomeValidator:
         result = GenomeValidator().validate(genome)
         assert result.valid is False
         assert any("win" in e.lower() for e in result.errors)
+
+
+class TestGenomeExtractor:
+    """Tests for deterministic rule extraction."""
+
+    def _make_genome(self, cards_per_player=5, starting_chips=0,
+                     initial_discard_count=0, win_conditions=None, phases=None):
+        """Helper to create test genomes."""
+        if win_conditions is None:
+            win_conditions = [WinCondition(type="empty_hand")]
+        if phases is None:
+            phases = [DrawPhase(source=Location.DECK, count=1)]
+        return GameGenome(
+            schema_version="1.0",
+            genome_id="TestGame",
+            generation=1,
+            setup=SetupRules(
+                cards_per_player=cards_per_player,
+                starting_chips=starting_chips,
+                initial_discard_count=initial_discard_count
+            ),
+            turn_structure=TurnStructure(phases=phases),
+            special_effects=[],
+            win_conditions=win_conditions,
+            player_count=2,
+            scoring_rules=[],
+        )
+
+    def test_extract_basic_setup(self):
+        """Extracts basic setup steps."""
+        from darwindeck.evolution.rulebook import GenomeExtractor
+        genome = self._make_genome(cards_per_player=7)
+        sections = GenomeExtractor().extract(genome)
+
+        assert "Shuffle the deck" in sections.setup_steps
+        assert any("7 cards" in step for step in sections.setup_steps)
+
+    def test_extract_setup_with_chips(self):
+        """Includes chips in setup when starting_chips > 0."""
+        from darwindeck.evolution.rulebook import GenomeExtractor
+        genome = self._make_genome(starting_chips=1000)
+        sections = GenomeExtractor().extract(genome)
+
+        assert any("1000" in step and "chip" in step.lower() for step in sections.setup_steps)
+
+    def test_extract_setup_with_discard(self):
+        """Includes initial discard when present."""
+        from darwindeck.evolution.rulebook import GenomeExtractor
+        genome = self._make_genome(initial_discard_count=1)
+        sections = GenomeExtractor().extract(genome)
+
+        assert any("discard" in step.lower() for step in sections.setup_steps)
+
+    def test_extract_empty_hand_objective(self):
+        """Extracts empty_hand win condition."""
+        from darwindeck.evolution.rulebook import GenomeExtractor
+        genome = self._make_genome(win_conditions=[WinCondition(type="empty_hand")])
+        sections = GenomeExtractor().extract(genome)
+
+        assert "empty" in sections.objective.lower()
+
+    def test_extract_high_score_objective(self):
+        """Extracts high_score win condition."""
+        from darwindeck.evolution.rulebook import GenomeExtractor
+        genome = self._make_genome(win_conditions=[WinCondition(type="high_score")])
+        sections = GenomeExtractor().extract(genome)
+
+        assert "score" in sections.objective.lower() or "points" in sections.objective.lower()
+
+    def test_extract_multiple_win_conditions(self):
+        """Handles multiple win conditions."""
+        from darwindeck.evolution.rulebook import GenomeExtractor
+        genome = self._make_genome(win_conditions=[
+            WinCondition(type="empty_hand"),
+            WinCondition(type="capture_all")
+        ])
+        sections = GenomeExtractor().extract(genome)
+
+        assert "empty" in sections.objective.lower() or "capture" in sections.objective.lower()
