@@ -211,7 +211,7 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 		if hasBettingPhase(moves) {
 			bettingPhase := getBettingPhaseData(genome)
 			if bettingPhase != nil {
-				err := runBettingRound(state, genome, bettingPhase, aiType, &metrics)
+				err := runBettingRound(state, genome, bettingPhase, aiType, &metrics, tensionMetrics, detector)
 				if err != "" {
 					tensionMetrics.Finalize(-1)
 					metrics.LeadChanges = uint32(tensionMetrics.LeadChanges)
@@ -983,7 +983,7 @@ func anyNeedsToAct(needsToAct []bool) bool {
 
 // runBettingRound executes a complete betting round
 // Returns error string if round fails, empty string on success
-func runBettingRound(state *engine.GameState, genome *engine.Genome, bettingPhase *engine.BettingPhaseData, aiType AIPlayerType, metrics *GameMetrics) string {
+func runBettingRound(state *engine.GameState, genome *engine.Genome, bettingPhase *engine.BettingPhaseData, aiType AIPlayerType, metrics *GameMetrics, tensionMetrics *engine.TensionMetrics, detector engine.LeaderDetector) string {
 	// Track who needs to act
 	needsToAct := make([]bool, state.NumPlayers)
 	for i := 0; i < int(state.NumPlayers); i++ {
@@ -1068,6 +1068,11 @@ func runBettingRound(state *engine.GameState, genome *engine.Genome, bettingPhas
 		engine.ApplyBettingAction(state, bettingPhase, currentPlayer, action)
 		metrics.TotalActions++
 		metrics.TotalInteractions++ // Betting is always interactive
+
+		// Update tension tracking after each betting action
+		if tensionMetrics != nil && detector != nil {
+			tensionMetrics.Update(state, detector)
+		}
 
 		// If bet increased, everyone else needs to act again
 		if state.CurrentBet > oldCurrentBet {

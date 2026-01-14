@@ -307,9 +307,38 @@ class FitnessEvaluator:
         # 3. Tension curve - use real instrumentation if available
         # Key insight: lead_changes = 0 with closest_margin = 0 means "always tied"
         # which indicates the leader detector couldn't track progress, not high tension.
+        #
+        # SPECIAL CASE: Betting games derive tension from betting dynamics, not lead changes.
+        # Poker tension comes from: pot commitment, all-in moments, fold equity pressure.
+        # Use betting activity as a proxy for tension in betting games.
+        is_betting_game = results.total_bets > 0
         has_meaningful_tracking = results.lead_changes > 0
 
-        if has_meaningful_tracking:
+        if is_betting_game and not has_meaningful_tracking:
+            # Betting game with no lead tracking: use betting-based tension
+            # Tension components:
+            # 1. Betting activity: bets per decision (more bets = more pressure points)
+            # 2. All-in frequency: high-stakes moments (all_in / hands played)
+            # 3. Showdown rate: games that went to showdown had sustained tension
+            games_played = max(1, results.total_games - results.draws - results.errors)
+            bets_per_game = results.total_bets / games_played if games_played > 0 else 0
+            all_in_rate = results.all_in_count / games_played if games_played > 0 else 0
+            showdown_rate = results.showdown_wins / games_played if games_played > 0 else 0
+
+            # Scoring:
+            # - 3+ bets per game = active betting (score 1.0)
+            # - All-in moments create peak tension (even 1 per game is significant)
+            # - Showdowns indicate sustained uncertainty (didn't fold early)
+            bet_activity_score = min(1.0, bets_per_game / 3.0)
+            all_in_score = min(1.0, all_in_rate * 2)  # 50% all-in rate = max
+            showdown_score = min(1.0, showdown_rate)
+
+            tension_curve = (
+                bet_activity_score * 0.4 +
+                all_in_score * 0.3 +
+                showdown_score * 0.3
+            )
+        elif has_meaningful_tracking:
             # Real back-and-forth detected - use full formula
             turns_per_expected_change = 20
             expected_changes = max(1, results.avg_turns / turns_per_expected_change)
