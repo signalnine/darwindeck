@@ -4,7 +4,8 @@ import pytest
 from darwindeck.evolution.rulebook import RulebookSections, GenomeValidator, ValidationResult
 from darwindeck.genome.schema import (
     GameGenome, SetupRules, TurnStructure, WinCondition,
-    PlayPhase, DrawPhase, BettingPhase, Location
+    PlayPhase, DrawPhase, BettingPhase, DiscardPhase, TrickPhase, ClaimPhase,
+    Location, Suit
 )
 
 
@@ -179,3 +180,95 @@ class TestGenomeExtractor:
         sections = GenomeExtractor().extract(genome)
 
         assert "empty" in sections.objective.lower() or "capture" in sections.objective.lower()
+
+    def test_extract_draw_phase(self):
+        """Extracts DrawPhase correctly."""
+        from darwindeck.evolution.rulebook import GenomeExtractor
+        genome = self._make_genome(phases=[
+            DrawPhase(source=Location.DECK, count=2)
+        ])
+        sections = GenomeExtractor().extract(genome)
+
+        assert len(sections.phases) == 1
+        name, desc = sections.phases[0]
+        assert "draw" in name.lower()
+        assert "2" in desc
+
+    def test_extract_play_phase(self):
+        """Extracts PlayPhase correctly."""
+        from darwindeck.evolution.rulebook import GenomeExtractor
+        genome = self._make_genome(phases=[
+            PlayPhase(target=Location.DISCARD, min_cards=1, max_cards=1)
+        ])
+        sections = GenomeExtractor().extract(genome)
+
+        assert len(sections.phases) == 1
+        name, desc = sections.phases[0]
+        assert "play" in name.lower()
+
+    def test_extract_betting_phase(self):
+        """Extracts BettingPhase correctly."""
+        from darwindeck.evolution.rulebook import GenomeExtractor
+        genome = self._make_genome(
+            starting_chips=1000,
+            phases=[BettingPhase(min_bet=25, max_raises=3)]
+        )
+        sections = GenomeExtractor().extract(genome)
+
+        assert len(sections.phases) == 1
+        name, desc = sections.phases[0]
+        assert "bet" in name.lower()
+        assert "25" in desc
+
+    def test_extract_multiple_phases(self):
+        """Extracts multiple phases in order."""
+        from darwindeck.evolution.rulebook import GenomeExtractor
+        genome = self._make_genome(phases=[
+            DrawPhase(source=Location.DECK, count=1),
+            PlayPhase(target=Location.DISCARD, min_cards=1, max_cards=3),
+        ])
+        sections = GenomeExtractor().extract(genome)
+
+        assert len(sections.phases) == 2
+        assert "draw" in sections.phases[0][0].lower()
+        assert "play" in sections.phases[1][0].lower()
+
+    def test_extract_discard_phase(self):
+        """Extracts DiscardPhase correctly."""
+        from darwindeck.evolution.rulebook import GenomeExtractor
+        genome = self._make_genome(phases=[
+            DiscardPhase(target=Location.DISCARD, count=2, mandatory=False)
+        ])
+        sections = GenomeExtractor().extract(genome)
+
+        assert len(sections.phases) == 1
+        name, desc = sections.phases[0]
+        assert "discard" in name.lower()
+        assert "2" in desc
+        assert "optional" in desc.lower()
+
+    def test_extract_trick_phase(self):
+        """Extracts TrickPhase correctly."""
+        from darwindeck.evolution.rulebook import GenomeExtractor
+        genome = self._make_genome(phases=[
+            TrickPhase(lead_suit_required=True, high_card_wins=True)
+        ])
+        sections = GenomeExtractor().extract(genome)
+
+        assert len(sections.phases) == 1
+        name, desc = sections.phases[0]
+        assert "trick" in name.lower()
+        assert "suit" in desc.lower()
+
+    def test_extract_claim_phase(self):
+        """Extracts ClaimPhase correctly."""
+        from darwindeck.evolution.rulebook import GenomeExtractor
+        genome = self._make_genome(phases=[
+            ClaimPhase(min_cards=1, max_cards=4, sequential_rank=True, allow_challenge=True)
+        ])
+        sections = GenomeExtractor().extract(genome)
+
+        assert len(sections.phases) == 1
+        name, desc = sections.phases[0]
+        assert "claim" in name.lower()
+        assert "challenge" in desc.lower()

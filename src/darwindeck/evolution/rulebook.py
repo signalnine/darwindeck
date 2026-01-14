@@ -170,9 +170,81 @@ class GenomeExtractor:
             return "Win by either:\n- " + "\n- ".join(objectives)
 
     def _extract_phases(self, genome: "GameGenome") -> list[tuple[str, str]]:
-        """Extract turn phases."""
-        # Placeholder - will implement in Task 4
-        return []
+        """Extract turn phases as (name, description) tuples."""
+        from darwindeck.genome.schema import (
+            DrawPhase, PlayPhase, DiscardPhase, BettingPhase,
+            TrickPhase, ClaimPhase, Location
+        )
+
+        phases = []
+        for i, phase in enumerate(genome.turn_structure.phases, 1):
+            name, desc = self._describe_phase(phase)
+            phases.append((f"Phase {i}: {name}", desc))
+        return phases
+
+    def _describe_phase(self, phase) -> tuple[str, str]:
+        """Convert a phase to (name, description)."""
+        from darwindeck.genome.schema import (
+            DrawPhase, PlayPhase, DiscardPhase, BettingPhase,
+            TrickPhase, ClaimPhase, Location
+        )
+
+        if isinstance(phase, DrawPhase):
+            source = "deck" if phase.source == Location.DECK else "discard pile"
+            if phase.count == 1:
+                desc = f"Draw 1 card from the {source}"
+            else:
+                desc = f"Draw {phase.count} cards from the {source}"
+            if not phase.mandatory:
+                desc += " (optional)"
+            return ("Draw", desc)
+
+        elif isinstance(phase, PlayPhase):
+            target = "discard pile" if phase.target == Location.DISCARD else "tableau"
+            if phase.min_cards == phase.max_cards:
+                if phase.min_cards == 1:
+                    desc = f"Play exactly 1 card to the {target}"
+                else:
+                    desc = f"Play exactly {phase.min_cards} cards to the {target}"
+            elif phase.min_cards == 0:
+                desc = f"Play up to {phase.max_cards} cards to the {target} (optional)"
+            else:
+                desc = f"Play {phase.min_cards}-{phase.max_cards} cards to the {target}"
+            return ("Play", desc)
+
+        elif isinstance(phase, DiscardPhase):
+            if phase.count == 1:
+                desc = "Discard 1 card"
+            else:
+                desc = f"Discard {phase.count} cards"
+            if not phase.mandatory:
+                desc += " (optional)"
+            return ("Discard", desc)
+
+        elif isinstance(phase, BettingPhase):
+            desc = f"Betting round (minimum bet: {phase.min_bet} chips, max {phase.max_raises} raises)"
+            return ("Betting", desc)
+
+        elif isinstance(phase, TrickPhase):
+            desc = "Play one card to the trick. "
+            if phase.lead_suit_required:
+                desc += "Must follow suit if able. "
+            if phase.high_card_wins:
+                desc += "Highest card wins the trick."
+            else:
+                desc += "Lowest card wins the trick."
+            return ("Trick", desc)
+
+        elif isinstance(phase, ClaimPhase):
+            desc = f"Play {phase.min_cards}-{phase.max_cards} cards face-down and claim a rank. "
+            if phase.sequential_rank:
+                desc += "Claims must follow sequence (A, 2, 3, ..., K). "
+            if phase.allow_challenge:
+                desc += "Opponents may challenge your claim."
+            return ("Claim", desc)
+
+        else:
+            return ("Unknown", "Perform the phase action")
 
     def _extract_special_rules(self, genome: "GameGenome") -> list[str]:
         """Extract special card effects."""
