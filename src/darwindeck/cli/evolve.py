@@ -12,6 +12,7 @@ from typing import List, Optional, Tuple, Dict
 from darwindeck.evolution.engine import EvolutionEngine, EvolutionConfig
 from darwindeck.evolution.describe import describe_top_games
 from darwindeck.evolution.skill_evaluation import SkillEvalResult
+from darwindeck.evolution.coherence import SemanticCoherenceChecker
 from darwindeck.genome.serialization import genome_to_json, genome_from_json
 from darwindeck.genome.schema import GameGenome
 
@@ -469,6 +470,23 @@ def main() -> int:
         filtered_count = original_count - len(best_genomes)
         if filtered_count > 0:
             logging.info(f"\nFiltered out {filtered_count} games with first-player advantage > 30%")
+
+    # Filter out semantically incoherent genomes (safety net)
+    coherence_checker = SemanticCoherenceChecker()
+    coherent_genomes = []
+    incoherent_count = 0
+    for ind in best_genomes:
+        result = coherence_checker.check(ind.genome)
+        if result.coherent:
+            coherent_genomes.append(ind)
+        else:
+            incoherent_count += 1
+            logging.debug(f"Skipping incoherent genome {ind.genome.genome_id}: {result.violations}")
+
+    if incoherent_count > 0:
+        logging.warning(f"Skipped {incoherent_count} incoherent genomes during save")
+
+    best_genomes = coherent_genomes
 
     # Save best genomes as JSON to timestamped subdirectory
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
