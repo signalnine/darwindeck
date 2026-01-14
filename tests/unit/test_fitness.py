@@ -2,10 +2,13 @@
 
 import pytest
 from darwindeck.evolution.fitness import CheapFitnessMetrics, calculate_cheap_metrics
-from darwindeck.evolution.fitness_full import FitnessEvaluator, SimulationResults
+from darwindeck.evolution.fitness_full import FitnessEvaluator, SimulationResults, FitnessResult
 from darwindeck.simulation.engine import GameEngine, GameResult
 from darwindeck.simulation.players import RandomPlayer
 from darwindeck.genome.examples import create_war_genome
+from darwindeck.genome.schema import (
+    GameGenome, SetupRules, TurnStructure, DiscardPhase, WinCondition, Location
+)
 
 
 def test_calculate_game_length() -> None:
@@ -70,3 +73,31 @@ def test_tension_curve_with_real_data() -> None:
     # margin_score = 1.0 - 0.1 = 0.9
     # tension = 1.0*0.4 + 0.8*0.4 + 0.9*0.2 = 0.4 + 0.32 + 0.18 = 0.9
     assert metrics.tension_curve > 0.85
+
+
+class TestFitnessCoherenceIntegration:
+    def test_incoherent_genome_gets_zero_fitness(self):
+        """Incoherent genome should have fitness=0."""
+        # Genome with high_score but no scoring rules
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="incoherent_test",
+            generation=0,
+            setup=SetupRules(cards_per_player=5),
+            turn_structure=TurnStructure(
+                phases=(DiscardPhase(target=Location.DISCARD, count=1),)
+            ),
+            special_effects=[],
+            win_conditions=[WinCondition(type="high_score", threshold=50)],
+            scoring_rules=[],
+            player_count=2,
+        )
+
+        from darwindeck.evolution.fitness_full import FullFitnessEvaluator
+        evaluator = FullFitnessEvaluator()
+        result = evaluator.evaluate(genome)
+
+        assert result.fitness == 0.0
+        assert result.valid is False
+        assert len(result.coherence_violations) > 0
+        assert "high_score" in result.coherence_violations[0]

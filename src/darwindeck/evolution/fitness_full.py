@@ -637,3 +637,102 @@ class FitnessEvaluator:
             games_simulated=results.total_games,
             valid=valid
         )
+
+
+class FullFitnessEvaluator:
+    """Evaluates game fitness with coherence check before simulation.
+
+    This evaluator performs semantic coherence checking before running
+    any simulations. Incoherent genomes get fitness=0 immediately,
+    saving simulation costs.
+
+    Usage:
+        evaluator = FullFitnessEvaluator()
+        result = evaluator.evaluate(genome)
+
+        if not result.valid:
+            print(f"Incoherent: {result.coherence_violations}")
+    """
+
+    def __init__(
+        self,
+        style: Optional[str] = None,
+        num_simulations: int = 100,
+        use_mcts: bool = False,
+    ):
+        """Initialize the full fitness evaluator.
+
+        Args:
+            style: Style preset name (balanced, bluffing, strategic, party, trick-taking)
+            num_simulations: Number of simulations per evaluation
+            use_mcts: Whether to use MCTS AI for skill measurement
+        """
+        from darwindeck.evolution.coherence import SemanticCoherenceChecker
+        from darwindeck.simulation.go_simulator import GoSimulator
+
+        self.coherence_checker = SemanticCoherenceChecker()
+        self.fitness_evaluator = FitnessEvaluator(style=style)
+        self.simulator = GoSimulator()
+        self.num_simulations = num_simulations
+        self.use_mcts = use_mcts
+
+    def evaluate(self, genome: GameGenome) -> FitnessResult:
+        """Evaluate genome fitness.
+
+        Checks semantic coherence first. If genome is incoherent,
+        returns fitness=0 without running simulations.
+
+        Args:
+            genome: Game genome to evaluate
+
+        Returns:
+            FitnessResult with fitness score and coherence violations
+        """
+        # Check coherence FIRST (fast, no simulation needed)
+        coherence = self.coherence_checker.check(genome)
+        if not coherence.coherent:
+            return FitnessResult(
+                fitness=0.0,
+                valid=False,
+                metrics={},
+                error=f"Incoherent: {'; '.join(coherence.violations)}",
+                coherence_violations=coherence.violations,
+            )
+
+        # Run simulations
+        try:
+            sim_results = self.simulator.simulate(
+                genome,
+                num_games=self.num_simulations,
+                use_mcts=self.use_mcts,
+            )
+
+            # Evaluate fitness
+            metrics = self.fitness_evaluator.evaluate(
+                genome, sim_results, use_mcts=self.use_mcts
+            )
+
+            return FitnessResult(
+                fitness=metrics.total_fitness,
+                valid=metrics.valid,
+                metrics={
+                    "decision_density": metrics.decision_density,
+                    "comeback_potential": metrics.comeback_potential,
+                    "tension_curve": metrics.tension_curve,
+                    "interaction_frequency": metrics.interaction_frequency,
+                    "rules_complexity": metrics.rules_complexity,
+                    "session_length": metrics.session_length,
+                    "skill_vs_luck": metrics.skill_vs_luck,
+                    "bluffing_depth": metrics.bluffing_depth,
+                    "betting_engagement": metrics.betting_engagement,
+                },
+                coherence_violations=[],
+            )
+        except Exception as e:
+            return FitnessResult(
+                fitness=0.0,
+                valid=False,
+                metrics={},
+                error=f"Simulation error: {str(e)}",
+                coherence_violations=[],
+            )
