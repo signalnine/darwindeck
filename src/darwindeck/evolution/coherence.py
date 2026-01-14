@@ -24,6 +24,7 @@ class SemanticCoherenceChecker:
         """Check genome for semantic coherence."""
         violations = []
         violations.extend(self._check_win_conditions(genome))
+        violations.extend(self._check_resources(genome))
         return CoherenceResult(
             coherent=len(violations) == 0,
             violations=violations
@@ -55,5 +56,23 @@ class SemanticCoherenceChecker:
                     violations.append(
                         f"Win condition '{wc.type}' requires scoring_rules or is_trick_based"
                     )
+
+        return violations
+
+    def _check_resources(self, genome: "GameGenome") -> list[str]:
+        """Check resources have supporting mechanics."""
+        from darwindeck.genome.schema import BettingPhase
+
+        violations = []
+
+        has_betting_phase = any(
+            isinstance(p, BettingPhase)
+            for p in genome.turn_structure.phases
+        )
+
+        if genome.setup.starting_chips > 0 and not has_betting_phase:
+            violations.append(
+                f"starting_chips={genome.setup.starting_chips} but no BettingPhase"
+            )
 
         return violations
