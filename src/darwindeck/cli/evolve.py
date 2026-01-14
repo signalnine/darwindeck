@@ -230,6 +230,12 @@ def main() -> int:
         help='Number of top genomes to save'
     )
     parser.add_argument(
+        '--rulebooks',
+        type=int,
+        default=0,
+        help='Generate rulebooks for top N games (0 = disabled)'
+    )
+    parser.add_argument(
         '--no-describe',
         action='store_true',
         help='Skip LLM-generated game descriptions'
@@ -587,6 +593,27 @@ def main() -> int:
 
                 if genome_id in descriptions:
                     logging.info(f"   {descriptions[genome_id]}")
+
+    # Generate rulebooks for top N games (if requested)
+    if args.rulebooks > 0:
+        from darwindeck.evolution.rulebook import RulebookGenerator
+
+        logging.info(f"\nGenerating rulebooks for top {args.rulebooks} games...")
+        generator = RulebookGenerator()
+        rulebook_dir = run_output_dir / "rulebooks"
+        rulebook_dir.mkdir(exist_ok=True)
+
+        for individual in best_genomes[:args.rulebooks]:
+            genome = individual.genome
+            try:
+                markdown = generator.generate(genome, use_llm=True)
+                out_path = rulebook_dir / f"{genome.genome_id}_rulebook.md"
+                out_path.write_text(markdown)
+                logging.info(f"  Generated {out_path.name}")
+            except Exception as e:
+                logging.warning(f"  Failed {genome.genome_id}: {e}")
+
+        logging.info(f"  Saved rulebooks to {rulebook_dir}")
 
     logging.info(f"\n✅ Evolution complete! Best fitness: {engine.best_ever.fitness:.4f}")
     return 0
