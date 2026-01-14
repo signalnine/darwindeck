@@ -18,10 +18,11 @@ const (
 
 // TensionMetrics tracks tension curve data during simulation
 type TensionMetrics struct {
-	LeadChanges   int     // Number of times leader switched
-	DecisiveTurn  int     // Turn when winner took PERMANENT lead
-	ClosestMargin float32 // Smallest normalized gap between 1st and 2nd (0 = tied)
-	TotalTurns    int     // For computing decisive turn percentage
+	LeadChanges      int     // Number of times leader switched
+	DecisiveTurn     int     // Turn when winner took PERMANENT lead
+	ClosestMargin    float32 // Smallest normalized gap between 1st and 2nd (0 = tied)
+	TotalTurns       int     // For computing decisive turn percentage
+	WinnerWasTrailing bool   // True if winner was behind at midpoint (comeback win)
 
 	// Internal tracking (not serialized)
 	currentLeader int   // Player ID of current leader (-1 for tie)
@@ -137,6 +138,55 @@ func (d *HandSizeLeaderDetector) GetMargin(state *GameState) float32 {
 		return 0
 	}
 	return float32(second-first) / float32(maxCards)
+}
+
+// HandSizeMaxLeaderDetector - for capture/collection games (War)
+// More cards in hand = winning (opposite of shedding)
+type HandSizeMaxLeaderDetector struct{}
+
+func (d *HandSizeMaxLeaderDetector) GetLeader(state *GameState) int {
+	if len(state.Players) < 2 {
+		return -1
+	}
+	maxCards := len(state.Players[0].Hand)
+	leader := 0
+	tied := false
+	for i := 1; i < len(state.Players); i++ {
+		cards := len(state.Players[i].Hand)
+		if cards > maxCards {
+			maxCards = cards
+			leader = i
+			tied = false
+		} else if cards == maxCards {
+			tied = true
+		}
+	}
+	if tied {
+		return -1
+	}
+	return leader
+}
+
+func (d *HandSizeMaxLeaderDetector) GetMargin(state *GameState) float32 {
+	if len(state.Players) < 2 {
+		return 0
+	}
+	var first, second int = 0, 0
+	var totalCards int = 0
+	for _, p := range state.Players {
+		cards := len(p.Hand)
+		totalCards += cards
+		if cards > first {
+			second = first
+			first = cards
+		} else if cards > second {
+			second = cards
+		}
+	}
+	if totalCards == 0 {
+		return 0
+	}
+	return float32(first-second) / float32(totalCards)
 }
 
 // TrickLeaderDetector - for trick-COLLECTING games (Spades, Whist)
@@ -305,27 +355,75 @@ func (tm *TensionMetrics) Update(state *GameState, detector LeaderDetector) {
 	tm.TotalTurns++
 }
 
-// Finalize computes DecisiveTurn based on winner
+// Finalize computes DecisiveTurn and WinnerWasTrailing based on winner
 // DecisiveTurn = first turn where winner took lead and NEVER lost it
+// WinnerWasTrailing = true if winner was behind at game midpoint
 func (tm *TensionMetrics) Finalize(winnerID int) {
 	// Handle invalid winner (draw or error)
 	if winnerID < 0 {
 		tm.DecisiveTurn = tm.TotalTurns
+		tm.WinnerWasTrailing = false
 		return
 	}
 
+	// Empty history - game ended immediately
+	if len(tm.leaderHistory) == 0 {
+		tm.DecisiveTurn = tm.TotalTurns
+		tm.WinnerWasTrailing = false
+		return
+	}
+
+	// Calculate WinnerWasTrailing: check who was leading at midpoint
+	midpoint := len(tm.leaderHistory) / 2
+	if midpoint > 0 && midpoint < len(tm.leaderHistory) {
+		midpointLeader := tm.leaderHistory[midpoint]
+		// Winner was trailing if someone ELSE was leading at midpoint
+		// (not a tie, and not the winner)
+		tm.WinnerWasTrailing = midpointLeader != -1 && midpointLeader != winnerID
+	} else {
+		tm.WinnerWasTrailing = false
+	}
+
 	// Scan backwards to find when winner took permanent lead
+	// We're looking for the last turn where someone OTHER than the winner was leading
 	tm.DecisiveTurn = tm.TotalTurns
+	foundOtherLeader := false
+	lastWinnerLead := -1 // Track last turn winner was leading (scanning backwards)
 
 	for i := len(tm.leaderHistory) - 1; i >= 0; i-- {
 		if tm.leaderHistory[i] != winnerID && tm.leaderHistory[i] != -1 {
 			// Found a turn where someone else was leading
+			// Winner took permanent lead after this
+			foundOtherLeader = true
 			if i+1 < len(tm.leaderHistory) {
 				tm.DecisiveTurn = i + 1
 			}
 			break
 		}
-		tm.DecisiveTurn = i
+		// Track when winner was leading (for the no-other-leader case)
+		if tm.leaderHistory[i] == winnerID && lastWinnerLead == -1 {
+			lastWinnerLead = i
+		}
+	}
+
+	// If no other player was ever leading, find when winner FIRST took lead
+	if !foundOtherLeader {
+		winnerFirstLead := -1
+		for i, leader := range tm.leaderHistory {
+			if leader == winnerID {
+				winnerFirstLead = i
+				break
+			}
+		}
+
+		if winnerFirstLead >= 0 {
+			// Winner was leading from turn winnerFirstLead onwards
+			tm.DecisiveTurn = winnerFirstLead
+		} else {
+			// Winner was NEVER explicitly leading (all ties until final resolution)
+			// This means maximum tension - outcome was uncertain until the very end
+			tm.DecisiveTurn = tm.TotalTurns
+		}
 	}
 }
 
@@ -353,6 +451,12 @@ func SelectLeaderDetector(genome *Genome) LeaderDetector {
 			return &TrickLeaderDetector{}
 		case WinTypeMostChips, WinTypeBestHand:
 			return &ChipLeaderDetector{}
+		case WinTypeCaptureAll:
+			// War-style: captured cards go back to hand, more cards = winning
+			return &HandSizeMaxLeaderDetector{}
+		case WinTypeMostCaptured:
+			// Scopa-style: captured cards tracked via Score
+			return &ScoreLeaderDetector{}
 		}
 	}
 

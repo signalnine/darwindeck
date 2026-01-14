@@ -152,10 +152,17 @@ class GoSimulator:
                 total_challenges=result.TotalChallenges(),
                 successful_bluffs=result.SuccessfulBluffs(),
                 successful_catches=result.SuccessfulCatches(),
+                # Betting metrics
+                total_bets=result.TotalBets(),
+                betting_bluffs=result.BettingBluffs(),
+                fold_wins=result.FoldWins(),
+                showdown_wins=result.ShowdownWins(),
+                all_in_count=result.AllInCount(),
                 # Tension curve metrics
                 lead_changes=result.LeadChanges(),
                 decisive_turn_pct=result.DecisiveTurnPct(),
                 closest_margin=result.ClosestMargin(),
+                trailing_winners=result.TrailingWinners(),
             )
         except Exception as e:
             # Return error results for simulation failures
@@ -302,10 +309,17 @@ class GoSimulator:
                 total_challenges=result.TotalChallenges(),
                 successful_bluffs=result.SuccessfulBluffs(),
                 successful_catches=result.SuccessfulCatches(),
+                # Betting metrics
+                total_bets=result.TotalBets(),
+                betting_bluffs=result.BettingBluffs(),
+                fold_wins=result.FoldWins(),
+                showdown_wins=result.ShowdownWins(),
+                all_in_count=result.AllInCount(),
                 # Tension curve metrics
                 lead_changes=result.LeadChanges(),
                 decisive_turn_pct=result.DecisiveTurnPct(),
                 closest_margin=result.ClosestMargin(),
+                trailing_winners=result.TrailingWinners(),
             )
         except Exception as e:
             return SimulationResults(

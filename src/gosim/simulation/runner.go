@@ -31,16 +31,24 @@ type GameMetrics struct {
 	TotalHandSize     uint64 // Sum of hand sizes at each decision (for filtering ratio)
 
 	// Bluffing metrics (ClaimPhase games)
-	TotalClaims        uint64 // Number of claims made
-	TotalBluffs        uint64 // Claims where cards didn't match claimed rank
-	TotalChallenges    uint64 // Number of challenges made
-	SuccessfulBluffs   uint64 // Bluffs that weren't challenged (opponent passed)
-	SuccessfulCatches  uint64 // Challenges that caught a bluff
+	TotalClaims       uint64 // Number of claims made
+	TotalBluffs       uint64 // Claims where cards didn't match claimed rank
+	TotalChallenges   uint64 // Number of challenges made
+	SuccessfulBluffs  uint64 // Bluffs that weren't challenged (opponent passed)
+	SuccessfulCatches uint64 // Challenges that caught a bluff
+
+	// Betting metrics (BettingPhase games)
+	TotalBets     uint64 // Count of Bet/Raise/AllIn actions
+	BettingBluffs uint64 // Bet/Raise/AllIn with weak hand (hand_strength < 0.3)
+	FoldWins      uint64 // Wins where opponent(s) folded (no showdown)
+	ShowdownWins  uint64 // Wins that went to showdown
+	AllInCount    uint64 // Number of all-in actions
 
 	// Tension curve metrics
-	LeadChanges     uint32  // Number of times the lead changed hands
-	DecisiveTurnPct float32 // Fraction of turns with margin >= 50% of max possible
-	ClosestMargin   float32 // Smallest margin observed (normalized 0-1)
+	LeadChanges       uint32  // Number of times the lead changed hands
+	DecisiveTurnPct   float32 // Fraction of turns with margin >= 50% of max possible
+	ClosestMargin     float32 // Smallest margin observed (normalized 0-1)
+	WinnerWasTrailing bool    // True if winner was behind at midpoint (comeback win)
 }
 
 // GameResult holds the outcome of a single game
@@ -77,10 +85,18 @@ type AggregatedStats struct {
 	SuccessfulBluffs  uint64
 	SuccessfulCatches uint64
 
+	// Betting metrics: aggregated across all games
+	TotalBets     uint64
+	BettingBluffs uint64
+	FoldWins      uint64
+	ShowdownWins  uint64
+	AllInCount    uint64
+
 	// Tension metrics: aggregated across all games
 	LeadChanges     uint32  // Sum of lead changes across all games
 	DecisiveTurnPct float32 // Average decisive turn percentage
 	ClosestMargin   float32 // Average closest margin
+	TrailingWinners uint32  // Games where winner was behind at midpoint
 }
 
 // RunBatch simulates multiple games with the same genome and AI configuration
@@ -110,17 +126,16 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 	// Setup deck and deal cards
 	setupDeck(state, seed)
 
-	// Read cards_per_player from genome setup section
+	// Read setup section from genome bytecode
+	// Format: cards_per_player:4 + initial_discard_count:4 + starting_chips:4
 	cardsPerPlayer := 26 // Default for War
-	if genome.Header.SetupOffset > 0 && genome.Header.SetupOffset+8 <= int32(len(genome.Bytecode)) {
-		setupOffset := genome.Header.SetupOffset
-		cardsPerPlayer = int(int32(binary.BigEndian.Uint32(genome.Bytecode[setupOffset : setupOffset+4])))
-	}
-
-	// Read starting_chips from genome setup section (offset +8)
+	initialDiscardCount := 0
 	startingChips := 0
+
 	if genome.Header.SetupOffset > 0 && genome.Header.SetupOffset+12 <= int32(len(genome.Bytecode)) {
 		setupOffset := genome.Header.SetupOffset
+		cardsPerPlayer = int(int32(binary.BigEndian.Uint32(genome.Bytecode[setupOffset : setupOffset+4])))
+		initialDiscardCount = int(int32(binary.BigEndian.Uint32(genome.Bytecode[setupOffset+4 : setupOffset+8])))
 		startingChips = int(int32(binary.BigEndian.Uint32(genome.Bytecode[setupOffset+8 : setupOffset+12])))
 	}
 
@@ -149,6 +164,18 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 		}
 	}
 
+	// Deal initial cards to discard pile (for Uno-style games)
+	// The first card goes face-up to start the discard pile
+	if initialDiscardCount > 0 && len(state.Deck) >= initialDiscardCount {
+		for i := 0; i < initialDiscardCount; i++ {
+			if len(state.Deck) > 0 {
+				card := state.Deck[len(state.Deck)-1]
+				state.Deck = state.Deck[:len(state.Deck)-1]
+				state.Discard = append(state.Discard, card)
+			}
+		}
+	}
+
 	// Initialize chips if this genome uses betting
 	if startingChips > 0 {
 		state.InitializeChips(startingChips)
@@ -168,6 +195,7 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 			metrics.LeadChanges = uint32(tensionMetrics.LeadChanges)
 			metrics.DecisiveTurnPct = tensionMetrics.DecisiveTurnPct()
 			metrics.ClosestMargin = tensionMetrics.ClosestMargin
+			metrics.WinnerWasTrailing = tensionMetrics.WinnerWasTrailing
 			return GameResult{
 				WinnerID:   winner,
 				TurnCount:  state.TurnNumber,
@@ -189,6 +217,7 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 					metrics.LeadChanges = uint32(tensionMetrics.LeadChanges)
 					metrics.DecisiveTurnPct = tensionMetrics.DecisiveTurnPct()
 					metrics.ClosestMargin = tensionMetrics.ClosestMargin
+					metrics.WinnerWasTrailing = tensionMetrics.WinnerWasTrailing
 					return GameResult{
 						WinnerID:   -1,
 						TurnCount:  state.TurnNumber,
@@ -198,16 +227,38 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 					}
 				}
 
-				// After betting round, resolve showdown
+				// Mark betting as complete for this hand
+				state.BettingComplete = true
+
+				// After betting round, check if we should resolve showdown
+				// For blackjack-style games, betting is at the start - continue game
+				// For poker-style games, betting is at the end - resolve showdown
+				if engine.IsBlackjackGame(genome) {
+					// Blackjack: just continue to draw phase
+					// Only resolve showdown if someone folded
+					winners := engine.ResolveShowdown(state)
+					if len(winners) == 1 {
+						// Single winner (opponent folded)
+						engine.AwardPot(state, winners)
+						metrics.FoldWins++
+						state.ResetHand()
+					}
+					// Otherwise continue to draw phase
+					continue
+				}
+
+				// Poker-style: resolve showdown after betting
 				winners := engine.ResolveShowdown(state)
 				if len(winners) == 1 {
 					// Single winner (others folded)
 					engine.AwardPot(state, winners)
+					metrics.FoldWins++ // Track fold win
 				} else if len(winners) > 1 {
 					// Multiple players - use poker hand comparison
 					winner := engine.FindBestPokerWinner(state, int(state.NumPlayers))
 					if winner >= 0 {
 						engine.AwardPot(state, []int{int(winner)})
+						metrics.ShowdownWins++ // Track showdown win
 					}
 				}
 
@@ -218,11 +269,31 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 		}
 
 		if len(moves) == 0 {
-			// No legal moves - game stuck
+			// No legal moves
+			// For blackjack, this means players can't draw anymore - determine winner
+			if engine.IsBlackjackGame(genome) {
+				winner := engine.FindBestBlackjackWinner(state, int(state.NumPlayers))
+				if winner >= 0 {
+					metrics.ShowdownWins++
+				}
+				tensionMetrics.Finalize(int(winner))
+				metrics.LeadChanges = uint32(tensionMetrics.LeadChanges)
+				metrics.DecisiveTurnPct = tensionMetrics.DecisiveTurnPct()
+				metrics.ClosestMargin = tensionMetrics.ClosestMargin
+				metrics.WinnerWasTrailing = tensionMetrics.WinnerWasTrailing
+				return GameResult{
+					WinnerID:   winner,
+					TurnCount:  state.TurnNumber,
+					DurationNs: uint64(time.Since(start).Nanoseconds()),
+					Metrics:    metrics,
+				}
+			}
+			// For other games, no legal moves means stuck
 			tensionMetrics.Finalize(-1)
 			metrics.LeadChanges = uint32(tensionMetrics.LeadChanges)
 			metrics.DecisiveTurnPct = tensionMetrics.DecisiveTurnPct()
 			metrics.ClosestMargin = tensionMetrics.ClosestMargin
+			metrics.WinnerWasTrailing = tensionMetrics.WinnerWasTrailing
 			return GameResult{
 				WinnerID:   -1,
 				TurnCount:  state.TurnNumber,
@@ -243,9 +314,24 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 		// Select and apply move based on AI type
 		var move *engine.LegalMove
 
+		// Use blackjack strategy for blackjack games with draw phase moves
+		isBlackjack := engine.IsBlackjackGame(genome)
+		hasBlackjackDrawMoves := false
+		if isBlackjack && len(moves) > 0 {
+			hasBlackjackDrawMoves = engine.IsBlackjackDrawMove(&moves[0])
+		}
+
 		// Optimization: skip MCTS search if only one legal move
 		if len(moves) == 1 {
 			move = &moves[0]
+		} else if hasBlackjackDrawMoves {
+			// Use basic blackjack strategy (hit <17, stand >=17)
+			idx := engine.SelectBlackjackMove(state, moves)
+			if idx >= 0 && idx < len(moves) {
+				move = &moves[idx]
+			} else {
+				move = &moves[0]
+			}
 		} else {
 			switch aiType {
 			case RandomAI:
@@ -270,6 +356,7 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 			metrics.LeadChanges = uint32(tensionMetrics.LeadChanges)
 			metrics.DecisiveTurnPct = tensionMetrics.DecisiveTurnPct()
 			metrics.ClosestMargin = tensionMetrics.ClosestMargin
+			metrics.WinnerWasTrailing = tensionMetrics.WinnerWasTrailing
 			return GameResult{
 				WinnerID:   -1,
 				TurnCount:  state.TurnNumber,
@@ -299,6 +386,7 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 	metrics.LeadChanges = uint32(tensionMetrics.LeadChanges)
 	metrics.DecisiveTurnPct = tensionMetrics.DecisiveTurnPct()
 	metrics.ClosestMargin = tensionMetrics.ClosestMargin
+	metrics.WinnerWasTrailing = tensionMetrics.WinnerWasTrailing
 	return GameResult{
 		WinnerID:   -1,
 		TurnCount:  state.TurnNumber,
@@ -331,16 +419,16 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 
 	setupDeck(state, seed)
 
+	// Read setup section from genome bytecode
+	// Format: cards_per_player:4 + initial_discard_count:4 + starting_chips:4
 	cardsPerPlayer := 26
-	if genome.Header.SetupOffset > 0 && genome.Header.SetupOffset+8 <= int32(len(genome.Bytecode)) {
-		setupOffset := genome.Header.SetupOffset
-		cardsPerPlayer = int(int32(binary.BigEndian.Uint32(genome.Bytecode[setupOffset : setupOffset+4])))
-	}
-
-	// Read starting_chips from genome setup section (offset +8)
+	initialDiscardCount := 0
 	startingChips := 0
+
 	if genome.Header.SetupOffset > 0 && genome.Header.SetupOffset+12 <= int32(len(genome.Bytecode)) {
 		setupOffset := genome.Header.SetupOffset
+		cardsPerPlayer = int(int32(binary.BigEndian.Uint32(genome.Bytecode[setupOffset : setupOffset+4])))
+		initialDiscardCount = int(int32(binary.BigEndian.Uint32(genome.Bytecode[setupOffset+4 : setupOffset+8])))
 		startingChips = int(int32(binary.BigEndian.Uint32(genome.Bytecode[setupOffset+8 : setupOffset+12])))
 	}
 
@@ -366,6 +454,18 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 		}
 	}
 
+	// Deal initial cards to discard pile (for Uno-style games)
+	// The first card goes face-up to start the discard pile
+	if initialDiscardCount > 0 && len(state.Deck) >= initialDiscardCount {
+		for i := 0; i < initialDiscardCount; i++ {
+			if len(state.Deck) > 0 {
+				card := state.Deck[len(state.Deck)-1]
+				state.Deck = state.Deck[:len(state.Deck)-1]
+				state.Discard = append(state.Discard, card)
+			}
+		}
+	}
+
 	// Initialize chips if this genome uses betting
 	if startingChips > 0 {
 		state.InitializeChips(startingChips)
@@ -383,6 +483,7 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 			metrics.LeadChanges = uint32(tensionMetrics.LeadChanges)
 			metrics.DecisiveTurnPct = tensionMetrics.DecisiveTurnPct()
 			metrics.ClosestMargin = tensionMetrics.ClosestMargin
+			metrics.WinnerWasTrailing = tensionMetrics.WinnerWasTrailing
 			return GameResult{
 				WinnerID:   winner,
 				TurnCount:  state.TurnNumber,
@@ -403,6 +504,7 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 					metrics.LeadChanges = uint32(tensionMetrics.LeadChanges)
 					metrics.DecisiveTurnPct = tensionMetrics.DecisiveTurnPct()
 					metrics.ClosestMargin = tensionMetrics.ClosestMargin
+					metrics.WinnerWasTrailing = tensionMetrics.WinnerWasTrailing
 					return GameResult{
 						WinnerID:   -1,
 						TurnCount:  state.TurnNumber,
@@ -412,16 +514,38 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 					}
 				}
 
-				// After betting round, resolve showdown
+				// Mark betting as complete for this hand
+				state.BettingComplete = true
+
+				// After betting round, check if we should resolve showdown
+				// For blackjack-style games, betting is at the start - continue game
+				// For poker-style games, betting is at the end - resolve showdown
+				if engine.IsBlackjackGame(genome) {
+					// Blackjack: just continue to draw phase
+					// Only resolve showdown if someone folded
+					winners := engine.ResolveShowdown(state)
+					if len(winners) == 1 {
+						// Single winner (opponent folded)
+						engine.AwardPot(state, winners)
+						metrics.FoldWins++
+						state.ResetHand()
+					}
+					// Otherwise continue to draw phase
+					continue
+				}
+
+				// Poker-style: resolve showdown after betting
 				winners := engine.ResolveShowdown(state)
 				if len(winners) == 1 {
 					// Single winner (others folded)
 					engine.AwardPot(state, winners)
+					metrics.FoldWins++ // Track fold win
 				} else if len(winners) > 1 {
 					// Multiple players - use poker hand comparison
 					winner := engine.FindBestPokerWinner(state, int(state.NumPlayers))
 					if winner >= 0 {
 						engine.AwardPot(state, []int{int(winner)})
+						metrics.ShowdownWins++ // Track showdown win
 					}
 				}
 
@@ -432,10 +556,31 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 		}
 
 		if len(moves) == 0 {
+			// No legal moves
+			// For blackjack, this means players can't draw anymore - determine winner
+			if engine.IsBlackjackGame(genome) {
+				winner := engine.FindBestBlackjackWinner(state, int(state.NumPlayers))
+				if winner >= 0 {
+					metrics.ShowdownWins++
+				}
+				tensionMetrics.Finalize(int(winner))
+				metrics.LeadChanges = uint32(tensionMetrics.LeadChanges)
+				metrics.DecisiveTurnPct = tensionMetrics.DecisiveTurnPct()
+				metrics.ClosestMargin = tensionMetrics.ClosestMargin
+				metrics.WinnerWasTrailing = tensionMetrics.WinnerWasTrailing
+				return GameResult{
+					WinnerID:   winner,
+					TurnCount:  state.TurnNumber,
+					DurationNs: uint64(time.Since(start).Nanoseconds()),
+					Metrics:    metrics,
+				}
+			}
+			// For other games, no legal moves means stuck
 			tensionMetrics.Finalize(-1)
 			metrics.LeadChanges = uint32(tensionMetrics.LeadChanges)
 			metrics.DecisiveTurnPct = tensionMetrics.DecisiveTurnPct()
 			metrics.ClosestMargin = tensionMetrics.ClosestMargin
+			metrics.WinnerWasTrailing = tensionMetrics.WinnerWasTrailing
 			return GameResult{
 				WinnerID:   -1,
 				TurnCount:  state.TurnNumber,
@@ -489,6 +634,7 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 			metrics.LeadChanges = uint32(tensionMetrics.LeadChanges)
 			metrics.DecisiveTurnPct = tensionMetrics.DecisiveTurnPct()
 			metrics.ClosestMargin = tensionMetrics.ClosestMargin
+			metrics.WinnerWasTrailing = tensionMetrics.WinnerWasTrailing
 			return GameResult{
 				WinnerID:   -1,
 				TurnCount:  state.TurnNumber,
@@ -517,6 +663,7 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 	metrics.LeadChanges = uint32(tensionMetrics.LeadChanges)
 	metrics.DecisiveTurnPct = tensionMetrics.DecisiveTurnPct()
 	metrics.ClosestMargin = tensionMetrics.ClosestMargin
+	metrics.WinnerWasTrailing = tensionMetrics.WinnerWasTrailing
 	return GameResult{
 		WinnerID:   -1,
 		TurnCount:  state.TurnNumber,
@@ -614,6 +761,18 @@ func isInteraction(state *engine.GameState, move *engine.LegalMove, genome *engi
 		if move.TargetLoc == engine.LocationOpponentHand ||
 			move.TargetLoc == engine.LocationOpponentDiscard {
 			return true
+		}
+		// Check if playing this card triggers a special effect targeting opponents
+		if move.CardIndex >= 0 && move.CardIndex < len(state.Players[state.CurrentPlayer].Hand) {
+			card := state.Players[state.CurrentPlayer].Hand[move.CardIndex]
+			if effect, ok := genome.Effects[card.Rank]; ok {
+				// Effects targeting opponents are interactions
+				// TARGET_NEXT_PLAYER=0, TARGET_PREV_PLAYER=1, TARGET_PLAYER_CHOICE=2,
+				// TARGET_RANDOM_OPPONENT=3, TARGET_ALL_OPPONENTS=4
+				if effect.Target <= 4 { // All targets except self
+					return true
+				}
+			}
 		}
 	case 3: // DiscardPhase
 		// Regular discard doesn't affect opponent
@@ -723,10 +882,20 @@ func aggregateResults(results []GameResult) AggregatedStats {
 		stats.SuccessfulBluffs += result.Metrics.SuccessfulBluffs
 		stats.SuccessfulCatches += result.Metrics.SuccessfulCatches
 
+		// Betting metrics
+		stats.TotalBets += result.Metrics.TotalBets
+		stats.BettingBluffs += result.Metrics.BettingBluffs
+		stats.FoldWins += result.Metrics.FoldWins
+		stats.ShowdownWins += result.Metrics.ShowdownWins
+		stats.AllInCount += result.Metrics.AllInCount
+
 		// Tension metrics (aggregate for averaging later)
 		stats.LeadChanges += result.Metrics.LeadChanges
 		stats.DecisiveTurnPct += result.Metrics.DecisiveTurnPct
 		stats.ClosestMargin += result.Metrics.ClosestMargin
+		if result.Metrics.WinnerWasTrailing {
+			stats.TrailingWinners++
+		}
 	}
 
 	// Calculate averages
@@ -880,6 +1049,21 @@ func runBettingRound(state *engine.GameState, genome *engine.Genome, bettingPhas
 			action = engine.SelectRandomBettingAction(moves, rand.Intn)
 		}
 
+		// Track betting metrics before applying action
+		handStrength := engine.EvaluateHandStrength(state.Players[currentPlayer].Hand)
+
+		// Count betting actions (Bet=1, Raise=3, AllIn=4)
+		if action == engine.BettingBet || action == engine.BettingRaise || action == engine.BettingAllIn {
+			metrics.TotalBets++
+			// Count as bluff if betting with weak hand (< 0.3)
+			if handStrength < 0.3 {
+				metrics.BettingBluffs++
+			}
+		}
+		if action == engine.BettingAllIn {
+			metrics.AllInCount++
+		}
+
 		oldCurrentBet := state.CurrentBet
 		engine.ApplyBettingAction(state, bettingPhase, currentPlayer, action)
 		metrics.TotalActions++
@@ -977,6 +1161,21 @@ func runBettingRoundAsymmetric(state *engine.GameState, genome *engine.Genome, b
 			action = engine.SelectGreedyBettingAction(state, moves, handStrength)
 		default: // RandomAI and MCTS use random for betting
 			action = engine.SelectRandomBettingAction(moves, rand.Intn)
+		}
+
+		// Track betting metrics before applying action
+		handStrength := engine.EvaluateHandStrength(state.Players[currentPlayer].Hand)
+
+		// Count betting actions (Bet=1, Raise=3, AllIn=4)
+		if action == engine.BettingBet || action == engine.BettingRaise || action == engine.BettingAllIn {
+			metrics.TotalBets++
+			// Count as bluff if betting with weak hand (< 0.3)
+			if handStrength < 0.3 {
+				metrics.BettingBluffs++
+			}
+		}
+		if action == engine.BettingAllIn {
+			metrics.AllInCount++
 		}
 
 		oldCurrentBet := state.CurrentBet

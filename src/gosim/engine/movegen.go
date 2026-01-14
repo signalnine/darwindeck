@@ -8,6 +8,17 @@ const (
 	MovePass      = -2 // Accept the claim without challenging
 )
 
+// Special CardIndex values for DrawPhase
+const (
+	MoveDraw     = -1 // Draw a card (hit in blackjack)
+	MoveDrawPass = -3 // Skip drawing (stand in blackjack)
+)
+
+// Special CardIndex values for PlayPhase
+const (
+	MovePlayPass = -4 // Pass/skip playing (used in President when can't beat top card)
+)
+
 // Special CardIndex values for BettingPhase
 const (
 	MoveBettingCheck = -10
@@ -36,13 +47,34 @@ func GenerateLegalMoves(state *GameState, genome *Genome) []LegalMove {
 			if len(phase.Data) < 6 {
 				continue
 			}
+
+			// Skip if player has already stood (blackjack)
+			if int(currentPlayer) < len(state.HasStood) && state.HasStood[currentPlayer] {
+				continue
+			}
+
 			source := Location(phase.Data[0])
 			mandatory := phase.Data[5] == 1
 
-			// Check if can draw
+			// Check phase condition if present
+			// Data layout: source:1, count:4, mandatory:1, has_condition:1, [condition:7]
+			hasCondition := len(phase.Data) > 6 && phase.Data[6] == 1
+			if hasCondition && len(phase.Data) >= 14 {
+				// Condition is at bytes 7-13: opcode:1, operator:1, value:4, ref:1
+				conditionMet := EvaluateCondition(state, currentPlayer, phase.Data[7:14])
+				if !conditionMet {
+					continue // Skip this phase if condition not met
+				}
+			}
+
+			// Check if can draw, with automatic deck reshuffling
 			canDraw := false
 			switch source {
 			case LocationDeck:
+				// If deck is empty but discard has cards, reshuffle discard into deck
+				if len(state.Deck) == 0 && len(state.Discard) > 1 {
+					reshuffleDeck(state)
+				}
 				canDraw = len(state.Deck) > 0
 			case LocationDiscard:
 				canDraw = len(state.Discard) > 0
@@ -52,38 +84,63 @@ func GenerateLegalMoves(state *GameState, genome *Genome) []LegalMove {
 				canDraw = len(state.Players[opponentID].Hand) > 0
 			}
 
-			if canDraw || mandatory {
+			if canDraw {
 				moves = append(moves, LegalMove{
 					PhaseIndex: phaseIdx,
-					CardIndex:  -1,
+					CardIndex:  MoveDraw, // -1 = draw (hit)
+					TargetLoc:  source,
+				})
+			}
+
+			// Add pass/stand option when drawing is not mandatory
+			if !mandatory && canDraw {
+				moves = append(moves, LegalMove{
+					PhaseIndex: phaseIdx,
+					CardIndex:  MoveDrawPass, // -3 = pass (stand)
 					TargetLoc:  source,
 				})
 			}
 
 		case 2: // PlayPhase
-			if len(phase.Data) < 3 {
+			if len(phase.Data) < 9 {
 				continue
 			}
 			target := Location(phase.Data[0])
 			minCards := int(phase.Data[1])
 			maxCards := int(phase.Data[2])
+			// phase.Data[3] is mandatory flag
+			passIfUnable := phase.Data[4] == 1
+			conditionLen := int(binary.BigEndian.Uint32(phase.Data[5:9]))
+
+			// Extract condition bytes if present
+			var conditionBytes []byte
+			if conditionLen > 0 && len(phase.Data) >= 9+conditionLen {
+				conditionBytes = phase.Data[9 : 9+conditionLen]
+			}
 
 			hand := state.Players[currentPlayer].Hand
 			if len(hand) == 0 {
 				continue
 			}
 
+			playMoveCount := 0
+
 			// Single-card plays (standard)
 			if minCards <= 1 && maxCards >= 1 {
 				// Check each card in hand
-				for cardIdx := range hand {
-					// TODO: Evaluate valid_play_condition from phase.Data
-					// For now, allow all cards
+				for cardIdx, card := range hand {
+					// Evaluate valid_play_condition if present
+					if len(conditionBytes) > 0 {
+						if !EvaluateCardCondition(state, currentPlayer, card, conditionBytes) {
+							continue // Card doesn't satisfy condition
+						}
+					}
 					moves = append(moves, LegalMove{
 						PhaseIndex: phaseIdx,
 						CardIndex:  cardIdx,
 						TargetLoc:  target,
 					})
+					playMoveCount++
 				}
 			}
 
@@ -107,8 +164,18 @@ func GenerateLegalMoves(state *GameState, genome *Genome) []LegalMove {
 							CardIndex:  -int(rank) - 100, // Negative rank encoding
 							TargetLoc:  target,
 						})
+						playMoveCount++
 					}
 				}
+			}
+
+			// If no valid plays but pass_if_unable is set, add pass move
+			if playMoveCount == 0 && passIfUnable {
+				moves = append(moves, LegalMove{
+					PhaseIndex: phaseIdx,
+					CardIndex:  MovePlayPass,
+					TargetLoc:  target,
+				})
 			}
 
 		case 3: // DiscardPhase
@@ -212,9 +279,29 @@ func GenerateLegalMoves(state *GameState, genome *Genome) []LegalMove {
 			}
 
 		case 5: // BettingPhase
+			// Skip if betting already completed this hand (for games like blackjack)
+			if state.BettingComplete {
+				continue
+			}
+
+			// Check if only one player remains (everyone else folded)
+			activePlayers := CountActivePlayers(state)
+			if activePlayers <= 1 {
+				// Betting round is effectively over - only one player left
+				// Mark betting complete so the game can proceed
+				state.BettingComplete = true
+				continue
+			}
+
 			// Parse betting phase data
 			bettingPhase, err := ParseBettingPhaseData(phase.Data)
 			if err != nil || bettingPhase == nil {
+				continue
+			}
+
+			// Check if all bets are matched and no one can act (betting round complete)
+			if AllBetsMatched(state) && CountActingPlayers(state) == 0 {
+				state.BettingComplete = true
 				continue
 			}
 
@@ -278,16 +365,50 @@ func ApplyMove(state *GameState, move *LegalMove, genome *Genome) {
 
 	switch phase.PhaseType {
 	case 1: // DrawPhase
-		if len(phase.Data) >= 5 {
+		// MoveDrawPass (-3) = stand/pass, mark player as stood (for Blackjack-style games)
+		// MoveDraw (-1) = hit/draw
+		if move.CardIndex == MoveDraw && len(phase.Data) >= 5 {
 			count := int(binary.BigEndian.Uint32(phase.Data[1:5]))
 			for i := 0; i < count; i++ {
 				state.DrawCard(currentPlayer, move.TargetLoc)
 			}
+		} else if move.CardIndex == MoveDrawPass {
+			// Mark player as having stood - but only for non-shedding games
+			// In shedding games (empty_hand win condition), passing is just skipping a draw
+			// In Blackjack-style games, passing means "stand" for the rest of the hand
+			isShedding := false
+			for _, wc := range genome.WinConditions {
+				if wc.WinType == 0 { // WinTypeEmptyHand = shedding game
+					isShedding = true
+					break
+				}
+			}
+			if !isShedding && int(currentPlayer) < len(state.HasStood) {
+				state.HasStood[currentPlayer] = true
+			}
 		}
 
 	case 2: // PlayPhase
-		if move.CardIndex >= 0 {
-			// Single-card play
+		if move.CardIndex == MovePlayPass {
+			// Player passes - can't or won't play a card
+			state.ConsecutivePasses++
+
+			// If all other players have passed (N-1 passes), clear the tableau
+			// The last player to play can now play any card
+			if state.ConsecutivePasses >= int(state.NumPlayers)-1 {
+				if len(state.Tableau) > 0 {
+					// Move tableau cards to discard
+					for _, pile := range state.Tableau {
+						state.Discard = append(state.Discard, pile...)
+					}
+					state.Tableau = nil
+				}
+				state.ConsecutivePasses = 0
+			}
+		} else if move.CardIndex >= 0 {
+			// Single-card play - reset pass counter
+			state.ConsecutivePasses = 0
+
 			playedCard := state.Players[currentPlayer].Hand[move.CardIndex]
 			state.PlayCard(currentPlayer, move.CardIndex, move.TargetLoc)
 
@@ -798,4 +919,23 @@ func resolveChallenge(state *GameState, challengerID uint8) {
 
 	// Clear the claim
 	state.CurrentClaim = nil
+}
+
+// reshuffleDeck moves all discard cards except the top one into the deck and shuffles.
+// Used for shedding games like Uno when the deck runs out.
+func reshuffleDeck(state *GameState) {
+	if len(state.Discard) <= 1 {
+		return // Nothing to reshuffle
+	}
+
+	// Keep the top card, move the rest to deck
+	topCard := state.Discard[len(state.Discard)-1]
+	for i := 0; i < len(state.Discard)-1; i++ {
+		state.Deck = append(state.Deck, state.Discard[i])
+	}
+	state.Discard = state.Discard[:1]
+	state.Discard[0] = topCard
+
+	// Shuffle the deck using turn number as seed for determinism
+	state.ShuffleDeck(uint64(state.TurnNumber))
 }

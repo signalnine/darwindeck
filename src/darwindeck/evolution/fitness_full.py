@@ -6,56 +6,63 @@ from darwindeck.genome.schema import GameGenome, PlayPhase, DrawPhase
 
 
 # Preset weight configurations for different game styles
+# IMPORTANT: Rules complexity is heavily weighted because complex games
+# don't get played - people won't learn rules they can't quickly understand
 STYLE_PRESETS = {
     'balanced': {
-        'decision_density': 0.20,
-        'comeback_potential': 0.15,
-        'tension_curve': 0.10,
-        'interaction_frequency': 0.20,
-        'rules_complexity': 0.05,
-        'skill_vs_luck': 0.30,
-        'bluffing_depth': 0.00,  # Not required for balanced games
+        # Rules complexity dominates - if you can't explain it, no one plays it
+        'rules_complexity': 0.40,  # Dominant weight - learnability is critical
+        'decision_density': 0.10,
+        'comeback_potential': 0.08,
+        'tension_curve': 0.06,
+        'interaction_frequency': 0.10,
+        'skill_vs_luck': 0.12,
+        'bluffing_depth': 0.00,
+        'betting_engagement': 0.14,
     },
     'bluffing': {
-        # Favor hidden information, betting, and player interaction
-        'decision_density': 0.15,
-        'comeback_potential': 0.10,
-        'tension_curve': 0.10,
-        'interaction_frequency': 0.20,
-        'rules_complexity': 0.05,
-        'skill_vs_luck': 0.10,
-        'bluffing_depth': 0.30,  # High - must have quality bluffing mechanics
+        # Bluffing games can be slightly more complex, but still need to be learnable
+        'rules_complexity': 0.35,
+        'decision_density': 0.05,
+        'comeback_potential': 0.05,
+        'tension_curve': 0.05,
+        'interaction_frequency': 0.08,
+        'skill_vs_luck': 0.05,
+        'bluffing_depth': 0.18,  # Quality bluffing mechanics
+        'betting_engagement': 0.19,  # Betting psychology
     },
     'strategic': {
-        # Favor deep thinking, skill-based play
-        'decision_density': 0.25,
-        'comeback_potential': 0.10,
+        # Strategy gamers tolerate MORE complexity, but it still matters a lot
+        'rules_complexity': 0.30,  # Lower than others, but still significant
+        'decision_density': 0.20,
+        'comeback_potential': 0.08,
         'tension_curve': 0.05,
-        'interaction_frequency': 0.15,
-        'rules_complexity': 0.05,
-        'skill_vs_luck': 0.40,  # High skill emphasis
-        'bluffing_depth': 0.00,  # Not required for strategic games
+        'interaction_frequency': 0.10,
+        'skill_vs_luck': 0.27,  # High skill emphasis
+        'bluffing_depth': 0.00,
+        'betting_engagement': 0.00,
     },
     'party': {
-        # Favor quick, interactive, accessible games
-        # Note: skill_vs_luck is INVERTED for party - higher = more luck-friendly
-        'decision_density': 0.10,
-        'comeback_potential': 0.20,  # Everyone can win
-        'tension_curve': 0.10,
-        'interaction_frequency': 0.25,  # High interaction
-        'rules_complexity': 0.20,  # Simple rules
-        'skill_vs_luck': 0.15,  # Luck-friendly (inverted: rewards low skill dominance)
-        'bluffing_depth': 0.00,  # Not required for party games
+        # Party games MUST be dead simple - complexity is the killer
+        'rules_complexity': 0.50,  # Half of fitness! Must explain in 1-2 minutes
+        'decision_density': 0.04,
+        'comeback_potential': 0.12,  # Everyone can win
+        'tension_curve': 0.06,
+        'interaction_frequency': 0.14,  # High interaction
+        'skill_vs_luck': 0.04,  # Luck-friendly
+        'bluffing_depth': 0.00,
+        'betting_engagement': 0.10,
     },
     'trick-taking': {
-        # Favor trick-based mechanics
-        'decision_density': 0.20,
-        'comeback_potential': 0.15,
-        'tension_curve': 0.15,
-        'interaction_frequency': 0.25,
-        'rules_complexity': 0.05,
-        'skill_vs_luck': 0.20,
-        'bluffing_depth': 0.00,  # Not required for trick-taking
+        # Trick-taking is familiar, so complexity is less of a barrier
+        'rules_complexity': 0.30,  # Familiar pattern helps, but still important
+        'decision_density': 0.15,
+        'comeback_potential': 0.10,
+        'tension_curve': 0.12,
+        'interaction_frequency': 0.18,
+        'skill_vs_luck': 0.15,
+        'bluffing_depth': 0.00,
+        'betting_engagement': 0.00,
     },
 }
 
@@ -85,10 +92,18 @@ class SimulationResults:
     successful_bluffs: int = 0
     successful_catches: int = 0
 
+    # Betting metrics (BettingPhase games)
+    total_bets: int = 0
+    betting_bluffs: int = 0
+    fold_wins: int = 0
+    showdown_wins: int = 0
+    all_in_count: int = 0
+
     # Tension curve metrics
     lead_changes: int = 0
     decisive_turn_pct: float = 1.0
     closest_margin: float = 1.0
+    trailing_winners: int = 0  # Games where winner was behind at midpoint
 
     @property
     def player0_wins(self) -> int:
@@ -112,6 +127,7 @@ class FitnessMetrics:
     session_length: float       # Tracked but not averaged (constraint only)
     skill_vs_luck: float
     bluffing_depth: float       # Quality of bluffing mechanics (0 for non-bluffing games)
+    betting_engagement: float   # Psychological appeal of betting (0 for non-betting games)
     total_fitness: float
     games_simulated: int
     valid: bool
@@ -188,32 +204,42 @@ class FitnessEvaluator:
             avg_valid_moves = results.total_valid_moves / results.total_decisions
             forced_ratio = results.forced_decisions / results.total_decisions
 
-            # Calculate filtering ratio: how much the game filters available moves
-            # If valid_moves == hand_size, no filtering is happening (meaningless choice)
-            # filtering_ratio = 0 means all cards always valid (like War)
-            # filtering_ratio = 0.8 means only 20% of hand is valid (real constraints)
+            # Calculate decision quality score based on move variety
+            # Key insight: meaningful decisions come from CONSTRAINED choices,
+            # not just having lots of options
             if results.total_hand_size > 0:
-                raw_ratio = 1.0 - (results.total_valid_moves / results.total_hand_size)
-                if raw_ratio < 0:
-                    # More moves than cards = multi-phase game or draw options
-                    # This indicates meaningful choices exist (not just "play any card")
-                    filtering_ratio = 0.5  # Baseline for games with phase variety
+                moves_per_card = results.total_valid_moves / results.total_hand_size
+
+                if moves_per_card <= 1.0:
+                    # Filtered game: fewer valid moves than cards in hand
+                    # Higher filtering = more meaningful constraints
+                    filtering_score = 1.0 - moves_per_card  # 0.0-1.0
+                    variety_score = 0.0
                 else:
-                    filtering_ratio = min(1.0, raw_ratio)
+                    # Multi-option game: more moves than cards (draw, pass, phases)
+                    # These ARE meaningful decisions, not unfiltered chaos
+                    filtering_score = 0.3  # Baseline - some implicit filtering
+                    # Extra options beyond hand = decision variety
+                    extra_options = moves_per_card - 1.0
+                    variety_score = min(0.5, extra_options * 0.15)
             else:
-                filtering_ratio = 0.0
+                filtering_score = 0.0
+                variety_score = 0.0
 
-            # Score: High when many FILTERED moves available, low when forced or unfiltered
-            # avg_valid_moves matters only if there's actual filtering
-            # Without filtering, having many options is meaningless (like War)
-            choice_score = min(1.0, (avg_valid_moves - 1) / 5.0)
+            # Choice score: how many options per decision point
+            # More options = more interesting (if not forced)
+            choice_score = min(1.0, (avg_valid_moves - 1) / 6.0)
 
-            # Apply filtering penalty: unfiltered games get low decision density
-            # even if they have many valid moves
+            # Final decision density combines:
+            # - Choice availability (having multiple options)
+            # - Filtering quality (constraints make choices meaningful)
+            # - Variety bonus (draw/pass/phase options)
+            # - Not being forced
             decision_density = min(1.0, (
-                choice_score * filtering_ratio * 0.5 +  # Filtered choices (most important)
-                (1.0 - forced_ratio) * 0.3 +  # Not being forced is still good
-                filtering_ratio * 0.2  # Raw filtering score
+                choice_score * 0.35 +           # Base choice score
+                filtering_score * 0.25 +        # Constraint quality
+                variety_score +                 # Multi-option bonus (up to 0.5)
+                (1.0 - forced_ratio) * 0.25     # Not being forced
             ))
         else:
             # Fallback to heuristic (current implementation)
@@ -229,12 +255,14 @@ class FitnessEvaluator:
                 min(1.0, has_conditions / 3.0) * 0.2
             ))
 
-        # 2. Comeback potential (how balanced is the game?)
-        # Expected win rate: 1/N for N players (50% for 2, 33% for 3, 25% for 4)
+        # 2. Comeback potential combines two signals:
+        #    a) Win rate balance: Are wins evenly distributed among players?
+        #    b) Trailing winner frequency: How often does the trailing player come back to win?
+
+        # 2a. Win rate balance (expected win rate: 1/N for N players)
         expected_rate = 1.0 / results.player_count if results.player_count > 0 else 0.5
         max_deviation = 1.0 - expected_rate  # Maximum possible deviation from expected
 
-        # Calculate average deviation from expected across all players
         if results.total_games > 0:
             deviations = []
             for wins in results.wins:
@@ -245,16 +273,32 @@ class FitnessEvaluator:
         else:
             avg_deviation = 0
 
-        comeback_potential = 1.0 - avg_deviation
+        balance_score = 1.0 - avg_deviation
+
+        # 2b. Trailing winner frequency: proportion of games where winner was behind at midpoint
+        # This is the true "comeback" metric - how often does the trailing player win?
+        decisive_games = results.total_games - results.draws - results.errors
+        if decisive_games > 0 and results.trailing_winners > 0:
+            # trailing_winners / decisive_games gives comeback frequency (0 to 1)
+            # 50% comebacks is ideal (maximum uncertainty), so we scale to [0, 1] with 0.5 = optimal
+            trailing_freq = results.trailing_winners / decisive_games
+            # Transform: 0% comebacks -> 0, 50% comebacks -> 1, 100% comebacks -> 0
+            # (100% comebacks means the midpoint leader NEVER wins, also not ideal)
+            trailing_score = 1.0 - abs(0.5 - trailing_freq) * 2
+        else:
+            # No trailing winner data available - fall back to balance score only
+            trailing_score = balance_score
+
+        # Combine: 60% trailing winner frequency (true comebacks) + 40% balance
+        comeback_potential = trailing_score * 0.6 + balance_score * 0.4
 
         # 3. Tension curve - use real instrumentation if available
-        has_tension_data = (
-            results.lead_changes > 0 or
-            results.decisive_turn_pct < 1.0 or
-            results.closest_margin < 1.0
-        )
+        # Key insight: lead_changes = 0 with closest_margin = 0 means "always tied"
+        # which indicates the leader detector couldn't track progress, not high tension.
+        has_meaningful_tracking = results.lead_changes > 0
 
-        if has_tension_data:
+        if has_meaningful_tracking:
+            # Real back-and-forth detected - use full formula
             turns_per_expected_change = 20
             expected_changes = max(1, results.avg_turns / turns_per_expected_change)
             lead_change_score = min(1.0, results.lead_changes / expected_changes)
@@ -266,11 +310,19 @@ class FitnessEvaluator:
                 decisive_turn_score * 0.4 +
                 margin_score * 0.2
             )
+        elif results.closest_margin > 0 and results.closest_margin < 1.0:
+            # No lead changes but non-zero margin = one player always ahead (runaway)
+            # Lower tension because outcome was predictable
+            margin_score = 1.0 - results.closest_margin  # Smaller margin = closer game
+            decisive_score = results.decisive_turn_pct
+            tension_curve = margin_score * 0.5 + decisive_score * 0.5
         else:
-            # Fallback to heuristic (for backward compatibility)
+            # No tracking data (always tied or no meaningful leader detection)
+            # Fall back to heuristic based on game length, but cap at 0.6
+            # since we can't verify actual back-and-forth tension
             turn_score = min(1.0, results.avg_turns / 100.0)
             length_bonus = min(1.0, max(0.0, (results.avg_turns - 20) / 50.0))
-            tension_curve = min(1.0, turn_score * 0.6 + length_bonus * 0.4)
+            tension_curve = min(0.6, turn_score * 0.6 + length_bonus * 0.4)
 
         # 4. Interaction frequency - use real data if available, else heuristic
         if hasattr(results, 'total_actions') and results.total_actions > 0:
@@ -293,26 +345,14 @@ class FitnessEvaluator:
                 multi_phase_score
             )
 
-        # 5. Rules complexity - separated into mechanical vs gameplay complexity
-        # Mechanical complexity (simpler = better): phase count, mandatory steps
-        mechanical_complexity = len(genome.turn_structure.phases)
-        mechanical_score = max(0.0, 1.0 - mechanical_complexity / 8.0)  # Cap at 8 phases
-
-        # Gameplay richness (richer = better, but balanced): special effects, scoring
-        # Special effects add interaction and interest (positive!)
-        # But too many can make game confusing (diminishing returns)
-        special_effects_count = len(genome.special_effects)
-        scoring_rules_count = len(genome.scoring_rules)
-
-        # Reward 1-3 special effects, neutral at 0, penalty beyond 5
-        effects_score = min(1.0, max(0.0, (
-            0.7 +  # Baseline for no effects
-            (special_effects_count / 3.0) * 0.5 -  # Reward up to 3 effects
-            max(0.0, (special_effects_count - 3) * 0.1)  # Penalty beyond 3
-        )))
-
-        # Combine: 60% mechanical simplicity, 40% gameplay richness
-        rules_complexity = mechanical_score * 0.6 + effects_score * 0.4
+        # 5. Rules complexity - cognitive load estimation
+        # Uses the complexity module which accounts for:
+        # - Condition nesting/conjunction depth
+        # - Familiar pattern discounts (trick-taking, draw-play)
+        # - Memory requirements (card counting, hidden info)
+        # - State tracking (trump suit, direction, betting state)
+        from darwindeck.evolution.complexity import get_rules_complexity_score
+        rules_complexity = get_rules_complexity_score(genome)
 
         # 6. Session length - CONSTRAINT, not metric
         estimated_duration_sec = results.avg_turns * 2  # 2 sec per turn
@@ -330,6 +370,7 @@ class FitnessEvaluator:
                 session_length=0.0,  # Violates constraint
                 skill_vs_luck=0.0,
                 bluffing_depth=0.0,
+                betting_engagement=0.0,
                 total_fitness=0.0,   # Failed constraint
                 games_simulated=results.total_games,
                 valid=False  # Mark as invalid
@@ -378,17 +419,14 @@ class FitnessEvaluator:
         if self.style == 'party':
             skill_vs_luck = 1.0 - skill_vs_luck
 
-        # 8. Bluffing depth - quality of bluffing mechanics
-        # Only relevant for games with ClaimPhase (bluffing mechanics)
-        if results.total_claims > 0:
-            # Game has bluffing - evaluate quality
-            bluff_rate = results.total_bluffs / results.total_claims
-            challenge_rate = results.total_challenges / results.total_claims if results.total_claims > 0 else 0
+        # 8. Bluffing depth - quality of bluffing/betting mechanics
+        # Relevant for both ClaimPhase (verbal bluffing) and BettingPhase (betting bluffs)
+        bluffing_depth = 0.0
 
-            # Good bluffing games have:
-            # - Mix of bluffs and honest claims (not 100% bluffs)
-            # - Meaningful challenge decisions (not 0% or 100%)
-            # - Both successful bluffs and catches (skill in reading opponents)
+        if results.total_claims > 0:
+            # ClaimPhase bluffing (e.g., Cheat/BS)
+            bluff_rate = results.total_bluffs / results.total_claims
+            challenge_rate = results.total_challenges / results.total_claims
 
             # Bluff rate score: Best around 50-70% (some honest, some bluff)
             bluff_score = 1.0 - abs(bluff_rate - 0.6) * 2
@@ -402,27 +440,116 @@ class FitnessEvaluator:
             total_outcomes = results.successful_bluffs + results.successful_catches
             if total_outcomes > 0:
                 bluff_success_rate = results.successful_bluffs / total_outcomes
-                # Best around 50% - neither side dominates
                 balance_score = 1.0 - abs(bluff_success_rate - 0.5) * 2
                 balance_score = max(0.0, min(1.0, balance_score))
             else:
                 balance_score = 0.0
 
-            # Combine scores
             bluffing_depth = (
-                bluff_score * 0.3 +      # Good bluff rate
-                challenge_score * 0.3 +  # Good challenge rate
-                balance_score * 0.4      # Balanced outcomes (most important)
+                bluff_score * 0.3 +
+                challenge_score * 0.3 +
+                balance_score * 0.4
             )
-        else:
-            # No bluffing mechanics
-            bluffing_depth = 0.0
+
+        elif results.total_bets > 0:
+            # BettingPhase bluffing (e.g., Poker, Blackjack)
+            # Good betting games have:
+            # - Some betting bluffs (betting with weak hands creates uncertainty)
+            # - Mix of fold wins and showdown wins (bluffs work sometimes)
+            # - Reasonable all-in frequency (not too rare, not every hand)
+
+            # Betting bluff rate: Best around 20-40% (some honest bets, some bluffs)
+            betting_bluff_rate = results.betting_bluffs / results.total_bets
+            bluff_score = 1.0 - abs(betting_bluff_rate - 0.3) * 3
+            bluff_score = max(0.0, min(1.0, bluff_score))
+
+            # Fold win ratio: Best around 30-50% (bluffs sometimes work)
+            total_wins = results.fold_wins + results.showdown_wins
+            if total_wins > 0:
+                fold_win_rate = results.fold_wins / total_wins
+                # Best around 35% - bluffs work, but showdowns are common
+                fold_score = 1.0 - abs(fold_win_rate - 0.35) * 3
+                fold_score = max(0.0, min(1.0, fold_score))
+            else:
+                fold_score = 0.0
+
+            # All-in frequency: Best around 5-15% of bets (dramatic but not constant)
+            all_in_rate = results.all_in_count / results.total_bets
+            # Best around 10%
+            all_in_score = 1.0 - abs(all_in_rate - 0.10) * 10
+            all_in_score = max(0.0, min(1.0, all_in_score))
+
+            bluffing_depth = (
+                bluff_score * 0.35 +     # Quality of betting bluffs
+                fold_score * 0.40 +      # Bluffs work sometimes (most important)
+                all_in_score * 0.25      # Dramatic moments without excess
+            )
+
+        # 9. Betting engagement - psychological appeal of betting games
+        # Captures the addictive reward loop that makes blackjack/poker popular
+        # regardless of strategic depth
+        betting_engagement = 0.0
+
+        if results.total_bets > 0:
+            total_games = results.total_games
+            total_wins = sum(results.wins)
+
+            # Resolution rate: games should have winners, not endless draws
+            # This is key for blackjack where random AI often leads to double-busts
+            resolution_rate = total_wins / total_games if total_games > 0 else 0
+            resolution_score = min(1.0, resolution_rate * 1.5)  # Scale up, cap at 1.0
+
+            # All-in drama: occasional dramatic moments are exciting
+            # Ideal around 10-20% of games have an all-in
+            all_in_rate = results.all_in_count / total_games if total_games > 0 else 0
+            if all_in_rate < 0.05:
+                drama_score = all_in_rate / 0.05  # Too few all-ins
+            elif all_in_rate <= 0.25:
+                drama_score = 1.0  # Sweet spot
+            else:
+                drama_score = max(0.3, 1.0 - (all_in_rate - 0.25) * 2)  # Too many
+
+            # Betting activity: enough betting decisions to be engaging
+            bets_per_game = results.total_bets / total_games if total_games > 0 else 0
+            if bets_per_game < 2:
+                activity_score = bets_per_game / 2  # Too few bets
+            elif bets_per_game <= 20:
+                activity_score = 1.0  # Good activity level
+            else:
+                activity_score = max(0.5, 1.0 - (bets_per_game - 20) / 50)  # Diminishing returns
+
+            # Win variance: back-and-forth is more engaging than one-sided
+            # Check if wins are reasonably balanced (not 100-0)
+            if total_wins > 0:
+                max_wins = max(results.wins)
+                balance = 1.0 - (max_wins / total_wins)  # 0 = one player wins all, 0.5 = even
+                variance_score = balance * 2  # Scale to 0-1, perfect balance = 1.0
+            else:
+                variance_score = 0.5  # No data, neutral
+
+            # Showdown excitement: mix of showdowns and folds is ideal
+            total_resolved = results.fold_wins + results.showdown_wins
+            if total_resolved > 0:
+                showdown_rate = results.showdown_wins / total_resolved
+                # Ideal around 70-80% showdowns (some bluffs work, but not too many)
+                showdown_score = 1.0 - abs(showdown_rate - 0.75) * 2
+                showdown_score = max(0.0, min(1.0, showdown_score))
+            else:
+                showdown_score = 0.5  # No data, neutral
+
+            betting_engagement = (
+                resolution_score * 0.30 +    # Games resolve with winners
+                drama_score * 0.20 +         # Occasional all-in drama
+                activity_score * 0.15 +      # Enough betting action
+                variance_score * 0.15 +      # Back-and-forth wins
+                showdown_score * 0.20        # Mix of showdowns and folds
+            )
 
         # Check validity
         valid = results.errors == 0 and results.total_games > 0
 
         # Compute weighted total (session_length removed from average)
-        # 7 metrics now (session_length is a constraint)
+        # 8 metrics now (session_length is a constraint)
         total_fitness = (
             self.weights['decision_density'] * decision_density +
             self.weights['comeback_potential'] * comeback_potential +
@@ -430,7 +557,8 @@ class FitnessEvaluator:
             self.weights['interaction_frequency'] * interaction_frequency +
             self.weights['rules_complexity'] * rules_complexity +
             self.weights['skill_vs_luck'] * skill_vs_luck +
-            self.weights['bluffing_depth'] * bluffing_depth
+            self.weights['bluffing_depth'] * bluffing_depth +
+            self.weights['betting_engagement'] * betting_engagement
         )
 
         # No need to renormalize - weights already sum to 1.0
@@ -444,6 +572,7 @@ class FitnessEvaluator:
             session_length=session_length,  # Keep for reporting
             skill_vs_luck=skill_vs_luck,
             bluffing_depth=bluffing_depth,
+            betting_engagement=betting_engagement,
             total_fitness=total_fitness,
             games_simulated=results.total_games,
             valid=valid

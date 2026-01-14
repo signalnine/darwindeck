@@ -180,7 +180,7 @@ class AggregatedStats(object):
             return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
         return 0
 
-    # AggregatedStats
+    # AggregatedStats (legacy field, not in schema)
     def AvgFinalChips(self, j):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(46))
         if o != 0:
@@ -188,35 +188,21 @@ class AggregatedStats(object):
             return self._tab.Get(flatbuffers.number_types.Float32Flags, a + flatbuffers.number_types.UOffsetTFlags.py_type(j * 4))
         return 0
 
-    # AggregatedStats
-    def AvgFinalChipsAsNumpy(self):
-        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(46))
-        if o != 0:
-            return self._tab.GetVectorAsNumpy(flatbuffers.number_types.Float32Flags, o)
-        return 0
-
-    # AggregatedStats
-    def AvgFinalChipsLength(self):
-        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(46))
-        if o != 0:
-            return self._tab.VectorLen(o)
-        return 0
-
-    # AggregatedStats
+    # AggregatedStats (legacy field, not in schema)
     def FoldRate(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(48))
         if o != 0:
             return self._tab.Get(flatbuffers.number_types.Float32Flags, o + self._tab.Pos)
         return 0.0
 
-    # AggregatedStats
+    # AggregatedStats (legacy field, not in schema)
     def TotalPotsWon(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(50))
         if o != 0:
             return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
         return 0
 
-    # AggregatedStats
+    # AggregatedStats - Tension metrics
     def LeadChanges(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(52))
         if o != 0:
@@ -237,7 +223,49 @@ class AggregatedStats(object):
             return self._tab.Get(flatbuffers.number_types.Float32Flags, o + self._tab.Pos)
         return 1.0
 
-def AggregatedStatsStart(builder): builder.StartObject(27)
+    # AggregatedStats - Betting metrics
+    def TotalBets(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(58))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
+        return 0
+
+    # AggregatedStats
+    def BettingBluffs(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(60))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
+        return 0
+
+    # AggregatedStats
+    def FoldWins(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(62))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
+        return 0
+
+    # AggregatedStats
+    def ShowdownWins(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(64))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
+        return 0
+
+    # AggregatedStats
+    def AllInCount(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(66))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
+        return 0
+
+    # AggregatedStats - Trailing winner frequency (comeback metric)
+    def TrailingWinners(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(68))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint32Flags, o + self._tab.Pos)
+        return 0
+
+def AggregatedStatsStart(builder): builder.StartObject(33)
 def AggregatedStatsAddTotalGames(builder, totalGames): builder.PrependUint32Slot(0, totalGames, 0)
 def AggregatedStatsAddPlayer0Wins(builder, player0Wins): builder.PrependUint32Slot(1, player0Wins, 0)
 def AggregatedStatsAddPlayer1Wins(builder, player1Wins): builder.PrependUint32Slot(2, player1Wins, 0)
@@ -260,11 +288,20 @@ def AggregatedStatsAddTotalBluffs(builder, totalBluffs): builder.PrependUint64Sl
 def AggregatedStatsAddTotalChallenges(builder, totalChallenges): builder.PrependUint64Slot(18, totalChallenges, 0)
 def AggregatedStatsAddSuccessfulBluffs(builder, successfulBluffs): builder.PrependUint64Slot(19, successfulBluffs, 0)
 def AggregatedStatsAddSuccessfulCatches(builder, successfulCatches): builder.PrependUint64Slot(20, successfulCatches, 0)
+# Legacy fields (not in schema but in Go bindings)
 def AggregatedStatsAddAvgFinalChips(builder, avgFinalChips): builder.PrependUOffsetTRelativeSlot(21, flatbuffers.number_types.UOffsetTFlags.py_type(avgFinalChips), 0)
-def AggregatedStatsStartAvgFinalChipsVector(builder, numElems): return builder.StartVector(4, numElems, 4)
 def AggregatedStatsAddFoldRate(builder, foldRate): builder.PrependFloat32Slot(22, foldRate, 0.0)
 def AggregatedStatsAddTotalPotsWon(builder, totalPotsWon): builder.PrependUint64Slot(23, totalPotsWon, 0)
+# Tension metrics
 def AggregatedStatsAddLeadChanges(builder, leadChanges): builder.PrependUint32Slot(24, leadChanges, 0)
 def AggregatedStatsAddDecisiveTurnPct(builder, decisiveTurnPct): builder.PrependFloat32Slot(25, decisiveTurnPct, 1.0)
 def AggregatedStatsAddClosestMargin(builder, closestMargin): builder.PrependFloat32Slot(26, closestMargin, 1.0)
+# Betting metrics
+def AggregatedStatsAddTotalBets(builder, totalBets): builder.PrependUint64Slot(27, totalBets, 0)
+def AggregatedStatsAddBettingBluffs(builder, bettingBluffs): builder.PrependUint64Slot(28, bettingBluffs, 0)
+def AggregatedStatsAddFoldWins(builder, foldWins): builder.PrependUint64Slot(29, foldWins, 0)
+def AggregatedStatsAddShowdownWins(builder, showdownWins): builder.PrependUint64Slot(30, showdownWins, 0)
+def AggregatedStatsAddAllInCount(builder, allInCount): builder.PrependUint64Slot(31, allInCount, 0)
+# Trailing winner frequency (comeback metric)
+def AggregatedStatsAddTrailingWinners(builder, trailingWinners): builder.PrependUint32Slot(32, trailingWinners, 0)
 def AggregatedStatsEnd(builder): return builder.EndObject()

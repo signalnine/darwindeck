@@ -34,6 +34,10 @@ const (
 	OpCheckPotSize         OpCode = 9
 	OpCheckCurrentBet      OpCode = 10
 	OpCheckCanAfford       OpCode = 11
+	// Card matching conditions (for valid_play_condition)
+	OpCheckCardMatchesRank OpCode = 12 // Candidate card matches reference card's rank
+	OpCheckCardMatchesSuit OpCode = 13 // Candidate card matches reference card's suit
+	OpCheckCardBeatsTop    OpCode = 14 // Candidate card beats reference card (President)
 
 	// Actions
 	OpDrawCards        OpCode = 20
@@ -200,12 +204,12 @@ func (g *Genome) parseTurnStructure() error {
 			if hasCondition == 1 {
 				phaseLen += 7 // Add condition bytes
 			}
-		case PhaseTypePlay: // PlayPhase: target:1 + min:1 + max:1 + mandatory:1 + conditionLen:4 + condition
-			if offset+8 > int32(len(g.Bytecode)) {
+		case PhaseTypePlay: // PlayPhase: target:1 + min:1 + max:1 + mandatory:1 + pass_if_unable:1 + conditionLen:4 + condition
+			if offset+9 > int32(len(g.Bytecode)) {
 				return errors.New("invalid play phase header")
 			}
-			conditionLen := int(binary.BigEndian.Uint32(g.Bytecode[offset+4 : offset+8]))
-			phaseLen = 8 + conditionLen
+			conditionLen := int(binary.BigEndian.Uint32(g.Bytecode[offset+5 : offset+9]))
+			phaseLen = 9 + conditionLen
 		case PhaseTypeDiscard: // DiscardPhase: target:1 + count:4 + mandatory:1 = 6 bytes
 			phaseLen = 6
 		case PhaseTypeTrick: // TrickPhase: lead_suit_required:1 + trump_suit:1 + high_card_wins:1 + breaking_suit:1 = 4 bytes
