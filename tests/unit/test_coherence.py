@@ -1,7 +1,8 @@
 """Tests for semantic coherence checking."""
 
 import pytest
-from darwindeck.evolution.coherence import CoherenceResult
+from darwindeck.evolution.coherence import SemanticCoherenceChecker, CoherenceResult
+from darwindeck.genome.examples import create_war_genome
 
 
 class TestCoherenceResult:
@@ -19,3 +20,12 @@ class TestCoherenceResult:
         )
         assert result.coherent is False
         assert len(result.violations) == 1
+
+
+class TestSemanticCoherenceChecker:
+    def test_checker_returns_result(self):
+        """Checker returns CoherenceResult."""
+        checker = SemanticCoherenceChecker()
+        genome = create_war_genome()
+        result = checker.check(genome)
+        assert isinstance(result, CoherenceResult)
