@@ -90,3 +90,91 @@ class GenomeValidator:
             errors=errors,
             warnings=warnings
         )
+
+
+class GenomeExtractor:
+    """Deterministic extraction of rules from genome fields."""
+
+    # Win condition type to human-readable text
+    WIN_CONDITION_TEXT = {
+        "empty_hand": "First player to empty their hand wins",
+        "high_score": "Player with the highest score wins",
+        "low_score": "Player with the lowest score wins",
+        "capture_all": "Capture all cards to win",
+        "most_tricks": "Player who wins the most tricks wins",
+        "fewest_tricks": "Player who wins the fewest tricks wins",
+        "most_chips": "Player with the most chips wins",
+        "most_captured": "Player who captures the most cards wins",
+        "first_to_score": "First player to reach the target score wins",
+    }
+
+    def extract(self, genome: "GameGenome") -> RulebookSections:
+        """Extract rulebook sections from genome."""
+        return RulebookSections(
+            game_name=genome.genome_id,
+            player_count=genome.player_count,
+            objective=self._extract_objective(genome),
+            components=self._extract_components(genome),
+            setup_steps=self._extract_setup(genome),
+            phases=self._extract_phases(genome),
+            special_rules=self._extract_special_rules(genome),
+        )
+
+    def _extract_components(self, genome: "GameGenome") -> list[str]:
+        """Extract required components."""
+        components = [f"Standard 52-card deck ({genome.player_count} players)"]
+        if genome.setup.starting_chips > 0:
+            components.append(f"Chips or tokens ({genome.setup.starting_chips} per player)")
+        if any(wc.type in ("high_score", "low_score", "first_to_score") for wc in genome.win_conditions):
+            components.append("Score tracking (pen and paper)")
+        return components
+
+    def _extract_setup(self, genome: "GameGenome") -> list[str]:
+        """Extract setup steps."""
+        steps = ["Shuffle the deck"]
+
+        # Deal cards
+        steps.append(f"Deal {genome.setup.cards_per_player} cards to each player")
+
+        # Initial discard
+        if genome.setup.initial_discard_count > 0:
+            if genome.setup.initial_discard_count == 1:
+                steps.append("Place 1 card face-up to start the discard pile")
+            else:
+                steps.append(f"Place {genome.setup.initial_discard_count} cards face-up to start the discard pile")
+
+        # Chips
+        if genome.setup.starting_chips > 0:
+            steps.append(f"Give each player {genome.setup.starting_chips} chips")
+
+        # Remaining deck
+        steps.append("Place remaining cards face-down as the draw pile")
+
+        return steps
+
+    def _extract_objective(self, genome: "GameGenome") -> str:
+        """Extract win conditions as objective text."""
+        if not genome.win_conditions:
+            return "Win the game"
+
+        objectives = []
+        for wc in genome.win_conditions:
+            text = self.WIN_CONDITION_TEXT.get(wc.type, f"Meet the {wc.type} condition")
+            if wc.threshold:
+                text = text.replace("target score", str(wc.threshold))
+            objectives.append(text)
+
+        if len(objectives) == 1:
+            return objectives[0]
+        else:
+            return "Win by either:\n- " + "\n- ".join(objectives)
+
+    def _extract_phases(self, genome: "GameGenome") -> list[tuple[str, str]]:
+        """Extract turn phases."""
+        # Placeholder - will implement in Task 4
+        return []
+
+    def _extract_special_rules(self, genome: "GameGenome") -> list[str]:
+        """Extract special card effects."""
+        # Placeholder - will implement in Task 5
+        return []
