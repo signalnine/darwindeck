@@ -172,3 +172,37 @@ class TestResourceCoherence:
         checker = SemanticCoherenceChecker()
         result = checker.check(genome)
         assert result.coherent is True
+
+
+class TestRealWorldRegressions:
+    def test_gentle_blade_is_incoherent(self):
+        """GentleBlade genome that prompted this feature should fail.
+
+        Issues: capture_all is OK (has tableau), but high_score without scoring,
+        and starting_chips without betting.
+        """
+        genome = _make_genome(
+            phases=[
+                DiscardPhase(target=Location.DISCARD, count=1),
+                PlayPhase(target=Location.TABLEAU, min_cards=1, max_cards=1),
+                PlayPhase(target=Location.TABLEAU, min_cards=1, max_cards=1),
+                PlayPhase(target=Location.TABLEAU, min_cards=1, max_cards=1),
+            ],
+            win_conditions=[
+                WinCondition(type="capture_all"),
+                WinCondition(type="empty_hand"),
+                WinCondition(type="high_score", threshold=89),
+            ],
+            starting_chips=5252,
+        )
+        checker = SemanticCoherenceChecker()
+        result = checker.check(genome)
+
+        # Should fail due to: high_score without scoring, chips without betting
+        assert result.coherent is False
+        assert len(result.violations) >= 2
+
+        # Check specific violations
+        violation_text = " ".join(result.violations)
+        assert "high_score" in violation_text
+        assert "starting_chips" in violation_text or "BettingPhase" in violation_text
