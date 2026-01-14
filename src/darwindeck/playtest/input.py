@@ -1,0 +1,1 @@
+"""Human input handling."""
