@@ -258,3 +258,60 @@ class TestGenerateBettingMoves:
 
         assert BettingAction.ALL_IN in actions
         assert BettingAction.CALL not in actions  # Can't afford
+
+
+class TestApplyBettingMove:
+    """Test betting move application."""
+
+    def _make_player(self, chips: int, current_bet: int = 0) -> PlayerState:
+        return PlayerState(
+            player_id=0,
+            hand=(),
+            score=0,
+            chips=chips,
+            current_bet=current_bet,
+        )
+
+    def _make_state(self, player: PlayerState, current_bet: int = 0, pot: int = 0) -> "GameState":
+        from darwindeck.simulation.state import GameState
+        return GameState(
+            players=(player,),
+            deck=(),
+            discard=(),
+            turn=1,
+            active_player=0,
+            pot=pot,
+            current_bet=current_bet,
+        )
+
+    def test_apply_check_no_change(self):
+        """CHECK should not change state."""
+        from darwindeck.simulation.movegen import apply_betting_move, BettingAction, BettingMove
+        from darwindeck.genome.schema import BettingPhase
+
+        player = self._make_player(chips=500)
+        state = self._make_state(player, pot=100)
+        phase = BettingPhase(min_bet=10, max_raises=3)
+        move = BettingMove(action=BettingAction.CHECK, phase_index=0)
+
+        new_state = apply_betting_move(state, move, phase)
+
+        assert new_state.players[0].chips == 500
+        assert new_state.pot == 100
+
+    def test_apply_bet_updates_chips_and_pot(self):
+        """BET should decrease chips, increase pot, set current_bet."""
+        from darwindeck.simulation.movegen import apply_betting_move, BettingAction, BettingMove
+        from darwindeck.genome.schema import BettingPhase
+
+        player = self._make_player(chips=500)
+        state = self._make_state(player, pot=0, current_bet=0)
+        phase = BettingPhase(min_bet=50, max_raises=3)
+        move = BettingMove(action=BettingAction.BET, phase_index=0)
+
+        new_state = apply_betting_move(state, move, phase)
+
+        assert new_state.players[0].chips == 450  # 500 - 50
+        assert new_state.players[0].current_bet == 50
+        assert new_state.pot == 50
+        assert new_state.current_bet == 50

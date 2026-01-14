@@ -296,6 +296,40 @@ def has_matching_pair(hand: tuple[Card, ...]) -> bool:
     return False
 
 
+def _update_player_tuple(players: tuple[PlayerState, ...], idx: int, new_player: PlayerState) -> tuple[PlayerState, ...]:
+    """Return new players tuple with updated player at idx."""
+    return tuple(
+        new_player if i == idx else p
+        for i, p in enumerate(players)
+    )
+
+
+def apply_betting_move(state: GameState, move: BettingMove, phase: BettingPhase) -> GameState:
+    """Apply a betting move to the state, returning new state.
+
+    Mirrors Go's ApplyBettingAction in betting.go.
+    """
+    player = state.players[state.active_player]
+
+    if move.action == BettingAction.CHECK:
+        return state  # No change
+
+    elif move.action == BettingAction.BET:
+        new_player = player.copy_with(
+            chips=player.chips - phase.min_bet,
+            current_bet=phase.min_bet,
+        )
+        new_players = _update_player_tuple(state.players, state.active_player, new_player)
+        return state.copy_with(
+            players=new_players,
+            pot=state.pot + phase.min_bet,
+            current_bet=phase.min_bet,
+        )
+
+    # Other actions in Task 7
+    return state
+
+
 def generate_betting_moves(state: GameState, phase: BettingPhase, player_id: int) -> list[BettingMove]:
     """Generate all legal betting moves for a player.
 
