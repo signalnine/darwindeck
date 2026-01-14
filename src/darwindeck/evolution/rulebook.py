@@ -2,11 +2,20 @@
 
 from __future__ import annotations
 
+import logging
+import os
 from dataclasses import dataclass, field
 from typing import Optional, TYPE_CHECKING
 
+try:
+    import anthropic
+except ImportError:
+    anthropic = None  # type: ignore
+
 if TYPE_CHECKING:
     from darwindeck.genome.schema import GameGenome
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -367,6 +376,84 @@ class GenomeExtractor:
         return rules
 
 
+class RulebookEnhancer:
+    """Optional LLM enhancement for rulebook sections."""
+
+    def enhance(self, sections: RulebookSections, genome: Optional["GameGenome"]) -> RulebookSections:
+        """Enhance sections with LLM-generated content.
+
+        Args:
+            sections: Extracted rulebook sections
+            genome: Original genome (for validation)
+
+        Returns:
+            Enhanced sections (or original if LLM unavailable)
+        """
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            logger.warning("ANTHROPIC_API_KEY not set, skipping LLM enhancement")
+            return sections
+
+        if anthropic is None:
+            logger.warning("anthropic package not installed, skipping LLM enhancement")
+            return sections
+
+        try:
+            client = anthropic.Anthropic(api_key=api_key)
+
+            # Generate overview
+            overview = self._generate_overview(client, sections, genome)
+            if overview:
+                sections = RulebookSections(
+                    game_name=sections.game_name,
+                    player_count=sections.player_count,
+                    objective=sections.objective,
+                    overview=overview,
+                    components=sections.components,
+                    setup_steps=sections.setup_steps,
+                    phases=sections.phases,
+                    special_rules=sections.special_rules,
+                    edge_cases=sections.edge_cases,
+                    quick_reference=sections.quick_reference,
+                )
+
+            # TODO: Add example turn generation
+            # TODO: Add quick reference generation
+
+            return sections
+
+        except Exception as e:
+            logger.warning(f"LLM enhancement failed: {e}")
+            return sections
+
+    def _generate_overview(
+        self, client, sections: RulebookSections, genome: Optional["GameGenome"]
+    ) -> Optional[str]:
+        """Generate engaging overview."""
+        phase_names = [name for name, _ in sections.phases]
+
+        prompt = f"""Write a 1-2 sentence overview for this card game:
+
+Game: {sections.game_name}
+Players: {sections.player_count}
+Phases: {', '.join(phase_names)}
+Objective: {sections.objective}
+
+Make it engaging and accessible. Do not invent mechanics not listed above.
+Return ONLY the overview text, no quotes or formatting."""
+
+        try:
+            response = client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=100,
+                messages=[{"role": "user", "content": prompt}]
+            )
+            return response.content[0].text.strip()
+        except Exception as e:
+            logger.warning(f"Overview generation failed: {e}")
+            return None
+
+
 class RulebookGenerator:
     """Generates complete rulebooks from genomes."""
 
@@ -399,9 +486,10 @@ class RulebookGenerator:
         defaults = select_applicable_defaults(genome)
         sections.edge_cases = [d.rule for d in defaults]
 
-        # TODO: LLM enhancement (Task 8)
-        # if use_llm:
-        #     sections = RulebookEnhancer().enhance(sections, genome)
+        # LLM enhancement (optional)
+        if use_llm:
+            enhancer = RulebookEnhancer()
+            sections = enhancer.enhance(sections, genome)
 
         # Render to markdown
         return self._render_markdown(sections)
