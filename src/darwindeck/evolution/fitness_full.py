@@ -10,15 +10,16 @@ from darwindeck.genome.schema import GameGenome, PlayPhase, DrawPhase
 # don't get played - people won't learn rules they can't quickly understand
 STYLE_PRESETS = {
     'balanced': {
-        # Rules complexity dominates - if you can't explain it, no one plays it
-        'rules_complexity': 0.40,  # Dominant weight - learnability is critical
-        'decision_density': 0.10,
-        'comeback_potential': 0.08,
-        'tension_curve': 0.06,
-        'interaction_frequency': 0.10,
-        'skill_vs_luck': 0.12,
+        # Balanced preset: games need meaningful decisions AND be learnable
+        # A game without decisions (War) shouldn't rank high even if simple
+        'decision_density': 0.25,    # PRIMARY - no decisions = not a game
+        'skill_vs_luck': 0.20,       # Skill should matter
+        'rules_complexity': 0.18,    # Learnable but not dominant
+        'comeback_potential': 0.12,  # Games should feel winnable
+        'interaction_frequency': 0.10,  # Social element
+        'tension_curve': 0.08,       # Nice to have drama
         'bluffing_depth': 0.00,
-        'betting_engagement': 0.14,
+        'betting_engagement': 0.07,
     },
     'bluffing': {
         # Bluffing games can be slightly more complex, but still need to be learnable
@@ -228,18 +229,29 @@ class FitnessEvaluator:
 
             # Choice score: how many options per decision point
             # More options = more interesting (if not forced)
-            choice_score = min(1.0, (avg_valid_moves - 1) / 6.0)
+            raw_choice_score = min(1.0, (avg_valid_moves - 1) / 6.0)
+
+            # KEY INSIGHT: Unconstrained choices are NOT meaningful decisions.
+            # If filtering_score is low (no play constraints), having many options
+            # doesn't create meaningful decisions - they're all equivalent.
+            # Example: War lets you play any of 26 cards, but they're all equivalent
+            # because you don't know what opponent will play.
+            #
+            # Scale choice_score by filtering: more constraints = more meaningful choices
+            # With no filtering, choice_score is heavily penalized
+            constraint_multiplier = 0.2 + (filtering_score * 0.8)  # Range: 0.2 to 1.0
+            choice_score = raw_choice_score * constraint_multiplier
 
             # Final decision density combines:
-            # - Choice availability (having multiple options)
+            # - Choice availability (scaled by constraints)
             # - Filtering quality (constraints make choices meaningful)
             # - Variety bonus (draw/pass/phase options)
             # - Not being forced
             decision_density = min(1.0, (
-                choice_score * 0.35 +           # Base choice score
-                filtering_score * 0.25 +        # Constraint quality
+                choice_score * 0.35 +           # Constrained choices
+                filtering_score * 0.30 +        # Constraint quality (increased weight)
                 variety_score +                 # Multi-option bonus (up to 0.5)
-                (1.0 - forced_ratio) * 0.25     # Not being forced
+                (1.0 - forced_ratio) * 0.20     # Not being forced (reduced weight)
             ))
         else:
             # Fallback to heuristic (current implementation)
