@@ -40,3 +40,56 @@ class TestPlayerStateBetting:
         assert player.current_bet == 0
         assert player.has_folded is False
         assert player.is_all_in is False
+
+
+class TestGameStateBetting:
+    """Test GameState betting fields."""
+
+    def test_game_state_has_pot(self):
+        """GameState should have pot field."""
+        from darwindeck.simulation.state import GameState
+
+        player = PlayerState(player_id=0, hand=(), score=0)
+        state = GameState(
+            players=(player,),
+            deck=(),
+            discard=(),
+            turn=1,
+            active_player=0,
+            pot=150,
+        )
+        assert state.pot == 150
+
+    def test_game_state_has_betting_fields(self):
+        """GameState should have current_bet and raise_count."""
+        from darwindeck.simulation.state import GameState
+
+        player = PlayerState(player_id=0, hand=(), score=0)
+        state = GameState(
+            players=(player,),
+            deck=(),
+            discard=(),
+            turn=1,
+            active_player=0,
+            pot=150,
+            current_bet=50,
+            raise_count=1,
+        )
+        assert state.current_bet == 50
+        assert state.raise_count == 1
+
+    def test_game_state_betting_fields_default_to_zero(self):
+        """Betting fields should default to 0 for non-betting games."""
+        from darwindeck.simulation.state import GameState
+
+        player = PlayerState(player_id=0, hand=(), score=0)
+        state = GameState(
+            players=(player,),
+            deck=(),
+            discard=(),
+            turn=1,
+            active_player=0,
+        )
+        assert state.pot == 0
+        assert state.current_bet == 0
+        assert state.raise_count == 0

@@ -63,6 +63,11 @@ class GameState:
     tableau: Optional[tuple[tuple[Card, ...], ...]] = None  # For solitaire-style
     community: Optional[tuple[Card, ...]] = None  # For poker-style
 
+    # Betting fields (default to 0 for non-betting games)
+    pot: int = 0
+    current_bet: int = 0
+    raise_count: int = 0
+
     def copy_with(self, **changes) -> "GameState":  # type: ignore
         """Create a new state with specified changes."""
         # Helper for making state transitions
@@ -74,6 +79,9 @@ class GameState:
             "active_player": self.active_player,
             "tableau": self.tableau,
             "community": self.community,
+            "pot": self.pot,
+            "current_bet": self.current_bet,
+            "raise_count": self.raise_count,
         }
         current.update(changes)
         return GameState(**current)
