@@ -315,3 +315,70 @@ class TestApplyBettingMove:
         assert new_state.players[0].current_bet == 50
         assert new_state.pot == 50
         assert new_state.current_bet == 50
+
+    def test_apply_call_matches_bet(self):
+        """CALL should match the current bet."""
+        from darwindeck.simulation.movegen import apply_betting_move, BettingAction, BettingMove
+        from darwindeck.genome.schema import BettingPhase
+
+        player = self._make_player(chips=500, current_bet=0)
+        state = self._make_state(player, pot=50, current_bet=50)
+        phase = BettingPhase(min_bet=10, max_raises=3)
+        move = BettingMove(action=BettingAction.CALL, phase_index=0)
+
+        new_state = apply_betting_move(state, move, phase)
+
+        assert new_state.players[0].chips == 450  # 500 - 50
+        assert new_state.players[0].current_bet == 50
+        assert new_state.pot == 100  # 50 + 50
+
+    def test_apply_raise_increases_bet(self):
+        """RAISE should call and add min_bet."""
+        from darwindeck.simulation.movegen import apply_betting_move, BettingAction, BettingMove
+        from darwindeck.genome.schema import BettingPhase
+
+        player = self._make_player(chips=500, current_bet=0)
+        state = self._make_state(player, pot=50, current_bet=50)
+        phase = BettingPhase(min_bet=10, max_raises=3)
+        move = BettingMove(action=BettingAction.RAISE, phase_index=0)
+
+        new_state = apply_betting_move(state, move, phase)
+
+        assert new_state.players[0].chips == 440  # 500 - 50 - 10
+        assert new_state.players[0].current_bet == 60  # 50 + 10
+        assert new_state.pot == 110  # 50 + 60
+        assert new_state.current_bet == 60
+        assert new_state.raise_count == 1
+
+    def test_apply_all_in_bets_all_chips(self):
+        """ALL_IN should bet all remaining chips."""
+        from darwindeck.simulation.movegen import apply_betting_move, BettingAction, BettingMove
+        from darwindeck.genome.schema import BettingPhase
+
+        player = self._make_player(chips=30, current_bet=0)
+        state = self._make_state(player, pot=50, current_bet=50)
+        phase = BettingPhase(min_bet=10, max_raises=3)
+        move = BettingMove(action=BettingAction.ALL_IN, phase_index=0)
+
+        new_state = apply_betting_move(state, move, phase)
+
+        assert new_state.players[0].chips == 0
+        assert new_state.players[0].current_bet == 30
+        assert new_state.players[0].is_all_in is True
+        assert new_state.pot == 80  # 50 + 30
+
+    def test_apply_fold_sets_flag(self):
+        """FOLD should set has_folded flag."""
+        from darwindeck.simulation.movegen import apply_betting_move, BettingAction, BettingMove
+        from darwindeck.genome.schema import BettingPhase
+
+        player = self._make_player(chips=500, current_bet=0)
+        state = self._make_state(player, pot=50, current_bet=50)
+        phase = BettingPhase(min_bet=10, max_raises=3)
+        move = BettingMove(action=BettingAction.FOLD, phase_index=0)
+
+        new_state = apply_betting_move(state, move, phase)
+
+        assert new_state.players[0].has_folded is True
+        assert new_state.players[0].chips == 500  # Unchanged
+        assert new_state.pot == 50  # Unchanged
