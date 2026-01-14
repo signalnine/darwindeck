@@ -85,3 +85,36 @@ class TestPlaytestSession:
         assert len(session.move_history) == 2
         assert session.move_history[0]["player"] == "human"
         assert session.move_history[1]["player"] == "ai"
+
+
+class TestGameLoop:
+    """Tests for game loop logic."""
+
+    def test_detects_win(self):
+        """Detects when a player wins."""
+        from darwindeck.simulation.movegen import check_win_conditions
+
+        genome = make_simple_genome()
+        config = SessionConfig(seed=12345)
+        session = PlaytestSession(genome, config)
+
+        # Initialize and check initial state
+        session.state = session._initialize_state()
+
+        # Game should not be over initially
+        winner = check_win_conditions(session.state, genome)
+        assert winner is None
+
+    def test_stuck_detection_triggers(self):
+        """Stuck detection ends game."""
+        genome = make_simple_genome()
+        config = SessionConfig(seed=12345, max_turns=5)
+        session = PlaytestSession(genome, config)
+
+        session.state = session._initialize_state()
+
+        # Simulate reaching turn limit
+        session.state = session.state.copy_with(turn=6)
+        reason = session.stuck_detector.check(session.state)
+
+        assert reason is not None
