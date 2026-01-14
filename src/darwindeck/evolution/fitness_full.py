@@ -562,10 +562,19 @@ class FitnessEvaluator:
 
         # Compute weighted total (session_length removed from average)
         # 8 metrics now (session_length is a constraint)
+        #
+        # KEY INSIGHT: Tension × decision_density as INTERACTION TERM
+        # High tension only matters if you can ACT on it.
+        # War has dramatic lead changes (0.87 tension) but zero decisions (0.27 density)
+        # → tension contribution = 0.87 × 0.27 = 0.23 (heavily penalized)
+        # Spades has tension (0.98) AND decisions (0.41)
+        # → tension contribution = 0.98 × 0.41 = 0.40 (properly rewarded)
+        effective_tension = tension_curve * decision_density
+
         total_fitness = (
             self.weights['decision_density'] * decision_density +
             self.weights['comeback_potential'] * comeback_potential +
-            self.weights['tension_curve'] * tension_curve +
+            self.weights['tension_curve'] * effective_tension +
             self.weights['interaction_frequency'] * interaction_frequency +
             self.weights['rules_complexity'] * rules_complexity +
             self.weights['skill_vs_luck'] * skill_vs_luck +
