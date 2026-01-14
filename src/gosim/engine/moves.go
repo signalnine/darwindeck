@@ -2,6 +2,11 @@ package engine
 
 // DrawCard moves a card from source to player hand
 func (s *GameState) DrawCard(playerID uint8, source Location) bool {
+	// Bounds check to prevent panic on invalid playerID
+	if int(playerID) >= len(s.Players) {
+		return false
+	}
+
 	var srcPile *[]Card
 
 	switch source {
@@ -11,7 +16,15 @@ func (s *GameState) DrawCard(playerID uint8, source Location) bool {
 		srcPile = &s.Discard
 	case LocationOpponentHand:
 		// Optional extension: draw from opponent's hand
-		opponentID := 1 - playerID
+		// For multi-player games, use next player as opponent
+		// Ensure valid index even with edge cases
+		if s.NumPlayers == 0 || int(playerID) >= len(s.Players) {
+			return false
+		}
+		opponentID := (playerID + 1) % s.NumPlayers
+		if int(opponentID) >= len(s.Players) {
+			return false
+		}
 		srcPile = &s.Players[opponentID].Hand
 	case LocationOpponentDiscard:
 		// Optional extension: draw from opponent's discard (not standard)
@@ -36,6 +49,11 @@ func (s *GameState) DrawCard(playerID uint8, source Location) bool {
 
 // PlayCard moves a card from player hand to target location
 func (s *GameState) PlayCard(playerID uint8, cardIndex int, target Location) bool {
+	// Bounds check to prevent panic on invalid playerID
+	if int(playerID) >= len(s.Players) {
+		return false
+	}
+
 	hand := &s.Players[playerID].Hand
 
 	if cardIndex < 0 || cardIndex >= len(*hand) {
