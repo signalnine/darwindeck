@@ -365,3 +365,104 @@ class GenomeExtractor:
             rules.append(f"**Wild cards ({', '.join(wild_names)}):** Can be played on any card")
 
         return rules
+
+
+class RulebookGenerator:
+    """Generates complete rulebooks from genomes."""
+
+    def __init__(self):
+        self.validator = GenomeValidator()
+        self.extractor = GenomeExtractor()
+
+    def generate(self, genome: "GameGenome", use_llm: bool = True) -> str:
+        """Generate a complete rulebook for a genome.
+
+        Args:
+            genome: The game genome
+            use_llm: Whether to use LLM enhancement (default True)
+
+        Returns:
+            Complete rulebook as markdown string
+
+        Raises:
+            ValueError: If genome fails validation
+        """
+        # Validate genome first
+        validation = self.validator.validate(genome)
+        if not validation.valid:
+            raise ValueError(f"Invalid genome: {'; '.join(validation.errors)}")
+
+        # Extract sections
+        sections = self.extractor.extract(genome)
+
+        # Get applicable edge case defaults
+        defaults = select_applicable_defaults(genome)
+        sections.edge_cases = [d.rule for d in defaults]
+
+        # TODO: LLM enhancement (Task 8)
+        # if use_llm:
+        #     sections = RulebookEnhancer().enhance(sections, genome)
+
+        # Render to markdown
+        return self._render_markdown(sections)
+
+    def _render_markdown(self, sections: RulebookSections) -> str:
+        """Render sections to markdown format."""
+        lines = []
+
+        # Title
+        lines.append(f"# {sections.game_name}")
+        lines.append("")
+
+        # Overview (if present)
+        if sections.overview:
+            lines.append("## Overview")
+            lines.append(sections.overview)
+            lines.append("")
+
+        # Components
+        lines.append("## Components")
+        for component in sections.components:
+            lines.append(f"- {component}")
+        lines.append("")
+
+        # Setup
+        lines.append("## Setup")
+        for i, step in enumerate(sections.setup_steps, 1):
+            lines.append(f"{i}. {step}")
+        lines.append("")
+
+        # Objective
+        lines.append("## Objective")
+        lines.append(sections.objective)
+        lines.append("")
+
+        # Turn Structure
+        lines.append("## Turn Structure")
+        lines.append(f"Each turn consists of {len(sections.phases)} phase(s):")
+        lines.append("")
+        for name, desc in sections.phases:
+            lines.append(f"### {name}")
+            lines.append(desc)
+            lines.append("")
+
+        # Special Rules (if any)
+        if sections.special_rules:
+            lines.append("## Special Rules")
+            for rule in sections.special_rules:
+                lines.append(rule)
+                lines.append("")
+
+        # Edge Cases
+        lines.append("## Edge Cases")
+        for edge_case in sections.edge_cases:
+            lines.append(edge_case)
+            lines.append("")
+
+        # Quick Reference (if present)
+        if sections.quick_reference:
+            lines.append("## Quick Reference")
+            lines.append(sections.quick_reference)
+            lines.append("")
+
+        return "\n".join(lines)
