@@ -3,6 +3,31 @@
 import pytest
 from darwindeck.evolution.coherence import SemanticCoherenceChecker, CoherenceResult
 from darwindeck.genome.examples import create_war_genome
+from darwindeck.genome.schema import (
+    GameGenome, SetupRules, TurnStructure, PlayPhase, DiscardPhase,
+    WinCondition, Location
+)
+
+
+def _make_genome(
+    phases: list,
+    win_conditions: list[WinCondition],
+    starting_chips: int = 0,
+    scoring_rules: list = None,
+    is_trick_based: bool = False,
+) -> GameGenome:
+    """Helper to create test genomes."""
+    return GameGenome(
+        schema_version="1.0",
+        genome_id="test",
+        generation=0,
+        setup=SetupRules(cards_per_player=5, starting_chips=starting_chips),
+        turn_structure=TurnStructure(phases=tuple(phases), is_trick_based=is_trick_based),
+        win_conditions=tuple(win_conditions),
+        scoring_rules=tuple(scoring_rules or []),
+        special_effects=[],
+        player_count=2,
+    )
 
 
 class TestCoherenceResult:
@@ -29,3 +54,37 @@ class TestSemanticCoherenceChecker:
         genome = create_war_genome()
         result = checker.check(genome)
         assert isinstance(result, CoherenceResult)
+
+
+class TestCaptureWinConditions:
+    def test_capture_all_with_tableau_is_coherent(self):
+        """capture_all + PlayPhase(target=TABLEAU) = valid."""
+        genome = _make_genome(
+            phases=[PlayPhase(target=Location.TABLEAU, min_cards=1, max_cards=1)],
+            win_conditions=[WinCondition(type="capture_all")],
+        )
+        checker = SemanticCoherenceChecker()
+        result = checker.check(genome)
+        assert result.coherent is True
+
+    def test_capture_all_without_tableau_is_incoherent(self):
+        """capture_all + only discard phases = invalid."""
+        genome = _make_genome(
+            phases=[DiscardPhase(target=Location.DISCARD, count=1)],
+            win_conditions=[WinCondition(type="capture_all")],
+        )
+        checker = SemanticCoherenceChecker()
+        result = checker.check(genome)
+        assert result.coherent is False
+        assert "capture_all" in result.violations[0]
+        assert "TABLEAU" in result.violations[0]
+
+    def test_most_captured_without_tableau_is_incoherent(self):
+        """most_captured + no tableau = invalid."""
+        genome = _make_genome(
+            phases=[DiscardPhase(target=Location.DISCARD, count=1)],
+            win_conditions=[WinCondition(type="most_captured")],
+        )
+        checker = SemanticCoherenceChecker()
+        result = checker.check(genome)
+        assert result.coherent is False
