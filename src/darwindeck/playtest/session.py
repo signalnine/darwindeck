@@ -246,7 +246,7 @@ class PlaytestSession:
             # For card plays, prefer higher-rank cards (for captures)
             card_value = 0
             if move.card_index >= 0:
-                ai_player = 1 - self.human_player
+                ai_player = 1 - self.human_player_idx
                 hand = self.state.players[ai_player].hand
                 if move.card_index < len(hand):
                     card = hand[move.card_index]
