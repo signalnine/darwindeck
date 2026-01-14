@@ -136,17 +136,11 @@ def create_crazy_eights_genome() -> GameGenome:
         ),
         turn_structure=TurnStructure(
             phases=[
-                # Draw if unable to play
+                # Draw from deck (optional - simpler than conditional draw)
                 DrawPhase(
                     source=Location.DECK,
                     count=1,
-                    mandatory=True,
-                    condition=Condition(
-                        type=ConditionType.HAND_SIZE,
-                        operator=Operator.EQ,
-                        value=0,
-                        reference="valid_plays"
-                    )
+                    mandatory=False  # Let AI decide when to draw
                 ),
                 # Play matching card(s) - can play multiple of same rank
                 PlayPhase(
@@ -192,7 +186,7 @@ def create_crazy_eights_genome() -> GameGenome:
             WinCondition(type="empty_hand")
         ],
         scoring_rules=[],
-        max_turns=200,
+        max_turns=500,  # Increased from 200 - shedding games need more turns
         player_count=2
     )
 
@@ -368,11 +362,14 @@ def create_go_fish_genome() -> GameGenome:
         ),
         special_effects=[],
         win_conditions=[
-            WinCondition(type="empty_hand"),
+            # Primary: highest score (most books) wins
+            # This ensures ScoreLeaderDetector is used for tension tracking
             WinCondition(
                 type="high_score",
                 threshold=1
-            )
+            ),
+            # Fallback: if deck runs out and hands empty, game ends
+            WinCondition(type="empty_hand"),
         ],
         scoring_rules=[],
         max_turns=200,
@@ -994,7 +991,7 @@ def create_uno_genome() -> GameGenome:
             WinCondition(type="empty_hand"),
         ],
         scoring_rules=[],
-        max_turns=200,
+        max_turns=500,  # Increased from 200 - shedding games need more turns
         player_count=2,
     )
 
