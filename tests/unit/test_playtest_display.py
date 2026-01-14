@@ -1,8 +1,9 @@
 """Tests for display components."""
 
 import pytest
-from darwindeck.playtest.display import StateRenderer, format_card
+from darwindeck.playtest.display import StateRenderer, MovePresenter, format_card
 from darwindeck.simulation.state import GameState, PlayerState, Card
+from darwindeck.simulation.movegen import LegalMove
 from darwindeck.genome.schema import (
     Rank, Suit, Location, GameGenome, SetupRules,
     TurnStructure, WinCondition, PlayPhase
@@ -97,3 +98,45 @@ class TestStateRenderer:
         output = renderer.render(state, genome, player_idx=0)
 
         assert "15" in output
+
+
+class TestMovePresenter:
+    """Tests for MovePresenter."""
+
+    def test_presents_card_play_moves(self):
+        """Presents card play options with numbers."""
+        presenter = MovePresenter()
+        state = make_state_with_hand([("7", "S"), ("K", "H")])
+        genome = make_simple_genome()
+        moves = [
+            LegalMove(phase_index=0, card_index=0, target_loc=Location.DISCARD),
+            LegalMove(phase_index=0, card_index=1, target_loc=Location.DISCARD),
+        ]
+
+        output = presenter.present(moves, state, genome)
+
+        assert "[1]" in output
+        assert "[2]" in output
+        assert "7" in output  # 7S
+        assert "K" in output  # KH
+
+    def test_presents_empty_moves(self):
+        """Handles no legal moves gracefully."""
+        presenter = MovePresenter()
+        state = make_state_with_hand([])
+        genome = make_simple_genome()
+
+        output = presenter.present([], state, genome)
+
+        assert "no" in output.lower() or "pass" in output.lower()
+
+    def test_quit_option_always_shown(self):
+        """Quit option is always available."""
+        presenter = MovePresenter()
+        state = make_state_with_hand([("A", "C")])
+        genome = make_simple_genome()
+        moves = [LegalMove(phase_index=0, card_index=0, target_loc=Location.DISCARD)]
+
+        output = presenter.present(moves, state, genome)
+
+        assert "q" in output.lower() or "quit" in output.lower()
