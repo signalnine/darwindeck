@@ -3,7 +3,7 @@
 
 set -e
 
-# Change to project directory (for poetry to find pyproject.toml)
+# Change to project directory
 cd "$(dirname "$0")/.."
 
 # Detect CPU count
@@ -35,7 +35,7 @@ echo "🚀 Starting evolution..."
 export PYTHONUNBUFFERED=1
 export EVOLUTION_WORKERS=$WORKERS
 
-/home/gabe/.local/bin/poetry run python -m darwindeck.cli.evolve \
+uv run python -m darwindeck.cli.evolve \
     --population-size $POPULATION \
     --generations $GENERATIONS \
     --style $STYLE \
