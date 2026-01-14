@@ -23,6 +23,11 @@ class PlayerState:
     player_id: int
     hand: tuple[Card, ...]
     score: int
+    # Betting fields (default to 0/False for non-betting games)
+    chips: int = 0
+    current_bet: int = 0
+    has_folded: bool = False
+    is_all_in: bool = False
 
     def copy_with(self, **changes) -> "PlayerState":  # type: ignore
         """Create new PlayerState with changes."""
@@ -30,6 +35,10 @@ class PlayerState:
             "player_id": self.player_id,
             "hand": self.hand,
             "score": self.score,
+            "chips": self.chips,
+            "current_bet": self.current_bet,
+            "has_folded": self.has_folded,
+            "is_all_in": self.is_all_in,
         }
         current.update(changes)
         return PlayerState(**current)
