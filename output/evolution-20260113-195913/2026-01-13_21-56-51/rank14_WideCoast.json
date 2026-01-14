@@ -1,0 +1,82 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "WideCoast",
+  "generation": 52,
+  "setup": {
+    "cards_per_player": 13,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 0,
+    "starting_chips": 1680
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "DrawPhase",
+        "source": "DISCARD",
+        "count": 3,
+        "mandatory": false,
+        "condition": null
+      },
+      {
+        "type": "DiscardPhase",
+        "target": "DISCARD",
+        "count": 1,
+        "mandatory": false
+      },
+      {
+        "type": "DiscardPhase",
+        "target": "DISCARD",
+        "count": 1,
+        "mandatory": false
+      }
+    ],
+    "is_trick_based": false,
+    "tricks_per_hand": null
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "capture_all",
+      "threshold": null
+    },
+    {
+      "type": "empty_hand",
+      "threshold": null
+    },
+    {
+      "type": "first_to_score",
+      "threshold": 164
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 877,
+  "min_turns": 10,
+  "player_count": 2,
+  "fitness": 0.7134648741563303,
+  "fitness_rank": 14,
+  "fitness_metrics": {
+    "decision_density": 0.5104893854131163,
+    "comeback_potential": 0.5800000000000001,
+    "tension_curve": 1.0,
+    "interaction_frequency": 1.0,
+    "rules_complexity": 0.7620050633967466,
+    "session_length": 0.8225740785951967,
+    "skill_vs_luck": 0.6865000000000001,
+    "bluffing_depth": 0.7421122106050888,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "skill_evaluation": {
+    "greedy_win_rate": 0.98,
+    "greedy_wins_as_p0": 50,
+    "greedy_wins_as_p1": 48,
+    "mcts_win_rate": 0.91,
+    "mcts_wins_as_p0": 49,
+    "mcts_wins_as_p1": 42,
+    "skill_score": 0.9450000000000001,
+    "first_player_advantage": 0.08999999999999997,
+    "total_games": 200,
+    "timed_out": false
+  },
+  "skill_rank": 14
+}

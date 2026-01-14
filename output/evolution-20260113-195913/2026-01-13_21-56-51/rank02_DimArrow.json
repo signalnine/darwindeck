@@ -1,0 +1,73 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "DimArrow",
+  "generation": 48,
+  "setup": {
+    "cards_per_player": 25,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 0,
+    "starting_chips": 3922
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "DiscardPhase",
+        "target": "DISCARD",
+        "count": 1,
+        "mandatory": true
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": null,
+        "min_cards": 1,
+        "max_cards": 1,
+        "mandatory": true
+      }
+    ],
+    "is_trick_based": false,
+    "tricks_per_hand": null
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "capture_all",
+      "threshold": null
+    },
+    {
+      "type": "empty_hand",
+      "threshold": null
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 2000,
+  "min_turns": 10,
+  "player_count": 2,
+  "fitness": 0.7681969661597204,
+  "fitness_rank": 2,
+  "fitness_metrics": {
+    "decision_density": 0.8579733017496831,
+    "comeback_potential": 0.94,
+    "tension_curve": 0.7,
+    "interaction_frequency": 0.9525921132764921,
+    "rules_complexity": 0.7551955514684797,
+    "session_length": 0.9720592583550347,
+    "skill_vs_luck": 0.7569999999999999,
+    "bluffing_depth": 0.7858523524161672,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "skill_evaluation": {
+    "greedy_win_rate": 0.53,
+    "greedy_wins_as_p0": 32,
+    "greedy_wins_as_p1": 21,
+    "mcts_win_rate": 1.0,
+    "mcts_wins_as_p0": 50,
+    "mcts_wins_as_p1": 50,
+    "skill_score": 0.765,
+    "first_player_advantage": 0.10999999999999999,
+    "total_games": 200,
+    "timed_out": false
+  },
+  "skill_rank": 2
+}

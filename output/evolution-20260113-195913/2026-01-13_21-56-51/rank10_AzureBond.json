@@ -1,0 +1,93 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "AzureBond",
+  "generation": 53,
+  "setup": {
+    "cards_per_player": 23,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 0,
+    "starting_chips": 3922
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "DiscardPhase",
+        "target": "DISCARD",
+        "count": 1,
+        "mandatory": true
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": null,
+        "min_cards": 1,
+        "max_cards": 1,
+        "mandatory": true
+      },
+      {
+        "type": "ClaimPhase",
+        "min_cards": 1,
+        "max_cards": 2,
+        "sequential_rank": false,
+        "allow_challenge": true,
+        "pile_penalty": true
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": null,
+        "min_cards": 1,
+        "max_cards": 1,
+        "mandatory": true
+      }
+    ],
+    "is_trick_based": false,
+    "tricks_per_hand": null
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "capture_all",
+      "threshold": null
+    },
+    {
+      "type": "empty_hand",
+      "threshold": null
+    },
+    {
+      "type": "all_hands_empty",
+      "threshold": null
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 2000,
+  "min_turns": 10,
+  "player_count": 2,
+  "fitness": 0.7171780518790032,
+  "fitness_rank": 10,
+  "fitness_metrics": {
+    "decision_density": 0.9397727099819311,
+    "comeback_potential": 0.98,
+    "tension_curve": 1.0,
+    "interaction_frequency": 0.9712749823565626,
+    "rules_complexity": 0.5346970123754322,
+    "session_length": 0.6733555772569444,
+    "skill_vs_luck": 0.844,
+    "bluffing_depth": 0.7643045997826874,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "skill_evaluation": {
+    "greedy_win_rate": 0.54,
+    "greedy_wins_as_p0": 29,
+    "greedy_wins_as_p1": 25,
+    "mcts_win_rate": 0.94,
+    "mcts_wins_as_p0": 48,
+    "mcts_wins_as_p1": 46,
+    "skill_score": 0.74,
+    "first_player_advantage": 0.06000000000000005,
+    "total_games": 200,
+    "timed_out": false
+  },
+  "skill_rank": 10
+}

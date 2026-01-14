@@ -1,0 +1,71 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "FierceGuard",
+  "generation": 44,
+  "setup": {
+    "cards_per_player": 17,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 0,
+    "starting_chips": 989
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "ClaimPhase",
+        "min_cards": 1,
+        "max_cards": 1,
+        "sequential_rank": true,
+        "allow_challenge": true,
+        "pile_penalty": true
+      }
+    ],
+    "is_trick_based": false,
+    "tricks_per_hand": null
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "capture_all",
+      "threshold": null
+    },
+    {
+      "type": "empty_hand",
+      "threshold": null
+    },
+    {
+      "type": "capture_all",
+      "threshold": null
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 926,
+  "min_turns": 10,
+  "player_count": 2,
+  "fitness": 0.7223524759385795,
+  "fitness_rank": 4,
+  "fitness_metrics": {
+    "decision_density": 0.8636139673409595,
+    "comeback_potential": 0.8200000000000001,
+    "tension_curve": 1.0,
+    "interaction_frequency": 0.9534834873650876,
+    "rules_complexity": 0.6266267399376091,
+    "session_length": 0.9374370433666088,
+    "skill_vs_luck": 0.6835,
+    "bluffing_depth": 0.7788780068728522,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "skill_evaluation": {
+    "greedy_win_rate": 1.0,
+    "greedy_wins_as_p0": 50,
+    "greedy_wins_as_p1": 50,
+    "mcts_win_rate": 1.0,
+    "mcts_wins_as_p0": 50,
+    "mcts_wins_as_p1": 50,
+    "skill_score": 1.0,
+    "first_player_advantage": 0.0,
+    "total_games": 200,
+    "timed_out": false
+  },
+  "skill_rank": 4
+}

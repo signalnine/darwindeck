@@ -1,0 +1,78 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "PrimeLake",
+  "generation": 56,
+  "setup": {
+    "cards_per_player": 23,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 1,
+    "starting_chips": 3922
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "DiscardPhase",
+        "target": "DISCARD",
+        "count": 1,
+        "mandatory": true
+      },
+      {
+        "type": "BettingPhase",
+        "min_bet": 6,
+        "max_raises": 1
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": null,
+        "min_cards": 1,
+        "max_cards": 1,
+        "mandatory": true
+      }
+    ],
+    "is_trick_based": false,
+    "tricks_per_hand": null
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "capture_all",
+      "threshold": null
+    },
+    {
+      "type": "empty_hand",
+      "threshold": null
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 2000,
+  "min_turns": 10,
+  "player_count": 2,
+  "fitness": 0.7128737880414395,
+  "fitness_rank": 16,
+  "fitness_metrics": {
+    "decision_density": 0.9337330787596114,
+    "comeback_potential": 0.94,
+    "tension_curve": 0.9999845266342164,
+    "interaction_frequency": 0.967784352399737,
+    "rules_complexity": 0.5299568084131473,
+    "session_length": 0.5977000144675926,
+    "skill_vs_luck": 0.7945,
+    "bluffing_depth": 0.7857142857142857,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "skill_evaluation": {
+    "greedy_win_rate": 0.54,
+    "greedy_wins_as_p0": 30,
+    "greedy_wins_as_p1": 24,
+    "mcts_win_rate": 0.03,
+    "mcts_wins_as_p0": 1,
+    "mcts_wins_as_p1": 2,
+    "skill_score": 0.28500000000000003,
+    "first_player_advantage": 0.04999999999999999,
+    "total_games": 200,
+    "timed_out": false
+  },
+  "skill_rank": 16
+}

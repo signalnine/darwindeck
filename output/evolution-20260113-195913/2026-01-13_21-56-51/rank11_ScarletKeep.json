@@ -1,0 +1,79 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "ScarletKeep",
+  "generation": 55,
+  "setup": {
+    "cards_per_player": 22,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 1,
+    "starting_chips": 3641
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "PlayPhase",
+        "target": "DISCARD",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "LOCATION_SIZE",
+          "operator": "GT",
+          "value": 9,
+          "reference": null
+        },
+        "min_cards": 2,
+        "max_cards": 5,
+        "mandatory": true
+      },
+      {
+        "type": "DiscardPhase",
+        "target": "DISCARD",
+        "count": 1,
+        "mandatory": true
+      }
+    ],
+    "is_trick_based": false,
+    "tricks_per_hand": null
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "capture_all",
+      "threshold": null
+    },
+    {
+      "type": "empty_hand",
+      "threshold": null
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 2000,
+  "min_turns": 10,
+  "player_count": 2,
+  "fitness": 0.7149601136845363,
+  "fitness_rank": 11,
+  "fitness_metrics": {
+    "decision_density": 0.8185203735955864,
+    "comeback_potential": 0.8600000000000001,
+    "tension_curve": 0.7,
+    "interaction_frequency": 0.9567031082908377,
+    "rules_complexity": 0.6297307217248391,
+    "session_length": 0.7475962999131944,
+    "skill_vs_luck": 0.733,
+    "bluffing_depth": 0.7924104481219485,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "skill_evaluation": {
+    "greedy_win_rate": 0.3,
+    "greedy_wins_as_p0": 15,
+    "greedy_wins_as_p1": 15,
+    "mcts_win_rate": 0.99,
+    "mcts_wins_as_p0": 50,
+    "mcts_wins_as_p1": 49,
+    "skill_score": 0.645,
+    "first_player_advantage": 0.010000000000000009,
+    "total_games": 200,
+    "timed_out": false
+  },
+  "skill_rank": 11
+}

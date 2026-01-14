@@ -1,0 +1,89 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "ArcaneWall",
+  "generation": 29,
+  "setup": {
+    "cards_per_player": 15,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 1,
+    "starting_chips": 989
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "ClaimPhase",
+        "min_cards": 1,
+        "max_cards": 1,
+        "sequential_rank": true,
+        "allow_challenge": true,
+        "pile_penalty": true
+      },
+      {
+        "type": "ClaimPhase",
+        "min_cards": 1,
+        "max_cards": 3,
+        "sequential_rank": true,
+        "allow_challenge": true,
+        "pile_penalty": true
+      },
+      {
+        "type": "DiscardPhase",
+        "target": "DISCARD",
+        "count": 1,
+        "mandatory": true
+      },
+      {
+        "type": "ClaimPhase",
+        "min_cards": 1,
+        "max_cards": 1,
+        "sequential_rank": true,
+        "allow_challenge": true,
+        "pile_penalty": true
+      }
+    ],
+    "is_trick_based": false,
+    "tricks_per_hand": null
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "capture_all",
+      "threshold": null
+    },
+    {
+      "type": "empty_hand",
+      "threshold": null
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 827,
+  "min_turns": 10,
+  "player_count": 2,
+  "fitness": 0.7146084120062226,
+  "fitness_rank": 12,
+  "fitness_metrics": {
+    "decision_density": 0.8561373923759721,
+    "comeback_potential": 0.96,
+    "tension_curve": 1.0,
+    "interaction_frequency": 0.9672589804653022,
+    "rules_complexity": 0.5346970123754322,
+    "session_length": 0.9442703812210648,
+    "skill_vs_luck": 0.838,
+    "bluffing_depth": 0.8086666666666666,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "skill_evaluation": {
+    "greedy_win_rate": 0.17,
+    "greedy_wins_as_p0": 17,
+    "greedy_wins_as_p1": 0,
+    "mcts_win_rate": 0.98,
+    "mcts_wins_as_p0": 50,
+    "mcts_wins_as_p1": 48,
+    "skill_score": 0.575,
+    "first_player_advantage": 0.19000000000000006,
+    "total_games": 200,
+    "timed_out": false
+  },
+  "skill_rank": 12
+}
