@@ -1,7 +1,7 @@
 # Full Rulebook Generation Design
 
 **Date:** 2026-01-14
-**Status:** Approved
+**Status:** Approved (revised after multi-agent review)
 **Goal:** Generate complete, print-and-play rulebooks from evolved game genomes
 
 ## Overview
@@ -28,25 +28,30 @@ src/darwindeck/
 
 ### Core Components
 
-1. **`RulebookGenerator`** - Main class that orchestrates generation
+1. **`GenomeValidator`** - Pre-extraction validation (NEW - addresses multi-agent review)
 2. **`GenomeExtractor`** - Deterministic extraction of rules from genome fields
-3. **`RulebookEnhancer`** - Optional LLM pass for prose polish and examples
+3. **`RulebookGenerator`** - Main class that orchestrates generation
+4. **`RulebookEnhancer`** - Optional LLM pass for prose polish and examples
+5. **`OutputValidator`** - Post-generation validation of LLM output (NEW - addresses multi-agent review)
 
 ### Data Flow
 
 ```
 GameGenome
+    → GenomeValidator.validate()           # NEW: Catch impossible setups
     → GenomeExtractor.extract()
     → RulebookSections (structured data)
     → RulebookGenerator.render_markdown()
     → Basic rulebook (no LLM)
     → RulebookEnhancer.enhance() [optional]
+    → OutputValidator.validate()           # NEW: Verify LLM didn't invent rules
     → Final polished rulebook
 ```
 
 Key benefits:
 - Works without API key (basic mode)
 - LLM only adds value, never invents rules
+- **Validation at both ends ensures correctness**
 - Easy to test extraction logic independently
 
 ## Rulebook Structure
@@ -86,6 +91,52 @@ Each turn consists of [N] phases:
 ## Quick Reference
 [One-line summary of each phase]
 ```
+
+## Pre-Extraction Validation (NEW)
+
+The `GenomeValidator` catches impossible or problematic configurations before extraction:
+
+### Feasibility Checks
+
+```python
+class GenomeValidator:
+    def validate(self, genome: GameGenome) -> ValidationResult:
+        errors = []
+        warnings = []
+
+        # Card count feasibility
+        total_cards_needed = genome.setup.cards_per_player * genome.player_count
+        total_cards_needed += genome.setup.initial_discard_count
+        if total_cards_needed > 52:
+            errors.append(f"Setup requires {total_cards_needed} cards but deck only has 52")
+
+        # Betting requires chips
+        has_betting = any(isinstance(p, BettingPhase) for p in genome.turn_structure.phases)
+        if has_betting and genome.setup.starting_chips == 0:
+            errors.append("BettingPhase present but starting_chips is 0")
+
+        # Win condition coherence
+        if not genome.win_conditions:
+            errors.append("No win conditions defined")
+
+        # Phase sequence sanity
+        if not genome.turn_structure.phases:
+            errors.append("No phases defined in turn structure")
+
+        return ValidationResult(
+            valid=len(errors) == 0,
+            errors=errors,
+            warnings=warnings
+        )
+```
+
+### Validation Outcomes
+
+| Result | Action |
+|--------|--------|
+| **Valid** | Proceed to extraction |
+| **Warnings** | Proceed but include warnings in rulebook |
+| **Errors** | Abort with clear error message |
 
 ## Genome-to-Rules Extraction
 
@@ -149,55 +200,106 @@ Three targeted LLM calls (~300 tokens total per rulebook):
 
 **Constraint:** Prompt explicitly states: "Do not invent rules. Only clarify how existing rules handle edge cases."
 
+### LLM Output Validation (NEW)
+
+The `OutputValidator` verifies LLM didn't invent rules not present in the genome:
+
+```python
+class OutputValidator:
+    def validate(self, genome: GameGenome, llm_output: str, section: str) -> ValidationResult:
+        """Check that LLM output doesn't contain invented rules."""
+        errors = []
+
+        # Extract key terms that MUST come from genome
+        genome_phases = {type(p).__name__ for p in genome.turn_structure.phases}
+        genome_win_types = {wc.type for wc in genome.win_conditions}
+        genome_effects = {e.effect_type for e in genome.special_effects}
+
+        # Check for invented phases
+        phase_keywords = ["draw", "play", "discard", "bet", "claim", "trick"]
+        for keyword in phase_keywords:
+            if keyword in llm_output.lower():
+                # Verify this phase type exists in genome
+                if not any(keyword in p.lower() for p in genome_phases):
+                    errors.append(f"LLM mentioned '{keyword}' but genome has no such phase")
+
+        # Check for invented win conditions
+        if "win" in llm_output.lower() and section == "example":
+            # Example turns shouldn't declare winners
+            errors.append("Example turn should not determine a winner")
+
+        return ValidationResult(
+            valid=len(errors) == 0,
+            errors=errors,
+            fallback_to_basic=True  # Use template version if validation fails
+        )
+```
+
+**On validation failure:** Fall back to basic (non-LLM) version of that section, log warning.
+
 ### Basic Mode (No LLM)
 
 - Overview: Generic template based on game type
 - Example: Omitted
 - Edge cases: Standard defaults only
 
-## Standard Edge Case Defaults
+## Genome-Conditional Edge Case Defaults (REVISED)
 
-### Deck Exhaustion
-```
-If deck is empty and a draw is required:
-→ Shuffle the discard pile (except top card) to form new deck
-→ If still empty: skip the draw phase
+Defaults are now **conditional on genome mechanics** to avoid conflicts with evolved rules.
+
+### Default Selection Logic
+
+```python
+def select_applicable_defaults(genome: GameGenome) -> list[EdgeCaseDefault]:
+    """Only apply defaults that don't conflict with genome mechanics."""
+    defaults = []
+
+    # Deck exhaustion - SKIP if deck exhaustion is a win condition
+    deck_exhaustion_wins = any(
+        wc.type in ("deck_empty", "last_card") for wc in genome.win_conditions
+    )
+    if not deck_exhaustion_wins:
+        defaults.append(DECK_EXHAUSTION_RESHUFFLE)
+
+    # No valid plays - SKIP if genome has explicit pass/skip mechanics
+    has_pass_phase = any(
+        isinstance(p, PlayPhase) and p.min_cards == 0
+        for p in genome.turn_structure.phases
+    )
+    if not has_pass_phase:
+        defaults.append(NO_VALID_PLAYS_DRAW_OR_PASS)
+
+    # Hand limit - SKIP for accumulation games (capture_all, most_cards)
+    accumulation_game = any(
+        wc.type in ("capture_all", "most_cards") for wc in genome.win_conditions
+    )
+    if not accumulation_game:
+        defaults.append(HAND_LIMIT_15)
+
+    # Betting defaults - ONLY if betting phases exist
+    has_betting = any(isinstance(p, BettingPhase) for p in genome.turn_structure.phases)
+    if has_betting:
+        defaults.append(BETTING_ALL_IN)
+        defaults.append(BETTING_POT_SPLIT)
+
+    return defaults
 ```
 
-### No Valid Plays
-```
-If no legal card can be played:
-→ Draw games: Draw until playable card found (max 3 draws, then pass)
-→ Non-draw games: Pass turn
-```
+### Available Defaults
 
-### Simultaneous Win
-```
-If multiple players meet win conditions on same turn:
-→ Points-based: Highest score wins
-→ Empty-hand: Active player wins
-→ Capture: Player with more captured cards wins
-→ Still tied: Draw
-```
+| Default | Condition to Apply | Rule |
+|---------|-------------------|------|
+| **Deck Exhaustion** | No "deck_empty" win condition | Reshuffle discard (except top card) |
+| **No Valid Plays** | No optional (min=0) play phase | Draw up to 3, then pass |
+| **Simultaneous Win** | Always applies | Active player wins ties |
+| **Hand Limit** | Not a capture/accumulation game | Discard to 15 at end of turn |
+| **Betting: All-In** | Has BettingPhase | Player with 0 chips goes all-in |
+| **Betting: Pot Split** | Has BettingPhase | Odd chips go to dealer-left |
+| **Turn Limit** | Always applies | Use max_turns from genome, then highest score or draw |
 
-### Hand Limit
-```
-If hand exceeds 15 cards:
-→ Discard down to 15 at end of turn
-```
+### Explicit Genome Override
 
-### Betting Edge Cases
-```
-If chips reach 0: Player is eliminated (or all-in if mid-round)
-If pot can't split evenly: Remainder to player closest to dealer
-```
-
-### Turn Limit
-```
-If max_turns reached:
-→ Score-based: Highest score wins
-→ Other: Draw
-```
+If a genome explicitly specifies behavior for an edge case (future enhancement), that takes precedence over any default.
 
 ## CLI Interface
 
@@ -291,11 +393,25 @@ None.
 
 ## Implementation Tasks
 
-1. Create `RulebookSections` dataclass
-2. Implement `GenomeExtractor` with phase/win condition mapping
-3. Implement `RulebookGenerator.render_markdown()`
-4. Implement `RulebookEnhancer` with three LLM calls
-5. Create CLI command `darwindeck.cli.rulebook`
-6. Add `--rulebooks` flag to evolution CLI
-7. Write tests for extraction logic
-8. Test with evolved genomes from recent runs
+1. **`GenomeValidator`** - Pre-extraction validation (feasibility checks)
+2. **`RulebookSections`** dataclass - Intermediate representation
+3. **`GenomeExtractor`** - Deterministic phase/win condition mapping
+4. **`select_applicable_defaults()`** - Genome-conditional edge case selection
+5. **`RulebookGenerator.render_markdown()`** - Markdown output
+6. **`RulebookEnhancer`** - Three targeted LLM calls
+7. **`OutputValidator`** - Post-LLM validation (fallback on failure)
+8. **CLI command** `darwindeck.cli.rulebook`
+9. **Evolution integration** `--rulebooks` flag
+10. **Tests** - Validation logic, extraction, golden file tests for LLM
+
+## Multi-Agent Review Summary
+
+This design was reviewed by Claude, Gemini, and Codex. Three STRONG issues were identified and addressed:
+
+| Issue | Resolution |
+|-------|------------|
+| LLM constraint unenforceable | Added `OutputValidator` with fallback to basic mode |
+| No validation layer | Added `GenomeValidator` pre-extraction checks |
+| Defaults conflict with mechanics | Made defaults genome-conditional |
+
+See `/tmp/consensus-*.md` for full review details.
