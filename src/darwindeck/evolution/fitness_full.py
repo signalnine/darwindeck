@@ -1,6 +1,6 @@
 """Full fitness evaluation with session length constraint (Phase 4)."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, Optional
 from darwindeck.genome.schema import GameGenome, PlayPhase, DrawPhase
 
@@ -132,6 +132,16 @@ class FitnessMetrics:
     total_fitness: float
     games_simulated: int
     valid: bool
+
+
+@dataclass
+class FitnessResult:
+    """Result of fitness evaluation."""
+    fitness: float
+    valid: bool
+    metrics: dict
+    error: Optional[str] = None
+    coherence_violations: list[str] = field(default_factory=list)
 
 
 class FitnessEvaluator:
