@@ -378,6 +378,20 @@ def apply_betting_move(state: GameState, move: BettingMove, phase: BettingPhase)
     return state
 
 
+def count_active_players(state: GameState) -> int:
+    """Count players who haven't folded."""
+    return sum(1 for p in state.players if not p.has_folded)
+
+
+def all_bets_matched(state: GameState) -> bool:
+    """Check if all active players have matched the current bet."""
+    for p in state.players:
+        if not p.has_folded and not p.is_all_in:
+            if p.current_bet != state.current_bet:
+                return False
+    return True
+
+
 def generate_betting_moves(state: GameState, phase: BettingPhase, player_id: int) -> list[BettingMove]:
     """Generate all legal betting moves for a player.
 

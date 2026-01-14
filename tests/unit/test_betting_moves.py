@@ -382,3 +382,78 @@ class TestApplyBettingMove:
         assert new_state.players[0].has_folded is True
         assert new_state.players[0].chips == 500  # Unchanged
         assert new_state.pot == 50  # Unchanged
+
+
+class TestBettingHelpers:
+    """Test betting round helper functions."""
+
+    def test_count_active_players_excludes_folded(self):
+        """count_active_players should not count folded players."""
+        from darwindeck.simulation.movegen import count_active_players
+        from darwindeck.simulation.state import GameState
+
+        p0 = PlayerState(player_id=0, hand=(), score=0, has_folded=False)
+        p1 = PlayerState(player_id=1, hand=(), score=0, has_folded=True)
+        state = GameState(
+            players=(p0, p1),
+            deck=(),
+            discard=(),
+            turn=1,
+            active_player=0,
+        )
+
+        assert count_active_players(state) == 1
+
+    def test_all_bets_matched_when_equal(self):
+        """all_bets_matched should return True when all players match."""
+        from darwindeck.simulation.movegen import all_bets_matched
+        from darwindeck.simulation.state import GameState
+
+        p0 = PlayerState(player_id=0, hand=(), score=0, current_bet=50)
+        p1 = PlayerState(player_id=1, hand=(), score=0, current_bet=50)
+        state = GameState(
+            players=(p0, p1),
+            deck=(),
+            discard=(),
+            turn=1,
+            active_player=0,
+            current_bet=50,
+        )
+
+        assert all_bets_matched(state) is True
+
+    def test_all_bets_matched_ignores_folded(self):
+        """all_bets_matched should ignore folded players."""
+        from darwindeck.simulation.movegen import all_bets_matched
+        from darwindeck.simulation.state import GameState
+
+        p0 = PlayerState(player_id=0, hand=(), score=0, current_bet=50)
+        p1 = PlayerState(player_id=1, hand=(), score=0, current_bet=0, has_folded=True)
+        state = GameState(
+            players=(p0, p1),
+            deck=(),
+            discard=(),
+            turn=1,
+            active_player=0,
+            current_bet=50,
+        )
+
+        assert all_bets_matched(state) is True
+
+    def test_all_bets_matched_ignores_all_in(self):
+        """all_bets_matched should ignore all-in players."""
+        from darwindeck.simulation.movegen import all_bets_matched
+        from darwindeck.simulation.state import GameState
+
+        p0 = PlayerState(player_id=0, hand=(), score=0, current_bet=50)
+        p1 = PlayerState(player_id=1, hand=(), score=0, current_bet=30, is_all_in=True)
+        state = GameState(
+            players=(p0, p1),
+            deck=(),
+            discard=(),
+            turn=1,
+            active_player=0,
+            current_bet=50,
+        )
+
+        assert all_bets_matched(state) is True
