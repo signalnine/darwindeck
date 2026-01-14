@@ -88,3 +88,47 @@ class TestCaptureWinConditions:
         checker = SemanticCoherenceChecker()
         result = checker.check(genome)
         assert result.coherent is False
+
+
+class TestScoringWinConditions:
+    def test_high_score_with_trick_based_is_coherent(self):
+        """high_score + is_trick_based = valid."""
+        genome = _make_genome(
+            phases=[PlayPhase(target=Location.TABLEAU, min_cards=1, max_cards=1)],
+            win_conditions=[WinCondition(type="high_score", threshold=50)],
+            is_trick_based=True,
+        )
+        checker = SemanticCoherenceChecker()
+        result = checker.check(genome)
+        assert result.coherent is True
+
+    def test_high_score_without_scoring_is_incoherent(self):
+        """high_score + no scoring_rules + not trick_based = invalid."""
+        genome = _make_genome(
+            phases=[DiscardPhase(target=Location.DISCARD, count=1)],
+            win_conditions=[WinCondition(type="high_score", threshold=50)],
+        )
+        checker = SemanticCoherenceChecker()
+        result = checker.check(genome)
+        assert result.coherent is False
+        assert "high_score" in result.violations[0]
+
+    def test_low_score_without_scoring_is_incoherent(self):
+        """low_score + no scoring = invalid."""
+        genome = _make_genome(
+            phases=[DiscardPhase(target=Location.DISCARD, count=1)],
+            win_conditions=[WinCondition(type="low_score", threshold=10)],
+        )
+        checker = SemanticCoherenceChecker()
+        result = checker.check(genome)
+        assert result.coherent is False
+
+    def test_empty_hand_always_coherent(self):
+        """empty_hand works with any configuration."""
+        genome = _make_genome(
+            phases=[DiscardPhase(target=Location.DISCARD, count=1)],
+            win_conditions=[WinCondition(type="empty_hand")],
+        )
+        checker = SemanticCoherenceChecker()
+        result = checker.check(genome)
+        assert result.coherent is True
