@@ -388,3 +388,68 @@ class TestGenomeExtractor:
 
         assert any("wild" in rule.lower() for rule in sections.special_rules)
         assert any("jack" in rule.lower() or "queen" in rule.lower() for rule in sections.special_rules)
+
+
+class TestEdgeCaseDefaults:
+    """Tests for genome-conditional edge case defaults."""
+
+    def _make_genome(self, win_conditions=None, phases=None, starting_chips=0):
+        if win_conditions is None:
+            win_conditions = [WinCondition(type="empty_hand")]
+        if phases is None:
+            phases = [DrawPhase(source=Location.DECK, count=1)]
+        return GameGenome(
+            schema_version="1.0",
+            genome_id="test",
+            generation=1,
+            setup=SetupRules(cards_per_player=5, starting_chips=starting_chips),
+            turn_structure=TurnStructure(phases=phases),
+            special_effects=[],
+            win_conditions=win_conditions,
+            player_count=2,
+            scoring_rules=[],
+        )
+
+    def test_deck_exhaustion_default_included(self):
+        """Deck exhaustion default included for normal games."""
+        from darwindeck.evolution.rulebook import select_applicable_defaults
+
+        genome = self._make_genome()
+        defaults = select_applicable_defaults(genome)
+
+        assert any(d.name == "deck_exhaustion" for d in defaults)
+
+    def test_deck_exhaustion_skipped_when_win_condition(self):
+        """Deck exhaustion default skipped if it's a win condition."""
+        from darwindeck.evolution.rulebook import select_applicable_defaults
+
+        genome = self._make_genome(win_conditions=[WinCondition(type="deck_empty")])
+        defaults = select_applicable_defaults(genome)
+
+        assert not any(d.name == "deck_exhaustion" for d in defaults)
+
+    def test_betting_defaults_only_with_betting(self):
+        """Betting defaults only included when BettingPhase exists."""
+        from darwindeck.evolution.rulebook import select_applicable_defaults
+
+        # Without betting
+        genome_no_bet = self._make_genome()
+        defaults_no_bet = select_applicable_defaults(genome_no_bet)
+        assert not any("betting" in d.name for d in defaults_no_bet)
+
+        # With betting
+        genome_bet = self._make_genome(
+            starting_chips=1000,
+            phases=[BettingPhase(min_bet=10)]
+        )
+        defaults_bet = select_applicable_defaults(genome_bet)
+        assert any("betting" in d.name for d in defaults_bet)
+
+    def test_hand_limit_skipped_for_capture_games(self):
+        """Hand limit not applied to capture/accumulation games."""
+        from darwindeck.evolution.rulebook import select_applicable_defaults
+
+        genome = self._make_genome(win_conditions=[WinCondition(type="capture_all")])
+        defaults = select_applicable_defaults(genome)
+
+        assert not any(d.name == "hand_limit" for d in defaults)

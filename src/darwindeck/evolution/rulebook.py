@@ -9,6 +9,92 @@ if TYPE_CHECKING:
     from darwindeck.genome.schema import GameGenome
 
 
+@dataclass
+class EdgeCaseDefault:
+    """A default edge case rule."""
+    name: str
+    rule: str
+
+
+# Define all available defaults
+DECK_EXHAUSTION = EdgeCaseDefault(
+    name="deck_exhaustion",
+    rule="**Empty deck:** Shuffle the discard pile (except top card) to form a new deck. If still empty, skip the draw."
+)
+
+NO_VALID_PLAYS = EdgeCaseDefault(
+    name="no_valid_plays",
+    rule="**No valid plays:** Draw up to 3 cards until you can play, then pass if still unable."
+)
+
+SIMULTANEOUS_WIN = EdgeCaseDefault(
+    name="simultaneous_win",
+    rule="**Tie:** If multiple players meet win conditions simultaneously, the active player wins."
+)
+
+HAND_LIMIT = EdgeCaseDefault(
+    name="hand_limit",
+    rule="**Hand limit:** If your hand exceeds 15 cards, discard down to 15 at end of turn."
+)
+
+BETTING_ALL_IN = EdgeCaseDefault(
+    name="betting_all_in",
+    rule="**All-in:** If you can't afford to call, you may go all-in with remaining chips."
+)
+
+BETTING_POT_SPLIT = EdgeCaseDefault(
+    name="betting_pot_split",
+    rule="**Pot split:** If the pot can't split evenly, odd chips go to the player left of dealer."
+)
+
+TURN_LIMIT = EdgeCaseDefault(
+    name="turn_limit",
+    rule="**Turn limit:** If max turns reached, highest score wins (or draw if no scoring)."
+)
+
+
+def select_applicable_defaults(genome: "GameGenome") -> list[EdgeCaseDefault]:
+    """Select edge case defaults that don't conflict with genome mechanics."""
+    from darwindeck.genome.schema import BettingPhase, PlayPhase
+
+    defaults = []
+
+    # Check win condition types
+    win_types = {wc.type for wc in genome.win_conditions}
+
+    # Deck exhaustion - skip if it's a win condition
+    if not win_types & {"deck_empty", "last_card"}:
+        defaults.append(DECK_EXHAUSTION)
+
+    # No valid plays - skip if genome has optional play (min=0)
+    has_optional_play = any(
+        isinstance(p, PlayPhase) and p.min_cards == 0
+        for p in genome.turn_structure.phases
+    )
+    if not has_optional_play:
+        defaults.append(NO_VALID_PLAYS)
+
+    # Simultaneous win - always applies
+    defaults.append(SIMULTANEOUS_WIN)
+
+    # Hand limit - skip for accumulation games
+    if not win_types & {"capture_all", "most_cards", "most_captured"}:
+        defaults.append(HAND_LIMIT)
+
+    # Betting defaults - only if betting phases exist
+    has_betting = any(
+        isinstance(p, BettingPhase) for p in genome.turn_structure.phases
+    )
+    if has_betting:
+        defaults.append(BETTING_ALL_IN)
+        defaults.append(BETTING_POT_SPLIT)
+
+    # Turn limit - always applies
+    defaults.append(TURN_LIMIT)
+
+    return defaults
+
+
 @dataclass  # Intentionally mutable: sections are populated incrementally by extractor/LLM
 class RulebookSections:
     """Intermediate representation of rulebook content.
