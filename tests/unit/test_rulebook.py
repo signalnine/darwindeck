@@ -3,7 +3,7 @@
 import pytest
 from darwindeck.evolution.rulebook import (
     RulebookSections, GenomeValidator, GenomeExtractor, ValidationResult,
-    RulebookGenerator
+    RulebookGenerator, RulebookEnhancer
 )
 from darwindeck.genome.schema import (
     GameGenome, SetupRules, TurnStructure, WinCondition,
@@ -539,3 +539,76 @@ class TestRulebookGenerator:
 
         # Should include common edge cases like deck exhaustion, turn limit
         assert "Empty deck" in markdown or "Turn limit" in markdown or "Tie" in markdown
+
+
+class TestRulebookEnhancer:
+    """Tests for LLM enhancement."""
+
+    def _make_sections(self):
+        return RulebookSections(
+            game_name="TestGame",
+            player_count=2,
+            objective="Empty your hand to win",
+            components=["Standard 52-card deck"],
+            setup_steps=["Deal 5 cards"],
+            phases=[("Draw", "Draw 1 card")],
+        )
+
+    @pytest.fixture
+    def mock_anthropic(self, monkeypatch):
+        """Mock the anthropic module."""
+        from unittest.mock import MagicMock
+        mock_module = MagicMock()
+        monkeypatch.setattr("darwindeck.evolution.rulebook.anthropic", mock_module)
+        return mock_module
+
+    def test_enhance_without_api_key_returns_unchanged(self, monkeypatch):
+        """Without API key, sections returned unchanged."""
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "")
+        sections = self._make_sections()
+        enhanced = RulebookEnhancer().enhance(sections, None)
+
+        assert enhanced.overview is None  # Not enhanced
+
+    def test_enhance_adds_overview(self, monkeypatch, mock_anthropic):
+        """LLM enhancement adds overview."""
+        from unittest.mock import MagicMock
+
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+
+        mock_client = MagicMock()
+        mock_anthropic.Anthropic.return_value = mock_client
+        mock_client.messages.create.return_value = MagicMock(
+            content=[MagicMock(text="A fun card game about emptying your hand.")]
+        )
+
+        sections = self._make_sections()
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="TestGame",
+            generation=1,
+            setup=SetupRules(cards_per_player=5),
+            turn_structure=TurnStructure(phases=[DrawPhase(source=Location.DECK)]),
+            special_effects=[],
+            win_conditions=[WinCondition(type="empty_hand")],
+            player_count=2,
+            scoring_rules=[],
+        )
+
+        enhanced = RulebookEnhancer().enhance(sections, genome)
+
+        assert enhanced.overview is not None
+        assert "fun" in enhanced.overview.lower() or "card" in enhanced.overview.lower()
+
+    def test_enhance_handles_api_error_gracefully(self, monkeypatch, mock_anthropic):
+        """LLM errors return unchanged sections."""
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+
+        mock_anthropic.Anthropic.side_effect = Exception("API error")
+
+        sections = self._make_sections()
+        enhanced = RulebookEnhancer().enhance(sections, None)
+
+        # Should return original sections unchanged
+        assert enhanced.overview is None
+        assert enhanced.game_name == "TestGame"
