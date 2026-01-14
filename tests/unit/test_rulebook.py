@@ -1,11 +1,11 @@
 """Tests for rulebook generation."""
 
 import pytest
-from darwindeck.evolution.rulebook import RulebookSections, GenomeValidator, ValidationResult
+from darwindeck.evolution.rulebook import RulebookSections, GenomeValidator, GenomeExtractor, ValidationResult
 from darwindeck.genome.schema import (
     GameGenome, SetupRules, TurnStructure, WinCondition,
     PlayPhase, DrawPhase, BettingPhase, DiscardPhase, TrickPhase, ClaimPhase,
-    Location, Suit
+    Location, Suit, SpecialEffect, EffectType, TargetSelector, Rank
 )
 
 
@@ -272,3 +272,119 @@ class TestGenomeExtractor:
         name, desc = sections.phases[0]
         assert "claim" in name.lower()
         assert "challenge" in desc.lower()
+
+    def test_extract_skip_effect(self):
+        """Extracts skip next player effect."""
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="test",
+            generation=1,
+            setup=SetupRules(cards_per_player=5),
+            turn_structure=TurnStructure(phases=[DrawPhase(source=Location.DECK)]),
+            special_effects=[
+                SpecialEffect(trigger_rank=Rank.EIGHT, effect_type=EffectType.SKIP_NEXT, target=TargetSelector.NEXT_PLAYER)
+            ],
+            win_conditions=[WinCondition(type="empty_hand")],
+            player_count=2,
+            scoring_rules=[],
+        )
+        sections = GenomeExtractor().extract(genome)
+
+        assert len(sections.special_rules) >= 1
+        assert any("8" in rule or "eight" in rule.lower() for rule in sections.special_rules)
+        assert any("skip" in rule.lower() for rule in sections.special_rules)
+
+    def test_extract_reverse_effect(self):
+        """Extracts reverse direction effect."""
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="test",
+            generation=1,
+            setup=SetupRules(cards_per_player=5),
+            turn_structure=TurnStructure(phases=[DrawPhase(source=Location.DECK)]),
+            special_effects=[
+                SpecialEffect(trigger_rank=Rank.ACE, effect_type=EffectType.REVERSE_DIRECTION, target=TargetSelector.ALL_OPPONENTS)
+            ],
+            win_conditions=[WinCondition(type="empty_hand")],
+            player_count=2,
+            scoring_rules=[],
+        )
+        sections = GenomeExtractor().extract(genome)
+
+        assert any("reverse" in rule.lower() for rule in sections.special_rules)
+
+    def test_extract_draw_cards_effect(self):
+        """Extracts draw cards effect."""
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="test",
+            generation=1,
+            setup=SetupRules(cards_per_player=5),
+            turn_structure=TurnStructure(phases=[DrawPhase(source=Location.DECK)]),
+            special_effects=[
+                SpecialEffect(trigger_rank=Rank.TWO, effect_type=EffectType.DRAW_CARDS, target=TargetSelector.NEXT_PLAYER, value=2)
+            ],
+            win_conditions=[WinCondition(type="empty_hand")],
+            player_count=2,
+            scoring_rules=[],
+        )
+        sections = GenomeExtractor().extract(genome)
+
+        assert any("draw" in rule.lower() and "2" in rule for rule in sections.special_rules)
+
+    def test_extract_extra_turn_effect(self):
+        """Extracts extra turn effect."""
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="test",
+            generation=1,
+            setup=SetupRules(cards_per_player=5),
+            turn_structure=TurnStructure(phases=[DrawPhase(source=Location.DECK)]),
+            special_effects=[
+                # EXTRA_TURN affects self, but schema uses target for consistency - use NEXT_PLAYER as placeholder
+                SpecialEffect(trigger_rank=Rank.KING, effect_type=EffectType.EXTRA_TURN, target=TargetSelector.NEXT_PLAYER)
+            ],
+            win_conditions=[WinCondition(type="empty_hand")],
+            player_count=2,
+            scoring_rules=[],
+        )
+        sections = GenomeExtractor().extract(genome)
+
+        assert any("extra" in rule.lower() and "turn" in rule.lower() for rule in sections.special_rules)
+
+    def test_extract_force_discard_effect(self):
+        """Extracts force discard effect."""
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="test",
+            generation=1,
+            setup=SetupRules(cards_per_player=5),
+            turn_structure=TurnStructure(phases=[DrawPhase(source=Location.DECK)]),
+            special_effects=[
+                SpecialEffect(trigger_rank=Rank.JACK, effect_type=EffectType.FORCE_DISCARD, target=TargetSelector.NEXT_PLAYER, value=2)
+            ],
+            win_conditions=[WinCondition(type="empty_hand")],
+            player_count=2,
+            scoring_rules=[],
+        )
+        sections = GenomeExtractor().extract(genome)
+
+        assert any("discard" in rule.lower() and "2" in rule for rule in sections.special_rules)
+
+    def test_extract_wild_cards(self):
+        """Extracts wild cards from setup."""
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="test",
+            generation=1,
+            setup=SetupRules(cards_per_player=5, wild_cards=(Rank.JACK, Rank.QUEEN)),
+            turn_structure=TurnStructure(phases=[DrawPhase(source=Location.DECK)]),
+            special_effects=[],
+            win_conditions=[WinCondition(type="empty_hand")],
+            player_count=2,
+            scoring_rules=[],
+        )
+        sections = GenomeExtractor().extract(genome)
+
+        assert any("wild" in rule.lower() for rule in sections.special_rules)
+        assert any("jack" in rule.lower() or "queen" in rule.lower() for rule in sections.special_rules)
