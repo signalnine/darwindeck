@@ -229,6 +229,40 @@ class PlaytestSession:
         if self.config.difficulty == "random":
             return self.rng.choice(moves)
 
-        # Greedy: prefer moves that play cards (reduce hand size)
-        # Simple heuristic for now
-        return self.rng.choice(moves)
+        # Greedy/MCTS: use hand-reducing heuristic
+        # MCTS not fully implemented, falls back to greedy heuristic
+        return self._greedy_select(moves)
+
+    def _greedy_select(self, moves: list[LegalMove]) -> LegalMove:
+        """Greedy heuristic: prefer moves that play cards (reduce hand size)."""
+        if not self.state:
+            return moves[0]
+
+        # Score each move: prefer card plays, higher cards for captures
+        def score_move(move: LegalMove) -> tuple[int, int]:
+            # Prefer moves that play cards (card_index >= 0 means a card play)
+            plays_card = 1 if move.card_index >= 0 else 0
+
+            # For card plays, prefer higher-rank cards (for captures)
+            card_value = 0
+            if move.card_index >= 0:
+                ai_player = 1 - self.human_player
+                hand = self.state.players[ai_player].hand
+                if move.card_index < len(hand):
+                    card = hand[move.card_index]
+                    # Rank value: 2=2, ..., A=14
+                    rank_values = {
+                        "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7,
+                        "8": 8, "9": 9, "10": 10, "J": 11, "Q": 12, "K": 13, "A": 14
+                    }
+                    card_value = rank_values.get(card.rank.value, 0)
+
+            return (plays_card, card_value)
+
+        # Sort moves by score (descending), pick best
+        scored = sorted(moves, key=score_move, reverse=True)
+        best_score = score_move(scored[0])
+
+        # Randomly pick among ties
+        ties = [m for m in scored if score_move(m) == best_score]
+        return self.rng.choice(ties)

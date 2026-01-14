@@ -13,6 +13,7 @@ from darwindeck.playtest.session import PlaytestSession, SessionConfig
 from darwindeck.playtest.picker import GenomePicker
 from darwindeck.playtest.feedback import FeedbackCollector
 from darwindeck.genome.serialization import genome_from_dict
+from darwindeck.evolution.rulebook import GenomeValidator
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +71,13 @@ def main(
             sys.exit(0)
         genome, path = result
         genome_path_str = str(path)
+
+    # Validate genome before starting
+    validator = GenomeValidator()
+    validation = validator.validate(genome)
+    if not validation.valid:
+        click.echo(f"\nError: Invalid genome - {validation.reason}")
+        sys.exit(1)
 
     # Get difficulty if not specified
     if difficulty is None:
