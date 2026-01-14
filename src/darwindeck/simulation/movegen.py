@@ -320,7 +320,14 @@ def generate_betting_moves(state: GameState, phase: BettingPhase, player_id: int
             # Can't afford min bet, but can go all-in
             moves.append(BettingMove(action=BettingAction.ALL_IN, phase_index=phase_index))
     else:
-        # Must match, raise, all-in, or fold (Task 5)
-        pass
+        # Must match, raise, all-in, or fold
+        if player.chips >= to_call:
+            moves.append(BettingMove(action=BettingAction.CALL, phase_index=phase_index))
+            if player.chips >= to_call + phase.min_bet and state.raise_count < phase.max_raises:
+                moves.append(BettingMove(action=BettingAction.RAISE, phase_index=phase_index))
+        if player.chips > 0 and player.chips < to_call:
+            # Can't afford call, but can go all-in
+            moves.append(BettingMove(action=BettingAction.ALL_IN, phase_index=phase_index))
+        moves.append(BettingMove(action=BettingAction.FOLD, phase_index=phase_index))
 
     return moves
