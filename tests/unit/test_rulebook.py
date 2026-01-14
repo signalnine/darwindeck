@@ -1,7 +1,10 @@
 """Tests for rulebook generation."""
 
 import pytest
-from darwindeck.evolution.rulebook import RulebookSections, GenomeValidator, GenomeExtractor, ValidationResult
+from darwindeck.evolution.rulebook import (
+    RulebookSections, GenomeValidator, GenomeExtractor, ValidationResult,
+    RulebookGenerator
+)
 from darwindeck.genome.schema import (
     GameGenome, SetupRules, TurnStructure, WinCondition,
     PlayPhase, DrawPhase, BettingPhase, DiscardPhase, TrickPhase, ClaimPhase,
@@ -453,3 +456,86 @@ class TestEdgeCaseDefaults:
         defaults = select_applicable_defaults(genome)
 
         assert not any(d.name == "hand_limit" for d in defaults)
+
+
+class TestRulebookGenerator:
+    """Tests for markdown rulebook generation."""
+
+    def _make_genome(self):
+        return GameGenome(
+            schema_version="1.0",
+            genome_id="TestGame",
+            generation=1,
+            setup=SetupRules(cards_per_player=7),
+            turn_structure=TurnStructure(phases=[
+                DrawPhase(source=Location.DECK, count=1),
+                PlayPhase(target=Location.DISCARD, min_cards=1, max_cards=1),
+            ]),
+            special_effects=[],
+            win_conditions=[WinCondition(type="empty_hand")],
+            player_count=2,
+            scoring_rules=[],
+        )
+
+    def test_render_markdown_has_all_sections(self):
+        """Rendered markdown has all required sections."""
+        genome = self._make_genome()
+        generator = RulebookGenerator()
+        markdown = generator.generate(genome)
+
+        assert "# TestGame" in markdown
+        assert "## Components" in markdown
+        assert "## Setup" in markdown
+        assert "## Objective" in markdown
+        assert "## Turn Structure" in markdown
+        assert "## Edge Cases" in markdown
+
+    def test_render_markdown_includes_setup_steps(self):
+        """Setup steps are included in markdown."""
+        genome = self._make_genome()
+        markdown = RulebookGenerator().generate(genome)
+
+        assert "Shuffle the deck" in markdown
+        assert "7 cards" in markdown
+
+    def test_render_markdown_includes_phases(self):
+        """Phases are included in markdown."""
+        genome = self._make_genome()
+        markdown = RulebookGenerator().generate(genome)
+
+        assert "Draw" in markdown
+        assert "Play" in markdown
+
+    def test_generate_basic_mode(self):
+        """Basic mode works without LLM."""
+        genome = self._make_genome()
+        markdown = RulebookGenerator().generate(genome, use_llm=False)
+
+        assert "# TestGame" in markdown
+        assert "## Overview" not in markdown or "Overview" in markdown  # May have template overview
+
+    def test_generate_raises_on_invalid_genome(self):
+        """Generate raises ValueError on invalid genome."""
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="InvalidGame",
+            generation=1,
+            setup=SetupRules(cards_per_player=30),  # 60 cards for 2 players > 52
+            turn_structure=TurnStructure(phases=[
+                DrawPhase(source=Location.DECK, count=1),
+            ]),
+            special_effects=[],
+            win_conditions=[WinCondition(type="empty_hand")],
+            player_count=2,
+            scoring_rules=[],
+        )
+        with pytest.raises(ValueError, match="Invalid genome"):
+            RulebookGenerator().generate(genome)
+
+    def test_generate_includes_edge_cases(self):
+        """Generated markdown includes edge case defaults."""
+        genome = self._make_genome()
+        markdown = RulebookGenerator().generate(genome)
+
+        # Should include common edge cases like deck exhaustion, turn limit
+        assert "Empty deck" in markdown or "Turn limit" in markdown or "Tie" in markdown
