@@ -41,6 +41,10 @@ class OpCode(IntEnum):
     CHECK_POT_SIZE = 9
     CHECK_CURRENT_BET = 10
     CHECK_CAN_AFFORD = 11
+    # Card matching conditions (for valid_play_condition)
+    CHECK_CARD_MATCHES_RANK = 12  # Candidate card matches reference card's rank
+    CHECK_CARD_MATCHES_SUIT = 13  # Candidate card matches reference card's suit
+    CHECK_CARD_BEATS_TOP = 14     # Candidate card beats reference card (President)
     # Actions (20-39)
     DRAW_CARDS = 20
     PLAY_CARD = 21
@@ -187,6 +191,10 @@ class BytecodeCompiler:
         win_bytes = self._compile_win_conditions(genome.win_conditions)
         self.offset += len(win_bytes)
 
+        # Compile effects (Go expects them right after win conditions)
+        effects_bytes = compile_effects(genome.special_effects)
+        self.offset += len(effects_bytes)
+
         score_offset = self.offset
         score_bytes = self._compile_scoring(genome.scoring_rules)
         self.offset += len(score_bytes)
@@ -203,8 +211,8 @@ class BytecodeCompiler:
             scoring_offset=score_offset
         )
 
-        # Combine all sections
-        return header.to_bytes() + setup_bytes + turn_bytes + win_bytes + score_bytes
+        # Combine all sections (effects come right after win conditions, before scoring)
+        return header.to_bytes() + setup_bytes + turn_bytes + win_bytes + effects_bytes + score_bytes
 
     def _compile_setup(self, setup: SetupRules) -> bytes:
         """Encode setup rules.
@@ -255,7 +263,7 @@ class BytecodeCompiler:
             # Simple condition: [OpCode:1][Operator:1][Value:4][Reference:1]
             opcode = self._condition_type_to_opcode(cond.type)
             operator = self._operator_to_code(cond.operator) if cond.operator else 0
-            value = cond.value if isinstance(cond.value, int) else 0
+            value = self._value_to_int(cond.value)
             ref = self._reference_to_code(cond.reference) if cond.reference else 0
             return struct.pack("!BBiB", opcode, operator, value, ref)
 
@@ -282,18 +290,22 @@ class BytecodeCompiler:
     def _compile_play_phase(self, phase: PlayPhase) -> bytes:
         """Encode PlayPhase to bytecode.
 
-        Go format: phase_type:1 + target:1 + min:1 + max:1 + mandatory:1 + conditionLen:4 + condition
+        Go format: phase_type:1 + target:1 + min:1 + max:1 + mandatory:1 + pass_if_unable:1 + conditionLen:4 + condition
         """
         phase_type = 2  # PlayPhase
         target = self._location_to_code(phase.target)
         min_cards = phase.min_cards
         max_cards = phase.max_cards
         mandatory = 1 if phase.mandatory else 0
+        pass_if_unable = 1 if phase.pass_if_unable else 0
 
-        condition_bytes = self._compile_condition(phase.valid_play_condition)
+        # Compile condition if present, otherwise empty
+        condition_bytes = b""
+        if phase.valid_play_condition is not None:
+            condition_bytes = self._compile_condition(phase.valid_play_condition)
 
-        # Go reads: target:1 + min:1 + max:1 + mandatory:1 + conditionLen:4 = 8 bytes header
-        header = struct.pack("!BBBBBI", phase_type, target, min_cards, max_cards, mandatory, len(condition_bytes))
+        # Go reads: target:1 + min:1 + max:1 + mandatory:1 + pass_if_unable:1 + conditionLen:4 = 9 bytes header
+        header = struct.pack("!BBBBBBI", phase_type, target, min_cards, max_cards, mandatory, pass_if_unable, len(condition_bytes))
         return header + condition_bytes
 
     def _compile_discard_phase(self, phase: DiscardPhase) -> bytes:
@@ -387,10 +399,15 @@ class BytecodeCompiler:
         """Map ConditionType to OpCode."""
         mapping = {
             ConditionType.HAND_SIZE: OpCode.CHECK_HAND_SIZE,
-            ConditionType.CARD_MATCHES_RANK: OpCode.CHECK_CARD_RANK,
-            ConditionType.CARD_MATCHES_SUIT: OpCode.CHECK_CARD_SUIT,
+            ConditionType.CARD_IS_RANK: OpCode.CHECK_CARD_RANK,  # Card is specific rank (wild cards)
+            ConditionType.CARD_MATCHES_RANK: OpCode.CHECK_CARD_MATCHES_RANK,  # Card matches reference's rank
+            ConditionType.CARD_MATCHES_SUIT: OpCode.CHECK_CARD_MATCHES_SUIT,  # Card matches reference's suit
+            ConditionType.CARD_BEATS_TOP: OpCode.CHECK_CARD_BEATS_TOP,  # Card beats reference (President)
             ConditionType.LOCATION_SIZE: OpCode.CHECK_LOCATION_SIZE,
             ConditionType.SEQUENCE_ADJACENT: OpCode.CHECK_SEQUENCE,
+            ConditionType.HAS_SET_OF_N: OpCode.CHECK_HAS_SET_OF_N,
+            ConditionType.HAS_RUN_OF_N: OpCode.CHECK_HAS_RUN_OF_N,
+            ConditionType.HAS_MATCHING_PAIR: OpCode.CHECK_HAS_MATCHING_PAIR,
         }
         return mapping.get(cond_type, 0)
 
@@ -413,15 +430,64 @@ class BytecodeCompiler:
             Location.HAND: 1,
             Location.DISCARD: 2,
             Location.TABLEAU: 3,
+            Location.OPPONENT_HAND: 4,
+            Location.OPPONENT_DISCARD: 5,
         }
         return mapping.get(loc, 0)
 
+    def _value_to_int(self, value) -> int:
+        """Convert condition value to integer.
+
+        Handles:
+        - int: pass through
+        - Rank enum: convert to 0-12 (Ace=0, King=12)
+        - Suit enum: convert to 0-3 (Hearts=0, Spades=3)
+        - None/other: return 0
+        """
+        from darwindeck.genome.schema import Rank, Suit
+
+        if isinstance(value, int):
+            return value
+
+        if isinstance(value, Rank):
+            rank_order = [Rank.ACE, Rank.TWO, Rank.THREE, Rank.FOUR, Rank.FIVE,
+                          Rank.SIX, Rank.SEVEN, Rank.EIGHT, Rank.NINE, Rank.TEN,
+                          Rank.JACK, Rank.QUEEN, Rank.KING]
+            try:
+                return rank_order.index(value)
+            except ValueError:
+                return 0
+
+        if isinstance(value, Suit):
+            suit_order = [Suit.HEARTS, Suit.DIAMONDS, Suit.CLUBS, Suit.SPADES]
+            try:
+                return suit_order.index(value)
+            except ValueError:
+                return 0
+
+        return 0
+
     def _reference_to_code(self, ref: str) -> int:
-        """Map reference string to code."""
+        """Map reference string to code.
+
+        Two contexts use references differently:
+        - Card comparisons (CARD_BEATS_TOP, etc.): Reference identifies which card to compare
+          - 1 = top_discard (top of discard pile)
+          - 2 = last_played / tableau_top (top of tableau)
+        - Location checks (LOCATION_SIZE): Reference identifies which location to check
+          - Uses Location codes: 0=deck, 1=hand, 2=discard, 3=tableau
+        """
         mapping = {
+            # Card references (for CARD_BEATS_TOP, CARD_MATCHES_RANK, etc.)
             "top_discard": 1,
             "last_played": 2,
+            "tableau_top": 2,  # Alias for last_played
             "valid_plays": 3,
+            # Location references (for LOCATION_SIZE)
+            "deck": 0,
+            "hand": 1,
+            "discard": 2,
+            "tableau": 3,
         }
         return mapping.get(ref, 0)
 

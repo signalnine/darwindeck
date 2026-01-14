@@ -117,6 +117,8 @@ class SetupRules:
     random_trump: bool = False               # Trump selected randomly
     # NEW: Betting support
     starting_chips: int = 0                  # 0 means no betting enabled
+    # NEW: Custom deck support (reduces special effects complexity)
+    custom_printed_deck: bool = False        # True for Uno-style decks with effects printed on cards
 
     def __post_init__(self):
         """Convert lists to tuples for immutability."""
@@ -129,7 +131,7 @@ class PlayPhase:
     """Play cards from hand."""
 
     target: Location
-    valid_play_condition: "ConditionOrCompound"  # type: ignore
+    valid_play_condition: Optional["ConditionOrCompound"] = None  # type: ignore
     min_cards: int = 1
     max_cards: int = 1
     mandatory: bool = True

@@ -378,8 +378,82 @@ func (rcv *AggregatedStats) MutateClosestMargin(n float32) bool {
 	return rcv._tab.MutateFloat32Slot(56, n)
 }
 
+// Betting metrics (BettingPhase games)
+func (rcv *AggregatedStats) TotalBets() uint64 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(58))
+	if o != 0 {
+		return rcv._tab.GetUint64(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *AggregatedStats) MutateTotalBets(n uint64) bool {
+	return rcv._tab.MutateUint64Slot(58, n)
+}
+
+func (rcv *AggregatedStats) BettingBluffs() uint64 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(60))
+	if o != 0 {
+		return rcv._tab.GetUint64(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *AggregatedStats) MutateBettingBluffs(n uint64) bool {
+	return rcv._tab.MutateUint64Slot(60, n)
+}
+
+func (rcv *AggregatedStats) FoldWins() uint64 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(62))
+	if o != 0 {
+		return rcv._tab.GetUint64(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *AggregatedStats) MutateFoldWins(n uint64) bool {
+	return rcv._tab.MutateUint64Slot(62, n)
+}
+
+func (rcv *AggregatedStats) ShowdownWins() uint64 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(64))
+	if o != 0 {
+		return rcv._tab.GetUint64(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *AggregatedStats) MutateShowdownWins(n uint64) bool {
+	return rcv._tab.MutateUint64Slot(64, n)
+}
+
+func (rcv *AggregatedStats) AllInCount() uint64 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(66))
+	if o != 0 {
+		return rcv._tab.GetUint64(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *AggregatedStats) MutateAllInCount(n uint64) bool {
+	return rcv._tab.MutateUint64Slot(66, n)
+}
+
+// TrailingWinners returns the count of games where the winner was behind at midpoint
+func (rcv *AggregatedStats) TrailingWinners() uint32 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(68))
+	if o != 0 {
+		return rcv._tab.GetUint32(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *AggregatedStats) MutateTrailingWinners(n uint32) bool {
+	return rcv._tab.MutateUint32Slot(68, n)
+}
+
 func AggregatedStatsStart(builder *flatbuffers.Builder) {
-	builder.StartObject(27)
+	builder.StartObject(33)
 }
 func AggregatedStatsAddTotalGames(builder *flatbuffers.Builder, totalGames uint32) {
 	builder.PrependUint32Slot(0, totalGames, 0)
@@ -467,6 +541,24 @@ func AggregatedStatsAddDecisiveTurnPct(builder *flatbuffers.Builder, decisiveTur
 }
 func AggregatedStatsAddClosestMargin(builder *flatbuffers.Builder, closestMargin float32) {
 	builder.PrependFloat32Slot(26, closestMargin, 1.0)
+}
+func AggregatedStatsAddTotalBets(builder *flatbuffers.Builder, totalBets uint64) {
+	builder.PrependUint64Slot(27, totalBets, 0)
+}
+func AggregatedStatsAddBettingBluffs(builder *flatbuffers.Builder, bettingBluffs uint64) {
+	builder.PrependUint64Slot(28, bettingBluffs, 0)
+}
+func AggregatedStatsAddFoldWins(builder *flatbuffers.Builder, foldWins uint64) {
+	builder.PrependUint64Slot(29, foldWins, 0)
+}
+func AggregatedStatsAddShowdownWins(builder *flatbuffers.Builder, showdownWins uint64) {
+	builder.PrependUint64Slot(30, showdownWins, 0)
+}
+func AggregatedStatsAddAllInCount(builder *flatbuffers.Builder, allInCount uint64) {
+	builder.PrependUint64Slot(31, allInCount, 0)
+}
+func AggregatedStatsAddTrailingWinners(builder *flatbuffers.Builder, trailingWinners uint32) {
+	builder.PrependUint32Slot(32, trailingWinners, 0)
 }
 func AggregatedStatsEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

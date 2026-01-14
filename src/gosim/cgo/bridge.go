@@ -40,10 +40,18 @@ type AggStats struct {
 	SuccessfulBluffs  uint64
 	SuccessfulCatches uint64
 
+	// Betting metrics
+	TotalBets     uint64
+	BettingBluffs uint64
+	FoldWins      uint64
+	ShowdownWins  uint64
+	AllInCount    uint64
+
 	// Tension metrics
-	LeadChanges     uint32
-	DecisiveTurnPct float32
-	ClosestMargin   float32
+	LeadChanges      uint32
+	DecisiveTurnPct  float32
+	ClosestMargin    float32
+	TrailingWinners  uint32
 }
 
 //export SimulateBatch
@@ -163,10 +171,17 @@ func SimulateBatch(requestPtr unsafe.Pointer, requestLen C.int, responseLen *C.i
 			TotalChallenges:   simStats.TotalChallenges,
 			SuccessfulBluffs:  simStats.SuccessfulBluffs,
 			SuccessfulCatches: simStats.SuccessfulCatches,
+			// Betting metrics
+			TotalBets:     simStats.TotalBets,
+			BettingBluffs: simStats.BettingBluffs,
+			FoldWins:      simStats.FoldWins,
+			ShowdownWins:  simStats.ShowdownWins,
+			AllInCount:    simStats.AllInCount,
 			// Tension metrics (aggregated from individual games)
-			LeadChanges:     simStats.LeadChanges,
-			DecisiveTurnPct: simStats.DecisiveTurnPct,
-			ClosestMargin:   simStats.ClosestMargin,
+			LeadChanges:      simStats.LeadChanges,
+			DecisiveTurnPct:  simStats.DecisiveTurnPct,
+			ClosestMargin:    simStats.ClosestMargin,
+			TrailingWinners:  simStats.TrailingWinners,
 		}
 
 		// Serialize result
@@ -259,10 +274,17 @@ func serializeStats(builder *flatbuffers.Builder, stats *AggStats) flatbuffers.U
 	cardsim.AggregatedStatsAddTotalChallenges(builder, stats.TotalChallenges)
 	cardsim.AggregatedStatsAddSuccessfulBluffs(builder, stats.SuccessfulBluffs)
 	cardsim.AggregatedStatsAddSuccessfulCatches(builder, stats.SuccessfulCatches)
+	// Betting metrics
+	cardsim.AggregatedStatsAddTotalBets(builder, stats.TotalBets)
+	cardsim.AggregatedStatsAddBettingBluffs(builder, stats.BettingBluffs)
+	cardsim.AggregatedStatsAddFoldWins(builder, stats.FoldWins)
+	cardsim.AggregatedStatsAddShowdownWins(builder, stats.ShowdownWins)
+	cardsim.AggregatedStatsAddAllInCount(builder, stats.AllInCount)
 	// Tension metrics
 	cardsim.AggregatedStatsAddLeadChanges(builder, stats.LeadChanges)
 	cardsim.AggregatedStatsAddDecisiveTurnPct(builder, stats.DecisiveTurnPct)
 	cardsim.AggregatedStatsAddClosestMargin(builder, stats.ClosestMargin)
+	cardsim.AggregatedStatsAddTrailingWinners(builder, stats.TrailingWinners)
 	return cardsim.AggregatedStatsEnd(builder)
 }
 

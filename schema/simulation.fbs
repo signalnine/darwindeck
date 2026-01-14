@@ -67,15 +67,18 @@ table AggregatedStats {
   successful_bluffs: uint64;     // Bluffs that weren't challenged
   successful_catches: uint64;    // Challenges that caught a bluff
 
-  // Betting metrics
-  avg_final_chips: [float];       // Average final chips per player (index = player ID)
-  fold_rate: float;               // Percentage of hands ending in fold (0-1)
-  total_pots_won: uint64;         // Total pots won across all games
+  // Betting metrics (BettingPhase games)
+  total_bets: uint64;             // Count of Bet/Raise/AllIn actions
+  betting_bluffs: uint64;         // Bet/Raise/AllIn with weak hand (hand_strength < 0.3)
+  fold_wins: uint64;              // Wins where opponent(s) folded (no showdown)
+  showdown_wins: uint64;          // Wins that went to showdown
+  all_in_count: uint64;           // Number of all-in actions
 
   // Tension curve metrics
   lead_changes: uint32 = 0;
   decisive_turn_pct: float32 = 1.0;
   closest_margin: float32 = 1.0;
+  trailing_winners: uint32 = 0;    // Games where winner was behind at midpoint
 }
 
 // Batch response

@@ -26,6 +26,8 @@ func EvaluateCondition(state *GameState, playerID uint8, conditionBytes []byte) 
 		switch Location(reference) {
 		case LocationDeck:
 			actual = int32(len(state.Deck))
+		case LocationHand:
+			actual = int32(len(state.Players[playerID].Hand))
 		case LocationDiscard:
 			actual = int32(len(state.Discard))
 		case LocationTableau:
@@ -180,11 +182,147 @@ func getReferencedCard(state *GameState, reference uint8) *Card {
 		if len(state.Discard) > 0 {
 			return &state.Discard[len(state.Discard)-1]
 		}
-	case 2: // last_played (tableau top)
+	case 2, 3: // last_played / tableau_top (top of tableau pile)
+		// Reference 2 = "last_played", Reference 3 = "tableau" (both mean top of tableau)
 		if len(state.Tableau) > 0 && len(state.Tableau[0]) > 0 {
 			pile := state.Tableau[0]
 			return &pile[len(pile)-1]
 		}
 	}
 	return nil
+}
+
+// EvaluateCardCondition checks if a candidate card satisfies a condition.
+// Used for valid_play_condition evaluation in PlayPhase.
+func EvaluateCardCondition(state *GameState, playerID uint8, candidateCard Card, conditionBytes []byte) bool {
+	if len(conditionBytes) < 7 {
+		return false
+	}
+
+	opcode := OpCode(conditionBytes[0])
+	// operator is at conditionBytes[1] - unused for card matching
+	value := int32(binary.BigEndian.Uint32(conditionBytes[2:6]))
+	reference := conditionBytes[6]
+
+	switch opcode {
+	case OpCheckCardRank:
+		// CARD_IS_RANK: Check if candidate card is a specific rank (for wild cards)
+		return int32(candidateCard.Rank) == value
+
+	case OpCheckCardSuit:
+		// CARD_IS_SUIT: Check if candidate card is a specific suit
+		return int32(candidateCard.Suit) == value
+
+	case OpCheckCardMatchesRank:
+		// CARD_MATCHES_RANK: Check if candidate matches reference card's rank
+		refCard := getReferencedCard(state, reference)
+		if refCard == nil {
+			return true // No reference card = any card valid
+		}
+		return candidateCard.Rank == refCard.Rank
+
+	case OpCheckCardMatchesSuit:
+		// CARD_MATCHES_SUIT: Check if candidate matches reference card's suit
+		refCard := getReferencedCard(state, reference)
+		if refCard == nil {
+			return true // No reference card = any card valid
+		}
+		return candidateCard.Suit == refCard.Suit
+
+	case OpCheckCardBeatsTop:
+		// CARD_BEATS_TOP: Check if candidate beats reference card (President/Daifugo)
+		// Higher rank wins, same rank is allowed (multiple cards of same rank can be played)
+		refCard := getReferencedCard(state, reference)
+		if refCard == nil {
+			return true // No reference card = any card valid
+		}
+		return candidateCard.Rank >= refCard.Rank
+
+	case OpAnd:
+		// Compound AND: all nested conditions must be true
+		return evaluateCompoundCardCondition(state, playerID, candidateCard, conditionBytes, true)
+
+	case OpOr:
+		// Compound OR: at least one nested condition must be true
+		return evaluateCompoundCardCondition(state, playerID, candidateCard, conditionBytes, false)
+
+	default:
+		// For non-card conditions, delegate to EvaluateCondition
+		return EvaluateCondition(state, playerID, conditionBytes)
+	}
+}
+
+// evaluateCompoundCardCondition evaluates compound AND/OR conditions for a card
+func evaluateCompoundCardCondition(state *GameState, playerID uint8, candidateCard Card, conditionBytes []byte, isAnd bool) bool {
+	if len(conditionBytes) < 5 {
+		return false
+	}
+
+	// Format: [OpCode:1][Count:4][nested conditions...]
+	count := binary.BigEndian.Uint32(conditionBytes[1:5])
+	offset := 5
+
+	for i := uint32(0); i < count; i++ {
+		if offset+7 > len(conditionBytes) {
+			return false
+		}
+
+		// Determine the size of this condition
+		nestedOpcode := OpCode(conditionBytes[offset])
+		var nestedLen int
+
+		if nestedOpcode == OpAnd || nestedOpcode == OpOr {
+			// Compound condition - need to calculate size
+			nestedLen = calculateCompoundConditionSize(conditionBytes[offset:])
+		} else {
+			// Simple condition is 7 bytes
+			nestedLen = 7
+		}
+
+		if offset+nestedLen > len(conditionBytes) {
+			return false
+		}
+
+		result := EvaluateCardCondition(state, playerID, candidateCard, conditionBytes[offset:offset+nestedLen])
+
+		if isAnd && !result {
+			return false // AND: any false = false
+		}
+		if !isAnd && result {
+			return true // OR: any true = true
+		}
+
+		offset += nestedLen
+	}
+
+	return isAnd // AND returns true if all passed, OR returns false if none passed
+}
+
+// calculateCompoundConditionSize returns the total byte size of a compound condition
+func calculateCompoundConditionSize(conditionBytes []byte) int {
+	if len(conditionBytes) < 5 {
+		return 0
+	}
+
+	count := binary.BigEndian.Uint32(conditionBytes[1:5])
+	size := 5 // header
+
+	offset := 5
+	for i := uint32(0); i < count; i++ {
+		if offset >= len(conditionBytes) {
+			break
+		}
+
+		nestedOpcode := OpCode(conditionBytes[offset])
+		if nestedOpcode == OpAnd || nestedOpcode == OpOr {
+			nestedLen := calculateCompoundConditionSize(conditionBytes[offset:])
+			size += nestedLen
+			offset += nestedLen
+		} else {
+			size += 7
+			offset += 7
+		}
+	}
+
+	return size
 }

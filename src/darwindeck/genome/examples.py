@@ -42,13 +42,6 @@ def create_war_genome() -> GameGenome:
             phases=[
                 PlayPhase(
                     target=Location.TABLEAU,
-                    # Always play from top of hand
-                    valid_play_condition=Condition(
-                        type=ConditionType.LOCATION_SIZE,
-                        reference="hand",
-                        operator=Operator.GT,
-                        value=0
-                    ),
                     min_cards=1,
                     max_cards=1,
                     mandatory=True,
@@ -272,11 +265,11 @@ def create_gin_rummy_genome() -> GameGenome:
 def create_old_maid_genome() -> GameGenome:
     """Create Old Maid card game genome.
 
-    Simplified Old Maid features:
-    - Draw from opponent's hand (simplified to draw from deck)
+    Old Maid features:
+    - Draw from opponent's hand
     - Discard pairs of matching ranks
-    - Avoid being stuck with the odd card
-    - Player with last card loses
+    - Avoid being stuck with the odd card (queen)
+    - First player to empty hand wins
     """
     return GameGenome(
         schema_version="1.0",
@@ -289,9 +282,9 @@ def create_old_maid_genome() -> GameGenome:
         ),
         turn_structure=TurnStructure(
             phases=[
-                # Simplified: draw from deck instead of opponent hand
+                # Draw from opponent's hand (core Old Maid mechanic)
                 DrawPhase(
-                    source=Location.DECK,
+                    source=Location.OPPONENT_HAND,
                     count=1,
                     mandatory=True
                 ),
@@ -968,6 +961,7 @@ def create_uno_genome() -> GameGenome:
         setup=SetupRules(
             cards_per_player=7,
             initial_discard_count=1,  # Start with one card face up
+            custom_printed_deck=True,  # Effects are printed on the cards (no memorization)
         ),
         turn_structure=TurnStructure(phases=[
             PlayPhase(
@@ -987,12 +981,7 @@ def create_uno_genome() -> GameGenome:
             DrawPhase(
                 source=Location.DECK,
                 count=1,
-                mandatory=False,  # Only draw if didn't play
-                condition=Condition(
-                    type=ConditionType.HAND_SIZE,
-                    operator=Operator.EQ,
-                    value=0,  # Dummy - controlled by pass_if_unable
-                ),
+                mandatory=False,  # Can choose not to draw
             ),
         ]),
         special_effects=[

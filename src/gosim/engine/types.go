@@ -65,6 +65,7 @@ type GameState struct {
 	CurrentBet         int64 // Highest bet in current round (int64 for precision)
 	RaiseCount         int   // Raises this round
 	BettingStartPlayer int   // Rotates each hand for position fairness
+	BettingComplete    bool  // True after betting round finishes (for blackjack: betting before draw)
 	// Optional extensions for bluffing games
 	CurrentClaim *Claim // nil if no active claim
 	// Trick-taking game state
@@ -79,6 +80,10 @@ type GameState struct {
 	// Special effects state
 	PlayDirection int8  // 1 = clockwise, -1 = counter-clockwise
 	SkipCount     uint8 // Number of players to skip (capped at NumPlayers-1)
+	// Blackjack-specific state
+	HasStood []bool // Track which players have stood (for blackjack)
+	// President/climbing game state
+	ConsecutivePasses int // Track consecutive passes (for clearing tableau)
 }
 
 // StatePool manages GameState memory
@@ -91,6 +96,7 @@ var StatePool = sync.Pool{
 			Tableau:      make([][]Card, 0, 10),
 			CurrentTrick: make([]TrickCard, 0, 4), // Max 4 players per trick
 			TricksWon:    make([]uint8, 0, 4),     // Max 4 players
+			HasStood:     make([]bool, 4),         // Max 4 players for blackjack
 		}
 	},
 }
@@ -129,6 +135,7 @@ func (s *GameState) Reset() {
 	s.Pot = 0
 	s.CurrentBet = 0
 	s.RaiseCount = 0
+	s.BettingComplete = false
 	s.BettingStartPlayer = 0
 	s.CurrentClaim = nil
 	// Trick-taking state
@@ -141,6 +148,12 @@ func (s *GameState) Reset() {
 	s.CaptureMode = false
 	s.PlayDirection = 1
 	s.SkipCount = 0
+	// Blackjack state
+	for i := 0; i < len(s.HasStood); i++ {
+		s.HasStood[i] = false
+	}
+	// President state
+	s.ConsecutivePasses = 0
 }
 
 // Clone creates a deep copy for MCTS tree search
@@ -201,6 +214,12 @@ func (s *GameState) Clone() *GameState {
 	clone.CaptureMode = s.CaptureMode
 	clone.PlayDirection = s.PlayDirection
 	clone.SkipCount = s.SkipCount
+	// Clone blackjack state
+	for i := 0; i < len(s.HasStood) && i < len(clone.HasStood); i++ {
+		clone.HasStood[i] = s.HasStood[i]
+	}
+	// Clone President state
+	clone.ConsecutivePasses = s.ConsecutivePasses
 
 	return clone
 }
@@ -229,5 +248,6 @@ func (gs *GameState) ResetHand() {
 	gs.Pot = 0
 	gs.CurrentBet = 0
 	gs.RaiseCount = 0
+	gs.BettingComplete = false
 	gs.BettingStartPlayer = (gs.BettingStartPlayer + 1) % len(gs.Players)
 }
