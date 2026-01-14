@@ -1,9 +1,27 @@
 """Move generation and application for genome-based games."""
 
 from dataclasses import dataclass
+from enum import Enum
 from typing import List, Optional
 from darwindeck.genome.schema import GameGenome, PlayPhase, Location
 from darwindeck.simulation.state import GameState, Card, PlayerState
+
+
+class BettingAction(Enum):
+    """Betting action types."""
+    CHECK = "check"
+    BET = "bet"
+    CALL = "call"
+    RAISE = "raise"
+    ALL_IN = "all_in"
+    FOLD = "fold"
+
+
+@dataclass(frozen=True)
+class BettingMove:
+    """A betting action (separate from card play moves)."""
+    action: BettingAction
+    phase_index: int
 
 
 # Rank value mapping for card comparison

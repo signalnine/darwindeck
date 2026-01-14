@@ -93,3 +93,26 @@ class TestGameStateBetting:
         assert state.pot == 0
         assert state.current_bet == 0
         assert state.raise_count == 0
+
+
+class TestBettingTypes:
+    """Test BettingAction and BettingMove types."""
+
+    def test_betting_action_enum_values(self):
+        """BettingAction should have all poker actions."""
+        from darwindeck.simulation.movegen import BettingAction
+
+        assert BettingAction.CHECK.value == "check"
+        assert BettingAction.BET.value == "bet"
+        assert BettingAction.CALL.value == "call"
+        assert BettingAction.RAISE.value == "raise"
+        assert BettingAction.ALL_IN.value == "all_in"
+        assert BettingAction.FOLD.value == "fold"
+
+    def test_betting_move_dataclass(self):
+        """BettingMove should hold action and phase_index."""
+        from darwindeck.simulation.movegen import BettingAction, BettingMove
+
+        move = BettingMove(action=BettingAction.BET, phase_index=0)
+        assert move.action == BettingAction.BET
+        assert move.phase_index == 0
