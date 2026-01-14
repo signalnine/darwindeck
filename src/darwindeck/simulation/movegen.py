@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from enum import Enum
 from typing import List, Optional
-from darwindeck.genome.schema import GameGenome, PlayPhase, Location
+from darwindeck.genome.schema import GameGenome, PlayPhase, Location, BettingPhase
 from darwindeck.simulation.state import GameState, Card, PlayerState
 
 
@@ -294,3 +294,33 @@ def has_matching_pair(hand: tuple[Card, ...]) -> bool:
                     return True
 
     return False
+
+
+def generate_betting_moves(state: GameState, phase: BettingPhase, player_id: int) -> list[BettingMove]:
+    """Generate all legal betting moves for a player.
+
+    Mirrors Go's GenerateBettingMoves in betting.go.
+    """
+    player = state.players[player_id]
+    moves: list[BettingMove] = []
+
+    # Can't act if folded, all-in, or no chips
+    if player.has_folded or player.is_all_in or player.chips <= 0:
+        return moves
+
+    to_call = state.current_bet - player.current_bet
+    phase_index = 0  # Will be set by caller if needed
+
+    if to_call == 0:
+        # No bet to match
+        moves.append(BettingMove(action=BettingAction.CHECK, phase_index=phase_index))
+        if player.chips >= phase.min_bet:
+            moves.append(BettingMove(action=BettingAction.BET, phase_index=phase_index))
+        elif player.chips > 0:
+            # Can't afford min bet, but can go all-in
+            moves.append(BettingMove(action=BettingAction.ALL_IN, phase_index=phase_index))
+    else:
+        # Must match, raise, all-in, or fold (Task 5)
+        pass
+
+    return moves
