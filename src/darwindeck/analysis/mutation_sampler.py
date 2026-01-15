@@ -172,6 +172,11 @@ def sample_trajectories(
     simulator = GoSimulator(seed=base_random_seed)
     mutation_pipeline = create_default_pipeline()
 
+    # IMPORTANT: Create evaluator with caching disabled
+    # Mutated genomes keep same genome_id, so cache would return wrong values
+    style = getattr(evaluator, 'style', 'balanced')
+    evaluator = FitnessEvaluator(style=style, use_cache=False)
+
     # Generate random seeds if not provided
     if config.random_seeds is None:
         rng = random.Random(base_random_seed)
@@ -215,9 +220,11 @@ def _sample_trajectory_worker(args: tuple) -> FitnessTrajectory:
     genome, seed_type, config_dict, random_seed, style = args
 
     # Recreate objects in worker process
+    # IMPORTANT: use_cache=False because mutated genomes keep same genome_id
+    # and would incorrectly return cached fitness of the original seed
     config = SamplingConfig(**config_dict)
     simulator = GoSimulator(seed=random_seed)
-    evaluator = FitnessEvaluator(style=style)
+    evaluator = FitnessEvaluator(style=style, use_cache=False)
     mutation_pipeline = create_default_pipeline()
 
     return sample_single_trajectory(
