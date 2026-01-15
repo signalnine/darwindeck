@@ -132,3 +132,56 @@ def test_full_genome_with_betting_phase_json():
     assert isinstance(betting_phase, BettingPhase)
     assert betting_phase.min_bet == 25
     assert betting_phase.max_raises == 4
+
+
+def test_genome_serialization_with_tableau_mode():
+    """Genome with tableau_mode serializes and deserializes correctly."""
+    from darwindeck.genome.schema import (
+        GameGenome, SetupRules, TurnStructure, WinCondition,
+        TableauMode, SequenceDirection
+    )
+    from darwindeck.genome.serialization import genome_to_dict, genome_from_dict
+
+    genome = GameGenome(
+        schema_version="1.0",
+        genome_id="test_war",
+        generation=1,
+        setup=SetupRules(
+            cards_per_player=26,
+            tableau_mode=TableauMode.WAR,
+        ),
+        turn_structure=TurnStructure(phases=[]),
+        special_effects=[],
+        win_conditions=[WinCondition(type="capture_all")],
+        scoring_rules=[],
+    )
+
+    # Round-trip
+    d = genome_to_dict(genome)
+    restored = genome_from_dict(d)
+
+    assert restored.setup.tableau_mode == TableauMode.WAR
+    assert restored.setup.sequence_direction == SequenceDirection.BOTH
+
+
+def test_genome_deserialization_missing_tableau_mode():
+    """Genome without tableau_mode defaults to NONE."""
+    from darwindeck.genome.schema import TableauMode, SequenceDirection
+    from darwindeck.genome.serialization import genome_from_dict
+
+    # Old-style genome dict without tableau_mode
+    d = {
+        "schema_version": "1.0",
+        "genome_id": "old_game",
+        "generation": 1,
+        "setup": {"cards_per_player": 7},
+        "turn_structure": {"phases": []},
+        "special_effects": [],
+        "win_conditions": [{"type": "empty_hand"}],
+        "scoring_rules": [],
+        "max_turns": 100,
+    }
+
+    genome = genome_from_dict(d)
+    assert genome.setup.tableau_mode == TableauMode.NONE
+    assert genome.setup.sequence_direction == SequenceDirection.BOTH

@@ -8,7 +8,8 @@ from dataclasses import asdict
 from darwindeck.genome.schema import (
     GameGenome, SetupRules, TurnStructure, WinCondition,
     PlayPhase, DrawPhase, DiscardPhase, TrickPhase, ClaimPhase, BettingPhase,
-    Location, Suit, Rank, SpecialEffect, EffectType, TargetSelector
+    Location, Suit, Rank, SpecialEffect, EffectType, TargetSelector,
+    TableauMode, SequenceDirection
 )
 from darwindeck.genome.conditions import (
     Condition, CompoundCondition, ConditionType, Operator
@@ -80,6 +81,11 @@ def _setup_to_dict(setup: SetupRules) -> Dict[str, Any]:
     }
     if setup.trump_suit is not None:
         d["trump_suit"] = setup.trump_suit.name
+    # Only include non-default values to keep JSON compact
+    if setup.tableau_mode != TableauMode.NONE:
+        d["tableau_mode"] = setup.tableau_mode.value
+    if setup.sequence_direction != SequenceDirection.BOTH:
+        d["sequence_direction"] = setup.sequence_direction.value
     return d
 
 
@@ -88,12 +94,17 @@ def _setup_from_dict(data: Dict[str, Any]) -> SetupRules:
     trump_suit = None
     if data.get("trump_suit"):
         trump_suit = Suit[data["trump_suit"]]
+    # Parse tableau mode with defaults for backward compatibility
+    tableau_mode = TableauMode(data.get("tableau_mode", "none"))
+    sequence_direction = SequenceDirection(data.get("sequence_direction", "both"))
     return SetupRules(
         cards_per_player=data["cards_per_player"],
         initial_deck=data.get("initial_deck", "standard_52"),
         initial_discard_count=data.get("initial_discard_count", 0),
         trump_suit=trump_suit,
         starting_chips=data.get("starting_chips", 0),
+        tableau_mode=tableau_mode,
+        sequence_direction=sequence_direction,
     )
 
 
