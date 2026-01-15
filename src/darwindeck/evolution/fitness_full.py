@@ -621,7 +621,30 @@ class FitnessEvaluator:
             self.weights['betting_engagement'] * betting_engagement
         )
 
-        # No need to renormalize - weights already sum to 1.0
+        # QUALITY GATES: Apply multiplier penalties for games failing minimum thresholds
+        # These are the best discriminators between known games and random garbage
+        # Random games typically score: comeback~0.05, skill~0.27, tension~0.43
+        # Known games typically score: comeback~0.71, skill~0.53, tension~0.63
+        quality_multiplier = 1.0
+
+        # Comeback potential: Random games almost always score ~0 here
+        # Threshold 0.15 catches most broken games while allowing edge cases
+        if comeback_potential < 0.15:
+            quality_multiplier *= 0.5  # 50% penalty for no comeback
+
+        # Skill vs luck: Random games average 0.27, known average 0.53
+        # Below 0.15 means game is essentially pure luck
+        if skill_vs_luck < 0.15:
+            quality_multiplier *= 0.7  # 30% penalty for pure luck
+
+        # One-sidedness check: If one player wins >80% of games, it's broken
+        # (This catches degenerate games that always favor first/second player)
+        if results.total_games > 0 and len(results.wins) >= 2:
+            max_win_rate = max(results.wins) / results.total_games
+            if max_win_rate > 0.80:
+                quality_multiplier *= 0.6  # 40% penalty for one-sided
+
+        total_fitness *= quality_multiplier
 
         return FitnessMetrics(
             decision_density=decision_density,
