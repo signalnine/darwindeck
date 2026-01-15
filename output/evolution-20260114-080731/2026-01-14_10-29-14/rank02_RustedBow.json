@@ -1,0 +1,93 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "RustedBow",
+  "generation": 67,
+  "setup": {
+    "cards_per_player": 26,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 0,
+    "starting_chips": 5063
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": null,
+        "min_cards": 1,
+        "max_cards": 1,
+        "mandatory": true
+      },
+      {
+        "type": "DiscardPhase",
+        "target": "DISCARD",
+        "count": 1,
+        "mandatory": true
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": null,
+        "min_cards": 1,
+        "max_cards": 1,
+        "mandatory": true
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": null,
+        "min_cards": 1,
+        "max_cards": 1,
+        "mandatory": true
+      }
+    ],
+    "is_trick_based": false,
+    "tricks_per_hand": null
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "capture_all",
+      "threshold": null
+    },
+    {
+      "type": "empty_hand",
+      "threshold": null
+    },
+    {
+      "type": "first_to_score",
+      "threshold": 84
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 2000,
+  "min_turns": 10,
+  "player_count": 2,
+  "fitness": 0.8763455976210559,
+  "fitness_rank": 2,
+  "fitness_metrics": {
+    "decision_density": 0.944,
+    "comeback_potential": 1.0,
+    "tension_curve": 1.0,
+    "interaction_frequency": 0.9675941485504042,
+    "rules_complexity": 0.7228676820334182,
+    "session_length": 0.7479036910445602,
+    "skill_vs_luck": 0.85,
+    "bluffing_depth": 0.044954113962465736,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "skill_evaluation": {
+    "greedy_win_rate": 0.72,
+    "greedy_wins_as_p0": 22,
+    "greedy_wins_as_p1": 50,
+    "mcts_win_rate": 0.92,
+    "mcts_wins_as_p0": 46,
+    "mcts_wins_as_p1": 46,
+    "skill_score": 0.8200000000000001,
+    "first_player_advantage": -0.2799999999999999,
+    "total_games": 200,
+    "timed_out": false
+  },
+  "skill_rank": 2
+}

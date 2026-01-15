@@ -1,0 +1,82 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "WesternRidge",
+  "generation": 9,
+  "setup": {
+    "cards_per_player": 12,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 1,
+    "starting_chips": 0
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "compound",
+          "logic": "OR",
+          "conditions": [
+            {
+              "type": "simple",
+              "condition_type": "LOCATION_SIZE",
+              "operator": "EQ",
+              "value": 0,
+              "reference": "tableau"
+            },
+            {
+              "type": "simple",
+              "condition_type": "CARD_BEATS_TOP",
+              "operator": null,
+              "value": "two_high",
+              "reference": "tableau"
+            }
+          ]
+        },
+        "min_cards": 1,
+        "max_cards": 1,
+        "mandatory": true
+      }
+    ],
+    "is_trick_based": false,
+    "tricks_per_hand": null
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "empty_hand",
+      "threshold": null
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 300,
+  "min_turns": 10,
+  "player_count": 4,
+  "fitness": 0.5939014519581745,
+  "fitness_rank": 1,
+  "fitness_metrics": {
+    "decision_density": 0.33014704994209393,
+    "comeback_potential": 0.8240000000000001,
+    "tension_curve": 0.8666399955749511,
+    "interaction_frequency": 1.0,
+    "rules_complexity": 0.6202409026404516,
+    "session_length": 0.15648888481987847,
+    "skill_vs_luck": 0.3632000091552734,
+    "bluffing_depth": 0.0,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "skill_evaluation": {
+    "greedy_win_rate": 0.08,
+    "greedy_wins_as_p0": 5,
+    "greedy_wins_as_p1": 3,
+    "mcts_win_rate": 0.5,
+    "mcts_wins_as_p0": 37,
+    "mcts_wins_as_p1": 13,
+    "skill_score": 0.29,
+    "first_player_advantage": 0.26,
+    "total_games": 200,
+    "timed_out": false
+  },
+  "skill_rank": 1
+}

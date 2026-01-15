@@ -1,0 +1,83 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "LittleDuel",
+  "generation": 2,
+  "setup": {
+    "cards_per_player": 26,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 0,
+    "starting_chips": 500
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "BettingPhase",
+        "min_bet": 10,
+        "max_raises": 2
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "LOCATION_SIZE",
+          "operator": "GT",
+          "value": 0,
+          "reference": "hand"
+        },
+        "min_cards": 1,
+        "max_cards": 1,
+        "mandatory": true
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "LOCATION_SIZE",
+          "operator": "GT",
+          "value": 0,
+          "reference": "hand"
+        },
+        "min_cards": 1,
+        "max_cards": 1,
+        "mandatory": true
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": null,
+        "min_cards": 1,
+        "max_cards": 1,
+        "mandatory": true
+      }
+    ],
+    "is_trick_based": false,
+    "tricks_per_hand": null
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "capture_all",
+      "threshold": null
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 1000,
+  "min_turns": 10,
+  "player_count": 2,
+  "fitness": 0.6228668560052829,
+  "fitness_rank": 1,
+  "fitness_metrics": {
+    "decision_density": 0.7468912273997892,
+    "comeback_potential": 0.3414736842105263,
+    "tension_curve": 0.9196945190429688,
+    "interaction_frequency": 1.0,
+    "rules_complexity": 0.4289798381131186,
+    "session_length": 0.8558222113715278,
+    "skill_vs_luck": 0.6524421052631579,
+    "bluffing_depth": 0.03500000000000003,
+    "games_simulated": 100,
+    "valid": true
+  }
+}

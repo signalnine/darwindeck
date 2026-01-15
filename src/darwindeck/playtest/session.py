@@ -7,9 +7,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Callable
 
-from darwindeck.genome.schema import GameGenome, Rank, Suit
+from typing import Union, List
+
+from darwindeck.genome.schema import GameGenome, Rank, Suit, BettingPhase
 from darwindeck.simulation.state import GameState, PlayerState, Card
-from darwindeck.simulation.movegen import LegalMove, generate_legal_moves, apply_move, check_win_conditions
+from darwindeck.simulation.movegen import (
+    LegalMove, BettingMove, BettingAction,
+    generate_legal_moves, apply_move, apply_betting_move, check_win_conditions,
+)
 from darwindeck.playtest.stuck import StuckDetector
 from darwindeck.playtest.display import StateRenderer, MovePresenter
 from darwindeck.playtest.rules import RuleExplainer
@@ -185,16 +190,31 @@ class PlaytestSession:
                     continue
 
                 if result.move:
-                    self._record_move(self.state.turn, "human", {"card_index": result.move.card_index})
-                    self.state = apply_move(self.state, result.move, self.genome)
+                    if isinstance(result.move, BettingMove):
+                        self._record_move(self.state.turn, "human", {"action": result.move.action.value})
+                        phase = self.genome.turn_structure.phases[result.move.phase_index]
+                        if isinstance(phase, BettingPhase):
+                            self.state = apply_betting_move(self.state, result.move, phase)
+                        self._advance_turn()
+                    else:
+                        self._record_move(self.state.turn, "human", {"card_index": result.move.card_index})
+                        self.state = apply_move(self.state, result.move, self.genome)
                     self.stuck_detector.record_action()
             else:
                 # AI turn
                 move = self._ai_select_move(moves)
                 if move:
-                    output_fn(f"AI plays: card {move.card_index + 1}")
-                    self._record_move(self.state.turn, "ai", {"card_index": move.card_index})
-                    self.state = apply_move(self.state, move, self.genome)
+                    if isinstance(move, BettingMove):
+                        output_fn(f"AI: {move.action.value}")
+                        self._record_move(self.state.turn, "ai", {"action": move.action.value})
+                        phase = self.genome.turn_structure.phases[move.phase_index]
+                        if isinstance(phase, BettingPhase):
+                            self.state = apply_betting_move(self.state, move, phase)
+                        self._advance_turn()
+                    else:
+                        output_fn(f"AI plays: card {move.card_index + 1}")
+                        self._record_move(self.state.turn, "ai", {"card_index": move.card_index})
+                        self.state = apply_move(self.state, move, self.genome)
                     self.stuck_detector.record_action()
                 else:
                     output_fn("AI passes")
@@ -229,17 +249,35 @@ class PlaytestSession:
                 turn=self.state.turn + 1,
             )
 
-    def _ai_select_move(self, moves: list[LegalMove]) -> Optional[LegalMove]:
+    def _ai_select_move(self, moves: List[Union[LegalMove, BettingMove]]) -> Optional[Union[LegalMove, BettingMove]]:
         """Select move using AI strategy."""
         if not moves:
             return None
 
+        # Check if these are betting moves
+        if isinstance(moves[0], BettingMove):
+            if self.config.difficulty == "random":
+                return self.rng.choice(moves)
+            return self._ai_betting_select(moves)  # type: ignore
+
         if self.config.difficulty == "random":
             return self.rng.choice(moves)
 
-        # Greedy/MCTS: use hand-reducing heuristic
-        # MCTS not fully implemented, falls back to greedy heuristic
-        return self._greedy_select(moves)
+        # Greedy/MCTS: use hand-reducing heuristic for card plays
+        return self._greedy_select(moves)  # type: ignore
+
+    def _ai_betting_select(self, moves: list[BettingMove]) -> BettingMove:
+        """AI betting strategy: simple heuristic until Task 13."""
+        # For now: prefer check > call > bet > raise > fold
+        priority = {
+            BettingAction.CHECK: 5,
+            BettingAction.CALL: 4,
+            BettingAction.BET: 3,
+            BettingAction.RAISE: 2,
+            BettingAction.ALL_IN: 1,
+            BettingAction.FOLD: 0,
+        }
+        return max(moves, key=lambda m: priority.get(m.action, -1))
 
     def _greedy_select(self, moves: list[LegalMove]) -> LegalMove:
         """Greedy heuristic: prefer moves that play cards (reduce hand size)."""

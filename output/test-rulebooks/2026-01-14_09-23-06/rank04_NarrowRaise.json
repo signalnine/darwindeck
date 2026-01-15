@@ -1,0 +1,69 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "NarrowRaise",
+  "generation": 2,
+  "setup": {
+    "cards_per_player": 13,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 0,
+    "starting_chips": 0,
+    "trump_suit": "SPADES"
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "DrawPhase",
+        "source": "DISCARD",
+        "count": 1,
+        "mandatory": false,
+        "condition": null
+      },
+      {
+        "type": "DrawPhase",
+        "source": "OPPONENT_HAND",
+        "count": 7,
+        "mandatory": true,
+        "condition": null
+      },
+      {
+        "type": "ClaimPhase",
+        "min_cards": 1,
+        "max_cards": 1,
+        "sequential_rank": true,
+        "allow_challenge": true,
+        "pile_penalty": true
+      }
+    ],
+    "is_trick_based": true,
+    "tricks_per_hand": 13
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "most_tricks",
+      "threshold": 0
+    },
+    {
+      "type": "all_hands_empty",
+      "threshold": 0
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 200,
+  "min_turns": 10,
+  "player_count": 4,
+  "fitness": 0.49193847099801113,
+  "fitness_rank": 4,
+  "fitness_metrics": {
+    "decision_density": 0.47225094275212176,
+    "comeback_potential": 0.696,
+    "tension_curve": 0.8219233252108097,
+    "interaction_frequency": 0.743801652892562,
+    "rules_complexity": 0.46735135493964486,
+    "session_length": 0.06453333536783855,
+    "skill_vs_luck": 0.5040000045776367,
+    "bluffing_depth": 0.7638126433016705,
+    "games_simulated": 100,
+    "valid": true
+  }
+}
