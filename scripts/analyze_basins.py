@@ -19,6 +19,7 @@ from darwindeck.analysis.random_baseline import (
     BaselineConfig, generate_random_genomes, compute_baseline_statistics
 )
 from darwindeck.simulation.go_simulator import GoSimulator
+from darwindeck.analysis.playability import PlayabilityChecker, is_meaningfully_playable
 from darwindeck.analysis.basin_detector import detect_basins, compute_valley_depths
 from darwindeck.analysis.basin_report import (
     print_summary, save_json, plot_heatmap, plot_trajectories,
@@ -34,29 +35,40 @@ def progress_reporter(current: int, total: int) -> None:
         print()  # Newline at end
 
 
-def is_playable(genome, simulator, games: int = 10) -> bool:
-    """Check if genome produces playable games (< 50% error rate)."""
-    try:
-        results = simulator.simulate(genome, num_games=games)
-        error_rate = results.errors / results.total_games if results.total_games > 0 else 1.0
-        return error_rate < 0.5
-    except Exception:
-        return False
-
-
 def filter_playable_genomes(genomes, simulator, verbose: bool = False):
-    """Filter list of genomes to only playable ones."""
+    """Filter list of genomes to only meaningfully playable ones.
+
+    Uses PlayabilityChecker for robust playability analysis including:
+    - Error rate (critical if > 50%)
+    - Draw rate (critical if > 95%)
+    - Decision density (critical if < 1 decision/game)
+    - Game length (critical if < 2 turns)
+    """
+    checker = PlayabilityChecker(num_games=50, strict=False)
     playable = []
     unplayable = []
+    unplayable_reasons = []
 
     for genome in genomes:
-        if is_playable(genome, simulator):
-            playable.append(genome)
-        else:
+        try:
+            results = simulator.simulate(genome, num_games=50)
+            report = checker.check(genome, results)
+
+            if report.playable:
+                playable.append(genome)
+            else:
+                unplayable.append(genome.genome_id)
+                # Collect critical issues for verbose output
+                critical = [i.code for i in report.issues if i.severity == "critical"]
+                unplayable_reasons.append(f"{genome.genome_id}: {', '.join(critical)}")
+        except Exception as e:
             unplayable.append(genome.genome_id)
+            unplayable_reasons.append(f"{genome.genome_id}: EXCEPTION ({e})")
 
     if verbose and unplayable:
-        print(f"   Filtered out {len(unplayable)} unplayable genomes: {', '.join(unplayable)}")
+        print(f"   Filtered out {len(unplayable)} unplayable genomes:")
+        for reason in unplayable_reasons:
+            print(f"      - {reason}")
 
     return playable
 
