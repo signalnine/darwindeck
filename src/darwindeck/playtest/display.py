@@ -6,7 +6,7 @@ from typing import Union
 
 from darwindeck.simulation.state import GameState, Card
 from darwindeck.simulation.movegen import LegalMove, BettingMove, BettingAction
-from darwindeck.genome.schema import GameGenome, Location, PlayPhase, BettingPhase
+from darwindeck.genome.schema import GameGenome, Location, PlayPhase, BettingPhase, DiscardPhase
 
 
 # Unicode card symbols
@@ -95,20 +95,39 @@ class MovePresenter:
         lines: list[str] = []
 
         # Separate moves by type (genome may have multiple phase types)
-        card_moves = [m for m in moves if isinstance(m, LegalMove)]
-        betting_moves = [m for m in moves if isinstance(m, BettingMove)]
+        play_moves: list[LegalMove] = []
+        discard_moves: list[LegalMove] = []
+        betting_moves: list[BettingMove] = []
 
-        # Present card play options if any
-        if card_moves:
-            lines.append(self._present_card_play_indexed(card_moves, state, 0))
+        for m in moves:
+            if isinstance(m, BettingMove):
+                betting_moves.append(m)
+            elif isinstance(m, LegalMove):
+                # Check phase type to distinguish play vs discard
+                phase = genome.turn_structure.phases[m.phase_index]
+                if isinstance(phase, DiscardPhase):
+                    discard_moves.append(m)
+                else:
+                    play_moves.append(m)
+
+        offset = 0
+
+        # Present play options if any
+        if play_moves:
+            lines.append(self._present_card_moves_indexed(play_moves, state, offset, "Play"))
+            offset += len(play_moves)
+
+        # Present discard options if any
+        if discard_moves:
+            lines.append(self._present_card_moves_indexed(discard_moves, state, offset, "Discard"))
+            offset += len(discard_moves)
 
         # Present betting options if any
         if betting_moves:
-            # Adjust indices to account for card moves
-            lines.append(self._present_betting_indexed(betting_moves, state, len(card_moves)))
+            lines.append(self._present_betting_indexed(betting_moves, state, offset))
 
-        # Fallback if neither type found
-        if not card_moves and not betting_moves:
+        # Fallback if nothing found
+        if not play_moves and not discard_moves and not betting_moves:
             lines.append(self._present_generic(moves))
 
         lines.append("")
@@ -118,19 +137,26 @@ class MovePresenter:
 
     def _present_card_play(self, moves: list[LegalMove], state: GameState) -> str:
         """Present card play options."""
-        return self._present_card_play_indexed(moves, state, 0)
+        return self._present_card_moves_indexed(moves, state, 0, "Play")
 
     def _present_card_play_indexed(self, moves: list[LegalMove], state: GameState, offset: int) -> str:
         """Present card play options with index offset."""
+        return self._present_card_moves_indexed(moves, state, offset, "Play")
+
+    def _present_card_moves_indexed(self, moves: list[LegalMove], state: GameState, offset: int, label: str) -> str:
+        """Present card moves with index offset and custom label."""
         hand = state.players[state.active_player].hand
         options: list[str] = []
 
         for i, move in enumerate(moves):
-            if 0 <= move.card_index < len(hand):
+            if move.card_index == -1:
+                # Pass move
+                options.append(f"[{offset + i + 1}] Pass")
+            elif 0 <= move.card_index < len(hand):
                 card = hand[move.card_index]
                 options.append(f"[{offset + i + 1}] {format_card(card)}")
 
-        return "Play: " + "  ".join(options)
+        return f"{label}: " + "  ".join(options)
 
     def _present_betting(self, moves: list[BettingMove], state: GameState) -> str:
         """Present betting options."""

@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from enum import Enum
 from typing import List, Optional, Union
-from darwindeck.genome.schema import GameGenome, PlayPhase, Location, BettingPhase
+from darwindeck.genome.schema import GameGenome, PlayPhase, Location, BettingPhase, DiscardPhase
 from darwindeck.simulation.state import GameState, Card, PlayerState
 
 
@@ -86,6 +86,30 @@ def generate_legal_moves(state: GameState, genome: GameGenome) -> List[Union[Leg
                         target_loc=target
                     ))
 
+        elif isinstance(phase, DiscardPhase):
+            # DiscardPhase: discard cards from hand
+            target = phase.target
+            hand = state.players[current_player].hand
+
+            if len(hand) > 0:
+                # Generate moves to discard each card
+                for card_idx in range(len(hand)):
+                    # TODO: Evaluate matching_condition
+                    moves.append(LegalMove(
+                        phase_index=phase_idx,
+                        card_index=card_idx,
+                        target_loc=target
+                    ))
+
+            # If not mandatory and hand is empty (or we want to skip), allow pass
+            if not phase.mandatory:
+                # Pass move represented by card_index=-1
+                moves.append(LegalMove(
+                    phase_index=phase_idx,
+                    card_index=-1,
+                    target_loc=target
+                ))
+
     return moves
 
 
@@ -105,6 +129,12 @@ def apply_move(state: GameState, move: LegalMove, genome: GameGenome) -> GameSta
             # War-specific logic: resolve battle after both players play
             if move.target_loc == Location.TABLEAU and len(state.players) == 2:
                 state = resolve_war_battle(state)
+
+    elif isinstance(phase, DiscardPhase):
+        if move.card_index >= 0:
+            # Discard card from hand to target location
+            state = play_card(state, current_player, move.card_index, move.target_loc)
+        # card_index == -1 means pass (no discard)
 
     # Advance turn
     next_player = (state.active_player + 1) % len(state.players)

@@ -766,3 +766,187 @@ class TestMixedMovePresentation:
         # Betting indices (offset by 2)
         assert "[3]" in output  # Check
         assert "[4]" in output  # Bet
+
+
+class TestDiscardPhaseMovegen:
+    """Test DiscardPhase move generation."""
+
+    def _make_state(self, hand: tuple) -> "GameState":
+        from darwindeck.simulation.state import GameState
+        player = PlayerState(player_id=0, hand=hand, score=0)
+        return GameState(
+            players=(player,),
+            deck=(),
+            discard=(),
+            turn=1,
+            active_player=0,
+        )
+
+    def test_generates_discard_moves_for_each_card(self):
+        """DiscardPhase should generate a move for each card in hand."""
+        from darwindeck.simulation.movegen import generate_legal_moves, LegalMove
+        from darwindeck.genome.schema import (
+            GameGenome, SetupRules, TurnStructure, WinCondition, DiscardPhase, Location
+        )
+        from darwindeck.simulation.state import Card
+
+        hand = (
+            Card(rank=Rank.ACE, suit=Suit.SPADES),
+            Card(rank=Rank.KING, suit=Suit.HEARTS),
+            Card(rank=Rank.QUEEN, suit=Suit.DIAMONDS),
+        )
+        state = self._make_state(hand)
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="test_discard",
+            generation=0,
+            setup=SetupRules(cards_per_player=3),
+            turn_structure=TurnStructure(phases=[
+                DiscardPhase(target=Location.DISCARD, mandatory=True)
+            ]),
+            special_effects=[],
+            win_conditions=[WinCondition(type="empty_hand")],
+            scoring_rules=[],
+            player_count=1,
+        )
+
+        moves = generate_legal_moves(state, genome)
+
+        # Should have one move per card
+        assert len(moves) == 3
+        card_indices = [m.card_index for m in moves]
+        assert card_indices == [0, 1, 2]
+
+    def test_generates_pass_move_when_not_mandatory(self):
+        """Non-mandatory DiscardPhase should include pass option."""
+        from darwindeck.simulation.movegen import generate_legal_moves, LegalMove
+        from darwindeck.genome.schema import (
+            GameGenome, SetupRules, TurnStructure, WinCondition, DiscardPhase, Location
+        )
+        from darwindeck.simulation.state import Card
+
+        hand = (Card(rank=Rank.ACE, suit=Suit.SPADES),)
+        state = self._make_state(hand)
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="test_discard",
+            generation=0,
+            setup=SetupRules(cards_per_player=1),
+            turn_structure=TurnStructure(phases=[
+                DiscardPhase(target=Location.DISCARD, mandatory=False)
+            ]),
+            special_effects=[],
+            win_conditions=[WinCondition(type="empty_hand")],
+            scoring_rules=[],
+            player_count=1,
+        )
+
+        moves = generate_legal_moves(state, genome)
+
+        # Should have discard move + pass move
+        assert len(moves) == 2
+        card_indices = [m.card_index for m in moves]
+        assert 0 in card_indices  # Discard first card
+        assert -1 in card_indices  # Pass
+
+    def test_no_pass_when_mandatory(self):
+        """Mandatory DiscardPhase should not include pass option."""
+        from darwindeck.simulation.movegen import generate_legal_moves, LegalMove
+        from darwindeck.genome.schema import (
+            GameGenome, SetupRules, TurnStructure, WinCondition, DiscardPhase, Location
+        )
+        from darwindeck.simulation.state import Card
+
+        hand = (Card(rank=Rank.ACE, suit=Suit.SPADES),)
+        state = self._make_state(hand)
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="test_discard",
+            generation=0,
+            setup=SetupRules(cards_per_player=1),
+            turn_structure=TurnStructure(phases=[
+                DiscardPhase(target=Location.DISCARD, mandatory=True)
+            ]),
+            special_effects=[],
+            win_conditions=[WinCondition(type="empty_hand")],
+            scoring_rules=[],
+            player_count=1,
+        )
+
+        moves = generate_legal_moves(state, genome)
+
+        # Should only have discard move, no pass
+        assert len(moves) == 1
+        assert moves[0].card_index == 0
+
+    def test_apply_discard_move_removes_card(self):
+        """Applying discard move should remove card from hand."""
+        from darwindeck.simulation.movegen import generate_legal_moves, apply_move, LegalMove
+        from darwindeck.genome.schema import (
+            GameGenome, SetupRules, TurnStructure, WinCondition, DiscardPhase, Location
+        )
+        from darwindeck.simulation.state import Card
+
+        hand = (
+            Card(rank=Rank.ACE, suit=Suit.SPADES),
+            Card(rank=Rank.KING, suit=Suit.HEARTS),
+        )
+        state = self._make_state(hand)
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="test_discard",
+            generation=0,
+            setup=SetupRules(cards_per_player=2),
+            turn_structure=TurnStructure(phases=[
+                DiscardPhase(target=Location.DISCARD, mandatory=True)
+            ]),
+            special_effects=[],
+            win_conditions=[WinCondition(type="empty_hand")],
+            scoring_rules=[],
+            player_count=1,
+        )
+
+        move = LegalMove(phase_index=0, card_index=0, target_loc=Location.DISCARD)
+        new_state = apply_move(state, move, genome)
+
+        # Hand should have one less card
+        assert len(new_state.players[0].hand) == 1
+        # The Ace should be gone, King remains
+        assert new_state.players[0].hand[0].rank == Rank.KING
+        # Discard pile should have the Ace
+        assert len(new_state.discard) == 1
+        assert new_state.discard[0].rank == Rank.ACE
+
+    def test_apply_pass_move_no_change(self):
+        """Applying pass move should not change hand."""
+        from darwindeck.simulation.movegen import apply_move, LegalMove
+        from darwindeck.genome.schema import (
+            GameGenome, SetupRules, TurnStructure, WinCondition, DiscardPhase, Location
+        )
+        from darwindeck.simulation.state import Card
+
+        hand = (Card(rank=Rank.ACE, suit=Suit.SPADES),)
+        state = self._make_state(hand)
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="test_discard",
+            generation=0,
+            setup=SetupRules(cards_per_player=1),
+            turn_structure=TurnStructure(phases=[
+                DiscardPhase(target=Location.DISCARD, mandatory=False)
+            ]),
+            special_effects=[],
+            win_conditions=[WinCondition(type="empty_hand")],
+            scoring_rules=[],
+            player_count=1,
+        )
+
+        # Pass move
+        move = LegalMove(phase_index=0, card_index=-1, target_loc=Location.DISCARD)
+        new_state = apply_move(state, move, genome)
+
+        # Hand should be unchanged
+        assert len(new_state.players[0].hand) == 1
+        assert new_state.players[0].hand[0].rank == Rank.ACE
+        # Discard pile should be empty
+        assert len(new_state.discard) == 0

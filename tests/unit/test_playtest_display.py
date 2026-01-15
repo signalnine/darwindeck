@@ -6,7 +6,7 @@ from darwindeck.simulation.state import GameState, PlayerState, Card
 from darwindeck.simulation.movegen import LegalMove
 from darwindeck.genome.schema import (
     Rank, Suit, Location, GameGenome, SetupRules,
-    TurnStructure, WinCondition, PlayPhase
+    TurnStructure, WinCondition, PlayPhase, DiscardPhase
 )
 
 
@@ -140,3 +140,37 @@ class TestMovePresenter:
         output = presenter.present(moves, state, genome)
 
         assert "q" in output.lower() or "quit" in output.lower()
+
+    def test_presents_discard_moves(self):
+        """Presents discard moves with 'Discard:' label."""
+        presenter = MovePresenter()
+        state = make_state_with_hand([("7", "S"), ("K", "H")])
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="test_discard",
+            generation=1,
+            setup=SetupRules(cards_per_player=5),
+            turn_structure=TurnStructure(phases=[
+                DiscardPhase(target=Location.DISCARD, mandatory=False)
+            ]),
+            special_effects=[],
+            win_conditions=[WinCondition(type="empty_hand")],
+            scoring_rules=[],
+            max_turns=100,
+            min_turns=1,
+            player_count=2,
+        )
+        moves = [
+            LegalMove(phase_index=0, card_index=0, target_loc=Location.DISCARD),
+            LegalMove(phase_index=0, card_index=1, target_loc=Location.DISCARD),
+            LegalMove(phase_index=0, card_index=-1, target_loc=Location.DISCARD),  # Pass
+        ]
+
+        output = presenter.present(moves, state, genome)
+
+        assert "Discard:" in output
+        assert "[1]" in output
+        assert "[2]" in output
+        assert "[3]" in output and "Pass" in output
+        assert "7" in output
+        assert "K" in output
