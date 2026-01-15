@@ -20,8 +20,28 @@ from darwindeck.genome.schema import (
     EffectType,
     TargetSelector,
     Rank,
+    TableauMode,
+    SequenceDirection,
 )
 from darwindeck.genome.conditions import Condition, ConditionType, Operator, CompoundCondition, ConditionOrCompound
+
+# Bytecode format version
+BYTECODE_VERSION = 2
+
+# TableauMode encoding
+TABLEAU_MODE_MAP = {
+    TableauMode.NONE: 0,
+    TableauMode.WAR: 1,
+    TableauMode.MATCH_RANK: 2,
+    TableauMode.SEQUENCE: 3,
+}
+
+# SequenceDirection encoding
+SEQUENCE_DIRECTION_MAP = {
+    SequenceDirection.ASCENDING: 0,
+    SequenceDirection.DESCENDING: 1,
+    SequenceDirection.BOTH: 2,
+}
 
 
 class OpCode(IntEnum):
@@ -136,8 +156,22 @@ def compile_effects(effects: list) -> bytes:
 
 @dataclass
 class BytecodeHeader:
-    """Fixed-size header for bytecode blob."""
-    version: int  # 4 bytes
+    """Fixed-size header for bytecode blob.
+
+    Format (39 bytes total):
+    - Byte 0: bytecode version (single byte, currently 2)
+    - Bytes 1-4: legacy version field (4 bytes, for compatibility)
+    - Bytes 5-12: genome_id_hash (8 bytes)
+    - Bytes 13-16: player_count (4 bytes)
+    - Bytes 17-20: max_turns (4 bytes)
+    - Bytes 21-24: setup_offset (4 bytes)
+    - Bytes 25-28: turn_structure_offset (4 bytes)
+    - Bytes 29-32: win_conditions_offset (4 bytes)
+    - Bytes 33-36: scoring_offset (4 bytes)
+    - Byte 37: tableau_mode (1 byte)
+    - Byte 38: sequence_direction (1 byte)
+    """
+    version: int  # 4 bytes (legacy, kept for compatibility)
     genome_id_hash: int  # 8 bytes (hash of genome_id)
     player_count: int  # 4 bytes
     max_turns: int  # 4 bytes
@@ -145,12 +179,20 @@ class BytecodeHeader:
     turn_structure_offset: int  # 4 bytes
     win_conditions_offset: int  # 4 bytes
     scoring_offset: int  # 4 bytes
+    tableau_mode: int = 0  # 1 byte (TableauMode enum value)
+    sequence_direction: int = 0  # 1 byte (SequenceDirection enum value)
 
-    STRUCT_FORMAT = "!IQIIiiii"  # Big-endian, 36 bytes total
+    # Inner struct format (bytes 1-36): legacy version + core fields
+    INNER_STRUCT_FORMAT = "!IQIIiiii"  # 36 bytes
+
+    HEADER_SIZE = 39  # Total header size including version byte and tableau fields
 
     def to_bytes(self) -> bytes:
-        return struct.pack(
-            self.STRUCT_FORMAT,
+        # Byte 0: bytecode version
+        result = bytes([BYTECODE_VERSION])
+        # Bytes 1-36: legacy struct fields
+        result += struct.pack(
+            self.INNER_STRUCT_FORMAT,
             self.version,
             self.genome_id_hash,
             self.player_count,
@@ -160,23 +202,30 @@ class BytecodeHeader:
             self.win_conditions_offset,
             self.scoring_offset
         )
+        # Bytes 37-38: tableau_mode and sequence_direction
+        result += bytes([self.tableau_mode, self.sequence_direction])
+        return result
 
     @classmethod
     def from_bytes(cls, data: bytes) -> "BytecodeHeader":
-        unpacked = struct.unpack(cls.STRUCT_FORMAT, data[:36])
-        return cls(*unpacked)
+        # Skip byte 0 (bytecode version), parse bytes 1-36
+        unpacked = struct.unpack(cls.INNER_STRUCT_FORMAT, data[1:37])
+        # Parse bytes 37-38
+        tableau_mode = data[37] if len(data) > 37 else 0
+        sequence_direction = data[38] if len(data) > 38 else 0
+        return cls(*unpacked, tableau_mode=tableau_mode, sequence_direction=sequence_direction)
 
 
 class BytecodeCompiler:
     """Compiles GameGenome to bytecode."""
 
     def __init__(self):
-        self.offset = 36  # After header
+        self.offset = BytecodeHeader.HEADER_SIZE  # After header (39 bytes)
 
     def compile_genome(self, genome: GameGenome) -> bytes:
         """Convert genome to bytecode blob."""
         # Reset offset for each genome (instance is reused across compilations)
-        self.offset = 36  # After header
+        self.offset = BytecodeHeader.HEADER_SIZE  # After header (39 bytes)
 
         # Compile sections
         setup_offset = self.offset
@@ -199,6 +248,12 @@ class BytecodeCompiler:
         score_bytes = self._compile_scoring(genome.scoring_rules)
         self.offset += len(score_bytes)
 
+        # Encode tableau_mode and sequence_direction
+        tableau_mode = TABLEAU_MODE_MAP.get(genome.setup.tableau_mode, 0)
+        sequence_direction = SEQUENCE_DIRECTION_MAP.get(
+            genome.setup.sequence_direction, 0
+        ) if genome.setup.sequence_direction else 0
+
         # Create header
         header = BytecodeHeader(
             version=1,
@@ -208,7 +263,9 @@ class BytecodeCompiler:
             setup_offset=setup_offset,
             turn_structure_offset=turn_offset,
             win_conditions_offset=win_offset,
-            scoring_offset=score_offset
+            scoring_offset=score_offset,
+            tableau_mode=tableau_mode,
+            sequence_direction=sequence_direction,
         )
 
         # Combine all sections (effects come right after win conditions, before scoring)

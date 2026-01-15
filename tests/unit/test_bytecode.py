@@ -22,19 +22,26 @@ def test_header_serialization() -> None:
         genome_id_hash=12345678901234567890,
         player_count=2,
         max_turns=100,
-        setup_offset=36,
-        turn_structure_offset=44,
-        win_conditions_offset=100,
-        scoring_offset=120
+        setup_offset=39,  # Updated for new header size
+        turn_structure_offset=47,
+        win_conditions_offset=103,
+        scoring_offset=123,
+        tableau_mode=1,  # WAR
+        sequence_direction=0,  # ASCENDING
     )
 
     serialized = header.to_bytes()
-    assert len(serialized) == 36
+    assert len(serialized) == 39  # New header size
+
+    # First byte should be bytecode version 2
+    assert serialized[0] == 2
 
     deserialized = BytecodeHeader.from_bytes(serialized)
     assert deserialized.version == 1
     assert deserialized.player_count == 2
     assert deserialized.max_turns == 100
+    assert deserialized.tableau_mode == 1
+    assert deserialized.sequence_direction == 0
 
 
 def test_compile_war_genome() -> None:
@@ -195,3 +202,58 @@ def test_compile_genome_with_betting_phase() -> None:
     setup_bytes = bytecode[setup_start:setup_start + 12]
     _, _, starting_chips = struct.unpack("!iii", setup_bytes)
     assert starting_chips == 500
+
+
+def test_bytecode_version_header():
+    """Bytecode starts with version byte."""
+    from darwindeck.genome.schema import (
+        GameGenome, SetupRules, TurnStructure, WinCondition, TableauMode
+    )
+
+    genome = GameGenome(
+        schema_version="1.0",
+        genome_id="test",
+        generation=1,
+        setup=SetupRules(cards_per_player=7, tableau_mode=TableauMode.WAR),
+        turn_structure=TurnStructure(phases=[]),
+        special_effects=[],
+        win_conditions=[WinCondition(type="empty_hand")],
+        scoring_rules=[],
+    )
+
+    compiler = BytecodeCompiler()
+    bytecode = compiler.compile_genome(genome)
+
+    # First byte should be version 2
+    assert bytecode[0] == 2
+
+
+def test_bytecode_tableau_mode_encoding():
+    """Bytecode encodes tableau_mode at correct offset."""
+    from darwindeck.genome.schema import (
+        GameGenome, SetupRules, TurnStructure, WinCondition,
+        TableauMode, SequenceDirection
+    )
+
+    genome = GameGenome(
+        schema_version="1.0",
+        genome_id="test",
+        generation=1,
+        setup=SetupRules(
+            cards_per_player=7,
+            tableau_mode=TableauMode.SEQUENCE,
+            sequence_direction=SequenceDirection.DESCENDING
+        ),
+        turn_structure=TurnStructure(phases=[]),
+        special_effects=[],
+        win_conditions=[WinCondition(type="empty_hand")],
+        scoring_rules=[],
+    )
+
+    compiler = BytecodeCompiler()
+    bytecode = compiler.compile_genome(genome)
+
+    # Offset 37: tableau_mode (3=SEQUENCE)
+    # Offset 38: sequence_direction (1=DESCENDING)
+    assert bytecode[37] == 3  # SEQUENCE
+    assert bytecode[38] == 1  # DESCENDING
