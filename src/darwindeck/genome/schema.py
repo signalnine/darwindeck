@@ -113,6 +113,15 @@ class CardScoringRule:
     trigger: ScoringTrigger
 
 
+class HandEvaluationMethod(Enum):
+    """How to evaluate and compare hands."""
+    NONE = "none"
+    HIGH_CARD = "high_card"          # Compare highest cards
+    POINT_TOTAL = "point_total"      # Sum card values (Blackjack)
+    PATTERN_MATCH = "pattern_match"  # Match patterns in priority order
+    CARD_COUNT = "card_count"        # Most cards wins (War)
+
+
 class TableauMode(Enum):
     """How cards on the tableau interact."""
     NONE = "none"              # Cards accumulate, no interaction

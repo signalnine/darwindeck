@@ -88,3 +88,14 @@ class TestCardScoringRule:
         )
         with pytest.raises(AttributeError):
             rule.points = 5
+
+
+class TestHandEvaluationMethod:
+    def test_hand_evaluation_method_values(self):
+        """HandEvaluationMethod enum has expected values."""
+        from darwindeck.genome.schema import HandEvaluationMethod
+        assert HandEvaluationMethod.NONE.value == "none"
+        assert HandEvaluationMethod.HIGH_CARD.value == "high_card"
+        assert HandEvaluationMethod.POINT_TOTAL.value == "point_total"
+        assert HandEvaluationMethod.PATTERN_MATCH.value == "pattern_match"
+        assert HandEvaluationMethod.CARD_COUNT.value == "card_count"
