@@ -98,8 +98,8 @@ def main():
                         help="Random seed for reproducibility")
 
     # Filtering
-    parser.add_argument("--filter-unplayable", action="store_true",
-                        help="Filter out genomes that fail simulation (>50% error rate)")
+    parser.add_argument("--no-filter-unplayable", action="store_true",
+                        help="Include genomes that fail simulation (by default, >50% error rate genomes are filtered)")
 
     # Execution
     parser.add_argument("--dry-run", action="store_true",
@@ -154,7 +154,7 @@ def main():
         print(f"Output directory: {args.output_dir}")
         print(f"Random seed: {args.seed}")
         print(f"Fitness style: {args.style}")
-        print(f"Filter unplayable: {args.filter_unplayable}")
+        print(f"Filter unplayable: {not args.no_filter_unplayable}")
         print(f"Parallel: {args.parallel} ({num_workers} workers)")
 
         # Load genomes to show count
@@ -181,8 +181,8 @@ def main():
     known_genomes = get_seed_genomes()
     print(f"   Loaded {len(known_genomes)} known games")
 
-    # 1b. Filter unplayable genomes if requested
-    if args.filter_unplayable:
+    # 1b. Filter unplayable genomes (default behavior)
+    if not args.no_filter_unplayable:
         print("\n1b. Filtering unplayable genomes...")
         simulator = GoSimulator(seed=args.seed)
         original_count = len(known_genomes)
