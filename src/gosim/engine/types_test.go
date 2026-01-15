@@ -103,3 +103,23 @@ func TestGameStateClonePreservesEffectFields(t *testing.T) {
 		t.Errorf("Clone SkipCount should be 2, got %d", clone.SkipCount)
 	}
 }
+
+func TestGameStateHasTableauMode(t *testing.T) {
+	state := NewGameState(2)
+
+	// Default should be 0 (NONE)
+	if state.TableauMode != 0 {
+		t.Errorf("Expected TableauMode 0, got %d", state.TableauMode)
+	}
+
+	// Should be settable
+	state.TableauMode = 1 // WAR
+	if state.TableauMode != 1 {
+		t.Errorf("Expected TableauMode 1, got %d", state.TableauMode)
+	}
+
+	state.SequenceDirection = 2 // BOTH
+	if state.SequenceDirection != 2 {
+		t.Errorf("Expected SequenceDirection 2, got %d", state.SequenceDirection)
+	}
+}

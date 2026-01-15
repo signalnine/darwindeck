@@ -152,7 +152,7 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 	// Check if this is a capture-mode game (Scopa-style)
 	for _, wc := range genome.WinConditions {
 		if wc.WinType == 7 { // most_captured
-			state.CaptureMode = true
+			state.TableauMode = 2 // MATCH_RANK for Scopa-style capture
 			break
 		}
 	}
@@ -443,7 +443,7 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 	// Check if this is a capture-mode game (Scopa-style)
 	for _, wc := range genome.WinConditions {
 		if wc.WinType == 7 { // most_captured
-			state.CaptureMode = true
+			state.TableauMode = 2 // MATCH_RANK for Scopa-style capture
 			break
 		}
 	}

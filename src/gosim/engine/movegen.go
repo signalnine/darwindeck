@@ -413,10 +413,10 @@ func ApplyMove(state *GameState, move *LegalMove, genome *Genome) {
 			state.PlayCard(currentPlayer, move.CardIndex, move.TargetLoc)
 
 			if move.TargetLoc == LocationTableau {
-				if state.CaptureMode {
+				if state.TableauMode == 2 { // MATCH_RANK (Scopa-style)
 					// Scopa capture mechanics: check for matching rank
 					resolveScopaCapture(state, currentPlayer, playedCard)
-				} else if state.NumPlayers == 2 {
+				} else if state.TableauMode == 1 || state.NumPlayers == 2 { // WAR mode or default 2-player
 					// War-specific logic: compare cards
 					resolveWarBattle(state)
 				}
