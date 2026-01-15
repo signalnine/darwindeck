@@ -644,6 +644,8 @@ def resolve_challenge(state: GameState, challenger_id: int) -> GameState:
 
 def check_win_conditions(state: GameState, genome: GameGenome) -> Optional[int]:
     """Check if any player has won. Returns winner ID or None."""
+    num_players = len(state.players)
+
     for wc in genome.win_conditions:
         if wc.type == "empty_hand":
             for player_id, player in enumerate(state.players):
@@ -662,10 +664,187 @@ def check_win_conditions(state: GameState, genome: GameGenome) -> Optional[int]:
                         return player_id
 
         elif wc.type == "high_score":
-            # TODO: Only check at end of game
-            pass
+            # Highest score wins when anyone reaches threshold
+            threshold = wc.threshold if wc.threshold else 0
+            triggered = any(p.score >= threshold for p in state.players)
+            if triggered:
+                max_score = -1
+                winner = None
+                for player_id, player in enumerate(state.players):
+                    if player.score > max_score:
+                        max_score = player.score
+                        winner = player_id
+                if winner is not None:
+                    return winner
+
+        elif wc.type == "low_score":
+            # Lowest score wins when anyone reaches threshold (Hearts-style)
+            threshold = wc.threshold if wc.threshold else 0
+            triggered = any(p.score >= threshold for p in state.players)
+            if triggered:
+                min_score = 999999
+                winner = None
+                for player_id, player in enumerate(state.players):
+                    if player.score < min_score:
+                        min_score = player.score
+                        winner = player_id
+                if winner is not None:
+                    return winner
+
+        elif wc.type == "all_hands_empty":
+            # Trick-taking: hand ends when all hands empty, lowest score wins
+            all_empty = all(len(p.hand) == 0 for p in state.players)
+            if all_empty:
+                min_score = 999999
+                winner = None
+                for player_id, player in enumerate(state.players):
+                    if player.score < min_score:
+                        min_score = player.score
+                        winner = player_id
+                if winner is not None:
+                    return winner
+
+        elif wc.type == "best_hand":
+            # Poker: best poker hand wins
+            # Only trigger after some turns (draw phase complete)
+            all_have_five = all(len(p.hand) == 5 for p in state.players)
+            if all_have_five and state.turn >= num_players * 2:
+                return find_best_poker_winner(state)
+
+        elif wc.type == "most_captured":
+            # Scopa-style: deck empty + hands empty, highest score wins
+            deck_empty = len(state.deck) == 0
+            hands_empty = all(len(p.hand) == 0 for p in state.players)
+            if deck_empty and hands_empty:
+                max_score = -1
+                winner = None
+                for player_id, player in enumerate(state.players):
+                    if player.score > max_score:
+                        max_score = player.score
+                        winner = player_id
+                if winner is not None:
+                    return winner
 
     return None
+
+
+# Poker hand evaluation for best_hand win condition
+
+class PokerHandRank:
+    """Poker hand rankings (higher is better)."""
+    HIGH_CARD = 0
+    ONE_PAIR = 1
+    TWO_PAIR = 2
+    THREE_OF_A_KIND = 3
+    STRAIGHT = 4
+    FLUSH = 5
+    FULL_HOUSE = 6
+    FOUR_OF_A_KIND = 7
+    STRAIGHT_FLUSH = 8
+
+
+def evaluate_poker_hand(cards: tuple[Card, ...]) -> tuple[int, list[int]]:
+    """Evaluate a 5-card poker hand.
+
+    Returns (rank, kickers) where rank is PokerHandRank and kickers
+    are values for tiebreaking (highest first).
+    """
+    if len(cards) != 5:
+        return (PokerHandRank.HIGH_CARD, [])
+
+    # Sort by rank descending
+    sorted_cards = sorted(cards, key=lambda c: RANK_VALUES[c.rank.value], reverse=True)
+    ranks = [RANK_VALUES[c.rank.value] for c in sorted_cards]
+    suits = [c.suit.value for c in sorted_cards]
+
+    # Check flush
+    is_flush = len(set(suits)) == 1
+
+    # Check straight
+    is_straight = False
+    if ranks == [ranks[0] - i for i in range(5)]:
+        is_straight = True
+    # Wheel straight: A-2-3-4-5
+    elif ranks == [14, 5, 4, 3, 2]:
+        is_straight = True
+        ranks = [5, 4, 3, 2, 1]  # Treat ace as 1 for wheel
+
+    # Count ranks
+    rank_counts: dict[int, int] = {}
+    for r in ranks:
+        rank_counts[r] = rank_counts.get(r, 0) + 1
+
+    counts = sorted(rank_counts.values(), reverse=True)
+    # Sort by count then by rank value
+    count_rank_pairs = sorted(
+        [(count, rank) for rank, count in rank_counts.items()],
+        key=lambda x: (x[0], x[1]),
+        reverse=True
+    )
+    kickers = [rank for _, rank in count_rank_pairs]
+
+    # Determine hand rank
+    if is_straight and is_flush:
+        return (PokerHandRank.STRAIGHT_FLUSH, [max(ranks)])
+    if counts == [4, 1]:
+        return (PokerHandRank.FOUR_OF_A_KIND, kickers)
+    if counts == [3, 2]:
+        return (PokerHandRank.FULL_HOUSE, kickers)
+    if is_flush:
+        return (PokerHandRank.FLUSH, ranks)
+    if is_straight:
+        return (PokerHandRank.STRAIGHT, [max(ranks)])
+    if counts == [3, 1, 1]:
+        return (PokerHandRank.THREE_OF_A_KIND, kickers)
+    if counts == [2, 2, 1]:
+        return (PokerHandRank.TWO_PAIR, kickers)
+    if counts == [2, 1, 1, 1]:
+        return (PokerHandRank.ONE_PAIR, kickers)
+
+    return (PokerHandRank.HIGH_CARD, ranks)
+
+
+def compare_poker_hands(hand1: tuple[int, list[int]], hand2: tuple[int, list[int]]) -> int:
+    """Compare two poker hands. Returns 1 if hand1 wins, -1 if hand2 wins, 0 for tie."""
+    rank1, kickers1 = hand1
+    rank2, kickers2 = hand2
+
+    if rank1 > rank2:
+        return 1
+    if rank1 < rank2:
+        return -1
+
+    # Same rank, compare kickers
+    for k1, k2 in zip(kickers1, kickers2):
+        if k1 > k2:
+            return 1
+        if k1 < k2:
+            return -1
+
+    return 0
+
+
+def find_best_poker_winner(state: GameState) -> Optional[int]:
+    """Find player with best poker hand. Returns player ID or None."""
+    best_player = None
+    best_hand: Optional[tuple[int, list[int]]] = None
+
+    for player_id, player in enumerate(state.players):
+        if len(player.hand) != 5:
+            continue
+
+        poker_hand = evaluate_poker_hand(player.hand)
+
+        if best_player is None:
+            best_player = player_id
+            best_hand = poker_hand
+        else:
+            cmp = compare_poker_hands(poker_hand, best_hand)  # type: ignore
+            if cmp > 0:
+                best_player = player_id
+                best_hand = poker_hand
+
+    return best_player
 
 
 # Pattern matching functions for set collection games

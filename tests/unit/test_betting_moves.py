@@ -1252,3 +1252,306 @@ class TestClaimPhaseMovegen:
         card_indices = [m.card_index for m in moves]
         assert MOVE_CHALLENGE in card_indices
         assert MOVE_CLAIM_PASS in card_indices
+
+
+class TestWinConditions:
+    """Test win condition checking."""
+
+    def _make_state(self, hands, scores=None, deck=None):
+        """Helper to create game state."""
+        from darwindeck.simulation.state import GameState, PlayerState, Card
+        from darwindeck.genome.schema import Rank, Suit
+
+        rank_map = {"A": Rank.ACE, "2": Rank.TWO, "3": Rank.THREE, "4": Rank.FOUR,
+                    "5": Rank.FIVE, "6": Rank.SIX, "7": Rank.SEVEN, "8": Rank.EIGHT,
+                    "9": Rank.NINE, "T": Rank.TEN, "J": Rank.JACK, "Q": Rank.QUEEN, "K": Rank.KING}
+        suit_map = {"S": Suit.SPADES, "H": Suit.HEARTS, "D": Suit.DIAMONDS, "C": Suit.CLUBS}
+
+        scores = scores or [0] * len(hands)
+        players = tuple(
+            PlayerState(
+                player_id=i,
+                hand=tuple(Card(rank=rank_map[r], suit=suit_map[s]) for r, s in hand),
+                score=scores[i],
+            )
+            for i, hand in enumerate(hands)
+        )
+
+        deck_cards = ()
+        if deck:
+            deck_cards = tuple(Card(rank=rank_map[r], suit=suit_map[s]) for r, s in deck)
+
+        return GameState(
+            players=players,
+            deck=deck_cards,
+            discard=(),
+            turn=5,
+            active_player=0,
+        )
+
+    def test_high_score_triggers_at_threshold(self):
+        """High score wins when threshold is reached."""
+        from darwindeck.simulation.movegen import check_win_conditions
+        from darwindeck.genome.schema import GameGenome, SetupRules, TurnStructure, WinCondition
+
+        state = self._make_state([[], []], scores=[80, 100])
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="test",
+            generation=0,
+            setup=SetupRules(cards_per_player=0),
+            turn_structure=TurnStructure(phases=[]),
+            special_effects=[],
+            win_conditions=[WinCondition(type="high_score", threshold=100)],
+            scoring_rules=[],
+            player_count=2,
+        )
+
+        winner = check_win_conditions(state, genome)
+        assert winner == 1  # Player 1 has higher score
+
+    def test_high_score_highest_wins_not_trigger(self):
+        """When threshold triggered, highest score wins (not the one who triggered)."""
+        from darwindeck.simulation.movegen import check_win_conditions
+        from darwindeck.genome.schema import GameGenome, SetupRules, TurnStructure, WinCondition
+
+        state = self._make_state([[], []], scores=[120, 100])  # P0 higher, P1 triggered
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="test",
+            generation=0,
+            setup=SetupRules(cards_per_player=0),
+            turn_structure=TurnStructure(phases=[]),
+            special_effects=[],
+            win_conditions=[WinCondition(type="high_score", threshold=100)],
+            scoring_rules=[],
+            player_count=2,
+        )
+
+        winner = check_win_conditions(state, genome)
+        assert winner == 0  # Player 0 has higher score
+
+    def test_low_score_triggers_at_threshold(self):
+        """Low score wins when threshold is reached (Hearts-style)."""
+        from darwindeck.simulation.movegen import check_win_conditions
+        from darwindeck.genome.schema import GameGenome, SetupRules, TurnStructure, WinCondition
+
+        state = self._make_state([[], []], scores=[50, 100])
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="test",
+            generation=0,
+            setup=SetupRules(cards_per_player=0),
+            turn_structure=TurnStructure(phases=[]),
+            special_effects=[],
+            win_conditions=[WinCondition(type="low_score", threshold=100)],
+            scoring_rules=[],
+            player_count=2,
+        )
+
+        winner = check_win_conditions(state, genome)
+        assert winner == 0  # Player 0 has lower score
+
+    def test_all_hands_empty_lowest_score_wins(self):
+        """All hands empty: lowest score wins (trick-taking)."""
+        from darwindeck.simulation.movegen import check_win_conditions
+        from darwindeck.genome.schema import GameGenome, SetupRules, TurnStructure, WinCondition
+
+        state = self._make_state([[], []], scores=[30, 10])  # Both hands empty
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="test",
+            generation=0,
+            setup=SetupRules(cards_per_player=0),
+            turn_structure=TurnStructure(phases=[]),
+            special_effects=[],
+            win_conditions=[WinCondition(type="all_hands_empty")],
+            scoring_rules=[],
+            player_count=2,
+        )
+
+        winner = check_win_conditions(state, genome)
+        assert winner == 1  # Player 1 has lower score
+
+    def test_all_hands_empty_no_trigger_if_cards_remain(self):
+        """All hands empty: doesn't trigger if any player has cards."""
+        from darwindeck.simulation.movegen import check_win_conditions
+        from darwindeck.genome.schema import GameGenome, SetupRules, TurnStructure, WinCondition
+
+        state = self._make_state([[("A", "S")], []], scores=[30, 10])  # P0 has cards
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="test",
+            generation=0,
+            setup=SetupRules(cards_per_player=0),
+            turn_structure=TurnStructure(phases=[]),
+            special_effects=[],
+            win_conditions=[WinCondition(type="all_hands_empty")],
+            scoring_rules=[],
+            player_count=2,
+        )
+
+        winner = check_win_conditions(state, genome)
+        assert winner is None  # Not triggered
+
+    def test_most_captured_triggers_when_deck_and_hands_empty(self):
+        """Most captured: triggers when deck empty and hands empty."""
+        from darwindeck.simulation.movegen import check_win_conditions
+        from darwindeck.genome.schema import GameGenome, SetupRules, TurnStructure, WinCondition
+
+        state = self._make_state([[], []], scores=[20, 32], deck=[])  # Empty deck and hands
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="test",
+            generation=0,
+            setup=SetupRules(cards_per_player=0),
+            turn_structure=TurnStructure(phases=[]),
+            special_effects=[],
+            win_conditions=[WinCondition(type="most_captured")],
+            scoring_rules=[],
+            player_count=2,
+        )
+
+        winner = check_win_conditions(state, genome)
+        assert winner == 1  # Player 1 has higher score (more captured)
+
+    def test_most_captured_no_trigger_if_deck_has_cards(self):
+        """Most captured: doesn't trigger if deck still has cards."""
+        from darwindeck.simulation.movegen import check_win_conditions
+        from darwindeck.genome.schema import GameGenome, SetupRules, TurnStructure, WinCondition
+
+        state = self._make_state([[], []], scores=[20, 32], deck=[("A", "S")])
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="test",
+            generation=0,
+            setup=SetupRules(cards_per_player=0),
+            turn_structure=TurnStructure(phases=[]),
+            special_effects=[],
+            win_conditions=[WinCondition(type="most_captured")],
+            scoring_rules=[],
+            player_count=2,
+        )
+
+        winner = check_win_conditions(state, genome)
+        assert winner is None  # Not triggered
+
+
+class TestPokerHandEvaluation:
+    """Test poker hand evaluation for best_hand win condition."""
+
+    def _make_hand(self, cards_str):
+        """Helper to create a poker hand from string like 'AS KS QS JS TS'."""
+        from darwindeck.simulation.state import Card
+        from darwindeck.genome.schema import Rank, Suit
+
+        rank_map = {"A": Rank.ACE, "2": Rank.TWO, "3": Rank.THREE, "4": Rank.FOUR,
+                    "5": Rank.FIVE, "6": Rank.SIX, "7": Rank.SEVEN, "8": Rank.EIGHT,
+                    "9": Rank.NINE, "T": Rank.TEN, "J": Rank.JACK, "Q": Rank.QUEEN, "K": Rank.KING}
+        suit_map = {"S": Suit.SPADES, "H": Suit.HEARTS, "D": Suit.DIAMONDS, "C": Suit.CLUBS}
+
+        cards = []
+        for card_str in cards_str.split():
+            rank = rank_map[card_str[0]]
+            suit = suit_map[card_str[1]]
+            cards.append(Card(rank=rank, suit=suit))
+        return tuple(cards)
+
+    def test_straight_flush_beats_four_of_a_kind(self):
+        """Straight flush should beat four of a kind."""
+        from darwindeck.simulation.movegen import evaluate_poker_hand, compare_poker_hands, PokerHandRank
+
+        straight_flush = self._make_hand("AS KS QS JS TS")  # Royal flush
+        four_kind = self._make_hand("AH AC AD AS 2S")
+
+        sf_eval = evaluate_poker_hand(straight_flush)
+        fk_eval = evaluate_poker_hand(four_kind)
+
+        assert sf_eval[0] == PokerHandRank.STRAIGHT_FLUSH
+        assert fk_eval[0] == PokerHandRank.FOUR_OF_A_KIND
+        assert compare_poker_hands(sf_eval, fk_eval) == 1
+
+    def test_full_house_beats_flush(self):
+        """Full house should beat flush."""
+        from darwindeck.simulation.movegen import evaluate_poker_hand, compare_poker_hands, PokerHandRank
+
+        full_house = self._make_hand("AH AC AD KS KH")
+        flush = self._make_hand("AS KS QS JS 9S")
+
+        fh_eval = evaluate_poker_hand(full_house)
+        fl_eval = evaluate_poker_hand(flush)
+
+        assert fh_eval[0] == PokerHandRank.FULL_HOUSE
+        assert fl_eval[0] == PokerHandRank.FLUSH
+        assert compare_poker_hands(fh_eval, fl_eval) == 1
+
+    def test_pair_beats_high_card(self):
+        """Pair should beat high card."""
+        from darwindeck.simulation.movegen import evaluate_poker_hand, compare_poker_hands, PokerHandRank
+
+        pair = self._make_hand("AH AC KS QS JS")
+        high_card = self._make_hand("AS KH QD JC 9S")
+
+        pair_eval = evaluate_poker_hand(pair)
+        hc_eval = evaluate_poker_hand(high_card)
+
+        assert pair_eval[0] == PokerHandRank.ONE_PAIR
+        assert hc_eval[0] == PokerHandRank.HIGH_CARD
+        assert compare_poker_hands(pair_eval, hc_eval) == 1
+
+    def test_higher_pair_wins(self):
+        """Higher pair should beat lower pair."""
+        from darwindeck.simulation.movegen import evaluate_poker_hand, compare_poker_hands
+
+        high_pair = self._make_hand("AH AC KS QS JS")
+        low_pair = self._make_hand("KH KC QS JS TS")
+
+        hp_eval = evaluate_poker_hand(high_pair)
+        lp_eval = evaluate_poker_hand(low_pair)
+
+        assert compare_poker_hands(hp_eval, lp_eval) == 1
+
+    def test_wheel_straight_recognized(self):
+        """A-2-3-4-5 wheel straight should be recognized."""
+        from darwindeck.simulation.movegen import evaluate_poker_hand, PokerHandRank
+
+        wheel = self._make_hand("AS 2H 3D 4C 5S")
+        eval_result = evaluate_poker_hand(wheel)
+
+        assert eval_result[0] == PokerHandRank.STRAIGHT
+
+    def test_best_hand_win_condition(self):
+        """Best hand win condition finds player with best poker hand."""
+        from darwindeck.simulation.movegen import check_win_conditions
+        from darwindeck.simulation.state import GameState, PlayerState, Card
+        from darwindeck.genome.schema import GameGenome, SetupRules, TurnStructure, WinCondition, Rank, Suit
+
+        # Player 0: pair of aces, Player 1: full house
+        p0_hand = self._make_hand("AH AC KS QS JS")
+        p1_hand = self._make_hand("KH KC KD QS QH")
+
+        state = GameState(
+            players=(
+                PlayerState(player_id=0, hand=p0_hand, score=0),
+                PlayerState(player_id=1, hand=p1_hand, score=0),
+            ),
+            deck=(),
+            discard=(),
+            turn=10,  # Enough turns for trigger
+            active_player=0,
+        )
+
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="test",
+            generation=0,
+            setup=SetupRules(cards_per_player=5),
+            turn_structure=TurnStructure(phases=[]),
+            special_effects=[],
+            win_conditions=[WinCondition(type="best_hand")],
+            scoring_rules=[],
+            player_count=2,
+        )
+
+        winner = check_win_conditions(state, genome)
+        assert winner == 1  # Player 1 has full house, beats pair
