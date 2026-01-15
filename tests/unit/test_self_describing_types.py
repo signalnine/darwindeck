@@ -43,3 +43,48 @@ class TestCardCondition:
         cond = CardCondition(suit=Suit.HEARTS)
         with pytest.raises(AttributeError):
             cond.suit = Suit.CLUBS
+
+
+class TestCardScoringRule:
+    def test_hearts_scoring_rule(self):
+        """CardScoringRule can express Hearts 1-point-per-heart."""
+        from darwindeck.genome.schema import CardScoringRule, CardCondition
+        rule = CardScoringRule(
+            condition=CardCondition(suit=Suit.HEARTS),
+            points=1,
+            trigger=ScoringTrigger.TRICK_WIN
+        )
+        assert rule.points == 1
+        assert rule.trigger == ScoringTrigger.TRICK_WIN
+        assert rule.condition.suit == Suit.HEARTS
+
+    def test_queen_of_spades_scoring(self):
+        """CardScoringRule can express Queen of Spades 13 points."""
+        from darwindeck.genome.schema import CardScoringRule, CardCondition
+        rule = CardScoringRule(
+            condition=CardCondition(suit=Suit.SPADES, rank=Rank.QUEEN),
+            points=13,
+            trigger=ScoringTrigger.TRICK_WIN
+        )
+        assert rule.points == 13
+
+    def test_negative_points(self):
+        """CardScoringRule can have negative points."""
+        from darwindeck.genome.schema import CardScoringRule, CardCondition
+        rule = CardScoringRule(
+            condition=CardCondition(rank=Rank.ACE),
+            points=-10,
+            trigger=ScoringTrigger.HAND_END
+        )
+        assert rule.points == -10
+
+    def test_card_scoring_rule_frozen(self):
+        """CardScoringRule is immutable."""
+        from darwindeck.genome.schema import CardScoringRule, CardCondition
+        rule = CardScoringRule(
+            condition=CardCondition(suit=Suit.HEARTS),
+            points=1,
+            trigger=ScoringTrigger.TRICK_WIN
+        )
+        with pytest.raises(AttributeError):
+            rule.points = 5

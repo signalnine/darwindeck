@@ -105,6 +105,14 @@ class CardCondition:
     rank: Optional[Rank] = None
 
 
+@dataclass(frozen=True)
+class CardScoringRule:
+    """Score points when a card meets a condition."""
+    condition: CardCondition
+    points: int
+    trigger: ScoringTrigger
+
+
 class TableauMode(Enum):
     """How cards on the tableau interact."""
     NONE = "none"              # Cards accumulate, no interaction
