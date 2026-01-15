@@ -1,0 +1,93 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "SageTest",
+  "generation": 72,
+  "setup": {
+    "cards_per_player": 25,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 0,
+    "starting_chips": 5108
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": null,
+        "min_cards": 1,
+        "max_cards": 1,
+        "mandatory": true
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": null,
+        "min_cards": 1,
+        "max_cards": 1,
+        "mandatory": true
+      },
+      {
+        "type": "DiscardPhase",
+        "target": "DISCARD",
+        "count": 1,
+        "mandatory": true
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": null,
+        "min_cards": 1,
+        "max_cards": 1,
+        "mandatory": true
+      }
+    ],
+    "is_trick_based": false,
+    "tricks_per_hand": null
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "capture_all",
+      "threshold": null
+    },
+    {
+      "type": "empty_hand",
+      "threshold": null
+    },
+    {
+      "type": "empty_hand",
+      "threshold": null
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 1000,
+  "min_turns": 10,
+  "player_count": 2,
+  "fitness": 0.8737447622494637,
+  "fitness_rank": 6,
+  "fitness_metrics": {
+    "decision_density": 0.944,
+    "comeback_potential": 0.98,
+    "tension_curve": 1.0,
+    "interaction_frequency": 0.9796857948344853,
+    "rules_complexity": 0.7228676820334182,
+    "session_length": 0.5150518572771992,
+    "skill_vs_luck": 0.844,
+    "bluffing_depth": 0.040887894488930765,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "skill_evaluation": {
+    "greedy_win_rate": 0.7,
+    "greedy_wins_as_p0": 20,
+    "greedy_wins_as_p1": 50,
+    "mcts_win_rate": 0.88,
+    "mcts_wins_as_p0": 46,
+    "mcts_wins_as_p1": 42,
+    "skill_score": 0.79,
+    "first_player_advantage": -0.26,
+    "total_games": 200,
+    "timed_out": false
+  },
+  "skill_rank": 6
+}

@@ -528,3 +528,42 @@ class TestDisplayBetting:
 
         assert "500" in output  # Chips shown
         assert "150" in output  # Pot shown
+
+    def test_presenter_shows_betting_options(self):
+        """MovePresenter should display betting actions by name."""
+        from darwindeck.simulation.state import GameState
+        from darwindeck.simulation.movegen import BettingMove, BettingAction
+        from darwindeck.genome.schema import GameGenome, SetupRules, TurnStructure, BettingPhase
+        from darwindeck.playtest.display import MovePresenter
+
+        player = PlayerState(player_id=0, hand=(), score=0, chips=500)
+        state = GameState(
+            players=(player,),
+            deck=(),
+            discard=(),
+            turn=1,
+            active_player=0,
+        )
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="test",
+            generation=0,
+            setup=SetupRules(cards_per_player=2, starting_chips=500),
+            turn_structure=TurnStructure(phases=(BettingPhase(min_bet=10, max_raises=3),)),
+            special_effects=[],
+            win_conditions=(),
+            scoring_rules=(),
+            player_count=1,
+        )
+        moves = [
+            BettingMove(action=BettingAction.CHECK, phase_index=0),
+            BettingMove(action=BettingAction.BET, phase_index=0),
+        ]
+        presenter = MovePresenter()
+
+        output = presenter.present(moves, state, genome)
+
+        assert "Check" in output
+        assert "Bet" in output
+        assert "[1]" in output
+        assert "[2]" in output

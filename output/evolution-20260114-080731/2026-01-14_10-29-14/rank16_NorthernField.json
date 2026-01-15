@@ -1,0 +1,67 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "NorthernField",
+  "generation": 74,
+  "setup": {
+    "cards_per_player": 25,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 0,
+    "starting_chips": 5108
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": null,
+        "min_cards": 1,
+        "max_cards": 1,
+        "mandatory": true
+      }
+    ],
+    "is_trick_based": false,
+    "tricks_per_hand": null
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "capture_all",
+      "threshold": null
+    },
+    {
+      "type": "empty_hand",
+      "threshold": null
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 2000,
+  "min_turns": 10,
+  "player_count": 2,
+  "fitness": 0.8625630012042474,
+  "fitness_rank": 16,
+  "fitness_metrics": {
+    "decision_density": 0.944,
+    "comeback_potential": 0.94,
+    "tension_curve": 1.0,
+    "interaction_frequency": 0.9792317424064308,
+    "rules_complexity": 0.828332372020024,
+    "session_length": 0.5050444426359953,
+    "skill_vs_luck": 0.7194999999999999,
+    "bluffing_depth": 0.04114092280632592,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "skill_evaluation": {
+    "greedy_win_rate": 0.4,
+    "greedy_wins_as_p0": 19,
+    "greedy_wins_as_p1": 21,
+    "mcts_win_rate": 0.52,
+    "mcts_wins_as_p0": 26,
+    "mcts_wins_as_p1": 0,
+    "skill_score": 0.46,
+    "first_player_advantage": 0.030000000000000027,
+    "total_games": 150,
+    "timed_out": true
+  },
+  "skill_rank": 16
+}

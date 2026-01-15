@@ -1,0 +1,52 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "SouthernChallenge",
+  "generation": 6,
+  "setup": {
+    "cards_per_player": 13,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 0,
+    "starting_chips": 487
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "BettingPhase",
+        "min_bet": 5,
+        "max_raises": 4
+      },
+      {
+        "type": "BettingPhase",
+        "min_bet": 10,
+        "max_raises": 2
+      }
+    ],
+    "is_trick_based": false,
+    "tricks_per_hand": null
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "capture_all",
+      "threshold": null
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 1000,
+  "min_turns": 10,
+  "player_count": 4,
+  "fitness": 0.16269333383258244,
+  "fitness_rank": 6,
+  "fitness_metrics": {
+    "decision_density": 0.16666666666666666,
+    "comeback_potential": 0.0,
+    "tension_curve": 0.0,
+    "interaction_frequency": 0.2,
+    "rules_complexity": 0.4779259286995321,
+    "session_length": 0.0,
+    "skill_vs_luck": 0.075,
+    "bluffing_depth": 0.0,
+    "games_simulated": 100,
+    "valid": false
+  }
+}

@@ -3,16 +3,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Union
 
-from darwindeck.simulation.movegen import LegalMove
+from darwindeck.simulation.movegen import LegalMove, BettingMove
 
 
 @dataclass
 class InputResult:
     """Result of human input."""
 
-    move: Optional[LegalMove] = None
+    move: Optional[Union[LegalMove, BettingMove]] = None
     quit: bool = False
     is_pass: bool = False
     error: Optional[str] = None
@@ -21,7 +21,7 @@ class InputResult:
 class HumanPlayer:
     """Handles human player input."""
 
-    def get_move(self, moves: list[LegalMove], prompt: str = "> ") -> InputResult:
+    def get_move(self, moves: list[Union[LegalMove, BettingMove]], prompt: str = "> ") -> InputResult:
         """Get move from human input.
 
         Args:

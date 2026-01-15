@@ -1,0 +1,74 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "GrandWall",
+  "generation": 3,
+  "setup": {
+    "cards_per_player": 26,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 0,
+    "starting_chips": 487
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "BettingPhase",
+        "min_bet": 10,
+        "max_raises": 2
+      },
+      {
+        "type": "BettingPhase",
+        "min_bet": 20,
+        "max_raises": 3
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "LOCATION_SIZE",
+          "operator": "GT",
+          "value": 0,
+          "reference": "hand"
+        },
+        "min_cards": 1,
+        "max_cards": 1,
+        "mandatory": true
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": null,
+        "min_cards": 1,
+        "max_cards": 1,
+        "mandatory": true
+      }
+    ],
+    "is_trick_based": false,
+    "tricks_per_hand": null
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "capture_all",
+      "threshold": null
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 1000,
+  "min_turns": 10,
+  "player_count": 2,
+  "fitness": 0.6010292262369183,
+  "fitness_rank": 2,
+  "fitness_metrics": {
+    "decision_density": 0.5969109792736562,
+    "comeback_potential": 0.46885106382978725,
+    "tension_curve": 0.9099859952926637,
+    "interaction_frequency": 1.0,
+    "rules_complexity": 0.4172394151236394,
+    "session_length": 0.8599148220486111,
+    "skill_vs_luck": 0.6906553191489362,
+    "bluffing_depth": 0.09692959582790095,
+    "games_simulated": 100,
+    "valid": true
+  }
+}

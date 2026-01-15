@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from typing import Union
+
 from darwindeck.simulation.state import GameState, Card
-from darwindeck.simulation.movegen import LegalMove
+from darwindeck.simulation.movegen import LegalMove, BettingMove, BettingAction
 from darwindeck.genome.schema import GameGenome, Location, PlayPhase, BettingPhase
 
 
@@ -82,7 +84,7 @@ class MovePresenter:
 
     def present(
         self,
-        moves: list[LegalMove],
+        moves: list[Union[LegalMove, BettingMove]],
         state: GameState,
         genome: GameGenome,
     ) -> str:
@@ -92,15 +94,16 @@ class MovePresenter:
 
         lines: list[str] = []
 
-        # Determine phase type from first move
-        if moves:
-            phase_idx = moves[0].phase_index
+        # Check if these are betting moves
+        if moves and isinstance(moves[0], BettingMove):
+            lines.append(self._present_betting(moves, state))  # type: ignore
+        elif moves:
+            # LegalMove - get phase type
+            phase_idx = moves[0].phase_index  # type: ignore
             phase = genome.turn_structure.phases[phase_idx]
 
             if isinstance(phase, PlayPhase):
-                lines.append(self._present_card_play(moves, state))
-            elif isinstance(phase, BettingPhase):
-                lines.append(self._present_betting(moves, state))
+                lines.append(self._present_card_play(moves, state))  # type: ignore
             else:
                 lines.append(self._present_generic(moves))
         else:
@@ -123,21 +126,20 @@ class MovePresenter:
 
         return "Play: " + "  ".join(options)
 
-    def _present_betting(self, moves: list[LegalMove], state: GameState) -> str:
+    def _present_betting(self, moves: list[BettingMove], state: GameState) -> str:
         """Present betting options."""
-        # Betting actions encoded in card_index as negative values
         action_names = {
-            -10: "Check",
-            -11: "Bet",
-            -12: "Call",
-            -13: "Raise",
-            -14: "All-In",
-            -15: "Fold",
+            BettingAction.CHECK: "Check",
+            BettingAction.BET: "Bet",
+            BettingAction.CALL: "Call",
+            BettingAction.RAISE: "Raise",
+            BettingAction.ALL_IN: "All-In",
+            BettingAction.FOLD: "Fold",
         }
         options: list[str] = []
 
         for i, move in enumerate(moves):
-            name = action_names.get(move.card_index, f"Action {move.card_index}")
+            name = action_names.get(move.action, str(move.action))
             options.append(f"[{i + 1}] {name}")
 
         return "Bet: " + "  ".join(options)

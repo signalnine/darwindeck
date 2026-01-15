@@ -1,0 +1,61 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "ScarletHand",
+  "generation": 3,
+  "setup": {
+    "cards_per_player": 26,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 1,
+    "starting_chips": 500
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "BettingPhase",
+        "min_bet": 13,
+        "max_raises": 2
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "LOCATION_SIZE",
+          "operator": "GT",
+          "value": 0,
+          "reference": "hand"
+        },
+        "min_cards": 1,
+        "max_cards": 1,
+        "mandatory": true
+      }
+    ],
+    "is_trick_based": false,
+    "tricks_per_hand": null
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "capture_all",
+      "threshold": null
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 1000,
+  "min_turns": 10,
+  "player_count": 2,
+  "fitness": 0.5347774584280317,
+  "fitness_rank": 3,
+  "fitness_metrics": {
+    "decision_density": 0.44592291864976813,
+    "comeback_potential": 0.39191836734693875,
+    "tension_curve": 0.891382384300232,
+    "interaction_frequency": 1.0,
+    "rules_complexity": 0.4749775962027789,
+    "session_length": 0.8597703721788195,
+    "skill_vs_luck": 0.5925755102040816,
+    "bluffing_depth": 0.12073178199632581,
+    "games_simulated": 100,
+    "valid": true
+  }
+}

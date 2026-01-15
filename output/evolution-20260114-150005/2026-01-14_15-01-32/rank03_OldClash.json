@@ -1,0 +1,82 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "OldClash",
+  "generation": 3,
+  "setup": {
+    "cards_per_player": 13,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 1,
+    "starting_chips": 0
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "compound",
+          "logic": "OR",
+          "conditions": [
+            {
+              "type": "simple",
+              "condition_type": "LOCATION_SIZE",
+              "operator": "EQ",
+              "value": 0,
+              "reference": "tableau"
+            },
+            {
+              "type": "simple",
+              "condition_type": "CARD_BEATS_TOP",
+              "operator": null,
+              "value": "two_high",
+              "reference": "tableau"
+            }
+          ]
+        },
+        "min_cards": 1,
+        "max_cards": 1,
+        "mandatory": true
+      }
+    ],
+    "is_trick_based": false,
+    "tricks_per_hand": null
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "empty_hand",
+      "threshold": null
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 300,
+  "min_turns": 10,
+  "player_count": 4,
+  "fitness": 0.5940226365039671,
+  "fitness_rank": 3,
+  "fitness_metrics": {
+    "decision_density": 0.3389155907365457,
+    "comeback_potential": 0.828,
+    "tension_curve": 0.87482750415802,
+    "interaction_frequency": 1.0,
+    "rules_complexity": 0.6202409026404516,
+    "session_length": 0.1707555474175347,
+    "skill_vs_luck": 0.32990001831054694,
+    "bluffing_depth": 0.0,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "skill_evaluation": {
+    "greedy_win_rate": 0.1,
+    "greedy_wins_as_p0": 5,
+    "greedy_wins_as_p1": 5,
+    "mcts_win_rate": 0.52,
+    "mcts_wins_as_p0": 40,
+    "mcts_wins_as_p1": 12,
+    "skill_score": 0.31,
+    "first_player_advantage": 0.28,
+    "total_games": 200,
+    "timed_out": false
+  },
+  "skill_rank": 3
+}

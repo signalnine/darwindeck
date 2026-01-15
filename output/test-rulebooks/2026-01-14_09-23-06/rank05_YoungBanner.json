@@ -1,0 +1,50 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "YoungBanner",
+  "generation": 3,
+  "setup": {
+    "cards_per_player": 17,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 0,
+    "starting_chips": 0
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": null,
+        "min_cards": 1,
+        "max_cards": 1,
+        "mandatory": true
+      }
+    ],
+    "is_trick_based": false,
+    "tricks_per_hand": null
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "capture_all",
+      "threshold": null
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 1000,
+  "min_turns": 10,
+  "player_count": 3,
+  "fitness": 0.18031775553384685,
+  "fitness_rank": 5,
+  "fitness_metrics": {
+    "decision_density": 0.08333333333333333,
+    "comeback_potential": 0.0,
+    "tension_curve": 0.0,
+    "interaction_frequency": 0.1,
+    "rules_complexity": 0.7888023455584086,
+    "session_length": 0.0,
+    "skill_vs_luck": 0.0375,
+    "bluffing_depth": 0.0,
+    "games_simulated": 100,
+    "valid": false
+  }
+}
