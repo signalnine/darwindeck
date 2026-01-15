@@ -373,7 +373,38 @@ class GenomeExtractor:
             wild_names = [rank_names.get(r, str(r)) for r in genome.setup.wild_cards]
             rules.append(f"**Wild cards ({', '.join(wild_names)}):** Can be played on any card")
 
+        # Add tableau mode description if non-trivial
+        tableau_desc = self._get_tableau_mode_description(genome)
+        if tableau_desc:
+            rules.append(f"**Tableau:** {tableau_desc}")
+
         return rules
+
+    def _get_tableau_mode_description(self, genome: "GameGenome") -> str:
+        """Get description for tableau mode.
+
+        Returns empty string for NONE mode, otherwise returns a human-readable
+        description of how cards on the tableau interact.
+        """
+        from darwindeck.genome.schema import TableauMode, SequenceDirection
+
+        mode = genome.setup.tableau_mode
+
+        if mode == TableauMode.NONE:
+            return ""
+        elif mode == TableauMode.WAR:
+            return "When both players have played, compare ranks—the higher card wins both cards."
+        elif mode == TableauMode.MATCH_RANK:
+            return "If your card matches a card on the tableau by rank, capture both cards."
+        elif mode == TableauMode.SEQUENCE:
+            direction = genome.setup.sequence_direction
+            if direction == SequenceDirection.ASCENDING:
+                return "Play cards in ascending order to build on tableau piles."
+            elif direction == SequenceDirection.DESCENDING:
+                return "Play cards in descending order to build on tableau piles."
+            else:  # BOTH
+                return "Play cards in either ascending or descending order to build on tableau piles."
+        return ""
 
 
 class RulebookEnhancer:

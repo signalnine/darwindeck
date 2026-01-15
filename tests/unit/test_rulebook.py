@@ -541,6 +541,182 @@ class TestRulebookGenerator:
         assert "Empty deck" in markdown or "Turn limit" in markdown or "Tie" in markdown
 
 
+class TestTableauModeDescriptions:
+    """Tests for tableau mode descriptions in rulebook."""
+
+    def test_rulebook_describes_war_mode(self):
+        """Rulebook includes WAR mode description."""
+        from darwindeck.genome.schema import (
+            GameGenome, SetupRules, TurnStructure, PlayPhase,
+            WinCondition, Location, TableauMode
+        )
+        from darwindeck.evolution.rulebook import RulebookGenerator
+
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="WarGame",
+            generation=1,
+            setup=SetupRules(cards_per_player=26, tableau_mode=TableauMode.WAR),
+            turn_structure=TurnStructure(phases=[
+                PlayPhase(target=Location.TABLEAU)
+            ]),
+            special_effects=[],
+            win_conditions=[WinCondition(type="capture_all")],
+            scoring_rules=[],
+        )
+
+        generator = RulebookGenerator()
+        rulebook = generator.generate(genome, use_llm=False)
+
+        assert "compare ranks" in rulebook.lower() or "higher card wins" in rulebook.lower()
+
+    def test_rulebook_describes_match_rank_mode(self):
+        """Rulebook includes MATCH_RANK mode description."""
+        from darwindeck.genome.schema import (
+            GameGenome, SetupRules, TurnStructure, PlayPhase,
+            WinCondition, Location, TableauMode
+        )
+        from darwindeck.evolution.rulebook import RulebookGenerator
+
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="MatchGame",
+            generation=1,
+            setup=SetupRules(cards_per_player=7, tableau_mode=TableauMode.MATCH_RANK),
+            turn_structure=TurnStructure(phases=[
+                PlayPhase(target=Location.TABLEAU)
+            ]),
+            special_effects=[],
+            win_conditions=[WinCondition(type="most_captured")],
+            scoring_rules=[],
+        )
+
+        generator = RulebookGenerator()
+        rulebook = generator.generate(genome, use_llm=False)
+
+        assert "match" in rulebook.lower() and "rank" in rulebook.lower()
+
+    def test_rulebook_describes_sequence_mode(self):
+        """Rulebook includes SEQUENCE mode description."""
+        from darwindeck.genome.schema import (
+            GameGenome, SetupRules, TurnStructure, PlayPhase,
+            WinCondition, Location, TableauMode, SequenceDirection
+        )
+        from darwindeck.evolution.rulebook import RulebookGenerator
+
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="SequenceGame",
+            generation=1,
+            setup=SetupRules(
+                cards_per_player=7,
+                tableau_mode=TableauMode.SEQUENCE,
+                sequence_direction=SequenceDirection.ASCENDING
+            ),
+            turn_structure=TurnStructure(phases=[
+                PlayPhase(target=Location.TABLEAU)
+            ]),
+            special_effects=[],
+            win_conditions=[WinCondition(type="empty_hand")],
+            scoring_rules=[],
+        )
+
+        generator = RulebookGenerator()
+        rulebook = generator.generate(genome, use_llm=False)
+
+        assert "ascending" in rulebook.lower() or "sequence" in rulebook.lower()
+
+    def test_rulebook_none_mode_no_special_description(self):
+        """Rulebook with NONE mode doesn't add tableau mode description."""
+        from darwindeck.genome.schema import (
+            GameGenome, SetupRules, TurnStructure, PlayPhase,
+            WinCondition, Location, TableauMode
+        )
+        from darwindeck.evolution.rulebook import RulebookGenerator
+
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="SimpleGame",
+            generation=1,
+            setup=SetupRules(cards_per_player=7, tableau_mode=TableauMode.NONE),
+            turn_structure=TurnStructure(phases=[
+                PlayPhase(target=Location.TABLEAU)
+            ]),
+            special_effects=[],
+            win_conditions=[WinCondition(type="empty_hand")],
+            scoring_rules=[],
+        )
+
+        generator = RulebookGenerator()
+        rulebook = generator.generate(genome, use_llm=False)
+
+        # Should NOT have war/match/sequence descriptions
+        assert "compare ranks" not in rulebook.lower()
+        assert "higher card wins" not in rulebook.lower()
+        assert "matching rank" not in rulebook.lower()
+
+    def test_rulebook_sequence_descending(self):
+        """Rulebook describes descending sequence correctly."""
+        from darwindeck.genome.schema import (
+            GameGenome, SetupRules, TurnStructure, PlayPhase,
+            WinCondition, Location, TableauMode, SequenceDirection
+        )
+        from darwindeck.evolution.rulebook import RulebookGenerator
+
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="DescendingGame",
+            generation=1,
+            setup=SetupRules(
+                cards_per_player=7,
+                tableau_mode=TableauMode.SEQUENCE,
+                sequence_direction=SequenceDirection.DESCENDING
+            ),
+            turn_structure=TurnStructure(phases=[
+                PlayPhase(target=Location.TABLEAU)
+            ]),
+            special_effects=[],
+            win_conditions=[WinCondition(type="empty_hand")],
+            scoring_rules=[],
+        )
+
+        generator = RulebookGenerator()
+        rulebook = generator.generate(genome, use_llm=False)
+
+        assert "descending" in rulebook.lower()
+
+    def test_rulebook_sequence_both_directions(self):
+        """Rulebook describes bidirectional sequence correctly."""
+        from darwindeck.genome.schema import (
+            GameGenome, SetupRules, TurnStructure, PlayPhase,
+            WinCondition, Location, TableauMode, SequenceDirection
+        )
+        from darwindeck.evolution.rulebook import RulebookGenerator
+
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="BidirectionalGame",
+            generation=1,
+            setup=SetupRules(
+                cards_per_player=7,
+                tableau_mode=TableauMode.SEQUENCE,
+                sequence_direction=SequenceDirection.BOTH
+            ),
+            turn_structure=TurnStructure(phases=[
+                PlayPhase(target=Location.TABLEAU)
+            ]),
+            special_effects=[],
+            win_conditions=[WinCondition(type="empty_hand")],
+            scoring_rules=[],
+        )
+
+        generator = RulebookGenerator()
+        rulebook = generator.generate(genome, use_llm=False)
+
+        # Should mention either direction or both
+        assert "either" in rulebook.lower() or "ascending or descending" in rulebook.lower() or "sequence" in rulebook.lower()
+
+
 class TestRulebookEnhancer:
     """Tests for LLM enhancement."""
 
