@@ -413,12 +413,19 @@ func ApplyMove(state *GameState, move *LegalMove, genome *Genome) {
 			state.PlayCard(currentPlayer, move.CardIndex, move.TargetLoc)
 
 			if move.TargetLoc == LocationTableau {
-				if state.TableauMode == 2 { // MATCH_RANK (Scopa-style)
-					// Scopa capture mechanics: check for matching rank
-					resolveScopaCapture(state, currentPlayer, playedCard)
-				} else if state.TableauMode == 1 || state.NumPlayers == 2 { // WAR mode or default 2-player
-					// War-specific logic: compare cards
+				// Use explicit TableauMode switch for clarity
+				switch state.TableauMode {
+				case 0: // NONE
+					// No special handling - card just sits on tableau
+				case 1: // WAR
+					// War-style battle: compare ranks, winner takes both
 					resolveWarBattle(state)
+				case 2: // MATCH_RANK
+					// Scopa-style capture: match by rank
+					resolveMatchRankCapture(state, currentPlayer, playedCard)
+				case 3: // SEQUENCE
+					// Sequence validation done in move generation; card just added to pile
+					// No additional resolution needed here
 				}
 			}
 
@@ -712,9 +719,9 @@ func resolveWarBattle(state *GameState) {
 	state.Tableau[0] = state.Tableau[0][:0]
 }
 
-// resolveScopaCapture handles Scopa-style rank matching capture
+// resolveMatchRankCapture handles rank-matching capture (Scopa-style)
 // When playing a card to tableau, capture any card with matching rank
-func resolveScopaCapture(state *GameState, playerID uint8, playedCard Card) {
+func resolveMatchRankCapture(state *GameState, playerID uint8, playedCard Card) {
 	if len(state.Tableau) == 0 || len(state.Tableau[0]) == 0 {
 		return
 	}
