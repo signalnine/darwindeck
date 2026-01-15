@@ -6,7 +6,8 @@ from typing import Union
 
 from darwindeck.simulation.state import GameState, Card
 from darwindeck.simulation.movegen import LegalMove, BettingMove, BettingAction
-from darwindeck.genome.schema import GameGenome, Location, PlayPhase, BettingPhase, DiscardPhase
+from darwindeck.genome.schema import GameGenome, Location, PlayPhase, BettingPhase, DiscardPhase, TrickPhase, ClaimPhase, DrawPhase
+from darwindeck.simulation.movegen import MOVE_CHALLENGE, MOVE_CLAIM_PASS, MOVE_DRAW, MOVE_DRAW_PASS
 
 
 # Unicode card symbols
@@ -96,17 +97,26 @@ class MovePresenter:
 
         # Separate moves by type (genome may have multiple phase types)
         play_moves: list[LegalMove] = []
+        trick_moves: list[LegalMove] = []
         discard_moves: list[LegalMove] = []
+        claim_moves: list[LegalMove] = []
+        draw_moves: list[LegalMove] = []
         betting_moves: list[BettingMove] = []
 
         for m in moves:
             if isinstance(m, BettingMove):
                 betting_moves.append(m)
             elif isinstance(m, LegalMove):
-                # Check phase type to distinguish play vs discard
+                # Check phase type to distinguish play vs discard vs trick vs claim vs draw
                 phase = genome.turn_structure.phases[m.phase_index]
                 if isinstance(phase, DiscardPhase):
                     discard_moves.append(m)
+                elif isinstance(phase, TrickPhase):
+                    trick_moves.append(m)
+                elif isinstance(phase, ClaimPhase):
+                    claim_moves.append(m)
+                elif isinstance(phase, DrawPhase):
+                    draw_moves.append(m)
                 else:
                     play_moves.append(m)
 
@@ -117,17 +127,32 @@ class MovePresenter:
             lines.append(self._present_card_moves_indexed(play_moves, state, offset, "Play"))
             offset += len(play_moves)
 
+        # Present trick options if any
+        if trick_moves:
+            lines.append(self._present_card_moves_indexed(trick_moves, state, offset, "Trick"))
+            offset += len(trick_moves)
+
         # Present discard options if any
         if discard_moves:
             lines.append(self._present_card_moves_indexed(discard_moves, state, offset, "Discard"))
             offset += len(discard_moves)
+
+        # Present claim options if any
+        if claim_moves:
+            lines.append(self._present_claim_indexed(claim_moves, state, offset))
+            offset += len(claim_moves)
+
+        # Present draw options if any
+        if draw_moves:
+            lines.append(self._present_draw_indexed(draw_moves, state, offset))
+            offset += len(draw_moves)
 
         # Present betting options if any
         if betting_moves:
             lines.append(self._present_betting_indexed(betting_moves, state, offset))
 
         # Fallback if nothing found
-        if not play_moves and not discard_moves and not betting_moves:
+        if not play_moves and not trick_moves and not discard_moves and not claim_moves and not draw_moves and not betting_moves:
             lines.append(self._present_generic(moves))
 
         lines.append("")
@@ -179,6 +204,34 @@ class MovePresenter:
             options.append(f"[{offset + i + 1}] {name}")
 
         return "Bet: " + "  ".join(options)
+
+    def _present_claim_indexed(self, moves: list[LegalMove], state: GameState, offset: int) -> str:
+        """Present claim options with index offset."""
+        options: list[str] = []
+        hand = state.players[state.active_player].hand
+
+        for i, move in enumerate(moves):
+            if move.card_index == MOVE_CHALLENGE:
+                options.append(f"[{offset + i + 1}] Challenge")
+            elif move.card_index == MOVE_CLAIM_PASS:
+                options.append(f"[{offset + i + 1}] Accept")
+            elif 0 <= move.card_index < len(hand):
+                card = hand[move.card_index]
+                options.append(f"[{offset + i + 1}] {format_card(card)}")
+
+        return "Claim: " + "  ".join(options)
+
+    def _present_draw_indexed(self, moves: list[LegalMove], state: GameState, offset: int) -> str:
+        """Present draw options with index offset."""
+        options: list[str] = []
+
+        for i, move in enumerate(moves):
+            if move.card_index == MOVE_DRAW:
+                options.append(f"[{offset + i + 1}] Draw")
+            elif move.card_index == MOVE_DRAW_PASS:
+                options.append(f"[{offset + i + 1}] Stand")
+
+        return "Draw: " + "  ".join(options)
 
     def _present_generic(self, moves: list[LegalMove]) -> str:
         """Fallback for other move types."""

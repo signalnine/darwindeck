@@ -17,6 +17,24 @@ class Card:
 
 
 @dataclass(frozen=True)
+class TrickCard:
+    """A card played to the current trick."""
+
+    player_id: int
+    card: Card
+
+
+@dataclass(frozen=True)
+class Claim:
+    """A bluffing claim for games like Cheat/BS/I Doubt It."""
+
+    claimer_id: int
+    claimed_rank: int  # 0-12 for A-K
+    claimed_count: int
+    cards_played: tuple[Card, ...]  # Actual cards played (for verification)
+
+
+@dataclass(frozen=True)
 class PlayerState:
     """Immutable player state."""
 
@@ -68,6 +86,13 @@ class GameState:
     current_bet: int = 0
     raise_count: int = 0
 
+    # Trick-taking fields
+    current_trick: tuple["TrickCard", ...] = ()
+    hearts_broken: bool = False  # For Hearts: whether hearts have been played
+
+    # Claim/bluffing fields (for Cheat/BS games)
+    current_claim: Optional["Claim"] = None
+
     def copy_with(self, **changes) -> "GameState":  # type: ignore
         """Create a new state with specified changes."""
         # Helper for making state transitions
@@ -82,6 +107,9 @@ class GameState:
             "pot": self.pot,
             "current_bet": self.current_bet,
             "raise_count": self.raise_count,
+            "current_trick": self.current_trick,
+            "hearts_broken": self.hearts_broken,
+            "current_claim": self.current_claim,
         }
         current.update(changes)
         return GameState(**current)

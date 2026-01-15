@@ -3,8 +3,16 @@
 from dataclasses import dataclass
 from enum import Enum
 from typing import List, Optional, Union
-from darwindeck.genome.schema import GameGenome, PlayPhase, Location, BettingPhase, DiscardPhase
-from darwindeck.simulation.state import GameState, Card, PlayerState
+from darwindeck.genome.schema import GameGenome, PlayPhase, Location, BettingPhase, DiscardPhase, TrickPhase, ClaimPhase, DrawPhase
+from darwindeck.simulation.state import GameState, Card, PlayerState, TrickCard, Claim
+
+# Special CardIndex values for ClaimPhase
+MOVE_CHALLENGE = -1  # Challenge the current claim
+MOVE_CLAIM_PASS = -2  # Accept the claim without challenging
+
+# Special CardIndex values for DrawPhase
+MOVE_DRAW = -1  # Draw a card
+MOVE_DRAW_PASS = -3  # Skip drawing (stand)
 
 
 class BettingAction(Enum):
@@ -110,6 +118,121 @@ def generate_legal_moves(state: GameState, genome: GameGenome) -> List[Union[Leg
                     target_loc=target
                 ))
 
+        elif isinstance(phase, TrickPhase):
+            # TrickPhase: play cards following suit rules
+            hand = state.players[current_player].hand
+            if len(hand) == 0:
+                continue
+
+            # Determine if we're leading or following
+            is_leading = len(state.current_trick) == 0
+
+            if is_leading:
+                # Leading: can play any card, except breaking suit until broken
+                for card_idx, card in enumerate(hand):
+                    # If breaking suit (e.g., Hearts) and not broken yet
+                    if phase.breaking_suit is not None and card.suit == phase.breaking_suit and not state.hearts_broken:
+                        # Check if player has any non-breaking suit cards
+                        has_other = any(c.suit != phase.breaking_suit for c in hand)
+                        if has_other:
+                            continue  # Can't lead breaking suit
+                        # If only breaking suit cards, can lead them
+
+                    moves.append(LegalMove(
+                        phase_index=phase_idx,
+                        card_index=card_idx,
+                        target_loc=Location.TABLEAU,
+                    ))
+            else:
+                # Following: must follow suit if required and able
+                lead_suit = state.current_trick[0].card.suit
+
+                if phase.lead_suit_required:
+                    # Check if we have cards of lead suit
+                    has_lead_suit = any(card.suit == lead_suit for card in hand)
+
+                    if has_lead_suit:
+                        # Must follow suit
+                        for card_idx, card in enumerate(hand):
+                            if card.suit == lead_suit:
+                                moves.append(LegalMove(
+                                    phase_index=phase_idx,
+                                    card_index=card_idx,
+                                    target_loc=Location.TABLEAU,
+                                ))
+                    else:
+                        # Can't follow suit - can play any card
+                        for card_idx in range(len(hand)):
+                            moves.append(LegalMove(
+                                phase_index=phase_idx,
+                                card_index=card_idx,
+                                target_loc=Location.TABLEAU,
+                            ))
+                else:
+                    # No suit following required - can play any card
+                    for card_idx in range(len(hand)):
+                        moves.append(LegalMove(
+                            phase_index=phase_idx,
+                            card_index=card_idx,
+                            target_loc=Location.TABLEAU,
+                        ))
+
+        elif isinstance(phase, ClaimPhase):
+            # ClaimPhase: bluffing/Cheat mechanics
+            if state.current_claim is None:
+                # No active claim - current player makes a claim
+                hand = state.players[current_player].hand
+                if len(hand) > 0:
+                    for card_idx in range(len(hand)):
+                        moves.append(LegalMove(
+                            phase_index=phase_idx,
+                            card_index=card_idx,
+                            target_loc=Location.DISCARD,
+                        ))
+            else:
+                # Active claim exists - opponent responds
+                if current_player != state.current_claim.claimer_id:
+                    # Can challenge or pass
+                    moves.append(LegalMove(
+                        phase_index=phase_idx,
+                        card_index=MOVE_CHALLENGE,
+                        target_loc=Location.DISCARD,
+                    ))
+                    moves.append(LegalMove(
+                        phase_index=phase_idx,
+                        card_index=MOVE_CLAIM_PASS,
+                        target_loc=Location.DISCARD,
+                    ))
+
+        elif isinstance(phase, DrawPhase):
+            # DrawPhase: draw cards from deck/discard/opponent
+            source = phase.source
+
+            # Check if can draw from source
+            can_draw = False
+            if source == Location.DECK:
+                can_draw = len(state.deck) > 0
+            elif source == Location.DISCARD:
+                can_draw = len(state.discard) > 0
+            elif source == Location.OPPONENT_HAND:
+                opponent_id = (current_player + 1) % len(state.players)
+                can_draw = len(state.players[opponent_id].hand) > 0
+
+            if can_draw:
+                moves.append(LegalMove(
+                    phase_index=phase_idx,
+                    card_index=MOVE_DRAW,
+                    target_loc=source,
+                ))
+
+            # Add pass/stand option when drawing is not mandatory
+            if not phase.mandatory:
+                moves.append(LegalMove(
+                    phase_index=phase_idx,
+                    card_index=MOVE_DRAW_PASS,
+                    target_loc=source,
+                ))
+
     return moves
 
 
@@ -135,6 +258,100 @@ def apply_move(state: GameState, move: LegalMove, genome: GameGenome) -> GameSta
             # Discard card from hand to target location
             state = play_card(state, current_player, move.card_index, move.target_loc)
         # card_index == -1 means pass (no discard)
+
+    elif isinstance(phase, TrickPhase):
+        if move.card_index >= 0 and move.card_index < len(state.players[current_player].hand):
+            card = state.players[current_player].hand[move.card_index]
+
+            # Remove card from hand
+            player = state.players[current_player]
+            new_hand = player.hand[:move.card_index] + player.hand[move.card_index+1:]
+            new_player = player.copy_with(hand=new_hand)
+            new_players = tuple(
+                new_player if i == current_player else p
+                for i, p in enumerate(state.players)
+            )
+
+            # Add to current trick
+            new_trick = state.current_trick + (TrickCard(player_id=current_player, card=card),)
+
+            # Check if this card breaks hearts
+            hearts_broken = state.hearts_broken
+            if phase.breaking_suit is not None and card.suit == phase.breaking_suit:
+                hearts_broken = True
+
+            state = state.copy_with(
+                players=new_players,
+                current_trick=new_trick,
+                hearts_broken=hearts_broken,
+            )
+
+            # Check if trick is complete
+            num_players = len(state.players)
+            if len(state.current_trick) >= num_players:
+                # Resolve trick - winner takes the cards
+                state = resolve_trick(state, phase)
+                # Don't advance turn normally - resolve_trick sets next player
+                return state
+
+    elif isinstance(phase, ClaimPhase):
+        if move.card_index >= 0:
+            # Making a claim - play card and create claim
+            hand = state.players[current_player].hand
+            if move.card_index < len(hand):
+                card = hand[move.card_index]
+
+                # Remove card from hand
+                new_hand = hand[:move.card_index] + hand[move.card_index+1:]
+                new_player = state.players[current_player].copy_with(hand=new_hand)
+                new_players = tuple(
+                    new_player if i == current_player else p
+                    for i, p in enumerate(state.players)
+                )
+
+                # Add to discard pile (face-down conceptually)
+                new_discard = state.discard + (card,)
+
+                # Create claim - claimed rank is sequential based on turn number
+                # Rank maps: 0=A, 1=2, 2=3, ..., 12=K
+                claimed_rank = state.turn % 13
+
+                new_claim = Claim(
+                    claimer_id=current_player,
+                    claimed_rank=claimed_rank,
+                    claimed_count=1,
+                    cards_played=(card,),
+                )
+
+                state = state.copy_with(
+                    players=new_players,
+                    discard=new_discard,
+                    current_claim=new_claim,
+                )
+
+        elif move.card_index == MOVE_CHALLENGE:
+            # Challenge the claim
+            if state.current_claim is not None:
+                state = resolve_challenge(state, current_player)
+                # After challenge resolves, current player makes the next claim
+                return state.copy_with(turn=state.turn + 1)
+
+        elif move.card_index == MOVE_CLAIM_PASS:
+            # Accept claim - clear it, cards stay in discard
+            state = state.copy_with(current_claim=None)
+            # After pass, current player makes the next claim
+            return state.copy_with(turn=state.turn + 1)
+
+    elif isinstance(phase, DrawPhase):
+        if move.card_index == MOVE_DRAW:
+            # Draw card(s) from source
+            source = phase.source
+            count = phase.count
+
+            for _ in range(count):
+                state = draw_card(state, current_player, source)
+
+        # MOVE_DRAW_PASS means skip drawing - no state change needed
 
     # Advance turn
     next_player = (state.active_player + 1) % len(state.players)
@@ -188,6 +405,57 @@ def play_card(state: GameState, player_id: int, card_index: int, target: Locatio
     return state.copy_with(players=new_players)
 
 
+def draw_card(state: GameState, player_id: int, source: Location) -> GameState:
+    """Draw a card from source location to player's hand."""
+    player = state.players[player_id]
+
+    if source == Location.DECK:
+        if len(state.deck) == 0:
+            return state
+        card = state.deck[0]
+        new_deck = state.deck[1:]
+        new_hand = player.hand + (card,)
+        new_player = player.copy_with(hand=new_hand)
+        new_players = tuple(
+            new_player if i == player_id else p
+            for i, p in enumerate(state.players)
+        )
+        return state.copy_with(players=new_players, deck=new_deck)
+
+    elif source == Location.DISCARD:
+        if len(state.discard) == 0:
+            return state
+        card = state.discard[-1]  # Draw from top of discard
+        new_discard = state.discard[:-1]
+        new_hand = player.hand + (card,)
+        new_player = player.copy_with(hand=new_hand)
+        new_players = tuple(
+            new_player if i == player_id else p
+            for i, p in enumerate(state.players)
+        )
+        return state.copy_with(players=new_players, discard=new_discard)
+
+    elif source == Location.OPPONENT_HAND:
+        # Draw random card from next player's hand
+        opponent_id = (player_id + 1) % len(state.players)
+        opponent = state.players[opponent_id]
+        if len(opponent.hand) == 0:
+            return state
+        # Draw from end (random in actual play, but deterministic here)
+        card = opponent.hand[-1]
+        new_opponent_hand = opponent.hand[:-1]
+        new_opponent = opponent.copy_with(hand=new_opponent_hand)
+        new_hand = player.hand + (card,)
+        new_player = player.copy_with(hand=new_hand)
+        new_players = tuple(
+            new_player if i == player_id else (new_opponent if i == opponent_id else p)
+            for i, p in enumerate(state.players)
+        )
+        return state.copy_with(players=new_players)
+
+    return state
+
+
 def resolve_war_battle(state: GameState) -> GameState:
     """Handle War game card comparison.
 
@@ -234,6 +502,143 @@ def resolve_war_battle(state: GameState) -> GameState:
     return state.copy_with(
         players=new_players,
         tableau=new_tableau
+    )
+
+
+def resolve_trick(state: GameState, phase: TrickPhase) -> GameState:
+    """Resolve a completed trick.
+
+    The winner is determined by:
+    1. Highest trump card (if trump suit is set and trump was played)
+    2. Highest card of lead suit
+
+    Winner takes the trick cards and leads next.
+    """
+    if len(state.current_trick) == 0:
+        return state
+
+    lead_suit = state.current_trick[0].card.suit
+    trump_suit = phase.trump_suit
+    high_card_wins = phase.high_card_wins
+
+    # Find winner
+    winner_idx = 0
+    winner_card = state.current_trick[0].card
+    winner_value = get_rank_value(winner_card)
+    winner_is_trump = trump_suit is not None and winner_card.suit == trump_suit
+
+    for i, trick_card in enumerate(state.current_trick[1:], 1):
+        card = trick_card.card
+        card_value = get_rank_value(card)
+        card_is_trump = trump_suit is not None and card.suit == trump_suit
+
+        # Determine if this card beats current winner
+        beats_winner = False
+
+        if card_is_trump and not winner_is_trump:
+            # Trump beats non-trump
+            beats_winner = True
+        elif card_is_trump and winner_is_trump:
+            # Both trump - compare values
+            if high_card_wins:
+                beats_winner = card_value > winner_value
+            else:
+                beats_winner = card_value < winner_value
+        elif not card_is_trump and not winner_is_trump:
+            # Neither is trump - must follow lead suit to win
+            if card.suit == lead_suit and winner_card.suit == lead_suit:
+                if high_card_wins:
+                    beats_winner = card_value > winner_value
+                else:
+                    beats_winner = card_value < winner_value
+            elif card.suit == lead_suit and winner_card.suit != lead_suit:
+                # This card follows lead, winner doesn't - this card wins
+                beats_winner = True
+            # If neither follows lead, first one wins (winner stays)
+
+        if beats_winner:
+            winner_idx = i
+            winner_card = card
+            winner_value = card_value
+            winner_is_trump = card_is_trump
+
+    # Winner's player ID
+    winner_player_id = state.current_trick[winner_idx].player_id
+
+    # Award trick to winner (add cards to their score or captured pile)
+    # For Hearts-style games, taking tricks adds to score (bad)
+    # For now, just track who won (scoring handled elsewhere)
+    trick_cards = tuple(tc.card for tc in state.current_trick)
+
+    # Update winner's score based on cards taken
+    # Simple scoring: each card = 1 point (customize for specific games)
+    winner_player = state.players[winner_player_id]
+    new_score = winner_player.score + len(trick_cards)
+    new_winner = winner_player.copy_with(score=new_score)
+
+    new_players = tuple(
+        new_winner if i == winner_player_id else p
+        for i, p in enumerate(state.players)
+    )
+
+    # Clear current trick and set winner as next player
+    return state.copy_with(
+        players=new_players,
+        current_trick=(),
+        active_player=winner_player_id,
+        turn=state.turn + 1,
+    )
+
+
+def resolve_challenge(state: GameState, challenger_id: int) -> GameState:
+    """Resolve a challenge in ClaimPhase.
+
+    If claim was TRUE (cards match claimed rank), challenger takes pile.
+    If claim was FALSE (cards don't match), claimer takes pile.
+    """
+    if state.current_claim is None:
+        return state
+
+    claim = state.current_claim
+    claimer_id = claim.claimer_id
+
+    # Rank value mapping for comparison
+    rank_to_index = {
+        "A": 0, "2": 1, "3": 2, "4": 3, "5": 4, "6": 5, "7": 6,
+        "8": 7, "9": 8, "10": 9, "J": 10, "Q": 11, "K": 12
+    }
+
+    # Check if the claim was truthful
+    truthful = True
+    for card in claim.cards_played:
+        card_rank_idx = rank_to_index.get(card.rank.value, -1)
+        if card_rank_idx != claim.claimed_rank:
+            truthful = False
+            break
+
+    # Determine loser
+    if truthful:
+        # Claim was true - challenger was wrong, takes the pile
+        loser_id = challenger_id
+    else:
+        # Claim was false - claimer was lying, takes the pile
+        loser_id = claimer_id
+
+    # Loser takes entire discard pile
+    loser_player = state.players[loser_id]
+    new_hand = loser_player.hand + state.discard
+    new_loser = loser_player.copy_with(hand=new_hand)
+
+    new_players = tuple(
+        new_loser if i == loser_id else p
+        for i, p in enumerate(state.players)
+    )
+
+    # Clear the claim and discard
+    return state.copy_with(
+        players=new_players,
+        discard=(),
+        current_claim=None,
     )
 
 
