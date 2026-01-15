@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 from typing import Dict, Optional
-from darwindeck.genome.schema import GameGenome, PlayPhase, DrawPhase
+from darwindeck.genome.schema import GameGenome, PlayPhase, DrawPhase, TableauMode
 
 
 # Preset weight configurations for different game styles
@@ -142,6 +142,46 @@ class FitnessResult:
     metrics: dict
     error: Optional[str] = None
     coherence_violations: list[str] = field(default_factory=list)
+
+
+def calculate_coherence_penalty(genome: GameGenome) -> float:
+    """Calculate fitness penalty for incoherent tableau mode + win condition combos.
+
+    Returns a value between 0.0 (no penalty) and 0.5 (max penalty).
+    These are SOFT penalties - discourage but don't prevent exploration.
+
+    Coherence table:
+    | Tableau Mode | Good With | Bad With | Penalty |
+    |--------------|-----------|----------|---------|
+    | WAR | capture_all, most_captured | empty_hand | 30% |
+    | MATCH_RANK | most_captured, high_score | capture_all | 20% |
+    | SEQUENCE | empty_hand | capture_all | 30% |
+    | NONE | Any | - | 0% |
+    """
+    penalty = 0.0
+
+    win_types = {wc.type for wc in genome.win_conditions}
+    mode = genome.setup.tableau_mode
+
+    # WAR (accumulation) conflicts with empty_hand (shedding)
+    # War is about capturing opponent's cards, not emptying your hand
+    if mode == TableauMode.WAR and "empty_hand" in win_types:
+        penalty += 0.30
+
+    # MATCH_RANK (partial capture) conflicts with capture_all (total capture)
+    # Match rank games typically have opportunistic capture, not total domination
+    if mode == TableauMode.MATCH_RANK and "capture_all" in win_types:
+        penalty += 0.20
+
+    # SEQUENCE (shedding) conflicts with capture_all (accumulation)
+    # Sequence games (like Solitaire) are about building piles, not capturing
+    if mode == TableauMode.SEQUENCE and "capture_all" in win_types:
+        penalty += 0.30
+
+    # NONE mode has no conflicts - cards just accumulate with no interaction
+    # (no additional rules)
+
+    return min(penalty, 0.50)  # Cap at 50%
 
 
 class FitnessEvaluator:
@@ -675,6 +715,11 @@ class FitnessEvaluator:
             max_win_rate = max(results.wins) / results.total_games
             if max_win_rate > 0.80:
                 quality_multiplier *= 0.6  # 40% penalty for one-sided
+
+        # Tableau coherence penalty: soft penalty for incoherent mode + win condition combos
+        # These are design-level conflicts that reduce game quality but don't make games unplayable
+        coherence_penalty = calculate_coherence_penalty(genome)
+        quality_multiplier *= (1.0 - coherence_penalty)
 
         total_fitness *= quality_multiplier
 

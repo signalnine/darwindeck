@@ -7,7 +7,8 @@ from darwindeck.simulation.engine import GameEngine, GameResult
 from darwindeck.simulation.players import RandomPlayer
 from darwindeck.genome.examples import create_war_genome
 from darwindeck.genome.schema import (
-    GameGenome, SetupRules, TurnStructure, DiscardPhase, WinCondition, Location
+    GameGenome, SetupRules, TurnStructure, DiscardPhase, WinCondition, Location,
+    PlayPhase, TableauMode, SequenceDirection
 )
 
 
@@ -101,3 +102,155 @@ class TestFitnessCoherenceIntegration:
         assert result.valid is False
         assert len(result.coherence_violations) > 0
         assert "high_score" in result.coherence_violations[0]
+
+
+class TestTableauCoherencePenalty:
+    """Tests for tableau mode + win condition coherence penalties."""
+
+    def test_war_mode_with_empty_hand_gets_penalty(self):
+        """WAR mode + empty_hand win condition gets coherence penalty."""
+        from darwindeck.evolution.fitness_full import calculate_coherence_penalty
+
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="incoherent",
+            generation=1,
+            setup=SetupRules(cards_per_player=7, tableau_mode=TableauMode.WAR),
+            turn_structure=TurnStructure(phases=[
+                PlayPhase(target=Location.TABLEAU)
+            ]),
+            special_effects=[],
+            win_conditions=[WinCondition(type="empty_hand")],  # Conflict!
+            scoring_rules=[],
+        )
+
+        penalty = calculate_coherence_penalty(genome)
+
+        assert penalty >= 0.3  # At least 30%
+
+    def test_match_rank_with_capture_all_gets_penalty(self):
+        """MATCH_RANK mode + capture_all win condition gets coherence penalty."""
+        from darwindeck.evolution.fitness_full import calculate_coherence_penalty
+
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="incoherent",
+            generation=1,
+            setup=SetupRules(cards_per_player=7, tableau_mode=TableauMode.MATCH_RANK),
+            turn_structure=TurnStructure(phases=[
+                PlayPhase(target=Location.TABLEAU)
+            ]),
+            special_effects=[],
+            win_conditions=[WinCondition(type="capture_all")],  # Conflict!
+            scoring_rules=[],
+        )
+
+        penalty = calculate_coherence_penalty(genome)
+
+        assert penalty >= 0.2  # At least 20%
+
+    def test_sequence_with_capture_all_gets_penalty(self):
+        """SEQUENCE mode + capture_all win condition gets coherence penalty."""
+        from darwindeck.evolution.fitness_full import calculate_coherence_penalty
+
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="incoherent",
+            generation=1,
+            setup=SetupRules(
+                cards_per_player=7,
+                tableau_mode=TableauMode.SEQUENCE,
+                sequence_direction=SequenceDirection.BOTH
+            ),
+            turn_structure=TurnStructure(phases=[
+                PlayPhase(target=Location.TABLEAU)
+            ]),
+            special_effects=[],
+            win_conditions=[WinCondition(type="capture_all")],  # Conflict!
+            scoring_rules=[],
+        )
+
+        penalty = calculate_coherence_penalty(genome)
+
+        assert penalty >= 0.3  # At least 30%
+
+    def test_coherent_mode_no_penalty(self):
+        """Coherent tableau mode + win condition combinations get no penalty."""
+        from darwindeck.evolution.fitness_full import calculate_coherence_penalty
+
+        # WAR + capture_all is coherent
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="coherent",
+            generation=1,
+            setup=SetupRules(cards_per_player=26, tableau_mode=TableauMode.WAR),
+            turn_structure=TurnStructure(phases=[
+                PlayPhase(target=Location.TABLEAU)
+            ]),
+            special_effects=[],
+            win_conditions=[WinCondition(type="capture_all")],  # Good match!
+            scoring_rules=[],
+        )
+
+        penalty = calculate_coherence_penalty(genome)
+
+        assert penalty == 0.0  # No penalty for coherent combo
+
+    def test_none_mode_no_penalty(self):
+        """NONE tableau mode never gets penalty."""
+        from darwindeck.evolution.fitness_full import calculate_coherence_penalty
+
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="none_mode",
+            generation=1,
+            setup=SetupRules(cards_per_player=7, tableau_mode=TableauMode.NONE),
+            turn_structure=TurnStructure(phases=[
+                PlayPhase(target=Location.TABLEAU)
+            ]),
+            special_effects=[],
+            win_conditions=[WinCondition(type="empty_hand")],
+            scoring_rules=[],
+        )
+
+        penalty = calculate_coherence_penalty(genome)
+
+        assert penalty == 0.0  # NONE mode is always fine
+
+    def test_coherence_penalty_applied_to_fitness(self):
+        """Coherence penalty should be applied to total fitness via quality_multiplier."""
+        from darwindeck.evolution.fitness_full import (
+            FitnessEvaluator, SimulationResults, calculate_coherence_penalty
+        )
+
+        # Create a coherent genome (WAR + capture_all)
+        coherent_genome = GameGenome(
+            schema_version="1.0",
+            genome_id="coherent",
+            generation=1,
+            setup=SetupRules(cards_per_player=26, tableau_mode=TableauMode.WAR),
+            turn_structure=TurnStructure(phases=[
+                PlayPhase(target=Location.TABLEAU)
+            ]),
+            special_effects=[],
+            win_conditions=[WinCondition(type="capture_all")],
+            scoring_rules=[],
+        )
+
+        # Create an incoherent genome (WAR + empty_hand)
+        incoherent_genome = GameGenome(
+            schema_version="1.0",
+            genome_id="incoherent",
+            generation=1,
+            setup=SetupRules(cards_per_player=7, tableau_mode=TableauMode.WAR),
+            turn_structure=TurnStructure(phases=[
+                PlayPhase(target=Location.TABLEAU)
+            ]),
+            special_effects=[],
+            win_conditions=[WinCondition(type="empty_hand")],
+            scoring_rules=[],
+        )
+
+        # Verify penalties
+        assert calculate_coherence_penalty(coherent_genome) == 0.0
+        assert calculate_coherence_penalty(incoherent_genome) >= 0.30
