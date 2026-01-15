@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Optional
+from typing import List, Optional, Union
 from darwindeck.genome.schema import GameGenome, PlayPhase, Location, BettingPhase
 from darwindeck.simulation.state import GameState, Card, PlayerState
 
@@ -55,13 +55,20 @@ class LegalMove:
     target_loc: Location
 
 
-def generate_legal_moves(state: GameState, genome: GameGenome) -> List[LegalMove]:
+def generate_legal_moves(state: GameState, genome: GameGenome) -> List[Union[LegalMove, BettingMove]]:
     """Generate all legal moves for current player."""
-    moves: List[LegalMove] = []
+    moves: List[Union[LegalMove, BettingMove]] = []
     current_player = state.active_player
 
     for phase_idx, phase in enumerate(genome.turn_structure.phases):
-        if isinstance(phase, PlayPhase):
+        if isinstance(phase, BettingPhase):
+            # Generate betting moves
+            betting_moves = generate_betting_moves(state, phase, current_player)
+            # Set correct phase_index
+            for bm in betting_moves:
+                moves.append(BettingMove(action=bm.action, phase_index=phase_idx))
+
+        elif isinstance(phase, PlayPhase):
             # PlayPhase: play cards from hand
             target = phase.target
             min_cards = phase.min_cards
