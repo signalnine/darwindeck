@@ -75,8 +75,9 @@ type GameState struct {
 	HeartsBroken   bool        // For Hearts: whether hearts have been played
 	NumPlayers     uint8       // Number of players (for trick completion check)
 	CardsPerPlayer int         // Cards dealt to each player (for hand size check)
-	// Scopa/capture game state
-	CaptureMode    bool        // If true, use Scopa capture mechanics instead of War
+	// Tableau mode for card matching games
+	TableauMode       uint8 // 0=NONE, 1=WAR, 2=MATCH_RANK, 3=SEQUENCE
+	SequenceDirection uint8 // 0=ASC, 1=DESC, 2=BOTH
 	// Special effects state
 	PlayDirection int8  // 1 = clockwise, -1 = counter-clockwise
 	SkipCount     uint8 // Number of players to skip (capped at NumPlayers-1)
@@ -113,6 +114,13 @@ func PutState(state *GameState) {
 	StatePool.Put(state)
 }
 
+// NewGameState creates a new GameState with the specified number of players
+func NewGameState(numPlayers int) *GameState {
+	state := GetState()
+	state.NumPlayers = uint8(numPlayers)
+	return state
+}
+
 // Reset clears state for reuse
 func (s *GameState) Reset() {
 	// Reset all 4 potential players
@@ -145,7 +153,8 @@ func (s *GameState) Reset() {
 	s.HeartsBroken = false
 	s.NumPlayers = 2
 	s.CardsPerPlayer = 0
-	s.CaptureMode = false
+	s.TableauMode = 0
+	s.SequenceDirection = 0
 	s.PlayDirection = 1
 	s.SkipCount = 0
 	// Blackjack state
@@ -211,7 +220,8 @@ func (s *GameState) Clone() *GameState {
 	clone.HeartsBroken = s.HeartsBroken
 	clone.NumPlayers = s.NumPlayers
 	clone.CardsPerPlayer = s.CardsPerPlayer
-	clone.CaptureMode = s.CaptureMode
+	clone.TableauMode = s.TableauMode
+	clone.SequenceDirection = s.SequenceDirection
 	clone.PlayDirection = s.PlayDirection
 	clone.SkipCount = s.SkipCount
 	// Clone blackjack state
