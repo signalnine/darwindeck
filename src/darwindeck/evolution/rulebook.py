@@ -134,6 +134,7 @@ class RulebookSections:
     components: list[str] = field(default_factory=list)
     setup_steps: list[str] = field(default_factory=list)
     phases: list[tuple[str, str]] = field(default_factory=list)  # (name, description)
+    scoring_rules: list[str] = field(default_factory=list)
     special_rules: list[str] = field(default_factory=list)
     edge_cases: list[str] = field(default_factory=list)
     quick_reference: Optional[str] = None
@@ -193,14 +194,16 @@ class GenomeExtractor:
     # Win condition type to human-readable text
     WIN_CONDITION_TEXT = {
         "empty_hand": "First player to empty their hand wins",
-        "high_score": "Player with the highest score wins",
-        "low_score": "Player with the lowest score wins",
+        "high_score": "Player with the highest score wins (when any player reaches {threshold} points)",
+        "low_score": "Player with the lowest score wins (when any player reaches {threshold} points)",
         "capture_all": "Capture all cards to win",
         "most_tricks": "Player who wins the most tricks wins",
         "fewest_tricks": "Player who wins the fewest tricks wins",
         "most_chips": "Player with the most chips wins",
         "most_captured": "Player who captures the most cards wins",
-        "first_to_score": "First player to reach the target score wins",
+        "first_to_score": "First player to reach {threshold} points wins",
+        "all_hands_empty": "When all hands are empty, lowest score wins",
+        "best_hand": "Best poker hand wins at showdown",
     }
 
     def extract(self, genome: "GameGenome") -> RulebookSections:
@@ -212,6 +215,7 @@ class GenomeExtractor:
             components=self._extract_components(genome),
             setup_steps=self._extract_setup(genome),
             phases=self._extract_phases(genome),
+            scoring_rules=self._extract_scoring_rules(genome),
             special_rules=self._extract_special_rules(genome),
         )
 
@@ -256,7 +260,10 @@ class GenomeExtractor:
         for wc in genome.win_conditions:
             text = self.WIN_CONDITION_TEXT.get(wc.type, f"Meet the {wc.type} condition")
             if wc.threshold:
-                text = text.replace("target score", str(wc.threshold))
+                text = text.replace("{threshold}", str(wc.threshold))
+            else:
+                text = text.replace(" (when any player reaches {threshold} points)", "")
+                text = text.replace("{threshold} points", "the target")
             objectives.append(text)
 
         if len(objectives) == 1:
@@ -328,6 +335,7 @@ class GenomeExtractor:
                 desc += "Highest card wins the trick."
             else:
                 desc += "Lowest card wins the trick."
+            # Note: Scoring happens in _extract_scoring_rules
             return ("Trick", desc)
 
         elif isinstance(phase, ClaimPhase):
@@ -341,9 +349,35 @@ class GenomeExtractor:
         else:
             return ("Unknown", "Perform the phase action")
 
+    def _extract_scoring_rules(self, genome: "GameGenome") -> list[str]:
+        """Extract scoring rules, including implicit trick-taking scoring."""
+        from darwindeck.genome.schema import TrickPhase
+
+        rules = []
+
+        # Check if this is a trick-taking game with score-based win condition
+        has_trick_phase = any(
+            isinstance(p, TrickPhase) for p in genome.turn_structure.phases
+        )
+        has_score_win = any(
+            wc.type in ("low_score", "high_score", "all_hands_empty")
+            for wc in genome.win_conditions
+        )
+
+        if has_trick_phase and has_score_win:
+            # Implicit Hearts-style scoring in the Go simulator
+            rules.append("**Trick Scoring:** When you win a trick, score 1 point for each Heart and 13 points for the Queen of Spades")
+
+        # Explicit scoring rules from genome (if any)
+        for scoring_rule in genome.scoring_rules:
+            rules.append(f"**Scoring:** {scoring_rule}")
+
+        return rules
+
     def _extract_special_rules(self, genome: "GameGenome") -> list[str]:
         """Extract special card effects as rules."""
         from darwindeck.genome.schema import EffectType, Rank
+        from collections import defaultdict
 
         rules = []
 
@@ -354,19 +388,32 @@ class GenomeExtractor:
             Rank.QUEEN: "Queen", Rank.KING: "King"
         }
 
-        for effect in genome.special_effects:
-            rank_name = rank_names.get(effect.trigger_rank, str(effect.trigger_rank))
+        effect_descriptions = {
+            EffectType.SKIP_NEXT: "skips the next player's turn",
+            EffectType.REVERSE_DIRECTION: "reverses the turn order",
+            EffectType.DRAW_CARDS: "makes next player draw {value} cards",
+            EffectType.EXTRA_TURN: "gives you an extra turn",
+            EffectType.FORCE_DISCARD: "makes next player discard {value} cards",
+        }
 
-            if effect.effect_type == EffectType.SKIP_NEXT:
-                rules.append(f"**{rank_name}:** Playing this card skips the next player's turn")
-            elif effect.effect_type == EffectType.REVERSE_DIRECTION:
-                rules.append(f"**{rank_name}:** Playing this card reverses the turn order")
-            elif effect.effect_type == EffectType.DRAW_CARDS:
-                rules.append(f"**{rank_name}:** Next player must draw {effect.value} cards")
-            elif effect.effect_type == EffectType.EXTRA_TURN:
-                rules.append(f"**{rank_name}:** Playing this card gives you an extra turn")
-            elif effect.effect_type == EffectType.FORCE_DISCARD:
-                rules.append(f"**{rank_name}:** Next player must discard {effect.value} cards")
+        # Group effects by trigger rank to consolidate duplicates
+        effects_by_rank: dict[Rank, list[str]] = defaultdict(list)
+
+        for effect in genome.special_effects:
+            desc = effect_descriptions.get(effect.effect_type)
+            if desc:
+                desc = desc.replace("{value}", str(effect.value))
+                effects_by_rank[effect.trigger_rank].append(desc)
+
+        # Generate consolidated rules
+        for rank, effect_list in effects_by_rank.items():
+            rank_name = rank_names.get(rank, str(rank))
+            if len(effect_list) == 1:
+                rules.append(f"**{rank_name}:** Playing this card {effect_list[0]}")
+            else:
+                # Multiple effects on same rank - both trigger!
+                combined = " AND ".join(effect_list)
+                rules.append(f"**{rank_name}:** Playing this card {combined}")
 
         # Add wild card rules if any
         if genome.setup.wild_cards:
@@ -443,6 +490,7 @@ class RulebookEnhancer:
                     components=sections.components,
                     setup_steps=sections.setup_steps,
                     phases=sections.phases,
+                    scoring_rules=sections.scoring_rules,
                     special_rules=sections.special_rules,
                     edge_cases=sections.edge_cases,
                     quick_reference=sections.quick_reference,
@@ -564,6 +612,13 @@ class RulebookGenerator:
             lines.append(f"### {name}")
             lines.append(desc)
             lines.append("")
+
+        # Scoring (if any)
+        if sections.scoring_rules:
+            lines.append("## Scoring")
+            for rule in sections.scoring_rules:
+                lines.append(rule)
+                lines.append("")
 
         # Special Rules (if any)
         if sections.special_rules:
