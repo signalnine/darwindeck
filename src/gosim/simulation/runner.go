@@ -149,13 +149,9 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 	state.NumPlayers = uint8(numPlayers)
 	state.CardsPerPlayer = cardsPerPlayer
 
-	// Check if this is a capture-mode game (Scopa-style)
-	for _, wc := range genome.WinConditions {
-		if wc.WinType == 7 { // most_captured
-			state.TableauMode = 2 // MATCH_RANK for Scopa-style capture
-			break
-		}
-	}
+	// Set tableau mode from genome header
+	state.TableauMode = genome.Header.TableauMode
+	state.SequenceDirection = genome.Header.SequenceDirection
 
 	// Deal cards to each player
 	for i := 0; i < cardsPerPlayer; i++ {
@@ -440,13 +436,9 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 	state.NumPlayers = uint8(numPlayers)
 	state.CardsPerPlayer = cardsPerPlayer
 
-	// Check if this is a capture-mode game (Scopa-style)
-	for _, wc := range genome.WinConditions {
-		if wc.WinType == 7 { // most_captured
-			state.TableauMode = 2 // MATCH_RANK for Scopa-style capture
-			break
-		}
-	}
+	// Set tableau mode from genome header
+	state.TableauMode = genome.Header.TableauMode
+	state.SequenceDirection = genome.Header.SequenceDirection
 
 	for i := 0; i < cardsPerPlayer; i++ {
 		for p := 0; p < numPlayers; p++ {
