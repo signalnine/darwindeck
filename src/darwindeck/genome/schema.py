@@ -134,6 +134,9 @@ class SetupRules:
     starting_chips: int = 0                  # 0 means no betting enabled
     # NEW: Custom deck support (reduces special effects complexity)
     custom_printed_deck: bool = False        # True for Uno-style decks with effects printed on cards
+    # NEW: Tableau interaction mode
+    tableau_mode: TableauMode = TableauMode.NONE
+    sequence_direction: SequenceDirection = SequenceDirection.BOTH
 
     def __post_init__(self):
         """Convert lists to tuples for immutability."""

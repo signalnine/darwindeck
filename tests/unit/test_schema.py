@@ -61,3 +61,25 @@ def test_sequence_direction_enum_values():
     assert SequenceDirection.ASCENDING.value == "ascending"
     assert SequenceDirection.DESCENDING.value == "descending"
     assert SequenceDirection.BOTH.value == "both"
+
+
+def test_setup_rules_tableau_mode_default():
+    """SetupRules defaults tableau_mode to NONE."""
+    from darwindeck.genome.schema import SetupRules, TableauMode, SequenceDirection
+
+    setup = SetupRules(cards_per_player=7)
+    assert setup.tableau_mode == TableauMode.NONE
+    assert setup.sequence_direction == SequenceDirection.BOTH
+
+
+def test_setup_rules_tableau_mode_explicit():
+    """SetupRules accepts explicit tableau_mode."""
+    from darwindeck.genome.schema import SetupRules, TableauMode, SequenceDirection
+
+    setup = SetupRules(
+        cards_per_player=7,
+        tableau_mode=TableauMode.WAR,
+        sequence_direction=SequenceDirection.ASCENDING
+    )
+    assert setup.tableau_mode == TableauMode.WAR
+    assert setup.sequence_direction == SequenceDirection.ASCENDING
