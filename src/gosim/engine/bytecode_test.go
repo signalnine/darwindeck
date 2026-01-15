@@ -309,3 +309,87 @@ func TestPhaseTypeConstants(t *testing.T) {
 		t.Errorf("PhaseTypeClaim should be 6, got %d", PhaseTypeClaim)
 	}
 }
+
+func TestParseGenomeVersion2(t *testing.T) {
+	// Minimal v2 bytecode: version byte + 36-byte struct + tableau fields
+	// Total: 39 bytes minimum for header
+	// Then we need turn structure and win conditions sections
+
+	// Build a minimal v2 bytecode:
+	// Byte 0: version = 2
+	// Bytes 1-4: legacy version (uint32) = 1
+	// Bytes 5-12: genome_id_hash (uint64) = 0
+	// Bytes 13-16: player_count (uint32) = 2
+	// Bytes 17-20: max_turns (uint32) = 100
+	// Bytes 21-24: setup_offset (int32) = 39
+	// Bytes 25-28: turn_structure_offset (int32) = 39
+	// Bytes 29-32: win_conditions_offset (int32) = 43 (after turn structure)
+	// Bytes 33-36: scoring_offset (int32) = 48 (after win conditions)
+	// Byte 37: tableau_mode = 1 (WAR)
+	// Byte 38: sequence_direction = 0 (ASCENDING)
+	// Then turn structure: phase_count(4) = 0
+	// Then win conditions: count(4) = 0
+
+	bytecode := make([]byte, 48)
+	bytecode[0] = 2  // Version 2
+
+	// Legacy version = 1 (big-endian)
+	bytecode[4] = 1
+
+	// Player count = 2 (big-endian at bytes 13-16, which is offset 13)
+	bytecode[16] = 2
+
+	// Max turns = 100 (big-endian at bytes 17-20)
+	bytecode[20] = 100
+
+	// Setup offset = 39 (big-endian at bytes 21-24)
+	bytecode[24] = 39
+
+	// Turn structure offset = 39 (big-endian at bytes 25-28)
+	bytecode[28] = 39
+
+	// Win conditions offset = 43 (big-endian at bytes 29-32)
+	bytecode[32] = 43
+
+	// Scoring offset = 48 (big-endian at bytes 33-36)
+	bytecode[36] = 48
+
+	// Tableau mode = 1 (WAR)
+	bytecode[37] = 1
+
+	// Sequence direction = 0 (ASCENDING)
+	bytecode[38] = 0
+
+	// Turn structure section at offset 39: phase_count = 0
+	// (4 bytes, all zeros - already zero)
+
+	// Win conditions section at offset 43: count = 0
+	// (4 bytes, all zeros - already zero)
+
+	genome, err := ParseGenome(bytecode)
+	if err != nil {
+		t.Fatalf("ParseGenome failed: %v", err)
+	}
+
+	// Check the new fields were parsed
+	if genome.Header.BytecodeVersion != 2 {
+		t.Errorf("Expected BytecodeVersion 2, got %d", genome.Header.BytecodeVersion)
+	}
+	if genome.Header.TableauMode != 1 {
+		t.Errorf("Expected TableauMode 1, got %d", genome.Header.TableauMode)
+	}
+	if genome.Header.SequenceDirection != 0 {
+		t.Errorf("Expected SequenceDirection 0, got %d", genome.Header.SequenceDirection)
+	}
+
+	// Check existing fields still work
+	if genome.Header.Version != 1 {
+		t.Errorf("Expected Version 1, got %d", genome.Header.Version)
+	}
+	if genome.Header.PlayerCount != 2 {
+		t.Errorf("Expected PlayerCount 2, got %d", genome.Header.PlayerCount)
+	}
+	if genome.Header.MaxTurns != 100 {
+		t.Errorf("Expected MaxTurns 100, got %d", genome.Header.MaxTurns)
+	}
+}

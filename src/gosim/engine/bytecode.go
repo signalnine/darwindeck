@@ -70,9 +70,12 @@ const (
 	OpGE OpCode = 55
 )
 
-// BytecodeHeader matches Python (36 bytes, not 32!)
+// BytecodeHeader matches Python bytecode format
+// V1 format: 36 bytes (no version byte prefix)
+// V2 format: 39 bytes (version byte at offset 0, struct at 1-36, tableau fields at 37-38)
 type BytecodeHeader struct {
-	Version             uint32
+	BytecodeVersion     uint8  // V2+: bytecode format version (at byte 0)
+	Version             uint32 // Legacy version field
 	GenomeIDHash        uint64
 	PlayerCount         uint32
 	MaxTurns            uint32
@@ -80,15 +83,34 @@ type BytecodeHeader struct {
 	TurnStructureOffset int32
 	WinConditionsOffset int32
 	ScoringOffset       int32
+	TableauMode         uint8 // V2+: tableau mode (0=none, 1=war, 2=klondike, 3=build_sequences)
+	SequenceDirection   uint8 // V2+: sequence direction (0=ascending, 1=descending, 2=both)
 }
 
 // ParseHeader extracts header from bytecode
+// Supports both V1 (36 bytes, no version prefix) and V2 (39 bytes, version at byte 0)
 func ParseHeader(bytecode []byte) (*BytecodeHeader, error) {
 	if len(bytecode) < 36 {
 		return nil, errors.New("bytecode too short for header")
 	}
 
+	// Check if this is V2 format (version byte at offset 0)
+	// V2 bytecode has version == 2 at byte 0
+	// V1 bytecode has the legacy version field (uint32) at bytes 0-3
+	// We can distinguish because V1's legacy version is typically 1,
+	// which would have bytes [0,0,0,1] - the first byte is 0, not 2
+	if bytecode[0] == 2 {
+		return parseV2Header(bytecode)
+	}
+
+	// V1 format (backward compatible)
+	return parseV1Header(bytecode)
+}
+
+// parseV1Header parses the original 36-byte header format (no version byte prefix)
+func parseV1Header(bytecode []byte) (*BytecodeHeader, error) {
 	h := &BytecodeHeader{}
+	h.BytecodeVersion = 1 // Assume V1 for legacy bytecode
 	h.Version = binary.BigEndian.Uint32(bytecode[0:4])
 	h.GenomeIDHash = binary.BigEndian.Uint64(bytecode[4:12])
 	h.PlayerCount = binary.BigEndian.Uint32(bytecode[12:16])
@@ -97,6 +119,43 @@ func ParseHeader(bytecode []byte) (*BytecodeHeader, error) {
 	h.TurnStructureOffset = int32(binary.BigEndian.Uint32(bytecode[24:28]))
 	h.WinConditionsOffset = int32(binary.BigEndian.Uint32(bytecode[28:32]))
 	h.ScoringOffset = int32(binary.BigEndian.Uint32(bytecode[32:36]))
+	// V1 has no tableau fields - leave as defaults (0)
+	h.TableauMode = 0
+	h.SequenceDirection = 0
+
+	return h, nil
+}
+
+// parseV2Header parses the new 39-byte header format (version byte at offset 0)
+// Format:
+// - Byte 0: bytecode version (2)
+// - Bytes 1-4: legacy version (uint32)
+// - Bytes 5-12: genome_id_hash (uint64)
+// - Bytes 13-16: player_count (uint32)
+// - Bytes 17-20: max_turns (uint32)
+// - Bytes 21-24: setup_offset (int32)
+// - Bytes 25-28: turn_structure_offset (int32)
+// - Bytes 29-32: win_conditions_offset (int32)
+// - Bytes 33-36: scoring_offset (int32)
+// - Byte 37: tableau_mode (uint8)
+// - Byte 38: sequence_direction (uint8)
+func parseV2Header(bytecode []byte) (*BytecodeHeader, error) {
+	if len(bytecode) < 39 {
+		return nil, fmt.Errorf("v2 bytecode too short: %d < 39", len(bytecode))
+	}
+
+	h := &BytecodeHeader{}
+	h.BytecodeVersion = bytecode[0]
+	h.Version = binary.BigEndian.Uint32(bytecode[1:5])
+	h.GenomeIDHash = binary.BigEndian.Uint64(bytecode[5:13])
+	h.PlayerCount = binary.BigEndian.Uint32(bytecode[13:17])
+	h.MaxTurns = binary.BigEndian.Uint32(bytecode[17:21])
+	h.SetupOffset = int32(binary.BigEndian.Uint32(bytecode[21:25]))
+	h.TurnStructureOffset = int32(binary.BigEndian.Uint32(bytecode[25:29]))
+	h.WinConditionsOffset = int32(binary.BigEndian.Uint32(bytecode[29:33]))
+	h.ScoringOffset = int32(binary.BigEndian.Uint32(bytecode[33:37]))
+	h.TableauMode = bytecode[37]
+	h.SequenceDirection = bytecode[38]
 
 	return h, nil
 }
