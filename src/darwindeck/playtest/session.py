@@ -254,17 +254,23 @@ class PlaytestSession:
         if not moves:
             return None
 
-        # Check if these are betting moves
-        if isinstance(moves[0], BettingMove):
+        # Separate moves by type (genome may have multiple phase types)
+        card_moves = [m for m in moves if isinstance(m, LegalMove)]
+        betting_moves = [m for m in moves if isinstance(m, BettingMove)]
+
+        # Prioritize card plays over betting (card plays are core game actions)
+        if card_moves:
             if self.config.difficulty == "random":
-                return self.rng.choice(moves)
-            return self._ai_betting_select(moves)  # type: ignore
+                return self.rng.choice(card_moves)
+            return self._greedy_select(card_moves)
 
-        if self.config.difficulty == "random":
-            return self.rng.choice(moves)
+        # If no card moves, use betting
+        if betting_moves:
+            if self.config.difficulty == "random":
+                return self.rng.choice(betting_moves)
+            return self._ai_betting_select(betting_moves)
 
-        # Greedy/MCTS: use hand-reducing heuristic for card plays
-        return self._greedy_select(moves)  # type: ignore
+        return None
 
     def _ai_betting_select(self, moves: list[BettingMove]) -> BettingMove:
         """AI betting strategy based on hand strength.
