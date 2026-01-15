@@ -209,6 +209,30 @@ class FitnessEvaluator:
                         use_mcts: bool) -> FitnessMetrics:
         """Compute fitness metrics from simulation results."""
 
+        # PLAYABILITY GATE: Check if game is meaningfully playable before computing metrics
+        # This saves compute by rejecting broken games early (>50% errors, >95% draws, etc.)
+        # Import here to avoid circular dependency (analysis imports fitness_full)
+        from darwindeck.analysis.playability import PlayabilityChecker
+        checker = PlayabilityChecker(num_games=results.total_games, strict=False)
+        playability = checker.check(genome, results)
+
+        if not playability.playable:
+            # Game has critical playability issues - return 0 fitness immediately
+            return FitnessMetrics(
+                decision_density=0.0,
+                comeback_potential=0.0,
+                tension_curve=0.0,
+                interaction_frequency=0.0,
+                rules_complexity=0.0,
+                session_length=0.0,
+                skill_vs_luck=0.0,
+                bluffing_depth=0.0,
+                betting_engagement=0.0,
+                total_fitness=0.0,
+                games_simulated=results.total_games,
+                valid=False  # Mark as invalid due to playability
+            )
+
         # 1. Decision density - use real data if available, else heuristic
         if hasattr(results, 'total_decisions') and results.total_decisions > 0:
             # Real instrumentation available (Phase 1)
