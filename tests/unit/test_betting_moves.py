@@ -567,3 +567,139 @@ class TestDisplayBetting:
         assert "Bet" in output
         assert "[1]" in output
         assert "[2]" in output
+
+
+class TestAIBettingStrategy:
+    """Test AI betting strategy based on hand strength."""
+
+    def test_ai_evaluates_hand_strength(self):
+        """AI should calculate hand strength between 0 and 1."""
+        from darwindeck.playtest.session import PlaytestSession, SessionConfig
+        from darwindeck.genome.schema import (
+            GameGenome, SetupRules, TurnStructure, WinCondition, BettingPhase
+        )
+        from darwindeck.simulation.state import Card
+        from darwindeck.genome.schema import Rank, Suit
+
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="test_betting",
+            generation=0,
+            setup=SetupRules(cards_per_player=2, starting_chips=500),
+            turn_structure=TurnStructure(
+                phases=(BettingPhase(min_bet=10, max_raises=3),),
+            ),
+            special_effects=[],
+            win_conditions=[WinCondition(type="high_score")],
+            scoring_rules=[],
+            player_count=2,
+        )
+        config = SessionConfig(seed=12345)
+        session = PlaytestSession(genome, config)
+        session.state = session._initialize_state()
+
+        # Evaluate for player 1 (AI)
+        strength = session._evaluate_hand_strength(player_id=1)
+
+        assert 0.0 <= strength <= 1.0
+
+    def test_ai_raises_with_strong_hand(self):
+        """AI with strong hand should prefer RAISE when available."""
+        from darwindeck.playtest.session import PlaytestSession, SessionConfig
+        from darwindeck.genome.schema import (
+            GameGenome, SetupRules, TurnStructure, WinCondition, BettingPhase, Rank, Suit
+        )
+        from darwindeck.simulation.state import Card
+        from darwindeck.simulation.movegen import BettingMove, BettingAction
+
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="test_betting",
+            generation=0,
+            setup=SetupRules(cards_per_player=2, starting_chips=500),
+            turn_structure=TurnStructure(
+                phases=(BettingPhase(min_bet=10, max_raises=3),),
+            ),
+            special_effects=[],
+            win_conditions=[WinCondition(type="high_score")],
+            scoring_rules=[],
+            player_count=2,
+        )
+        config = SessionConfig(seed=12345)
+        session = PlaytestSession(genome, config)
+        session.state = session._initialize_state()
+
+        # Give AI a strong hand (Aces and Kings)
+        ai_player = 1 - session.human_player_idx
+        strong_hand = (
+            Card(rank=Rank.ACE, suit=Suit.SPADES),
+            Card(rank=Rank.KING, suit=Suit.HEARTS),
+        )
+        new_player = session.state.players[ai_player].copy_with(hand=strong_hand)
+        new_players = tuple(
+            new_player if i == ai_player else p
+            for i, p in enumerate(session.state.players)
+        )
+        session.state = session.state.copy_with(players=new_players)
+
+        # Provide betting moves including RAISE
+        moves = [
+            BettingMove(action=BettingAction.CHECK, phase_index=0),
+            BettingMove(action=BettingAction.BET, phase_index=0),
+            BettingMove(action=BettingAction.RAISE, phase_index=0),
+        ]
+
+        selected = session._ai_betting_select(moves)
+
+        # Strong hand should prefer RAISE
+        assert selected.action == BettingAction.RAISE
+
+    def test_ai_checks_with_weak_hand(self):
+        """AI with weak hand should prefer CHECK when available."""
+        from darwindeck.playtest.session import PlaytestSession, SessionConfig
+        from darwindeck.genome.schema import (
+            GameGenome, SetupRules, TurnStructure, WinCondition, BettingPhase, Rank, Suit
+        )
+        from darwindeck.simulation.state import Card
+        from darwindeck.simulation.movegen import BettingMove, BettingAction
+
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="test_betting",
+            generation=0,
+            setup=SetupRules(cards_per_player=2, starting_chips=500),
+            turn_structure=TurnStructure(
+                phases=(BettingPhase(min_bet=10, max_raises=3),),
+            ),
+            special_effects=[],
+            win_conditions=[WinCondition(type="high_score")],
+            scoring_rules=[],
+            player_count=2,
+        )
+        config = SessionConfig(seed=12345)
+        session = PlaytestSession(genome, config)
+        session.state = session._initialize_state()
+
+        # Give AI a weak hand (2s and 3s)
+        ai_player = 1 - session.human_player_idx
+        weak_hand = (
+            Card(rank=Rank.TWO, suit=Suit.SPADES),
+            Card(rank=Rank.THREE, suit=Suit.HEARTS),
+        )
+        new_player = session.state.players[ai_player].copy_with(hand=weak_hand)
+        new_players = tuple(
+            new_player if i == ai_player else p
+            for i, p in enumerate(session.state.players)
+        )
+        session.state = session.state.copy_with(players=new_players)
+
+        # Provide betting moves
+        moves = [
+            BettingMove(action=BettingAction.CHECK, phase_index=0),
+            BettingMove(action=BettingAction.BET, phase_index=0),
+        ]
+
+        selected = session._ai_betting_select(moves)
+
+        # Weak hand should prefer CHECK
+        assert selected.action == BettingAction.CHECK

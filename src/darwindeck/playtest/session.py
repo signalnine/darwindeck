@@ -267,17 +267,75 @@ class PlaytestSession:
         return self._greedy_select(moves)  # type: ignore
 
     def _ai_betting_select(self, moves: list[BettingMove]) -> BettingMove:
-        """AI betting strategy: simple heuristic until Task 13."""
-        # For now: prefer check > call > bet > raise > fold
-        priority = {
-            BettingAction.CHECK: 5,
-            BettingAction.CALL: 4,
-            BettingAction.BET: 3,
-            BettingAction.RAISE: 2,
-            BettingAction.ALL_IN: 1,
-            BettingAction.FOLD: 0,
-        }
+        """AI betting strategy based on hand strength.
+
+        Hand strength determines action priority:
+        - Strong hand (>0.7): RAISE > BET > CALL > CHECK > FOLD
+        - Medium hand (0.4-0.7): CHECK > CALL > BET > FOLD > RAISE
+        - Weak hand (<0.4): CHECK > FOLD > CALL > BET > RAISE
+        """
+        if not self.state:
+            return moves[0]
+
+        # Calculate hand strength
+        ai_player = 1 - self.human_player_idx
+        hand_strength = self._evaluate_hand_strength(ai_player)
+
+        # Strong hand: aggressive play
+        if hand_strength > 0.7:
+            priority = {
+                BettingAction.RAISE: 6,
+                BettingAction.BET: 5,
+                BettingAction.ALL_IN: 4,
+                BettingAction.CALL: 3,
+                BettingAction.CHECK: 2,
+                BettingAction.FOLD: 0,
+            }
+        # Medium hand: cautious play
+        elif hand_strength > 0.4:
+            priority = {
+                BettingAction.CHECK: 5,
+                BettingAction.CALL: 4,
+                BettingAction.BET: 3,
+                BettingAction.FOLD: 2,
+                BettingAction.RAISE: 1,
+                BettingAction.ALL_IN: 0,
+            }
+        # Weak hand: defensive play
+        else:
+            priority = {
+                BettingAction.CHECK: 5,
+                BettingAction.FOLD: 4,
+                BettingAction.CALL: 2,
+                BettingAction.BET: 1,
+                BettingAction.RAISE: 0,
+                BettingAction.ALL_IN: 0,
+            }
+
         return max(moves, key=lambda m: priority.get(m.action, -1))
+
+    def _evaluate_hand_strength(self, player_id: int) -> float:
+        """Evaluate hand strength as value between 0.0 and 1.0.
+
+        Uses average rank value normalized to [0,1].
+        """
+        if not self.state:
+            return 0.5
+
+        hand = self.state.players[player_id].hand
+        if not hand:
+            return 0.0
+
+        rank_values = {
+            "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7,
+            "8": 8, "9": 9, "10": 10, "J": 11, "Q": 12, "K": 13, "A": 14
+        }
+
+        total = sum(rank_values.get(card.rank.value, 7) for card in hand)
+        avg = total / len(hand)
+
+        # Normalize: 2 -> 0.0, 14 -> 1.0
+        return (avg - 2) / 12.0
 
     def _greedy_select(self, moves: list[LegalMove]) -> LegalMove:
         """Greedy heuristic: prefer moves that play cards (reduce hand size)."""
