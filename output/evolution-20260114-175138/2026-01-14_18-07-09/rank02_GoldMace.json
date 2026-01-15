@@ -1,0 +1,92 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "GoldMace",
+  "generation": 53,
+  "setup": {
+    "cards_per_player": 23,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 1,
+    "starting_chips": 2055
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "DiscardPhase",
+        "target": "DISCARD",
+        "count": 1,
+        "mandatory": true
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": null,
+        "min_cards": 1,
+        "max_cards": 1,
+        "mandatory": true
+      },
+      {
+        "type": "BettingPhase",
+        "min_bet": 10,
+        "max_raises": 3
+      },
+      {
+        "type": "ClaimPhase",
+        "min_cards": 1,
+        "max_cards": 1,
+        "sequential_rank": true,
+        "allow_challenge": true,
+        "pile_penalty": true
+      },
+      {
+        "type": "DiscardPhase",
+        "target": "DISCARD",
+        "count": 1,
+        "mandatory": true
+      }
+    ],
+    "is_trick_based": false,
+    "tricks_per_hand": null
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "capture_all",
+      "threshold": null
+    },
+    {
+      "type": "empty_hand",
+      "threshold": null
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 1000,
+  "min_turns": 10,
+  "player_count": 2,
+  "fitness": 0.702673344120981,
+  "fitness_rank": 2,
+  "fitness_metrics": {
+    "decision_density": 0.944,
+    "comeback_potential": 1.0,
+    "tension_curve": 1.0,
+    "interaction_frequency": 0.9381773960629323,
+    "rules_complexity": 0.4745573068952059,
+    "session_length": 0.9230185275607639,
+    "skill_vs_luck": 0.8875,
+    "bluffing_depth": 0.7922171945701357,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "skill_evaluation": {
+    "greedy_win_rate": 0.51,
+    "greedy_wins_as_p0": 30,
+    "greedy_wins_as_p1": 21,
+    "mcts_win_rate": 0.85,
+    "mcts_wins_as_p0": 41,
+    "mcts_wins_as_p1": 44,
+    "skill_score": 0.6799999999999999,
+    "first_player_advantage": 0.05999999999999994,
+    "total_games": 200,
+    "timed_out": false
+  },
+  "skill_rank": 2
+}

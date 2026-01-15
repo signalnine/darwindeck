@@ -94,19 +94,21 @@ class MovePresenter:
 
         lines: list[str] = []
 
-        # Check if these are betting moves
-        if moves and isinstance(moves[0], BettingMove):
-            lines.append(self._present_betting(moves, state))  # type: ignore
-        elif moves:
-            # LegalMove - get phase type
-            phase_idx = moves[0].phase_index  # type: ignore
-            phase = genome.turn_structure.phases[phase_idx]
+        # Separate moves by type (genome may have multiple phase types)
+        card_moves = [m for m in moves if isinstance(m, LegalMove)]
+        betting_moves = [m for m in moves if isinstance(m, BettingMove)]
 
-            if isinstance(phase, PlayPhase):
-                lines.append(self._present_card_play(moves, state))  # type: ignore
-            else:
-                lines.append(self._present_generic(moves))
-        else:
+        # Present card play options if any
+        if card_moves:
+            lines.append(self._present_card_play_indexed(card_moves, state, 0))
+
+        # Present betting options if any
+        if betting_moves:
+            # Adjust indices to account for card moves
+            lines.append(self._present_betting_indexed(betting_moves, state, len(card_moves)))
+
+        # Fallback if neither type found
+        if not card_moves and not betting_moves:
             lines.append(self._present_generic(moves))
 
         lines.append("")
@@ -116,18 +118,26 @@ class MovePresenter:
 
     def _present_card_play(self, moves: list[LegalMove], state: GameState) -> str:
         """Present card play options."""
+        return self._present_card_play_indexed(moves, state, 0)
+
+    def _present_card_play_indexed(self, moves: list[LegalMove], state: GameState, offset: int) -> str:
+        """Present card play options with index offset."""
         hand = state.players[state.active_player].hand
         options: list[str] = []
 
-        for move in moves:
+        for i, move in enumerate(moves):
             if 0 <= move.card_index < len(hand):
                 card = hand[move.card_index]
-                options.append(f"[{move.card_index + 1}] {format_card(card)}")
+                options.append(f"[{offset + i + 1}] {format_card(card)}")
 
         return "Play: " + "  ".join(options)
 
     def _present_betting(self, moves: list[BettingMove], state: GameState) -> str:
         """Present betting options."""
+        return self._present_betting_indexed(moves, state, 0)
+
+    def _present_betting_indexed(self, moves: list[BettingMove], state: GameState, offset: int) -> str:
+        """Present betting options with index offset."""
         action_names = {
             BettingAction.CHECK: "Check",
             BettingAction.BET: "Bet",
@@ -140,7 +150,7 @@ class MovePresenter:
 
         for i, move in enumerate(moves):
             name = action_names.get(move.action, str(move.action))
-            options.append(f"[{i + 1}] {name}")
+            options.append(f"[{offset + i + 1}] {name}")
 
         return "Bet: " + "  ".join(options)
 

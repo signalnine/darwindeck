@@ -703,3 +703,66 @@ class TestAIBettingStrategy:
 
         # Weak hand should prefer CHECK
         assert selected.action == BettingAction.CHECK
+
+
+class TestMixedMovePresentation:
+    """Test presentation of mixed LegalMove and BettingMove lists."""
+
+    def test_presenter_handles_mixed_move_types(self):
+        """MovePresenter should handle genomes with both PlayPhase and BettingPhase."""
+        from darwindeck.simulation.state import GameState
+        from darwindeck.simulation.movegen import LegalMove, BettingMove, BettingAction
+        from darwindeck.genome.schema import (
+            GameGenome, SetupRules, TurnStructure, BettingPhase, PlayPhase, Location
+        )
+        from darwindeck.playtest.display import MovePresenter
+        from darwindeck.simulation.state import Card
+        from darwindeck.genome.schema import Rank, Suit
+
+        hand = (
+            Card(rank=Rank.ACE, suit=Suit.SPADES),
+            Card(rank=Rank.KING, suit=Suit.HEARTS),
+        )
+        player = PlayerState(player_id=0, hand=hand, score=0, chips=500)
+        state = GameState(
+            players=(player,),
+            deck=(),
+            discard=(),
+            turn=1,
+            active_player=0,
+        )
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="test",
+            generation=0,
+            setup=SetupRules(cards_per_player=2, starting_chips=500),
+            turn_structure=TurnStructure(phases=(
+                PlayPhase(min_cards=1, max_cards=1, target=Location.TABLEAU),
+                BettingPhase(min_bet=10, max_raises=3),
+            )),
+            special_effects=[],
+            win_conditions=(),
+            scoring_rules=(),
+            player_count=1,
+        )
+
+        # Mix of card and betting moves
+        moves = [
+            LegalMove(phase_index=0, card_index=0, target_loc=Location.TABLEAU),
+            LegalMove(phase_index=0, card_index=1, target_loc=Location.TABLEAU),
+            BettingMove(action=BettingAction.CHECK, phase_index=1),
+            BettingMove(action=BettingAction.BET, phase_index=1),
+        ]
+
+        presenter = MovePresenter()
+        output = presenter.present(moves, state, genome)
+
+        # Should show both card plays and betting options
+        assert "Play:" in output
+        assert "Bet:" in output
+        # Card play indices
+        assert "[1]" in output  # First card
+        assert "[2]" in output  # Second card
+        # Betting indices (offset by 2)
+        assert "[3]" in output  # Check
+        assert "[4]" in output  # Bet
