@@ -17,6 +17,8 @@ from darwindeck.genome.schema import (
     SpecialEffect,
     EffectType,
     TargetSelector,
+    TableauMode,
+    SequenceDirection,
 )
 from darwindeck.genome.conditions import Condition, ConditionType, Operator, CompoundCondition
 
@@ -36,7 +38,8 @@ def create_war_genome() -> GameGenome:
         setup=SetupRules(
             cards_per_player=26,
             initial_deck="standard_52",
-            initial_discard_count=0
+            initial_discard_count=0,
+            tableau_mode=TableauMode.WAR,
         ),
         turn_structure=TurnStructure(
             phases=[
@@ -395,6 +398,7 @@ def create_betting_war_genome() -> GameGenome:
             initial_deck="standard_52",
             initial_discard_count=0,
             starting_chips=500,
+            tableau_mode=TableauMode.WAR,
         ),
         turn_structure=TurnStructure(
             phases=[
@@ -491,7 +495,8 @@ def create_scopa_genome() -> GameGenome:
         setup=SetupRules(
             cards_per_player=3,
             initial_deck="standard_52",
-            initial_discard_count=4  # Start with 4 cards on tableau
+            initial_discard_count=4,  # Start with 4 cards on tableau
+            tableau_mode=TableauMode.MATCH_RANK,
         ),
         turn_structure=TurnStructure(
             phases=[
@@ -762,7 +767,9 @@ def create_fan_tan_genome() -> GameGenome:
         setup=SetupRules(
             cards_per_player=10,  # 2 players × 10 = 20, leaving 32 in deck
             initial_deck="standard_52",
-            initial_discard_count=0
+            initial_discard_count=0,
+            tableau_mode=TableauMode.SEQUENCE,
+            sequence_direction=SequenceDirection.BOTH,
         ),
         turn_structure=TurnStructure(
             phases=[
