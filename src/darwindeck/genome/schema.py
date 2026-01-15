@@ -122,6 +122,14 @@ class HandEvaluationMethod(Enum):
     CARD_COUNT = "card_count"        # Most cards wins (War)
 
 
+@dataclass(frozen=True)
+class CardValue:
+    """Point value for a card rank."""
+    rank: Rank
+    value: int
+    alternate_value: Optional[int] = None
+
+
 class TableauMode(Enum):
     """How cards on the tableau interact."""
     NONE = "none"              # Cards accumulate, no interaction

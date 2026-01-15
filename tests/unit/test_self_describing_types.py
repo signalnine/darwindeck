@@ -2,7 +2,7 @@
 """Tests for self-describing genome types."""
 
 import pytest
-from darwindeck.genome.schema import ScoringTrigger, Suit, Rank
+from darwindeck.genome.schema import ScoringTrigger, Suit, Rank, CardValue
 
 
 class TestScoringTrigger:
@@ -99,3 +99,24 @@ class TestHandEvaluationMethod:
         assert HandEvaluationMethod.POINT_TOTAL.value == "point_total"
         assert HandEvaluationMethod.PATTERN_MATCH.value == "pattern_match"
         assert HandEvaluationMethod.CARD_COUNT.value == "card_count"
+
+
+class TestCardValue:
+    def test_card_value_simple(self):
+        """CardValue can express simple point value."""
+        cv = CardValue(rank=Rank.KING, value=10)
+        assert cv.rank == Rank.KING
+        assert cv.value == 10
+        assert cv.alternate_value is None
+
+    def test_card_value_with_alternate(self):
+        """CardValue can express alternate value (Ace in Blackjack)."""
+        cv = CardValue(rank=Rank.ACE, value=11, alternate_value=1)
+        assert cv.value == 11
+        assert cv.alternate_value == 1
+
+    def test_card_value_frozen(self):
+        """CardValue is immutable."""
+        cv = CardValue(rank=Rank.KING, value=10)
+        with pytest.raises(AttributeError):
+            cv.value = 20
