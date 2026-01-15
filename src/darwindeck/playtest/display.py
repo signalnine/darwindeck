@@ -50,12 +50,12 @@ class StateRenderer:
             top = format_card(state.discard[-1])
             lines.append(f"Discard pile: {top}")
 
-        # Chips (if betting game)
-        if genome.setup.starting_chips > 0:
-            player = state.players[player_idx]
-            # PlayerState may not have chips attr in base version
-            chips = getattr(player, "chips", genome.setup.starting_chips)
-            lines.append(f"Your chips: {chips}")
+        # Show chips and pot if betting game
+        if state.players[player_idx].chips > 0 or state.pot > 0:
+            player_chips = state.players[player_idx].chips
+            lines.append(f"Your chips: {player_chips} | Pot: {state.pot}")
+            if state.current_bet > 0:
+                lines.append(f"Current bet: {state.current_bet}")
 
         # Debug mode
         if debug:

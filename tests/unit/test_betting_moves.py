@@ -491,3 +491,40 @@ class TestSessionBettingInit:
         assert state.players[0].chips == 500
         assert state.players[1].chips == 500
         assert state.pot == 0
+
+
+class TestDisplayBetting:
+    """Test display shows betting info."""
+
+    def test_render_shows_chips_when_nonzero(self):
+        """StateRenderer should show chips when player has them."""
+        from darwindeck.simulation.state import GameState
+        from darwindeck.genome.schema import GameGenome, SetupRules, TurnStructure
+        from darwindeck.playtest.display import StateRenderer
+
+        player = PlayerState(player_id=0, hand=(), score=0, chips=500)
+        state = GameState(
+            players=(player,),
+            deck=(),
+            discard=(),
+            turn=1,
+            active_player=0,
+            pot=150,
+        )
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="test",
+            generation=0,
+            setup=SetupRules(cards_per_player=2, starting_chips=500),
+            turn_structure=TurnStructure(phases=()),
+            special_effects=[],
+            win_conditions=(),
+            scoring_rules=(),
+            player_count=1,
+        )
+        renderer = StateRenderer()
+
+        output = renderer.render(state, genome, player_idx=0, debug=False)
+
+        assert "500" in output  # Chips shown
+        assert "150" in output  # Pot shown
