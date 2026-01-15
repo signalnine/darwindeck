@@ -98,6 +98,13 @@ class ScoringTrigger(Enum):
     SET_COMPLETE = "set_complete" # Score when completing a set (Go Fish)
 
 
+@dataclass(frozen=True)
+class CardCondition:
+    """Condition to match a card by suit and/or rank."""
+    suit: Optional[Suit] = None
+    rank: Optional[Rank] = None
+
+
 class TableauMode(Enum):
     """How cards on the tableau interact."""
     NONE = "none"              # Cards accumulate, no interaction
