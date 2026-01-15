@@ -42,3 +42,22 @@ def test_special_effect_default_value():
     )
 
     assert effect.value == 1
+
+
+def test_tableau_mode_enum_values():
+    """TableauMode enum has expected values."""
+    from darwindeck.genome.schema import TableauMode
+
+    assert TableauMode.NONE.value == "none"
+    assert TableauMode.WAR.value == "war"
+    assert TableauMode.MATCH_RANK.value == "match_rank"
+    assert TableauMode.SEQUENCE.value == "sequence"
+
+
+def test_sequence_direction_enum_values():
+    """SequenceDirection enum has expected values."""
+    from darwindeck.genome.schema import SequenceDirection
+
+    assert SequenceDirection.ASCENDING.value == "ascending"
+    assert SequenceDirection.DESCENDING.value == "descending"
+    assert SequenceDirection.BOTH.value == "both"
