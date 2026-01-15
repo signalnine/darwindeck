@@ -18,6 +18,7 @@ from darwindeck.analysis.mutation_sampler import (
 from darwindeck.analysis.random_baseline import (
     BaselineConfig, generate_random_genomes, compute_baseline_statistics
 )
+from darwindeck.simulation.go_simulator import GoSimulator
 from darwindeck.analysis.basin_detector import detect_basins, compute_valley_depths
 from darwindeck.analysis.basin_report import (
     print_summary, save_json, plot_heatmap, plot_trajectories,
@@ -31,6 +32,33 @@ def progress_reporter(current: int, total: int) -> None:
     print(f"\rSampling trajectories: {current}/{total} ({pct:.1f}%)", end="", flush=True)
     if current == total:
         print()  # Newline at end
+
+
+def is_playable(genome, simulator, games: int = 10) -> bool:
+    """Check if genome produces playable games (< 50% error rate)."""
+    try:
+        results = simulator.simulate(genome, num_games=games)
+        error_rate = results.errors / results.total_games if results.total_games > 0 else 1.0
+        return error_rate < 0.5
+    except Exception:
+        return False
+
+
+def filter_playable_genomes(genomes, simulator, verbose: bool = False):
+    """Filter list of genomes to only playable ones."""
+    playable = []
+    unplayable = []
+
+    for genome in genomes:
+        if is_playable(genome, simulator):
+            playable.append(genome)
+        else:
+            unplayable.append(genome.genome_id)
+
+    if verbose and unplayable:
+        print(f"   Filtered out {len(unplayable)} unplayable genomes: {', '.join(unplayable)}")
+
+    return playable
 
 
 def main():
@@ -68,6 +96,10 @@ def main():
                         help="Output directory")
     parser.add_argument("--seed", type=int, default=42,
                         help="Random seed for reproducibility")
+
+    # Filtering
+    parser.add_argument("--filter-unplayable", action="store_true",
+                        help="Filter out genomes that fail simulation (>50% error rate)")
 
     # Execution
     parser.add_argument("--dry-run", action="store_true",
@@ -122,6 +154,7 @@ def main():
         print(f"Output directory: {args.output_dir}")
         print(f"Random seed: {args.seed}")
         print(f"Fitness style: {args.style}")
+        print(f"Filter unplayable: {args.filter_unplayable}")
         print(f"Parallel: {args.parallel} ({num_workers} workers)")
 
         # Load genomes to show count
@@ -147,6 +180,19 @@ def main():
     print("\n1. Loading known genomes...")
     known_genomes = get_seed_genomes()
     print(f"   Loaded {len(known_genomes)} known games")
+
+    # 1b. Filter unplayable genomes if requested
+    if args.filter_unplayable:
+        print("\n1b. Filtering unplayable genomes...")
+        simulator = GoSimulator(seed=args.seed)
+        original_count = len(known_genomes)
+        known_genomes = filter_playable_genomes(known_genomes, simulator, verbose=args.verbose)
+        filtered_count = original_count - len(known_genomes)
+        print(f"   Filtered: {filtered_count} unplayable, {len(known_genomes)} remain")
+
+        if len(known_genomes) < 2:
+            print("ERROR: Need at least 2 playable genomes for basin analysis")
+            sys.exit(1)
 
     # 2. Compute distance matrix
     print("\n2. Computing distance matrix...")
