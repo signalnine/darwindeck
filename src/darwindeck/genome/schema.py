@@ -89,6 +89,15 @@ class BettingAction(Enum):
     FOLD = "fold"        # Surrender hand, forfeit pot
 
 
+class ScoringTrigger(Enum):
+    """When scoring happens for a card."""
+    TRICK_WIN = "trick_win"       # Score when winning trick with this card
+    CAPTURE = "capture"           # Score when capturing this card
+    PLAY = "play"                 # Score when playing this card
+    HAND_END = "hand_end"         # Score for cards in hand at end
+    SET_COMPLETE = "set_complete" # Score when completing a set (Go Fish)
+
+
 class TableauMode(Enum):
     """How cards on the tableau interact."""
     NONE = "none"              # Cards accumulate, no interaction
