@@ -457,3 +457,37 @@ class TestBettingHelpers:
         )
 
         assert all_bets_matched(state) is True
+
+
+class TestSessionBettingInit:
+    """Test session initializes betting state."""
+
+    def test_session_initializes_chips(self):
+        """Session should initialize player chips from genome."""
+        from darwindeck.playtest.session import PlaytestSession, SessionConfig
+        from darwindeck.genome.schema import (
+            GameGenome, SetupRules, TurnStructure, WinCondition, BettingPhase
+        )
+
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="test_betting",
+            generation=0,
+            setup=SetupRules(cards_per_player=2, starting_chips=500),
+            turn_structure=TurnStructure(
+                phases=(BettingPhase(min_bet=10, max_raises=3),),
+            ),
+            special_effects=[],
+            win_conditions=[WinCondition(type="high_score")],
+            scoring_rules=[],
+            player_count=2,
+        )
+        config = SessionConfig(seed=12345)
+        session = PlaytestSession(genome, config)
+
+        # Initialize state
+        state = session._initialize_state()
+
+        assert state.players[0].chips == 500
+        assert state.players[1].chips == 500
+        assert state.pot == 0

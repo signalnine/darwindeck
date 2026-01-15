@@ -84,9 +84,17 @@ class PlaytestSession:
             deck = deck[cards_per_player:]
             hands.append(hand)
 
+        # Get starting chips (0 for non-betting games)
+        starting_chips = self.genome.setup.starting_chips
+
         # Create player states
         players = tuple(
-            PlayerState(player_id=i, hand=hand, score=0)
+            PlayerState(
+                player_id=i,
+                hand=hand,
+                score=0,
+                chips=starting_chips,
+            )
             for i, hand in enumerate(hands)
         )
 
