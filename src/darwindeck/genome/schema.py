@@ -89,6 +89,21 @@ class BettingAction(Enum):
     FOLD = "fold"        # Surrender hand, forfeit pot
 
 
+class TableauMode(Enum):
+    """How cards on the tableau interact."""
+    NONE = "none"              # Cards accumulate, no interaction
+    WAR = "war"                # Compare cards, winner takes all (2-player only)
+    MATCH_RANK = "match_rank"  # Matching rank captures
+    SEQUENCE = "sequence"      # Build ascending/descending piles
+
+
+class SequenceDirection(Enum):
+    """Direction for SEQUENCE tableau mode."""
+    ASCENDING = "ascending"
+    DESCENDING = "descending"
+    BOTH = "both"
+
+
 @dataclass(frozen=True)
 class SpecialEffect:
     """A card-triggered immediate effect."""
