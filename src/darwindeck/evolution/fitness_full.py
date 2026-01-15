@@ -651,6 +651,14 @@ class FitnessEvaluator:
         # Known games typically score: comeback~0.71, skill~0.53, tension~0.63
         quality_multiplier = 1.0
 
+        # PLAYABILITY SCORE: Use as graduated multiplier (0.5 to 1.0 range)
+        # This creates evolutionary pressure toward robustly playable games,
+        # not just games that barely pass the playability gate.
+        # Score of 1.0 = no penalty, score of 0.5 = 25% penalty, score of 0.0 = 50% penalty
+        # Note: playability was already checked at method start, so we know it passed
+        playability_multiplier = 0.5 + (playability.score * 0.5)
+        quality_multiplier *= playability_multiplier
+
         # Comeback potential: Random games almost always score ~0 here
         # Threshold 0.15 catches most broken games while allowing edge cases
         if comeback_potential < 0.15:
