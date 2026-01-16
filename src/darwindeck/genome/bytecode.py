@@ -22,6 +22,10 @@ from darwindeck.genome.schema import (
     Rank,
     TableauMode,
     SequenceDirection,
+    ScoringTrigger,
+    CardCondition,
+    CardScoringRule,
+    Suit,
 )
 from darwindeck.genome.conditions import Condition, ConditionType, Operator, CompoundCondition, ConditionOrCompound
 
@@ -125,6 +129,23 @@ TARGET_TO_BYTE = {
     TargetSelector.ALL_OPPONENTS: 4,
     TargetSelector.LEFT_OPPONENT: 5,
     TargetSelector.RIGHT_OPPONENT: 6,
+}
+
+# ScoringTrigger encoding
+SCORING_TRIGGER_MAP = {
+    ScoringTrigger.TRICK_WIN: 0,
+    ScoringTrigger.CAPTURE: 1,
+    ScoringTrigger.PLAY: 2,
+    ScoringTrigger.HAND_END: 3,
+    ScoringTrigger.SET_COMPLETE: 4,
+}
+
+# Suit encoding (for CardCondition)
+SUIT_TO_BYTE = {
+    Suit.HEARTS: 0,
+    Suit.DIAMONDS: 1,
+    Suit.CLUBS: 2,
+    Suit.SPADES: 3,
 }
 
 
