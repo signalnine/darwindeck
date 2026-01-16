@@ -325,3 +325,25 @@ def test_compile_hand_patterns_poker():
 
     # Format: count:1 + variable per pattern
     assert bytecode[0] == 2  # 2 patterns
+
+
+def test_compile_hand_evaluation_blackjack():
+    """Test encoding Blackjack hand evaluation."""
+    from darwindeck.genome.schema import HandEvaluation, HandEvaluationMethod, CardValue, Rank
+    from darwindeck.genome.bytecode import compile_hand_evaluation
+
+    eval = HandEvaluation(
+        method=HandEvaluationMethod.POINT_TOTAL,
+        card_values=(
+            CardValue(rank=Rank.ACE, value=1, alternate_value=11),
+        ),
+        target_value=21,
+        bust_threshold=22,
+    )
+
+    bytecode = compile_hand_evaluation(eval)
+
+    # Format: method:1 + target:1 + bust:1 + card_values + patterns
+    assert bytecode[0] == 2  # POINT_TOTAL method
+    assert bytecode[1] == 21  # target_value
+    assert bytecode[2] == 22  # bust_threshold

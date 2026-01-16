@@ -260,6 +260,30 @@ def compile_hand_patterns(patterns: tuple) -> bytes:
     return result
 
 
+def compile_hand_evaluation(eval: HandEvaluation) -> bytes:
+    """Compile hand evaluation to bytecode.
+
+    Format:
+    - method (1 byte): HandEvaluationMethod enum
+    - target_value (1 byte, 0 if None)
+    - bust_threshold (1 byte, 0 if None)
+    - card_values section (variable)
+    - patterns section (variable)
+    """
+    if eval is None:
+        return bytes([0])  # NONE method
+
+    method = HAND_EVAL_METHOD_MAP.get(eval.method, 0)
+    target = eval.target_value or 0
+    bust = eval.bust_threshold or 0
+
+    result = bytes([method, target & 0xFF, bust & 0xFF])
+    result += compile_card_values(eval.card_values or ())
+    result += compile_hand_patterns(eval.patterns or ())
+
+    return result
+
+
 def compile_effects(effects: list) -> bytes:
     """Compile special effects to bytecode.
 
