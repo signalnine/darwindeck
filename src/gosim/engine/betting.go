@@ -1,5 +1,7 @@
 package engine
 
+import "sort"
+
 // BettingAction represents a betting action type
 type BettingAction int
 
@@ -259,4 +261,151 @@ func minFloat64(a, b float64) float64 {
 		return a
 	}
 	return b
+}
+
+// ============================================================================
+// Explicit Hand Pattern Evaluation (for poker-style games)
+// ============================================================================
+
+// EvaluateHandPattern returns the rank_priority of the best matching pattern.
+// Patterns are expected to be sorted by priority (highest first).
+// Returns 0 if no pattern matches or evaluation is nil/wrong method.
+func EvaluateHandPattern(hand []Card, eval *HandEvaluation) uint8 {
+	if eval == nil || eval.Method != EvalMethodPatternMatch || len(eval.Patterns) == 0 {
+		return 0
+	}
+
+	// Try each pattern (they should be sorted by priority, highest first)
+	for _, pattern := range eval.Patterns {
+		if matchesPattern(hand, pattern) {
+			return pattern.RankPriority
+		}
+	}
+
+	return 0
+}
+
+// matchesPattern checks if a hand matches a pattern
+func matchesPattern(hand []Card, p HandPattern) bool {
+	// Check required count
+	if p.RequiredCount > 0 && len(hand) != int(p.RequiredCount) {
+		return false
+	}
+
+	// Check same suit count (for flush)
+	if p.SameSuitCount > 0 {
+		suitCounts := make(map[uint8]int)
+		for _, c := range hand {
+			suitCounts[c.Suit]++
+		}
+		maxSuit := 0
+		for _, count := range suitCounts {
+			if count > maxSuit {
+				maxSuit = count
+			}
+		}
+		if maxSuit < int(p.SameSuitCount) {
+			return false
+		}
+	}
+
+	// Check same rank groups (for pairs, trips, full house)
+	if len(p.SameRankGroups) > 0 {
+		rankCounts := make(map[uint8]int)
+		for _, c := range hand {
+			rankCounts[c.Rank]++
+		}
+
+		// Sort counts descending
+		counts := make([]int, 0, len(rankCounts))
+		for _, count := range rankCounts {
+			counts = append(counts, count)
+		}
+		sort.Sort(sort.Reverse(sort.IntSlice(counts)))
+
+		// Check if groups match
+		for i, required := range p.SameRankGroups {
+			if i >= len(counts) || counts[i] < int(required) {
+				return false
+			}
+		}
+	}
+
+	// Check sequence (for straight)
+	if p.SequenceLength > 0 {
+		if !isSequence(hand, int(p.SequenceLength), p.SequenceWrap) {
+			return false
+		}
+	}
+
+	// Check required ranks (for specific hands like royal flush)
+	if len(p.RequiredRanks) > 0 {
+		rankSet := make(map[uint8]bool)
+		for _, c := range hand {
+			rankSet[c.Rank] = true
+		}
+		for _, r := range p.RequiredRanks {
+			if !rankSet[r] {
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
+// isSequence checks if hand contains a sequence of given length
+func isSequence(hand []Card, length int, wrap bool) bool {
+	if len(hand) < length {
+		return false
+	}
+
+	// Get unique ranks sorted
+	rankSet := make(map[uint8]bool)
+	for _, c := range hand {
+		rankSet[c.Rank] = true
+	}
+
+	ranks := make([]int, 0, len(rankSet))
+	for r := range rankSet {
+		ranks = append(ranks, int(r))
+	}
+	sort.Ints(ranks)
+
+	// Check for consecutive run
+	for i := 0; i <= len(ranks)-length; i++ {
+		consecutive := true
+		for j := 1; j < length; j++ {
+			if ranks[i+j] != ranks[i]+j {
+				consecutive = false
+				break
+			}
+		}
+		if consecutive {
+			return true
+		}
+	}
+
+	// Check wrap-around (Ace-low: A-2-3-4-5)
+	if wrap && len(ranks) >= length {
+		// Check if we have Ace (rank 12) and low cards
+		hasAce := rankSet[12]
+		if hasAce {
+			// Check for A-2-3-4-5 (ranks: 12, 0, 1, 2, 3)
+			// In our representation: 0=2, 1=3, 2=4, 3=5, ... 12=Ace
+			wrapRanks := []uint8{0, 1, 2, 3} // 2,3,4,5
+			allPresent := true
+			for _, r := range wrapRanks[:length-1] {
+				if !rankSet[r] {
+					allPresent = false
+					break
+				}
+			}
+			if allPresent {
+				return true
+			}
+		}
+	}
+
+	return false
 }

@@ -1033,3 +1033,352 @@ func TestContainsBettingAction_EmptySlice(t *testing.T) {
 		t.Error("Expected containsBettingAction to return false for empty slice")
 	}
 }
+
+// ============================================================================
+// Hand Pattern Evaluation Tests
+// ============================================================================
+
+func TestEvaluateHandPatternFullHouse(t *testing.T) {
+	eval := &HandEvaluation{
+		Method: EvalMethodPatternMatch,
+		Patterns: []HandPattern{
+			{RankPriority: 70, RequiredCount: 5, SameRankGroups: []uint8{3, 2}}, // Full House
+			{RankPriority: 60, RequiredCount: 5, SameSuitCount: 5},               // Flush
+		},
+	}
+
+	// Full house: 3 Kings + 2 Queens
+	// Rank 11 = King, Rank 10 = Queen (0=2, 1=3, ..., 10=Q, 11=K, 12=A)
+	hand := []Card{
+		{Rank: 11, Suit: 0}, {Rank: 11, Suit: 1}, {Rank: 11, Suit: 2},
+		{Rank: 10, Suit: 0}, {Rank: 10, Suit: 1},
+	}
+
+	priority := EvaluateHandPattern(hand, eval)
+
+	if priority != 70 {
+		t.Errorf("Expected priority 70 for full house, got %d", priority)
+	}
+}
+
+func TestEvaluateHandPatternFlush(t *testing.T) {
+	eval := &HandEvaluation{
+		Method: EvalMethodPatternMatch,
+		Patterns: []HandPattern{
+			{RankPriority: 70, RequiredCount: 5, SameRankGroups: []uint8{3, 2}}, // Full House
+			{RankPriority: 60, RequiredCount: 5, SameSuitCount: 5},               // Flush
+		},
+	}
+
+	// Flush: 5 Hearts (all suit 0)
+	hand := []Card{
+		{Rank: 0, Suit: 0}, {Rank: 3, Suit: 0}, {Rank: 5, Suit: 0},
+		{Rank: 7, Suit: 0}, {Rank: 9, Suit: 0},
+	}
+
+	priority := EvaluateHandPattern(hand, eval)
+
+	if priority != 60 {
+		t.Errorf("Expected priority 60 for flush, got %d", priority)
+	}
+}
+
+func TestEvaluateHandPatternPair(t *testing.T) {
+	eval := &HandEvaluation{
+		Method: EvalMethodPatternMatch,
+		Patterns: []HandPattern{
+			{RankPriority: 70, RequiredCount: 5, SameRankGroups: []uint8{3, 2}}, // Full House
+			{RankPriority: 20, RequiredCount: 5, SameRankGroups: []uint8{2}},    // One Pair
+		},
+	}
+
+	// One pair of 7s
+	hand := []Card{
+		{Rank: 5, Suit: 0}, {Rank: 5, Suit: 1},
+		{Rank: 2, Suit: 2}, {Rank: 8, Suit: 3}, {Rank: 10, Suit: 0},
+	}
+
+	priority := EvaluateHandPattern(hand, eval)
+
+	if priority != 20 {
+		t.Errorf("Expected priority 20 for one pair, got %d", priority)
+	}
+}
+
+func TestEvaluateHandPatternThreeOfAKind(t *testing.T) {
+	eval := &HandEvaluation{
+		Method: EvalMethodPatternMatch,
+		Patterns: []HandPattern{
+			{RankPriority: 70, RequiredCount: 5, SameRankGroups: []uint8{3, 2}}, // Full House
+			{RankPriority: 40, RequiredCount: 5, SameRankGroups: []uint8{3}},    // Three of a Kind
+			{RankPriority: 20, RequiredCount: 5, SameRankGroups: []uint8{2}},    // One Pair
+		},
+	}
+
+	// Three 8s
+	hand := []Card{
+		{Rank: 6, Suit: 0}, {Rank: 6, Suit: 1}, {Rank: 6, Suit: 2},
+		{Rank: 2, Suit: 3}, {Rank: 10, Suit: 0},
+	}
+
+	priority := EvaluateHandPattern(hand, eval)
+
+	if priority != 40 {
+		t.Errorf("Expected priority 40 for three of a kind, got %d", priority)
+	}
+}
+
+func TestEvaluateHandPatternStraight(t *testing.T) {
+	eval := &HandEvaluation{
+		Method: EvalMethodPatternMatch,
+		Patterns: []HandPattern{
+			{RankPriority: 50, RequiredCount: 5, SequenceLength: 5}, // Straight
+		},
+	}
+
+	// Straight: 5-6-7-8-9 (ranks 3, 4, 5, 6, 7)
+	hand := []Card{
+		{Rank: 3, Suit: 0}, {Rank: 4, Suit: 1}, {Rank: 5, Suit: 2},
+		{Rank: 6, Suit: 3}, {Rank: 7, Suit: 0},
+	}
+
+	priority := EvaluateHandPattern(hand, eval)
+
+	if priority != 50 {
+		t.Errorf("Expected priority 50 for straight, got %d", priority)
+	}
+}
+
+func TestEvaluateHandPatternStraightWrap(t *testing.T) {
+	eval := &HandEvaluation{
+		Method: EvalMethodPatternMatch,
+		Patterns: []HandPattern{
+			{RankPriority: 50, RequiredCount: 5, SequenceLength: 5, SequenceWrap: true}, // Straight with wrap
+		},
+	}
+
+	// Wheel straight: A-2-3-4-5 (ranks 12, 0, 1, 2, 3)
+	hand := []Card{
+		{Rank: 12, Suit: 0}, {Rank: 0, Suit: 1}, {Rank: 1, Suit: 2},
+		{Rank: 2, Suit: 3}, {Rank: 3, Suit: 0},
+	}
+
+	priority := EvaluateHandPattern(hand, eval)
+
+	if priority != 50 {
+		t.Errorf("Expected priority 50 for wheel straight, got %d", priority)
+	}
+}
+
+func TestEvaluateHandPatternNoMatch(t *testing.T) {
+	eval := &HandEvaluation{
+		Method: EvalMethodPatternMatch,
+		Patterns: []HandPattern{
+			{RankPriority: 70, RequiredCount: 5, SameRankGroups: []uint8{3, 2}}, // Full House
+			{RankPriority: 60, RequiredCount: 5, SameSuitCount: 5},               // Flush
+		},
+	}
+
+	// High card only - no patterns should match
+	hand := []Card{
+		{Rank: 0, Suit: 0}, {Rank: 3, Suit: 1}, {Rank: 5, Suit: 2},
+		{Rank: 7, Suit: 3}, {Rank: 9, Suit: 0},
+	}
+
+	priority := EvaluateHandPattern(hand, eval)
+
+	if priority != 0 {
+		t.Errorf("Expected priority 0 for no match, got %d", priority)
+	}
+}
+
+func TestEvaluateHandPatternNilEval(t *testing.T) {
+	hand := []Card{
+		{Rank: 11, Suit: 0}, {Rank: 11, Suit: 1}, {Rank: 11, Suit: 2},
+	}
+
+	priority := EvaluateHandPattern(hand, nil)
+
+	if priority != 0 {
+		t.Errorf("Expected priority 0 for nil evaluation, got %d", priority)
+	}
+}
+
+func TestEvaluateHandPatternWrongMethod(t *testing.T) {
+	eval := &HandEvaluation{
+		Method: EvalMethodPointTotal, // Not pattern match
+		Patterns: []HandPattern{
+			{RankPriority: 70, RequiredCount: 5, SameRankGroups: []uint8{3, 2}},
+		},
+	}
+
+	hand := []Card{
+		{Rank: 11, Suit: 0}, {Rank: 11, Suit: 1}, {Rank: 11, Suit: 2},
+		{Rank: 10, Suit: 0}, {Rank: 10, Suit: 1},
+	}
+
+	priority := EvaluateHandPattern(hand, eval)
+
+	if priority != 0 {
+		t.Errorf("Expected priority 0 for wrong method, got %d", priority)
+	}
+}
+
+func TestEvaluateHandPatternEmptyPatterns(t *testing.T) {
+	eval := &HandEvaluation{
+		Method:   EvalMethodPatternMatch,
+		Patterns: []HandPattern{}, // Empty patterns
+	}
+
+	hand := []Card{
+		{Rank: 11, Suit: 0}, {Rank: 11, Suit: 1}, {Rank: 11, Suit: 2},
+	}
+
+	priority := EvaluateHandPattern(hand, eval)
+
+	if priority != 0 {
+		t.Errorf("Expected priority 0 for empty patterns, got %d", priority)
+	}
+}
+
+func TestEvaluateHandPatternWrongCardCount(t *testing.T) {
+	eval := &HandEvaluation{
+		Method: EvalMethodPatternMatch,
+		Patterns: []HandPattern{
+			{RankPriority: 70, RequiredCount: 5, SameRankGroups: []uint8{3, 2}}, // Requires 5 cards
+		},
+	}
+
+	// Only 3 cards
+	hand := []Card{
+		{Rank: 11, Suit: 0}, {Rank: 11, Suit: 1}, {Rank: 11, Suit: 2},
+	}
+
+	priority := EvaluateHandPattern(hand, eval)
+
+	if priority != 0 {
+		t.Errorf("Expected priority 0 for wrong card count, got %d", priority)
+	}
+}
+
+func TestEvaluateHandPatternFourOfAKind(t *testing.T) {
+	eval := &HandEvaluation{
+		Method: EvalMethodPatternMatch,
+		Patterns: []HandPattern{
+			{RankPriority: 80, RequiredCount: 5, SameRankGroups: []uint8{4}},    // Four of a Kind
+			{RankPriority: 70, RequiredCount: 5, SameRankGroups: []uint8{3, 2}}, // Full House
+		},
+	}
+
+	// Four Aces + kicker
+	hand := []Card{
+		{Rank: 12, Suit: 0}, {Rank: 12, Suit: 1}, {Rank: 12, Suit: 2}, {Rank: 12, Suit: 3},
+		{Rank: 5, Suit: 0},
+	}
+
+	priority := EvaluateHandPattern(hand, eval)
+
+	if priority != 80 {
+		t.Errorf("Expected priority 80 for four of a kind, got %d", priority)
+	}
+}
+
+func TestEvaluateHandPatternTwoPair(t *testing.T) {
+	eval := &HandEvaluation{
+		Method: EvalMethodPatternMatch,
+		Patterns: []HandPattern{
+			{RankPriority: 70, RequiredCount: 5, SameRankGroups: []uint8{3, 2}}, // Full House
+			{RankPriority: 30, RequiredCount: 5, SameRankGroups: []uint8{2, 2}}, // Two Pair
+			{RankPriority: 20, RequiredCount: 5, SameRankGroups: []uint8{2}},    // One Pair
+		},
+	}
+
+	// Two pair: pair of Kings and pair of Queens
+	hand := []Card{
+		{Rank: 11, Suit: 0}, {Rank: 11, Suit: 1},
+		{Rank: 10, Suit: 0}, {Rank: 10, Suit: 1},
+		{Rank: 5, Suit: 2},
+	}
+
+	priority := EvaluateHandPattern(hand, eval)
+
+	if priority != 30 {
+		t.Errorf("Expected priority 30 for two pair, got %d", priority)
+	}
+}
+
+func TestEvaluateHandPatternStraightFlush(t *testing.T) {
+	eval := &HandEvaluation{
+		Method: EvalMethodPatternMatch,
+		Patterns: []HandPattern{
+			{RankPriority: 90, RequiredCount: 5, SameSuitCount: 5, SequenceLength: 5}, // Straight Flush
+			{RankPriority: 60, RequiredCount: 5, SameSuitCount: 5},                    // Flush
+			{RankPriority: 50, RequiredCount: 5, SequenceLength: 5},                   // Straight
+		},
+	}
+
+	// Straight flush: 5-6-7-8-9 all hearts
+	hand := []Card{
+		{Rank: 3, Suit: 0}, {Rank: 4, Suit: 0}, {Rank: 5, Suit: 0},
+		{Rank: 6, Suit: 0}, {Rank: 7, Suit: 0},
+	}
+
+	priority := EvaluateHandPattern(hand, eval)
+
+	if priority != 90 {
+		t.Errorf("Expected priority 90 for straight flush, got %d", priority)
+	}
+}
+
+func TestMatchesPattern_RequiredRanks(t *testing.T) {
+	// Test royal flush pattern (must have A, K, Q, J, 10)
+	pattern := HandPattern{
+		RequiredCount:  5,
+		SameSuitCount:  5,
+		SequenceLength: 5,
+		RequiredRanks:  []uint8{12, 11, 10, 9, 8}, // A, K, Q, J, 10
+	}
+
+	// Royal flush: 10-J-Q-K-A all spades
+	hand := []Card{
+		{Rank: 8, Suit: 3}, {Rank: 9, Suit: 3}, {Rank: 10, Suit: 3},
+		{Rank: 11, Suit: 3}, {Rank: 12, Suit: 3},
+	}
+
+	if !matchesPattern(hand, pattern) {
+		t.Error("Expected royal flush to match pattern")
+	}
+
+	// Non-royal straight flush
+	handNonRoyal := []Card{
+		{Rank: 4, Suit: 3}, {Rank: 5, Suit: 3}, {Rank: 6, Suit: 3},
+		{Rank: 7, Suit: 3}, {Rank: 8, Suit: 3},
+	}
+
+	if matchesPattern(handNonRoyal, pattern) {
+		t.Error("Expected non-royal straight flush to NOT match royal pattern")
+	}
+}
+
+func TestIsSequence_NotEnoughCards(t *testing.T) {
+	hand := []Card{
+		{Rank: 3, Suit: 0}, {Rank: 4, Suit: 1},
+	}
+
+	// Need 5 cards for sequence of 5
+	if isSequence(hand, 5, false) {
+		t.Error("Expected false when hand has fewer cards than sequence length")
+	}
+}
+
+func TestIsSequence_NonConsecutive(t *testing.T) {
+	hand := []Card{
+		{Rank: 3, Suit: 0}, {Rank: 4, Suit: 1}, {Rank: 6, Suit: 2},
+		{Rank: 7, Suit: 3}, {Rank: 8, Suit: 0},
+	}
+
+	// Gap between 4 and 6
+	if isSequence(hand, 5, false) {
+		t.Error("Expected false for non-consecutive hand")
+	}
+}
