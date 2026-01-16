@@ -310,6 +310,104 @@ func TestPhaseTypeConstants(t *testing.T) {
 	}
 }
 
+func TestParseCardScoringRules(t *testing.T) {
+	// Hearts scoring: hearts=1pt, QS=13pt
+	bytecode := []byte{
+		0x00, 0x02, // 2 rules
+		0x00, 0xFF, 0x00, 0x01, 0x00, // Hearts suit, any rank, 1 point, TRICK_WIN
+		0x03, 0x0A, 0x00, 0x0D, 0x00, // Spades suit, Queen rank, 13 points, TRICK_WIN
+	}
+
+	rules, err := ParseCardScoringRules(bytecode)
+	if err != nil {
+		t.Fatalf("Failed to parse: %v", err)
+	}
+
+	if len(rules) != 2 {
+		t.Errorf("Expected 2 rules, got %d", len(rules))
+	}
+
+	// Check first rule (Hearts)
+	if rules[0].Suit != 0 || rules[0].Points != 1 {
+		t.Errorf("First rule wrong: suit=%d points=%d", rules[0].Suit, rules[0].Points)
+	}
+	if rules[0].Rank != 0xFF {
+		t.Errorf("First rule rank wrong: expected 0xFF (any), got %d", rules[0].Rank)
+	}
+	if rules[0].Trigger != TriggerTrickWin {
+		t.Errorf("First rule trigger wrong: expected %d, got %d", TriggerTrickWin, rules[0].Trigger)
+	}
+
+	// Check second rule (Queen of Spades)
+	if rules[1].Suit != 3 || rules[1].Rank != 10 || rules[1].Points != 13 {
+		t.Errorf("Second rule wrong: suit=%d rank=%d points=%d", rules[1].Suit, rules[1].Rank, rules[1].Points)
+	}
+	if rules[1].Trigger != TriggerTrickWin {
+		t.Errorf("Second rule trigger wrong: expected %d, got %d", TriggerTrickWin, rules[1].Trigger)
+	}
+}
+
+func TestParseCardScoringRulesEmpty(t *testing.T) {
+	// Empty rules (count = 0)
+	bytecode := []byte{0x00, 0x00}
+	rules, err := ParseCardScoringRules(bytecode)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if rules != nil {
+		t.Errorf("Expected nil rules for count=0, got %v", rules)
+	}
+}
+
+func TestParseCardScoringRulesTooShort(t *testing.T) {
+	// Data too short (need at least 2 bytes for count)
+	bytecode := []byte{0x00}
+	rules, err := ParseCardScoringRules(bytecode)
+	if err != nil {
+		t.Fatalf("Unexpected error for short data: %v", err)
+	}
+	if rules != nil {
+		t.Errorf("Expected nil rules for short data, got %v", rules)
+	}
+}
+
+func TestParseCardScoringRulesTruncated(t *testing.T) {
+	// Says 2 rules but only has data for 1
+	bytecode := []byte{
+		0x00, 0x02, // 2 rules
+		0x00, 0xFF, 0x00, 0x01, 0x00, // Only 1 complete rule
+	}
+	_, err := ParseCardScoringRules(bytecode)
+	if err == nil {
+		t.Error("Expected error for truncated data")
+	}
+}
+
+func TestParseCardScoringRulesNegativePoints(t *testing.T) {
+	// Test negative points (signed int16)
+	// -5 in two's complement big-endian is 0xFF, 0xFB
+	bytecode := []byte{
+		0x00, 0x01, // 1 rule
+		0x02, 0x05, 0xFF, 0xFB, 0x01, // Clubs suit, rank 5, -5 points, CAPTURE
+	}
+
+	rules, err := ParseCardScoringRules(bytecode)
+	if err != nil {
+		t.Fatalf("Failed to parse: %v", err)
+	}
+
+	if len(rules) != 1 {
+		t.Fatalf("Expected 1 rule, got %d", len(rules))
+	}
+
+	if rules[0].Points != -5 {
+		t.Errorf("Expected points=-5, got %d", rules[0].Points)
+	}
+	if rules[0].Trigger != TriggerCapture {
+		t.Errorf("Expected trigger=%d (CAPTURE), got %d", TriggerCapture, rules[0].Trigger)
+	}
+}
+
 func TestParseGenomeVersion2(t *testing.T) {
 	// Minimal v2 bytecode: version byte + 36-byte struct + tableau fields
 	// Total: 39 bytes minimum for header

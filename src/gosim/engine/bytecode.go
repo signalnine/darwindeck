@@ -160,6 +160,23 @@ func parseV2Header(bytecode []byte) (*BytecodeHeader, error) {
 	return h, nil
 }
 
+// ScoringTrigger constants define when card scoring rules apply
+const (
+	TriggerTrickWin    uint8 = 0
+	TriggerCapture     uint8 = 1
+	TriggerPlay        uint8 = 2
+	TriggerHandEnd     uint8 = 3
+	TriggerSetComplete uint8 = 4
+)
+
+// CardScoringRule represents explicit scoring for cards
+type CardScoringRule struct {
+	Suit    uint8 // 0-3 for H/D/C/S, 255 for "any"
+	Rank    uint8 // 0-12 for 2-A, 255 for "any"
+	Points  int16 // Points to award (can be negative)
+	Trigger uint8 // 0=TRICK_WIN, 1=CAPTURE, 2=PLAY, 3=HAND_END, 4=SET_COMPLETE
+}
+
 // Genome holds parsed bytecode sections
 type Genome struct {
 	Header        *BytecodeHeader
@@ -373,4 +390,36 @@ func (g *Genome) parseWinConditions() (int, error) {
 	}
 
 	return int(offset), nil
+}
+
+// ParseCardScoringRules parses card scoring rules from bytecode.
+// Format: count:2 + (suit:1 + rank:1 + points:2 + trigger:1) * count
+// Each rule is 5 bytes.
+func ParseCardScoringRules(data []byte) ([]CardScoringRule, error) {
+	if len(data) < 2 {
+		return nil, nil
+	}
+
+	count := binary.BigEndian.Uint16(data[0:2])
+	if count == 0 {
+		return nil, nil
+	}
+
+	rules := make([]CardScoringRule, count)
+	offset := 2
+
+	for i := uint16(0); i < count; i++ {
+		if offset+5 > len(data) {
+			return nil, fmt.Errorf("incomplete scoring rule at index %d", i)
+		}
+		rules[i] = CardScoringRule{
+			Suit:    data[offset],
+			Rank:    data[offset+1],
+			Points:  int16(binary.BigEndian.Uint16(data[offset+2 : offset+4])),
+			Trigger: data[offset+4],
+		}
+		offset += 5
+	}
+
+	return rules, nil
 }
