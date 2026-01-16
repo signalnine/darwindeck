@@ -13,6 +13,7 @@ from darwindeck.genome.schema import (
     GameGenome, SetupRules, TurnStructure, WinCondition,
     TrickPhase, BettingPhase, PlayPhase, DrawPhase, ClaimPhase,
     SpecialEffect, EffectType, Rank, Location, TableauMode,
+    HandEvaluationMethod,
 )
 from darwindeck.genome.examples import (
     create_war_genome, create_scopa_genome, create_uno_genome,
@@ -128,10 +129,7 @@ def check_genome_completeness(genome: GameGenome) -> CompletenessResult:
             or genome.scoring_rules
             or (
                 genome.hand_evaluation is not None
-                and (
-                    (genome.hand_evaluation.patterns is not None and len(genome.hand_evaluation.patterns) > 0)
-                    or (genome.hand_evaluation.card_values is not None and len(genome.hand_evaluation.card_values) > 0)
-                )
+                and genome.hand_evaluation.method != HandEvaluationMethod.NONE
             )
         )
         if not has_showdown:
@@ -186,14 +184,14 @@ class TestGenomeCompleteness:
         # Should be complete since it's a shedding game
         assert result.complete, f"UNO genome incomplete: {result}"
 
-    def test_poker_genome_has_implicit_hand_ranking(self):
-        """Simple poker relies on implicit poker hand ranking."""
+    def test_poker_genome_is_complete_with_hand_evaluation(self):
+        """Simple poker with explicit hand_evaluation patterns is complete."""
         genome = create_simple_poker_genome()
         result = check_genome_completeness(genome)
 
-        # Poker with best_hand MUST rely on implicit hand ranking
-        assert IncompleteDependency.POKER_HAND_RANKING in result.dependencies
-        assert not result.complete
+        # Poker with explicit hand_evaluation patterns is now complete
+        assert result.complete, f"Simple poker should be complete: {result}"
+        assert IncompleteDependency.POKER_HAND_RANKING not in result.dependencies
 
     def test_trick_taking_with_score_win_is_incomplete(self):
         """Trick-taking games with score wins rely on implicit Hearts scoring."""

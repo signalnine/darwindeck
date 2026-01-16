@@ -429,7 +429,11 @@ def create_betting_war_genome() -> GameGenome:
         ),
         turn_structure=TurnStructure(
             phases=[
-                BettingPhase(min_bet=10, max_raises=2),
+                BettingPhase(
+                    min_bet=10,
+                    max_raises=2,
+                    showdown_method=ShowdownMethod.HIGHEST_CARD,
+                ),
                 PlayPhase(
                     target=Location.TABLEAU,
                     valid_play_condition=Condition(
@@ -451,7 +455,10 @@ def create_betting_war_genome() -> GameGenome:
         ],
         scoring_rules=[],
         max_turns=1000,
-        player_count=2
+        player_count=2,
+        hand_evaluation=HandEvaluation(
+            method=HandEvaluationMethod.HIGH_CARD,
+        ),
     )
 
 
@@ -574,6 +581,73 @@ def create_draw_poker_genome() -> GameGenome:
     - Best poker hand wins
     - Starting chips: 1000, min bet: 20
     """
+    # Standard poker hand patterns (10 hands, priority higher = better)
+    poker_patterns = (
+        HandPattern(
+            name="Royal Flush",
+            rank_priority=100,
+            required_count=5,
+            same_suit_count=5,
+            sequence_length=5,
+            required_ranks=(Rank.TEN, Rank.JACK, Rank.QUEEN, Rank.KING, Rank.ACE),
+        ),
+        HandPattern(
+            name="Straight Flush",
+            rank_priority=90,
+            required_count=5,
+            same_suit_count=5,
+            sequence_length=5,
+        ),
+        HandPattern(
+            name="Four of a Kind",
+            rank_priority=80,
+            required_count=5,
+            same_rank_groups=(4,),
+        ),
+        HandPattern(
+            name="Full House",
+            rank_priority=70,
+            required_count=5,
+            same_rank_groups=(3, 2),
+        ),
+        HandPattern(
+            name="Flush",
+            rank_priority=60,
+            required_count=5,
+            same_suit_count=5,
+        ),
+        HandPattern(
+            name="Straight",
+            rank_priority=50,
+            required_count=5,
+            sequence_length=5,
+            sequence_wrap=True,
+        ),
+        HandPattern(
+            name="Three of a Kind",
+            rank_priority=40,
+            required_count=5,
+            same_rank_groups=(3,),
+        ),
+        HandPattern(
+            name="Two Pair",
+            rank_priority=30,
+            required_count=5,
+            same_rank_groups=(2, 2),
+        ),
+        HandPattern(
+            name="One Pair",
+            rank_priority=20,
+            required_count=5,
+            same_rank_groups=(2,),
+        ),
+        HandPattern(
+            name="High Card",
+            rank_priority=10,
+            required_count=5,
+        ),
+    )
+
     return GameGenome(
         schema_version="1.0",
         genome_id="draw-poker",
@@ -587,7 +661,11 @@ def create_draw_poker_genome() -> GameGenome:
         turn_structure=TurnStructure(
             phases=[
                 # Pre-draw betting round
-                BettingPhase(min_bet=20, max_raises=3),
+                BettingPhase(
+                    min_bet=20,
+                    max_raises=3,
+                    showdown_method=ShowdownMethod.HAND_EVALUATION,
+                ),
                 # Discard up to 3 cards to improve hand
                 DiscardPhase(
                     target=Location.DISCARD,
@@ -613,7 +691,11 @@ def create_draw_poker_genome() -> GameGenome:
         ],
         scoring_rules=[],
         max_turns=20,
-        player_count=2
+        player_count=2,
+        hand_evaluation=HandEvaluation(
+            method=HandEvaluationMethod.PATTERN_MATCH,
+            patterns=poker_patterns,
+        ),
     )
 
 
