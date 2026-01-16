@@ -323,6 +323,9 @@ class BettingPhase:
     min_bet: int = 10       # Minimum bet/raise amount
     max_raises: int = 3     # Maximum raises per round (prevents infinite loops)
 
+    # Explicit showdown resolution
+    showdown_method: ShowdownMethod = ShowdownMethod.HAND_EVALUATION
+
 
 @dataclass(frozen=True)
 class TrickPhase:
@@ -338,6 +341,9 @@ class TrickPhase:
 
     # Optional: special rules
     breaking_suit: Optional[Suit] = None  # Suit that cannot be played until "broken" (Hearts in Hearts)
+
+    # Explicit breaking rule
+    breaking_rule: BreakingRule = BreakingRule.NONE
 
     def __post_init__(self):
         """Convert lists to tuples for immutability."""
@@ -362,6 +368,11 @@ class ClaimPhase:
     sequential_rank: bool = True  # Must claim in order (A, 2, 3, ..., K, A, ...)
     allow_challenge: bool = True  # Opponents can challenge claims
     pile_penalty: bool = True  # Loser takes discard pile (vs just revealing)
+
+    # Explicit rank mode
+    rank_mode: ClaimRankMode = ClaimRankMode.SEQUENTIAL
+    starting_rank: Rank = Rank.ACE
+    fixed_rank: Optional[Rank] = None
 
 
 @dataclass(frozen=True)

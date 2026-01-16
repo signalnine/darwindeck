@@ -366,3 +366,73 @@ class TestGameGenomeExtended:
         genome = create_war_genome()
         assert hasattr(genome, 'game_rules')
         assert isinstance(genome.game_rules, GameRules)
+
+
+class TestTrickPhaseExtended:
+    def test_trick_phase_has_breaking_rule(self):
+        """TrickPhase has breaking_rule field."""
+        from darwindeck.genome.schema import TrickPhase, BreakingRule, Suit
+        phase = TrickPhase(
+            lead_suit_required=True,
+            breaking_suit=Suit.HEARTS,
+            breaking_rule=BreakingRule.CANNOT_LEAD_UNTIL_BROKEN,
+        )
+        assert phase.breaking_rule == BreakingRule.CANNOT_LEAD_UNTIL_BROKEN
+
+    def test_trick_phase_breaking_rule_default(self):
+        """TrickPhase breaking_rule defaults to NONE."""
+        from darwindeck.genome.schema import TrickPhase, BreakingRule
+        phase = TrickPhase(lead_suit_required=True)
+        assert phase.breaking_rule == BreakingRule.NONE
+
+
+class TestClaimPhaseExtended:
+    def test_claim_phase_has_rank_mode(self):
+        """ClaimPhase has rank_mode field."""
+        from darwindeck.genome.schema import ClaimPhase, ClaimRankMode, Rank
+        phase = ClaimPhase(
+            min_cards=1,
+            max_cards=4,
+            rank_mode=ClaimRankMode.SEQUENTIAL,
+            starting_rank=Rank.ACE,
+        )
+        assert phase.rank_mode == ClaimRankMode.SEQUENTIAL
+        assert phase.starting_rank == Rank.ACE
+
+    def test_claim_phase_fixed_rank(self):
+        """ClaimPhase can have fixed rank."""
+        from darwindeck.genome.schema import ClaimPhase, ClaimRankMode, Rank
+        phase = ClaimPhase(
+            min_cards=1,
+            max_cards=4,
+            rank_mode=ClaimRankMode.FIXED,
+            fixed_rank=Rank.QUEEN,
+        )
+        assert phase.rank_mode == ClaimRankMode.FIXED
+        assert phase.fixed_rank == Rank.QUEEN
+
+    def test_claim_phase_defaults(self):
+        """ClaimPhase has sensible defaults."""
+        from darwindeck.genome.schema import ClaimPhase, ClaimRankMode, Rank
+        phase = ClaimPhase(min_cards=1, max_cards=4)
+        assert phase.rank_mode == ClaimRankMode.SEQUENTIAL
+        assert phase.starting_rank == Rank.ACE
+        assert phase.fixed_rank is None
+
+
+class TestBettingPhaseExtended:
+    def test_betting_phase_has_showdown_method(self):
+        """BettingPhase has showdown_method field."""
+        from darwindeck.genome.schema import BettingPhase, ShowdownMethod
+        phase = BettingPhase(
+            min_bet=10,
+            max_raises=3,
+            showdown_method=ShowdownMethod.HAND_EVALUATION,
+        )
+        assert phase.showdown_method == ShowdownMethod.HAND_EVALUATION
+
+    def test_betting_phase_showdown_default(self):
+        """BettingPhase showdown_method defaults to HAND_EVALUATION."""
+        from darwindeck.genome.schema import BettingPhase, ShowdownMethod
+        phase = BettingPhase(min_bet=10)
+        assert phase.showdown_method == ShowdownMethod.HAND_EVALUATION
