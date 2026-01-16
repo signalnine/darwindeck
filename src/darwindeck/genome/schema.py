@@ -383,8 +383,13 @@ class TurnStructure:
 class WinCondition:
     """How to win the game."""
 
-    type: str  # "empty_hand", "high_score", "first_to_score", "capture_all"
+    type: str  # "empty_hand", "high_score", "first_to_score", "capture_all", "best_hand"
     threshold: Optional[int] = None
+
+    # Explicit modifiers for how win condition works
+    comparison: WinComparison = WinComparison.NONE
+    trigger_mode: TriggerMode = TriggerMode.IMMEDIATE
+    required_hand_size: Optional[int] = None  # For best_hand: how many cards form hand
 
 
 @dataclass(frozen=True)
