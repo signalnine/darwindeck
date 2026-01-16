@@ -177,6 +177,42 @@ type CardScoringRule struct {
 	Trigger uint8 // 0=TRICK_WIN, 1=CAPTURE, 2=PLAY, 3=HAND_END, 4=SET_COMPLETE
 }
 
+// HandEvalMethod constants define how hands are evaluated
+const (
+	EvalMethodNone         uint8 = 0
+	EvalMethodHighCard     uint8 = 1
+	EvalMethodPointTotal   uint8 = 2
+	EvalMethodPatternMatch uint8 = 3
+	EvalMethodCardCount    uint8 = 4
+)
+
+// CardValue represents point value for a rank
+type CardValue struct {
+	Rank     uint8 // 0-12 for 2-A
+	Value    uint8 // Primary point value
+	AltValue uint8 // Alternate value (0 if none)
+}
+
+// HandPattern represents a pattern to match in a hand
+type HandPattern struct {
+	RankPriority   uint8
+	RequiredCount  uint8
+	SameSuitCount  uint8
+	SequenceLength uint8
+	SequenceWrap   bool
+	SameRankGroups []uint8
+	RequiredRanks  []uint8
+}
+
+// HandEvaluation represents how to evaluate hands
+type HandEvaluation struct {
+	Method        uint8 // 0=NONE, 1=HIGH_CARD, 2=POINT_TOTAL, 3=PATTERN_MATCH, 4=CARD_COUNT
+	TargetValue   uint8 // For POINT_TOTAL (e.g., 21 for Blackjack)
+	BustThreshold uint8 // For POINT_TOTAL (e.g., 22 for Blackjack)
+	CardValues    []CardValue
+	Patterns      []HandPattern
+}
+
 // Genome holds parsed bytecode sections
 type Genome struct {
 	Header        *BytecodeHeader
@@ -422,4 +458,116 @@ func ParseCardScoringRules(data []byte) ([]CardScoringRule, error) {
 	}
 
 	return rules, nil
+}
+
+// Hand evaluation parsing constants
+const (
+	cardValueSize     = 3 // rank:1 + value:1 + alt_value:1
+	patternHeaderSize = 5 // priority:1 + req_count:1 + same_suit:1 + seq_len:1 + seq_wrap:1
+)
+
+// ParseHandEvaluation parses hand evaluation from bytecode.
+// Format:
+// - method:1 (0=NONE returns nil)
+// - target_value:1
+// - bust_threshold:1
+// - value_count:1 + (rank:1 + value:1 + alt_value:1) * count
+// - pattern_count:1 + patterns...
+func ParseHandEvaluation(data []byte) (*HandEvaluation, error) {
+	if len(data) == 0 {
+		return nil, nil // No data, no evaluation - valid edge case
+	}
+	if data[0] == 0 {
+		return nil, nil // NONE method - valid
+	}
+	if len(data) < 4 {
+		return nil, fmt.Errorf("hand evaluation data too short: need at least 4 bytes, got %d", len(data))
+	}
+
+	eval := &HandEvaluation{
+		Method:        data[0],
+		TargetValue:   data[1],
+		BustThreshold: data[2],
+	}
+
+	// Validate method is known
+	if eval.Method > EvalMethodCardCount {
+		return nil, fmt.Errorf("unknown evaluation method: %d", eval.Method)
+	}
+
+	offset := 3
+
+	// Parse card values
+	valueCount := int(data[offset])
+	offset++
+
+	if offset+valueCount*cardValueSize > len(data) {
+		return nil, fmt.Errorf("truncated card values: expected %d bytes, have %d", valueCount*cardValueSize, len(data)-offset)
+	}
+
+	eval.CardValues = make([]CardValue, valueCount)
+	for i := 0; i < valueCount; i++ {
+		eval.CardValues[i] = CardValue{
+			Rank:     data[offset],
+			Value:    data[offset+1],
+			AltValue: data[offset+2],
+		}
+		offset += cardValueSize
+	}
+
+	// Parse patterns (optional - may not be present)
+	if offset >= len(data) {
+		return eval, nil
+	}
+
+	patternCount := int(data[offset])
+	offset++
+
+	eval.Patterns = make([]HandPattern, 0, patternCount)
+	for i := 0; i < patternCount; i++ {
+		if offset+patternHeaderSize > len(data) {
+			return nil, fmt.Errorf("truncated pattern header at index %d", i)
+		}
+
+		p := HandPattern{
+			RankPriority:   data[offset],
+			RequiredCount:  data[offset+1],
+			SameSuitCount:  data[offset+2],
+			SequenceLength: data[offset+3],
+			SequenceWrap:   data[offset+4] == 1,
+		}
+		offset += patternHeaderSize
+
+		// Parse same rank groups
+		if offset >= len(data) {
+			return nil, fmt.Errorf("truncated pattern: missing group count at index %d", i)
+		}
+		groupCount := int(data[offset])
+		offset++
+
+		if offset+groupCount > len(data) {
+			return nil, fmt.Errorf("truncated same rank groups at pattern %d", i)
+		}
+		p.SameRankGroups = make([]uint8, groupCount)
+		copy(p.SameRankGroups, data[offset:offset+groupCount])
+		offset += groupCount
+
+		// Parse required ranks
+		if offset >= len(data) {
+			return nil, fmt.Errorf("truncated pattern: missing rank count at index %d", i)
+		}
+		rankCount := int(data[offset])
+		offset++
+
+		if offset+rankCount > len(data) {
+			return nil, fmt.Errorf("truncated required ranks at pattern %d", i)
+		}
+		p.RequiredRanks = make([]uint8, rankCount)
+		copy(p.RequiredRanks, data[offset:offset+rankCount])
+		offset += rankCount
+
+		eval.Patterns = append(eval.Patterns, p)
+	}
+
+	return eval, nil
 }

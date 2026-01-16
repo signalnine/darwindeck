@@ -408,6 +408,146 @@ func TestParseCardScoringRulesNegativePoints(t *testing.T) {
 	}
 }
 
+func TestParseHandEvaluation(t *testing.T) {
+	// Blackjack: POINT_TOTAL, target=21, bust=22, Ace=1/11
+	bytecode := []byte{
+		0x02,             // POINT_TOTAL method
+		0x15,             // target_value = 21
+		0x16,             // bust_threshold = 22
+		0x01,             // 1 card value
+		0x0C, 0x01, 0x0B, // Ace (12), value=1, alt=11
+		0x00,             // 0 patterns
+	}
+
+	eval, err := ParseHandEvaluation(bytecode)
+	if err != nil {
+		t.Fatalf("Failed to parse: %v", err)
+	}
+
+	if eval.Method != EvalMethodPointTotal {
+		t.Errorf("Expected POINT_TOTAL (2), got %d", eval.Method)
+	}
+	if eval.TargetValue != 21 {
+		t.Errorf("Expected target 21, got %d", eval.TargetValue)
+	}
+	if eval.BustThreshold != 22 {
+		t.Errorf("Expected bust 22, got %d", eval.BustThreshold)
+	}
+	if len(eval.CardValues) != 1 {
+		t.Fatalf("Expected 1 card value, got %d", len(eval.CardValues))
+	}
+
+	// Check Ace card value
+	ace := eval.CardValues[0]
+	if ace.Rank != 12 {
+		t.Errorf("Expected Ace rank (12), got %d", ace.Rank)
+	}
+	if ace.Value != 1 {
+		t.Errorf("Expected Ace value 1, got %d", ace.Value)
+	}
+	if ace.AltValue != 11 {
+		t.Errorf("Expected Ace alt value 11, got %d", ace.AltValue)
+	}
+
+	if len(eval.Patterns) != 0 {
+		t.Errorf("Expected 0 patterns, got %d", len(eval.Patterns))
+	}
+}
+
+func TestParseHandEvaluationNone(t *testing.T) {
+	// Method NONE returns nil
+	bytecode := []byte{0x00}
+
+	eval, err := ParseHandEvaluation(bytecode)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if eval != nil {
+		t.Errorf("Expected nil for NONE method, got %+v", eval)
+	}
+}
+
+func TestParseHandEvaluationEmpty(t *testing.T) {
+	// Empty data returns nil
+	eval, err := ParseHandEvaluation([]byte{})
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if eval != nil {
+		t.Errorf("Expected nil for empty data, got %+v", eval)
+	}
+}
+
+func TestParseHandEvaluationWithPatterns(t *testing.T) {
+	// Poker-style: PATTERN_MATCH with a simple pattern
+	bytecode := []byte{
+		0x03,       // PATTERN_MATCH method
+		0x00,       // target_value = 0 (unused)
+		0x00,       // bust_threshold = 0 (unused)
+		0x00,       // 0 card values
+		0x01,       // 1 pattern
+		// Pattern: rank_priority=1, required_count=5, same_suit=5, seq_len=5, wrap=false
+		0x01, 0x05, 0x05, 0x05, 0x00,
+		0x00,       // 0 same rank groups
+		0x00,       // 0 required ranks
+	}
+
+	eval, err := ParseHandEvaluation(bytecode)
+	if err != nil {
+		t.Fatalf("Failed to parse: %v", err)
+	}
+
+	if eval.Method != EvalMethodPatternMatch {
+		t.Errorf("Expected PATTERN_MATCH (3), got %d", eval.Method)
+	}
+	if len(eval.Patterns) != 1 {
+		t.Fatalf("Expected 1 pattern, got %d", len(eval.Patterns))
+	}
+
+	p := eval.Patterns[0]
+	if p.RankPriority != 1 {
+		t.Errorf("Expected rank priority 1, got %d", p.RankPriority)
+	}
+	if p.RequiredCount != 5 {
+		t.Errorf("Expected required count 5, got %d", p.RequiredCount)
+	}
+	if p.SameSuitCount != 5 {
+		t.Errorf("Expected same suit count 5, got %d", p.SameSuitCount)
+	}
+	if p.SequenceLength != 5 {
+		t.Errorf("Expected sequence length 5, got %d", p.SequenceLength)
+	}
+	if p.SequenceWrap {
+		t.Error("Expected sequence wrap false")
+	}
+}
+
+func TestParseHandEvaluationTruncated(t *testing.T) {
+	// Too short for a valid evaluation
+	bytecode := []byte{0x02, 0x15} // Method + target, missing bust_threshold
+
+	_, err := ParseHandEvaluation(bytecode)
+	if err == nil {
+		t.Error("Expected error for truncated data")
+	}
+}
+
+func TestParseHandEvaluationTruncatedCardValues(t *testing.T) {
+	// Says 2 card values but only has data for 1
+	bytecode := []byte{
+		0x02,             // POINT_TOTAL method
+		0x15,             // target_value = 21
+		0x16,             // bust_threshold = 22
+		0x02,             // 2 card values (but only 1 follows)
+		0x0C, 0x01, 0x0B, // Only 1 card value
+	}
+
+	_, err := ParseHandEvaluation(bytecode)
+	if err == nil {
+		t.Error("Expected error for truncated card values")
+	}
+}
+
 func TestParseGenomeVersion2(t *testing.T) {
 	// Minimal v2 bytecode: version byte + 36-byte struct + tableau fields
 	// Total: 39 bytes minimum for header
