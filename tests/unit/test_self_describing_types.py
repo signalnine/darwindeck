@@ -254,3 +254,31 @@ class TestGameRulesEnums:
         assert TieBreaker.ALTERNATING.value == "alternating"
         assert TieBreaker.SPLIT.value == "split"
         assert TieBreaker.BATTLE.value == "battle"
+
+
+class TestGameRules:
+    def test_game_rules_defaults(self):
+        """GameRules has sensible defaults."""
+        from darwindeck.genome.schema import GameRules, PassAction, DeckEmptyAction, TieBreaker
+        rules = GameRules()
+        assert rules.consecutive_pass_action == PassAction.NONE
+        assert rules.deck_empty_action == DeckEmptyAction.RESHUFFLE_DISCARD
+        assert rules.tie_breaker == TieBreaker.ACTIVE_PLAYER
+
+    def test_game_rules_custom(self):
+        """GameRules can be customized."""
+        from darwindeck.genome.schema import GameRules, PassAction, DeckEmptyAction
+        rules = GameRules(
+            consecutive_pass_action=PassAction.CLEAR_TABLEAU,
+            passes_to_trigger=3,
+            deck_empty_action=DeckEmptyAction.GAME_ENDS,
+        )
+        assert rules.consecutive_pass_action == PassAction.CLEAR_TABLEAU
+        assert rules.passes_to_trigger == 3
+
+    def test_game_rules_frozen(self):
+        """GameRules is immutable."""
+        from darwindeck.genome.schema import GameRules, TieBreaker
+        rules = GameRules()
+        with pytest.raises(AttributeError):
+            rules.tie_breaker = TieBreaker.SPLIT

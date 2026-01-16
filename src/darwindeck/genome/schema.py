@@ -198,6 +198,17 @@ class TieBreaker(Enum):
     BATTLE = "battle"                # Play tiebreaker round (War)
 
 
+@dataclass(frozen=True)
+class GameRules:
+    """Explicit rules for edge cases."""
+    consecutive_pass_action: PassAction = PassAction.NONE
+    passes_to_trigger: Optional[int] = None  # None = num_players - 1
+    deck_empty_action: DeckEmptyAction = DeckEmptyAction.RESHUFFLE_DISCARD
+    keep_top_discard: bool = True
+    tie_breaker: TieBreaker = TieBreaker.ACTIVE_PLAYER
+    same_player_on_win: bool = False
+
+
 class TableauMode(Enum):
     """How cards on the tableau interact."""
     NONE = "none"              # Cards accumulate, no interaction
