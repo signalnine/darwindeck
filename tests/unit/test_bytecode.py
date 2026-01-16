@@ -351,3 +351,35 @@ def test_compile_hand_evaluation_blackjack():
     assert bytecode[0] == 2  # POINT_TOTAL method
     assert bytecode[1] == 21  # target_value
     assert bytecode[2] == 22  # bust_threshold
+
+
+def test_compile_genome_with_card_scoring():
+    """Test that Hearts genome includes card_scoring in bytecode."""
+    from darwindeck.genome.examples import create_hearts_genome
+    from darwindeck.genome.bytecode import BytecodeCompiler, BytecodeHeader
+
+    genome = create_hearts_genome()
+    compiler = BytecodeCompiler()
+    bytecode = compiler.compile_genome(genome)
+
+    header = BytecodeHeader.from_bytes(bytecode)
+
+    # Verify card_scoring_offset is set and points to valid data
+    assert header.card_scoring_offset > 0
+    assert header.card_scoring_offset < len(bytecode)
+
+
+def test_compile_genome_with_hand_evaluation():
+    """Test that Blackjack genome includes hand_evaluation in bytecode."""
+    from darwindeck.genome.examples import create_blackjack_genome
+    from darwindeck.genome.bytecode import BytecodeCompiler, BytecodeHeader
+
+    genome = create_blackjack_genome()
+    compiler = BytecodeCompiler()
+    bytecode = compiler.compile_genome(genome)
+
+    header = BytecodeHeader.from_bytes(bytecode)
+
+    # Verify hand_evaluation_offset is set and points to valid data
+    assert header.hand_evaluation_offset > 0
+    assert header.hand_evaluation_offset < len(bytecode)

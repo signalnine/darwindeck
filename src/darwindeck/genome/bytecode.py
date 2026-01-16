@@ -396,7 +396,7 @@ class BytecodeCompiler:
     def compile_genome(self, genome: GameGenome) -> bytes:
         """Convert genome to bytecode blob."""
         # Reset offset for each genome (instance is reused across compilations)
-        self.offset = BytecodeHeader.HEADER_SIZE  # After header (39 bytes)
+        self.offset = BytecodeHeader.HEADER_SIZE  # After header (47 bytes)
 
         # Compile sections
         setup_offset = self.offset
@@ -419,13 +419,23 @@ class BytecodeCompiler:
         score_bytes = self._compile_scoring(genome.scoring_rules)
         self.offset += len(score_bytes)
 
+        # Compile card_scoring section
+        card_scoring_offset = self.offset
+        card_scoring_bytes = compile_card_scoring(genome.card_scoring or ())
+        self.offset += len(card_scoring_bytes)
+
+        # Compile hand_evaluation section
+        hand_eval_offset = self.offset
+        hand_eval_bytes = compile_hand_evaluation(genome.hand_evaluation)
+        self.offset += len(hand_eval_bytes)
+
         # Encode tableau_mode and sequence_direction
         tableau_mode = TABLEAU_MODE_MAP.get(genome.setup.tableau_mode, 0)
         sequence_direction = SEQUENCE_DIRECTION_MAP.get(
             genome.setup.sequence_direction, 0
         ) if genome.setup.sequence_direction else 0
 
-        # Create header
+        # Create header with all offsets including new sections
         header = BytecodeHeader(
             version=1,
             genome_id_hash=hash(genome.genome_id) & 0xFFFFFFFFFFFFFFFF,
@@ -437,10 +447,13 @@ class BytecodeCompiler:
             scoring_offset=score_offset,
             tableau_mode=tableau_mode,
             sequence_direction=sequence_direction,
+            card_scoring_offset=card_scoring_offset,
+            hand_evaluation_offset=hand_eval_offset,
         )
 
         # Combine all sections (effects come right after win conditions, before scoring)
-        return header.to_bytes() + setup_bytes + turn_bytes + win_bytes + effects_bytes + score_bytes
+        return (header.to_bytes() + setup_bytes + turn_bytes + win_bytes +
+                effects_bytes + score_bytes + card_scoring_bytes + hand_eval_bytes)
 
     def _compile_setup(self, setup: SetupRules) -> bytes:
         """Encode setup rules.
