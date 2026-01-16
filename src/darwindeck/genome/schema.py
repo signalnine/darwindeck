@@ -130,6 +130,35 @@ class CardValue:
     alternate_value: Optional[int] = None
 
 
+@dataclass(frozen=True)
+class HandPattern:
+    """A pattern to match in a hand. Fully describes what to look for."""
+    name: str
+    rank_priority: int  # Higher = better hand (100 > 50)
+
+    # Constraints (all must be satisfied)
+    required_count: Optional[int] = None   # Exactly N cards
+    same_suit_count: Optional[int] = None  # N cards must share suit
+    same_rank_groups: Optional[tuple[int, ...]] = None  # (3, 2) = three + pair
+    sequence_length: Optional[int] = None  # N consecutive ranks
+    sequence_wrap: bool = False            # A-2-3 and Q-K-A both valid
+    required_ranks: Optional[tuple[Rank, ...]] = None  # Must contain these ranks
+
+
+@dataclass(frozen=True)
+class HandEvaluation:
+    """How to evaluate and compare hands for winning."""
+    method: HandEvaluationMethod
+
+    # For PATTERN_MATCH method
+    patterns: Optional[tuple[HandPattern, ...]] = None
+
+    # For POINT_TOTAL method (Blackjack)
+    card_values: Optional[tuple[CardValue, ...]] = None
+    target_value: Optional[int] = None      # Optimal score (21 in Blackjack)
+    bust_threshold: Optional[int] = None    # Score that loses (22 in Blackjack)
+
+
 class TableauMode(Enum):
     """How cards on the tableau interact."""
     NONE = "none"              # Cards accumulate, no interaction

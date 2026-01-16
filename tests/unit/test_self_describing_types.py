@@ -2,7 +2,7 @@
 """Tests for self-describing genome types."""
 
 import pytest
-from darwindeck.genome.schema import ScoringTrigger, Suit, Rank, CardValue
+from darwindeck.genome.schema import ScoringTrigger, Suit, Rank, CardValue, HandPattern
 
 
 class TestScoringTrigger:
@@ -120,3 +120,94 @@ class TestCardValue:
         cv = CardValue(rank=Rank.KING, value=10)
         with pytest.raises(AttributeError):
             cv.value = 20
+
+
+class TestHandPattern:
+    def test_flush_pattern(self):
+        """HandPattern can express a flush (5 same suit)."""
+        pattern = HandPattern(
+            name="Flush",
+            rank_priority=60,
+            required_count=5,
+            same_suit_count=5,
+        )
+        assert pattern.name == "Flush"
+        assert pattern.rank_priority == 60
+        assert pattern.same_suit_count == 5
+
+    def test_full_house_pattern(self):
+        """HandPattern can express full house (3+2)."""
+        pattern = HandPattern(
+            name="Full House",
+            rank_priority=70,
+            required_count=5,
+            same_rank_groups=(3, 2),
+        )
+        assert pattern.same_rank_groups == (3, 2)
+
+    def test_straight_pattern(self):
+        """HandPattern can express straight (5 consecutive)."""
+        pattern = HandPattern(
+            name="Straight",
+            rank_priority=50,
+            required_count=5,
+            sequence_length=5,
+            sequence_wrap=True,
+        )
+        assert pattern.sequence_length == 5
+        assert pattern.sequence_wrap is True
+
+    def test_royal_flush_pattern(self):
+        """HandPattern can express royal flush with required ranks."""
+        pattern = HandPattern(
+            name="Royal Flush",
+            rank_priority=100,
+            required_count=5,
+            same_suit_count=5,
+            sequence_length=5,
+            required_ranks=(Rank.TEN, Rank.JACK, Rank.QUEEN, Rank.KING, Rank.ACE),
+        )
+        assert pattern.required_ranks == (Rank.TEN, Rank.JACK, Rank.QUEEN, Rank.KING, Rank.ACE)
+
+    def test_hand_pattern_frozen(self):
+        """HandPattern is immutable."""
+        pattern = HandPattern(name="Test", rank_priority=10)
+        with pytest.raises(AttributeError):
+            pattern.name = "Changed"
+
+
+class TestHandEvaluation:
+    def test_poker_hand_evaluation(self):
+        """HandEvaluation can express poker with patterns."""
+        from darwindeck.genome.schema import HandEvaluation, HandEvaluationMethod
+        eval = HandEvaluation(
+            method=HandEvaluationMethod.PATTERN_MATCH,
+            patterns=(
+                HandPattern(name="Flush", rank_priority=60, same_suit_count=5),
+                HandPattern(name="Pair", rank_priority=20, same_rank_groups=(2,)),
+            ),
+        )
+        assert eval.method == HandEvaluationMethod.PATTERN_MATCH
+        assert len(eval.patterns) == 2
+
+    def test_blackjack_hand_evaluation(self):
+        """HandEvaluation can express blackjack with card values."""
+        from darwindeck.genome.schema import HandEvaluation, HandEvaluationMethod
+        eval = HandEvaluation(
+            method=HandEvaluationMethod.POINT_TOTAL,
+            card_values=(
+                CardValue(rank=Rank.ACE, value=11, alternate_value=1),
+                CardValue(rank=Rank.KING, value=10),
+            ),
+            target_value=21,
+            bust_threshold=22,
+        )
+        assert eval.target_value == 21
+        assert eval.bust_threshold == 22
+
+    def test_hand_evaluation_frozen(self):
+        """HandEvaluation is immutable."""
+        from darwindeck.genome.schema import HandEvaluation, HandEvaluationMethod
+        eval = HandEvaluation(method=HandEvaluationMethod.HIGH_CARD)
+        with pytest.raises(AttributeError):
+            eval.method = HandEvaluationMethod.PATTERN_MATCH
