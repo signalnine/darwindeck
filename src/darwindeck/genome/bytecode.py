@@ -29,6 +29,7 @@ from darwindeck.genome.schema import (
     HandEvaluationMethod,
     CardValue,
     HandEvaluation,
+    HandPattern,
 )
 from darwindeck.genome.conditions import Condition, ConditionType, Operator, CompoundCondition, ConditionOrCompound
 
@@ -211,6 +212,50 @@ def compile_card_values(values: tuple) -> bytes:
         value = cv.value & 0xFF
         alt = cv.alternate_value if cv.alternate_value else 0
         result += bytes([rank, value, alt])
+
+    return result
+
+
+def compile_hand_patterns(patterns: tuple) -> bytes:
+    """Compile hand patterns to bytecode.
+
+    Format:
+    - pattern_count (1 byte)
+    - For each pattern:
+      - rank_priority (1 byte)
+      - required_count (1 byte, 0 if None)
+      - same_suit_count (1 byte, 0 if None)
+      - sequence_length (1 byte, 0 if None)
+      - sequence_wrap (1 byte, 0 or 1)
+      - group_count (1 byte)
+      - same_rank_groups (group_count bytes)
+      - required_ranks_count (1 byte)
+      - required_ranks (required_ranks_count bytes)
+    """
+    if not patterns:
+        return bytes([0])
+
+    result = bytes([len(patterns)])
+    for pattern in patterns:
+        result += bytes([
+            # Clamp rank_priority to 0-255 for single-byte encoding
+            pattern.rank_priority & 0xFF,
+            pattern.required_count or 0,
+            pattern.same_suit_count or 0,
+            pattern.sequence_length or 0,
+            1 if pattern.sequence_wrap else 0,
+        ])
+
+        # Encode same_rank_groups (clamp each value to 0-255)
+        groups = pattern.same_rank_groups or ()
+        result += bytes([len(groups)])
+        result += bytes([g & 0xFF for g in groups])
+
+        # Encode required_ranks
+        ranks = pattern.required_ranks or ()
+        result += bytes([len(ranks)])
+        for r in ranks:
+            result += bytes([RANK_TO_BYTE.get(r, 0)])
 
     return result
 

@@ -299,3 +299,29 @@ def test_compile_card_values_blackjack():
     # Format: count:1 + [rank:1, value:1, alt_value:1] * count
     assert len(bytecode) == 1 + (3 * 2)  # 7 bytes
     assert bytecode[0] == 2  # 2 values
+
+
+def test_compile_hand_patterns_poker():
+    """Test encoding poker hand patterns."""
+    from darwindeck.genome.schema import HandPattern
+    from darwindeck.genome.bytecode import compile_hand_patterns
+
+    patterns = (
+        HandPattern(
+            name="Full House",
+            rank_priority=70,
+            required_count=5,
+            same_rank_groups=(3, 2),
+        ),
+        HandPattern(
+            name="Flush",
+            rank_priority=60,
+            required_count=5,
+            same_suit_count=5,
+        ),
+    )
+
+    bytecode = compile_hand_patterns(patterns)
+
+    # Format: count:1 + variable per pattern
+    assert bytecode[0] == 2  # 2 patterns
