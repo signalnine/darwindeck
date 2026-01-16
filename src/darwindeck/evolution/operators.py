@@ -10,7 +10,9 @@ from darwindeck.genome.schema import (
     GameGenome, WinCondition, SetupRules, TurnStructure,
     PlayPhase, DrawPhase, DiscardPhase, TrickPhase, ClaimPhase,
     BettingPhase,
-    Location, Suit, SpecialEffect, EffectType, TargetSelector, Rank
+    Location, Suit, SpecialEffect, EffectType, TargetSelector, Rank,
+    TableauMode, SequenceDirection,
+    CardScoringRule, CardCondition, ScoringTrigger,
 )
 from darwindeck.genome.conditions import Condition, ConditionType, Operator
 from darwindeck.evolution.naming import generate_name
@@ -953,6 +955,140 @@ class MutateStartingChipsMutation(MutationOperator):
             return replace(genome, setup=new_setup, generation=genome.generation + 1)
 
 
+class MutateTableauModeMutation(MutationOperator):
+    """Change the tableau interaction mode.
+
+    This mutation changes how cards interact on the tableau. The tableau_mode
+    determines behaviors like comparing cards (WAR), matching ranks, or building
+    sequences.
+
+    Constraint: WAR mode is only valid for 2-player games.
+    """
+
+    def __init__(self, probability: float = 0.05):
+        """Initialize tableau mode mutation.
+
+        Args:
+            probability: Mutation probability (default: 5% - low weight as significant change)
+        """
+        super().__init__(probability)
+
+    def mutate(self, genome: GameGenome) -> GameGenome:
+        """Change the tableau interaction mode.
+
+        Args:
+            genome: Genome to mutate
+
+        Returns:
+            New genome with different tableau mode
+        """
+        # Get valid modes for this player count
+        valid_modes = [TableauMode.NONE, TableauMode.MATCH_RANK, TableauMode.SEQUENCE]
+        if genome.player_count == 2:
+            valid_modes.append(TableauMode.WAR)
+
+        # Remove current mode to ensure change
+        valid_modes = [m for m in valid_modes if m != genome.setup.tableau_mode]
+
+        if not valid_modes:
+            return genome
+
+        new_mode = random.choice(valid_modes)
+
+        # Create new setup with updated tableau_mode
+        new_setup = replace(
+            genome.setup,
+            tableau_mode=new_mode,
+        )
+
+        return replace(genome, setup=new_setup, generation=genome.generation + 1)
+
+
+class MutateSequenceDirectionMutation(MutationOperator):
+    """Change the sequence direction (only when mode is SEQUENCE).
+
+    This mutation only applies when tableau_mode is SEQUENCE. It changes
+    whether sequences must be ascending, descending, or can go either way.
+    """
+
+    def __init__(self, probability: float = 0.03):
+        """Initialize sequence direction mutation.
+
+        Args:
+            probability: Mutation probability (default: 3% - low weight)
+        """
+        super().__init__(probability)
+
+    def mutate(self, genome: GameGenome) -> GameGenome:
+        """Change the sequence direction.
+
+        Args:
+            genome: Genome to mutate
+
+        Returns:
+            New genome with different sequence direction, or unchanged if not SEQUENCE mode
+        """
+        if genome.setup.tableau_mode != TableauMode.SEQUENCE:
+            return genome  # No-op if not sequence mode
+
+        directions = [SequenceDirection.ASCENDING, SequenceDirection.DESCENDING, SequenceDirection.BOTH]
+        directions = [d for d in directions if d != genome.setup.sequence_direction]
+
+        if not directions:
+            return genome
+
+        new_direction = random.choice(directions)
+
+        new_setup = replace(
+            genome.setup,
+            sequence_direction=new_direction,
+        )
+
+        return replace(genome, setup=new_setup, generation=genome.generation + 1)
+
+
+class AddCardScoringMutation(MutationOperator):
+    """Add a random card scoring rule."""
+
+    def __init__(self, probability: float = 0.05):
+        """Initialize card scoring mutation.
+
+        Args:
+            probability: Mutation probability (default: 5%)
+        """
+        super().__init__(probability)
+
+    def mutate(self, genome: GameGenome) -> GameGenome:
+        """Add a new card scoring rule.
+
+        Args:
+            genome: Genome to mutate
+
+        Returns:
+            New genome with additional card scoring rule
+        """
+        # Pick random suit (or None for any)
+        suit = random.choice([None, Suit.HEARTS, Suit.DIAMONDS, Suit.CLUBS, Suit.SPADES])
+
+        # Pick random rank (or None for any)
+        rank = random.choice([None] + list(Rank))
+
+        # Pick points (-5 to 15)
+        points = random.randint(-5, 15)
+
+        # Pick trigger
+        trigger = random.choice(list(ScoringTrigger))
+
+        new_rule = CardScoringRule(
+            condition=CardCondition(suit=suit, rank=rank),
+            points=points,
+            trigger=trigger,
+        )
+
+        new_scoring = genome.card_scoring + (new_rule,)
+        return replace(genome, card_scoring=new_scoring, generation=genome.generation + 1)
+
+
 class CrossoverOperator:
     """Semantic crossover operator for game genomes.
 
@@ -1110,6 +1246,10 @@ def create_default_pipeline(
         RemoveBettingPhaseMutation(probability=min(0.05 * mult, 0.15)), # 5% (10% aggressive)
         MutateBettingPhaseMutation(probability=min(0.10 * mult, 0.2)),  # 10% (20% aggressive)
         MutateStartingChipsMutation(probability=min(0.10 * mult, 0.2)), # 10% (20% aggressive)
+
+        # Tableau mode mutations (low weight - significant structural changes)
+        MutateTableauModeMutation(probability=min(0.05 * mult, 0.10)),       # 5% (10% aggressive)
+        MutateSequenceDirectionMutation(probability=min(0.03 * mult, 0.06)), # 3% (6% aggressive)
     ]
     return MutationPipeline(operators)
 

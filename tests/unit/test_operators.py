@@ -396,3 +396,231 @@ def test_add_betting_phase_min_bet_valid():
     )
     # starting_chips is 5, so min_bet should be at most 5
     assert betting_phase.min_bet <= genome.setup.starting_chips or betting_phase.min_bet == 1
+
+
+# =====================================================================
+# Tableau Mode Mutation Tests
+# =====================================================================
+
+
+def test_mutate_tableau_mode():
+    """MutateTableauModeMutation changes tableau mode."""
+    from darwindeck.genome.schema import (
+        GameGenome, SetupRules, TurnStructure, WinCondition, TableauMode
+    )
+    from darwindeck.evolution.operators import MutateTableauModeMutation
+
+    random.seed(42)
+
+    genome = GameGenome(
+        schema_version="1.0",
+        genome_id="test",
+        generation=1,
+        setup=SetupRules(cards_per_player=7, tableau_mode=TableauMode.NONE),
+        turn_structure=TurnStructure(phases=[]),
+        special_effects=[],
+        win_conditions=[WinCondition(type="empty_hand")],
+        scoring_rules=[],
+        player_count=2,
+    )
+
+    mutation = MutateTableauModeMutation(probability=1.0)
+    mutated = mutation.mutate(genome)
+
+    # Mode should have changed (with seed 42, should get a different mode)
+    assert mutated.setup.tableau_mode != TableauMode.NONE
+
+
+def test_mutate_tableau_mode_war_requires_2_players():
+    """WAR mode mutation only applies to 2-player games."""
+    from darwindeck.genome.schema import (
+        GameGenome, SetupRules, TurnStructure, WinCondition, TableauMode
+    )
+    from darwindeck.evolution.operators import MutateTableauModeMutation
+
+    genome = GameGenome(
+        schema_version="1.0",
+        genome_id="test",
+        generation=1,
+        setup=SetupRules(cards_per_player=7, tableau_mode=TableauMode.NONE),
+        turn_structure=TurnStructure(phases=[]),
+        special_effects=[],
+        win_conditions=[WinCondition(type="empty_hand")],
+        scoring_rules=[],
+        player_count=4,  # 4 players - WAR not allowed
+    )
+
+    mutation = MutateTableauModeMutation(probability=1.0)
+
+    # Try multiple times with different seeds - should never get WAR
+    for seed in range(50):
+        random.seed(seed)
+        mutated = mutation.mutate(genome)
+        assert mutated.setup.tableau_mode != TableauMode.WAR, f"WAR should not be allowed with 4 players (seed={seed})"
+
+
+def test_mutate_sequence_direction():
+    """MutateSequenceDirectionMutation changes direction when mode is SEQUENCE."""
+    from darwindeck.genome.schema import (
+        GameGenome, SetupRules, TurnStructure, WinCondition,
+        TableauMode, SequenceDirection
+    )
+    from darwindeck.evolution.operators import MutateSequenceDirectionMutation
+
+    random.seed(42)
+
+    genome = GameGenome(
+        schema_version="1.0",
+        genome_id="test",
+        generation=1,
+        setup=SetupRules(
+            cards_per_player=7,
+            tableau_mode=TableauMode.SEQUENCE,
+            sequence_direction=SequenceDirection.ASCENDING
+        ),
+        turn_structure=TurnStructure(phases=[]),
+        special_effects=[],
+        win_conditions=[WinCondition(type="empty_hand")],
+        scoring_rules=[],
+        player_count=2,
+    )
+
+    mutation = MutateSequenceDirectionMutation(probability=1.0)
+    mutated = mutation.mutate(genome)
+
+    # Direction should have changed
+    assert mutated.setup.sequence_direction != SequenceDirection.ASCENDING
+
+
+def test_mutate_sequence_direction_no_op_when_not_sequence():
+    """MutateSequenceDirectionMutation is no-op when not in SEQUENCE mode."""
+    from darwindeck.genome.schema import (
+        GameGenome, SetupRules, TurnStructure, WinCondition,
+        TableauMode, SequenceDirection
+    )
+    from darwindeck.evolution.operators import MutateSequenceDirectionMutation
+
+    random.seed(42)
+
+    genome = GameGenome(
+        schema_version="1.0",
+        genome_id="test",
+        generation=1,
+        setup=SetupRules(
+            cards_per_player=7,
+            tableau_mode=TableauMode.WAR,  # Not SEQUENCE
+            sequence_direction=SequenceDirection.BOTH
+        ),
+        turn_structure=TurnStructure(phases=[]),
+        special_effects=[],
+        win_conditions=[WinCondition(type="empty_hand")],
+        scoring_rules=[],
+        player_count=2,
+    )
+
+    mutation = MutateSequenceDirectionMutation(probability=1.0)
+    mutated = mutation.mutate(genome)
+
+    # Should be unchanged - mutation is no-op when not SEQUENCE mode
+    assert mutated.setup.sequence_direction == SequenceDirection.BOTH
+    assert mutated.setup.tableau_mode == TableauMode.WAR
+
+
+def test_tableau_mutations_in_default_pipeline():
+    """Default pipeline includes tableau mode mutations."""
+    from darwindeck.evolution.operators import (
+        create_default_pipeline,
+        MutateTableauModeMutation,
+        MutateSequenceDirectionMutation,
+    )
+
+    pipeline = create_default_pipeline()
+
+    # Pipeline should include tableau mode mutation
+    has_tableau_mode_mutation = any(
+        isinstance(op, MutateTableauModeMutation)
+        for op in pipeline.operators
+    )
+    assert has_tableau_mode_mutation, "Default pipeline should include MutateTableauModeMutation"
+
+    # Pipeline should include sequence direction mutation
+    has_sequence_direction_mutation = any(
+        isinstance(op, MutateSequenceDirectionMutation)
+        for op in pipeline.operators
+    )
+    assert has_sequence_direction_mutation, "Default pipeline should include MutateSequenceDirectionMutation"
+
+    # Check probabilities
+    tableau_op = next(
+        op for op in pipeline.operators
+        if isinstance(op, MutateTableauModeMutation)
+    )
+    assert tableau_op.probability == 0.05  # 5% probability
+
+    sequence_op = next(
+        op for op in pipeline.operators
+        if isinstance(op, MutateSequenceDirectionMutation)
+    )
+    assert sequence_op.probability == 0.03  # 3% probability
+
+
+# =====================================================================
+# Card Scoring Mutation Tests
+# =====================================================================
+
+
+def test_add_card_scoring_mutation():
+    """Test adding a card scoring rule."""
+    from darwindeck.evolution.operators import AddCardScoringMutation
+    from darwindeck.genome.examples import create_war_genome
+
+    genome = create_war_genome()
+    assert len(genome.card_scoring) == 0
+
+    mutation = AddCardScoringMutation(probability=1.0)
+    mutated = mutation.mutate(genome)
+
+    assert len(mutated.card_scoring) == 1
+    assert mutated.card_scoring[0].points != 0 or mutated.card_scoring[0].points == 0  # Can be any int
+
+
+def test_add_card_scoring_creates_valid_rule():
+    """AddCardScoringMutation creates a valid CardScoringRule with correct types."""
+    from darwindeck.evolution.operators import AddCardScoringMutation
+    from darwindeck.genome.schema import CardScoringRule, CardCondition, ScoringTrigger, Suit, Rank
+    from darwindeck.genome.examples import create_war_genome
+
+    random.seed(123)
+    genome = create_war_genome()
+
+    mutation = AddCardScoringMutation(probability=1.0)
+    mutated = mutation.mutate(genome)
+
+    new_rule = mutated.card_scoring[0]
+    assert isinstance(new_rule, CardScoringRule)
+    assert isinstance(new_rule.condition, CardCondition)
+    assert isinstance(new_rule.trigger, ScoringTrigger)
+    assert isinstance(new_rule.points, int)
+    assert -5 <= new_rule.points <= 15
+    # Suit can be None or a Suit
+    assert new_rule.condition.suit is None or isinstance(new_rule.condition.suit, Suit)
+    # Rank can be None or a Rank
+    assert new_rule.condition.rank is None or isinstance(new_rule.condition.rank, Rank)
+
+
+def test_add_card_scoring_multiple_rules():
+    """Multiple applications add multiple rules."""
+    from darwindeck.evolution.operators import AddCardScoringMutation
+    from darwindeck.genome.examples import create_war_genome
+
+    random.seed(42)
+    genome = create_war_genome()
+    assert len(genome.card_scoring) == 0
+
+    mutation = AddCardScoringMutation(probability=1.0)
+    mutated = mutation.mutate(genome)
+    mutated = mutation.mutate(mutated)
+    mutated = mutation.mutate(mutated)
+
+    assert len(mutated.card_scoring) == 3
+    assert mutated.generation == genome.generation + 3
