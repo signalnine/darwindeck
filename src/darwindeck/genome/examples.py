@@ -19,6 +19,18 @@ from darwindeck.genome.schema import (
     TargetSelector,
     TableauMode,
     SequenceDirection,
+    # Self-describing types
+    CardScoringRule,
+    CardCondition,
+    ScoringTrigger,
+    WinComparison,
+    TriggerMode,
+    BreakingRule,
+    HandEvaluation,
+    HandEvaluationMethod,
+    HandPattern,
+    CardValue,
+    ShowdownMethod,
 )
 from darwindeck.genome.conditions import Condition, ConditionType, Operator, CompoundCondition
 
@@ -65,13 +77,13 @@ def create_war_genome() -> GameGenome:
 
 
 def create_hearts_genome() -> GameGenome:
-    """Create classic 4-player Hearts genome using trick-taking extension.
+    """Create classic 4-player Hearts genome with explicit scoring.
 
     Classic 4-player Hearts:
     - 4 players, 13 cards each (full 52-card deck)
     - Must follow suit if able
     - Hearts cannot be led until "broken" (Hearts played when unable to follow suit)
-    - Each Heart counts as 1 point (scored automatically)
+    - Each Heart counts as 1 point, Queen of Spades is 13 points
     - Lowest score at end of tricks wins
     """
     return GameGenome(
@@ -90,6 +102,7 @@ def create_hearts_genome() -> GameGenome:
                     trump_suit=None,            # No trump in Hearts
                     high_card_wins=True,        # High card wins
                     breaking_suit=Suit.HEARTS,  # Hearts cannot be led until broken
+                    breaking_rule=BreakingRule.CANNOT_LEAD_UNTIL_BROKEN,
                 )
             ],
             is_trick_based=True,
@@ -99,14 +112,28 @@ def create_hearts_genome() -> GameGenome:
         win_conditions=[
             WinCondition(
                 type="low_score",  # Lowest score wins (avoid hearts)
-                threshold=13  # Max possible hearts
+                threshold=100,     # Game ends at 100 points
+                comparison=WinComparison.LOWEST,
+                trigger_mode=TriggerMode.THRESHOLD_GATE,
             ),
             WinCondition(
                 type="all_hands_empty",
-                threshold=0
             )
         ],
-        scoring_rules=[],  # Simplified: scoring handled by trick-taking logic
+        scoring_rules=[],
+        # Explicit card scoring
+        card_scoring=(
+            CardScoringRule(
+                condition=CardCondition(suit=Suit.HEARTS),
+                points=1,
+                trigger=ScoringTrigger.TRICK_WIN,
+            ),
+            CardScoringRule(
+                condition=CardCondition(suit=Suit.SPADES, rank=Rank.QUEEN),
+                points=13,
+                trigger=ScoringTrigger.TRICK_WIN,
+            ),
+        ),
         max_turns=200,     # 13 tricks × 4 players
         player_count=4,    # Classic 4-player format
         min_turns=52       # At least one full hand (13 tricks × 4 players)

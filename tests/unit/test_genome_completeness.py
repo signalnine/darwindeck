@@ -70,7 +70,9 @@ def check_genome_completeness(genome: GameGenome) -> CompletenessResult:
     # Check 1: Score-based win conditions require explicit scoring rules
     score_win_types = {"high_score", "low_score", "first_to_score"}
     if win_types & score_win_types:
-        if not genome.scoring_rules:
+        # Check both old scoring_rules and new card_scoring
+        has_scoring = bool(genome.scoring_rules) or bool(genome.card_scoring)
+        if not has_scoring:
             # Trick-taking games rely on implicit Hearts scoring
             if has_trick_phase:
                 dependencies.append(IncompleteDependency.HEARTS_SCORING)
@@ -81,14 +83,28 @@ def check_genome_completeness(genome: GameGenome) -> CompletenessResult:
     # Check 2: Threshold=21 triggers implicit blackjack detection
     for wc in genome.win_conditions:
         if wc.type == "high_score" and wc.threshold == 21:
-            dependencies.append(IncompleteDependency.THRESHOLD_21_BLACKJACK)
-            dependencies.append(IncompleteDependency.BLACKJACK_VALUATION)
-            warnings.append("Threshold 21 triggers implicit blackjack card valuation")
+            # Only incomplete if no hand_evaluation with card_values
+            has_card_values = (
+                genome.hand_evaluation is not None
+                and genome.hand_evaluation.card_values is not None
+                and len(genome.hand_evaluation.card_values) > 0
+            )
+            if not has_card_values:
+                dependencies.append(IncompleteDependency.THRESHOLD_21_BLACKJACK)
+                dependencies.append(IncompleteDependency.BLACKJACK_VALUATION)
+                warnings.append("Threshold 21 triggers implicit blackjack card valuation")
 
     # Check 3: best_hand win condition relies on poker hand ranking
     if "best_hand" in win_types:
-        dependencies.append(IncompleteDependency.POKER_HAND_RANKING)
-        warnings.append("best_hand win condition relies on hardcoded poker hand rankings")
+        # Only incomplete if no hand_evaluation with patterns
+        has_hand_eval = (
+            genome.hand_evaluation is not None
+            and genome.hand_evaluation.patterns is not None
+            and len(genome.hand_evaluation.patterns) > 0
+        )
+        if not has_hand_eval:
+            dependencies.append(IncompleteDependency.POKER_HAND_RANKING)
+            warnings.append("best_hand win condition relies on hardcoded poker hand rankings")
 
     # Check 4: Capture-based wins need explicit capture mechanic
     capture_win_types = {"capture_all", "most_captured"}
@@ -113,7 +129,8 @@ def check_genome_completeness(genome: GameGenome) -> CompletenessResult:
 
     # Check 7: all_hands_empty with trick phase assumes Hearts-style lowest wins
     if "all_hands_empty" in win_types and has_trick_phase:
-        if not genome.scoring_rules:
+        has_scoring = bool(genome.scoring_rules) or bool(genome.card_scoring)
+        if not has_scoring:
             dependencies.append(IncompleteDependency.HEARTS_SCORING)
             warnings.append("all_hands_empty with tricks assumes lowest score wins (Hearts)")
 
@@ -377,3 +394,40 @@ class TestImplicitMechanicsDocumentation:
 
         # This test always passes - it's for documentation
         assert len(implicit_mechanics) > 0
+
+
+class TestMigratedGenomesComplete:
+    """Test that migrated genomes with explicit fields are complete."""
+
+    def test_hearts_genome_is_complete(self):
+        """Hearts genome with card_scoring is complete."""
+        from darwindeck.genome.examples import create_hearts_genome
+        genome = create_hearts_genome()
+        result = check_genome_completeness(genome)
+        assert result.complete, f"Hearts genome incomplete: {result}"
+
+        # Verify card_scoring is populated
+        assert len(genome.card_scoring) >= 2  # Hearts + QS
+
+    def test_simple_poker_genome_is_complete(self):
+        """Simple Poker genome with hand_evaluation is complete."""
+        from darwindeck.genome.examples import create_simple_poker_genome
+        genome = create_simple_poker_genome()
+        result = check_genome_completeness(genome)
+        assert result.complete, f"Simple Poker genome incomplete: {result}"
+
+        # Verify hand_evaluation is populated
+        assert genome.hand_evaluation is not None
+        assert len(genome.hand_evaluation.patterns) >= 10  # All poker hands
+
+    def test_blackjack_genome_is_complete(self):
+        """Blackjack genome with card values is complete."""
+        from darwindeck.genome.examples import create_blackjack_genome
+        genome = create_blackjack_genome()
+        result = check_genome_completeness(genome)
+        assert result.complete, f"Blackjack genome incomplete: {result}"
+
+        # Verify hand_evaluation with card_values
+        assert genome.hand_evaluation is not None
+        assert len(genome.hand_evaluation.card_values) == 13  # All ranks
+        assert genome.hand_evaluation.target_value == 21
