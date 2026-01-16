@@ -209,6 +209,20 @@ class GameRules:
     same_player_on_win: bool = False
 
 
+class ClaimRankMode(Enum):
+    """How claim rank is determined (Go Fish)."""
+    SEQUENTIAL = "sequential"      # A,2,3...K,A,2... cycle through
+    PLAYER_CHOICE = "player_choice"  # Player selects rank to ask
+    FIXED = "fixed"                # Always ask for same rank
+
+
+class BreakingRule(Enum):
+    """Rule for breaking suits (Hearts)."""
+    NONE = "none"                                    # No breaking restriction
+    CANNOT_LEAD_UNTIL_BROKEN = "cannot_lead_until_broken"  # Can't lead suit until broken
+    CANNOT_PLAY_UNTIL_BROKEN = "cannot_play_until_broken"  # Can't play suit at all until broken
+
+
 class TableauMode(Enum):
     """How cards on the tableau interact."""
     NONE = "none"              # Cards accumulate, no interaction

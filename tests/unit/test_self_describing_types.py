@@ -282,3 +282,19 @@ class TestGameRules:
         rules = GameRules()
         with pytest.raises(AttributeError):
             rules.tie_breaker = TieBreaker.SPLIT
+
+
+class TestPhaseEnums:
+    def test_claim_rank_mode_values(self):
+        """ClaimRankMode enum has expected values."""
+        from darwindeck.genome.schema import ClaimRankMode
+        assert ClaimRankMode.SEQUENTIAL.value == "sequential"
+        assert ClaimRankMode.PLAYER_CHOICE.value == "player_choice"
+        assert ClaimRankMode.FIXED.value == "fixed"
+
+    def test_breaking_rule_values(self):
+        """BreakingRule enum has expected values."""
+        from darwindeck.genome.schema import BreakingRule
+        assert BreakingRule.NONE.value == "none"
+        assert BreakingRule.CANNOT_LEAD_UNTIL_BROKEN.value == "cannot_lead_until_broken"
+        assert BreakingRule.CANNOT_PLAY_UNTIL_BROKEN.value == "cannot_play_until_broken"
