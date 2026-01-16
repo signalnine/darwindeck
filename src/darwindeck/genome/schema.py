@@ -159,6 +159,22 @@ class HandEvaluation:
     bust_threshold: Optional[int] = None    # Score that loses (22 in Blackjack)
 
 
+class WinComparison(Enum):
+    """How scores are compared for winning."""
+    HIGHEST = "highest"  # Highest score wins (poker, most tricks)
+    LOWEST = "lowest"    # Lowest score wins (Hearts, Golf)
+    FIRST = "first"      # First to reach threshold wins
+    NONE = "none"        # No comparison (empty_hand, capture_all)
+
+
+class TriggerMode(Enum):
+    """When win condition is checked."""
+    IMMEDIATE = "immediate"            # Check after every action
+    THRESHOLD_GATE = "threshold_gate"  # Only check when threshold reached
+    ALL_HANDS_EMPTY = "all_hands_empty"  # Check when all hands empty
+    DECK_EMPTY = "deck_empty"          # Check when deck is exhausted
+
+
 class TableauMode(Enum):
     """How cards on the tableau interact."""
     NONE = "none"              # Cards accumulate, no interaction

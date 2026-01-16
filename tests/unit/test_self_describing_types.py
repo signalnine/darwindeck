@@ -211,3 +211,21 @@ class TestHandEvaluation:
         eval = HandEvaluation(method=HandEvaluationMethod.HIGH_CARD)
         with pytest.raises(AttributeError):
             eval.method = HandEvaluationMethod.PATTERN_MATCH
+
+
+class TestWinConditionEnums:
+    def test_win_comparison_values(self):
+        """WinComparison enum has expected values."""
+        from darwindeck.genome.schema import WinComparison
+        assert WinComparison.HIGHEST.value == "highest"
+        assert WinComparison.LOWEST.value == "lowest"
+        assert WinComparison.FIRST.value == "first"
+        assert WinComparison.NONE.value == "none"
+
+    def test_trigger_mode_values(self):
+        """TriggerMode enum has expected values."""
+        from darwindeck.genome.schema import TriggerMode
+        assert TriggerMode.IMMEDIATE.value == "immediate"
+        assert TriggerMode.THRESHOLD_GATE.value == "threshold_gate"
+        assert TriggerMode.ALL_HANDS_EMPTY.value == "all_hands_empty"
+        assert TriggerMode.DECK_EMPTY.value == "deck_empty"
