@@ -13,6 +13,7 @@ from darwindeck.genome.schema import (
     Location, Suit, SpecialEffect, EffectType, TargetSelector, Rank,
     TableauMode, SequenceDirection,
     CardScoringRule, CardCondition, ScoringTrigger,
+    HandEvaluation, HandPattern, CardValue,
 )
 from darwindeck.genome.conditions import Condition, ConditionType, Operator
 from darwindeck.evolution.naming import generate_name
@@ -1086,6 +1087,176 @@ class AddCardScoringMutation(MutationOperator):
         )
 
         new_scoring = genome.card_scoring + (new_rule,)
+        return replace(genome, card_scoring=new_scoring, generation=genome.generation + 1)
+
+
+class MutateHandPatternMutation(MutationOperator):
+    """Mutate rank_priority in a hand pattern."""
+
+    def __init__(self, probability: float = 0.05):
+        """Initialize hand pattern mutation.
+
+        Args:
+            probability: Mutation probability (default: 5%)
+        """
+        super().__init__(probability)
+
+    def mutate(self, genome: GameGenome) -> GameGenome:
+        """Mutate rank_priority of a random hand pattern.
+
+        Args:
+            genome: Genome to mutate
+
+        Returns:
+            New genome with mutated hand pattern
+        """
+        if genome.hand_evaluation is None or not genome.hand_evaluation.patterns:
+            return genome
+
+        patterns = list(genome.hand_evaluation.patterns)
+        idx = random.randrange(len(patterns))
+        old = patterns[idx]
+
+        # Mutate priority by ±5-10
+        delta = random.choice([-10, -5, 5, 10])
+        new_priority = max(1, min(100, old.rank_priority + delta))
+
+        patterns[idx] = HandPattern(
+            name=old.name,
+            rank_priority=new_priority,
+            required_count=old.required_count,
+            same_suit_count=old.same_suit_count,
+            same_rank_groups=old.same_rank_groups,
+            sequence_length=old.sequence_length,
+            sequence_wrap=old.sequence_wrap,
+            required_ranks=old.required_ranks,
+        )
+
+        new_eval = HandEvaluation(
+            method=genome.hand_evaluation.method,
+            patterns=tuple(patterns),
+            card_values=genome.hand_evaluation.card_values,
+            target_value=genome.hand_evaluation.target_value,
+            bust_threshold=genome.hand_evaluation.bust_threshold,
+        )
+
+        return replace(genome, hand_evaluation=new_eval, generation=genome.generation + 1)
+
+
+class MutateCardValueMutation(MutationOperator):
+    """Mutate point values in card_values."""
+
+    def __init__(self, probability: float = 0.05):
+        """Initialize card value mutation.
+
+        Args:
+            probability: Mutation probability (default: 5%)
+        """
+        super().__init__(probability)
+
+    def mutate(self, genome: GameGenome) -> GameGenome:
+        """Mutate point value of a random card value entry.
+
+        Args:
+            genome: Genome to mutate
+
+        Returns:
+            New genome with mutated card value
+        """
+        if genome.hand_evaluation is None or not genome.hand_evaluation.card_values:
+            return genome
+
+        values = list(genome.hand_evaluation.card_values)
+        idx = random.randrange(len(values))
+        old = values[idx]
+
+        # Mutate value by ±1-2
+        delta = random.choice([-2, -1, 1, 2])
+        new_value = max(1, min(15, old.value + delta))
+
+        values[idx] = CardValue(
+            rank=old.rank,
+            value=new_value,
+            alternate_value=old.alternate_value,
+        )
+
+        new_eval = HandEvaluation(
+            method=genome.hand_evaluation.method,
+            patterns=genome.hand_evaluation.patterns,
+            card_values=tuple(values),
+            target_value=genome.hand_evaluation.target_value,
+            bust_threshold=genome.hand_evaluation.bust_threshold,
+        )
+
+        return replace(genome, hand_evaluation=new_eval, generation=genome.generation + 1)
+
+
+class MutateCardScoringMutation(MutationOperator):
+    """Mutate points in an existing card scoring rule."""
+
+    def __init__(self, probability: float = 0.1):
+        """Initialize card scoring mutation operator.
+
+        Args:
+            probability: Mutation probability (default: 10%)
+        """
+        super().__init__(probability)
+
+    def mutate(self, genome: GameGenome) -> GameGenome:
+        """Mutate points in a random card scoring rule.
+
+        Args:
+            genome: Genome to mutate
+
+        Returns:
+            New genome with mutated card scoring rule, or original if no rules
+        """
+        if not genome.card_scoring:
+            return genome
+
+        # Pick random rule to mutate
+        idx = random.randrange(len(genome.card_scoring))
+        old_rule = genome.card_scoring[idx]
+
+        # Mutate points by ±1-3
+        delta = random.choice([-3, -2, -1, 1, 2, 3])
+        new_points = old_rule.points + delta
+
+        new_rule = CardScoringRule(
+            condition=old_rule.condition,
+            points=new_points,
+            trigger=old_rule.trigger,
+        )
+
+        new_scoring = genome.card_scoring[:idx] + (new_rule,) + genome.card_scoring[idx+1:]
+        return replace(genome, card_scoring=new_scoring, generation=genome.generation + 1)
+
+
+class RemoveCardScoringMutation(MutationOperator):
+    """Remove a random card scoring rule."""
+
+    def __init__(self, probability: float = 0.05):
+        """Initialize card scoring removal mutation operator.
+
+        Args:
+            probability: Mutation probability (default: 5%)
+        """
+        super().__init__(probability)
+
+    def mutate(self, genome: GameGenome) -> GameGenome:
+        """Remove a random card scoring rule.
+
+        Args:
+            genome: Genome to mutate
+
+        Returns:
+            New genome with removed card scoring rule, or original if no rules
+        """
+        if not genome.card_scoring:
+            return genome
+
+        idx = random.randrange(len(genome.card_scoring))
+        new_scoring = genome.card_scoring[:idx] + genome.card_scoring[idx+1:]
         return replace(genome, card_scoring=new_scoring, generation=genome.generation + 1)
 
 

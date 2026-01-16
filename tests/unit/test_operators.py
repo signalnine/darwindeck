@@ -624,3 +624,202 @@ def test_add_card_scoring_multiple_rules():
 
     assert len(mutated.card_scoring) == 3
     assert mutated.generation == genome.generation + 3
+
+
+def test_mutate_card_scoring():
+    """Test mutating existing card scoring rules."""
+    from darwindeck.evolution.operators import MutateCardScoringMutation
+    from darwindeck.genome.examples import create_hearts_genome
+
+    random.seed(42)
+    genome = create_hearts_genome()
+    assert len(genome.card_scoring) >= 2
+
+    original_points = [r.points for r in genome.card_scoring]
+
+    mutation = MutateCardScoringMutation(probability=1.0)
+    mutated = mutation.mutate(genome)
+
+    mutated_points = [r.points for r in mutated.card_scoring]
+    # At least one point value should have changed
+    assert original_points != mutated_points
+
+
+def test_mutate_card_scoring_no_rules():
+    """MutateCardScoringMutation returns genome unchanged if no rules exist."""
+    from darwindeck.evolution.operators import MutateCardScoringMutation
+    from darwindeck.genome.examples import create_war_genome
+
+    genome = create_war_genome()  # War has no card scoring rules
+    assert len(genome.card_scoring) == 0
+
+    mutation = MutateCardScoringMutation(probability=1.0)
+    mutated = mutation.mutate(genome)
+
+    # Should return genome unchanged
+    assert len(mutated.card_scoring) == 0
+    assert mutated.generation == genome.generation  # No mutation occurred
+
+
+def test_remove_card_scoring():
+    """Test removing a card scoring rule."""
+    from darwindeck.evolution.operators import RemoveCardScoringMutation
+    from darwindeck.genome.examples import create_hearts_genome
+
+    random.seed(42)
+    genome = create_hearts_genome()
+    original_count = len(genome.card_scoring)
+
+    mutation = RemoveCardScoringMutation(probability=1.0)
+    mutated = mutation.mutate(genome)
+
+    assert len(mutated.card_scoring) == original_count - 1
+
+
+def test_remove_card_scoring_no_rules():
+    """RemoveCardScoringMutation returns genome unchanged if no rules exist."""
+    from darwindeck.evolution.operators import RemoveCardScoringMutation
+    from darwindeck.genome.examples import create_war_genome
+
+    genome = create_war_genome()  # War has no card scoring rules
+    assert len(genome.card_scoring) == 0
+
+    mutation = RemoveCardScoringMutation(probability=1.0)
+    mutated = mutation.mutate(genome)
+
+    # Should return genome unchanged
+    assert len(mutated.card_scoring) == 0
+    assert mutated.generation == genome.generation  # No mutation occurred
+
+
+# =====================================================================
+# Hand Evaluation Mutation Tests
+# =====================================================================
+
+
+def test_mutate_hand_pattern_priority():
+    """Test mutating hand pattern rank priority."""
+    from darwindeck.evolution.operators import MutateHandPatternMutation
+    from darwindeck.genome.examples import create_simple_poker_genome
+
+    random.seed(42)
+
+    genome = create_simple_poker_genome()
+    assert genome.hand_evaluation is not None
+    assert len(genome.hand_evaluation.patterns) > 0
+
+    original_priorities = [p.rank_priority for p in genome.hand_evaluation.patterns]
+
+    mutation = MutateHandPatternMutation(probability=1.0)
+    mutated = mutation.mutate(genome)
+
+    mutated_priorities = [p.rank_priority for p in mutated.hand_evaluation.patterns]
+    assert original_priorities != mutated_priorities
+    assert mutated.generation == genome.generation + 1
+
+
+def test_mutate_hand_pattern_no_patterns():
+    """MutateHandPatternMutation returns unchanged if no patterns."""
+    from darwindeck.evolution.operators import MutateHandPatternMutation
+    from darwindeck.genome.examples import create_war_genome
+
+    genome = create_war_genome()
+    # War has no hand_evaluation
+    assert genome.hand_evaluation is None
+
+    mutation = MutateHandPatternMutation(probability=1.0)
+    mutated = mutation.mutate(genome)
+
+    # Should return genome unchanged
+    assert mutated.generation == genome.generation
+
+
+def test_mutate_hand_pattern_bounds():
+    """Mutated priority stays within 1-100 bounds."""
+    from darwindeck.evolution.operators import MutateHandPatternMutation
+    from darwindeck.genome.examples import create_simple_poker_genome
+
+    genome = create_simple_poker_genome()
+
+    mutation = MutateHandPatternMutation(probability=1.0)
+
+    # Try many seeds to test bounds
+    for seed in range(50):
+        random.seed(seed)
+        mutated = mutation.mutate(genome)
+        for pattern in mutated.hand_evaluation.patterns:
+            assert 1 <= pattern.rank_priority <= 100, f"Priority out of bounds: {pattern.rank_priority}"
+
+
+def test_mutate_card_value():
+    """Test mutating card point values."""
+    from darwindeck.evolution.operators import MutateCardValueMutation
+    from darwindeck.genome.examples import create_blackjack_genome
+
+    random.seed(42)
+
+    genome = create_blackjack_genome()
+    assert genome.hand_evaluation is not None
+    assert len(genome.hand_evaluation.card_values) > 0
+
+    original_values = [cv.value for cv in genome.hand_evaluation.card_values]
+
+    mutation = MutateCardValueMutation(probability=1.0)
+    mutated = mutation.mutate(genome)
+
+    mutated_values = [cv.value for cv in mutated.hand_evaluation.card_values]
+    assert original_values != mutated_values
+    assert mutated.generation == genome.generation + 1
+
+
+def test_mutate_card_value_no_values():
+    """MutateCardValueMutation returns unchanged if no card_values."""
+    from darwindeck.evolution.operators import MutateCardValueMutation
+    from darwindeck.genome.examples import create_war_genome
+
+    genome = create_war_genome()
+    # War has no hand_evaluation
+    assert genome.hand_evaluation is None
+
+    mutation = MutateCardValueMutation(probability=1.0)
+    mutated = mutation.mutate(genome)
+
+    # Should return genome unchanged
+    assert mutated.generation == genome.generation
+
+
+def test_mutate_card_value_bounds():
+    """Mutated value stays within 1-15 bounds."""
+    from darwindeck.evolution.operators import MutateCardValueMutation
+    from darwindeck.genome.examples import create_blackjack_genome
+
+    genome = create_blackjack_genome()
+
+    mutation = MutateCardValueMutation(probability=1.0)
+
+    # Try many seeds to test bounds
+    for seed in range(50):
+        random.seed(seed)
+        mutated = mutation.mutate(genome)
+        for cv in mutated.hand_evaluation.card_values:
+            assert 1 <= cv.value <= 15, f"Value out of bounds: {cv.value}"
+
+
+def test_mutate_card_value_preserves_alternate():
+    """MutateCardValueMutation preserves alternate_value."""
+    random.seed(0)  # Seed that will modify the Ace
+
+    from darwindeck.evolution.operators import MutateCardValueMutation
+    from darwindeck.genome.examples import create_blackjack_genome
+
+    genome = create_blackjack_genome()
+    # Blackjack Ace has alternate_value=11
+    ace_cv = next(cv for cv in genome.hand_evaluation.card_values if cv.alternate_value is not None)
+    assert ace_cv.alternate_value == 11
+
+    mutation = MutateCardValueMutation(probability=1.0)
+    mutated = mutation.mutate(genome)
+
+    # Find the Ace in mutated (should still have alternate_value)
+    mutated_ace = next(cv for cv in mutated.hand_evaluation.card_values if cv.rank == ace_cv.rank)
+    assert mutated_ace.alternate_value == 11
