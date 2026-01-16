@@ -282,3 +282,20 @@ def test_compile_card_scoring_hearts():
     # Format: count:2 + [suit:1, rank:1, points:2, trigger:1] * count
     assert len(bytecode) == 2 + (5 * 2)  # 12 bytes
     assert bytecode[0:2] == b'\x00\x02'  # 2 rules (big-endian)
+
+
+def test_compile_card_values_blackjack():
+    """Test encoding Blackjack card values."""
+    from darwindeck.genome.schema import CardValue, Rank
+    from darwindeck.genome.bytecode import compile_card_values
+
+    values = (
+        CardValue(rank=Rank.ACE, value=1, alternate_value=11),
+        CardValue(rank=Rank.KING, value=10),
+    )
+
+    bytecode = compile_card_values(values)
+
+    # Format: count:1 + [rank:1, value:1, alt_value:1] * count
+    assert len(bytecode) == 1 + (3 * 2)  # 7 bytes
+    assert bytecode[0] == 2  # 2 values

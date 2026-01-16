@@ -26,6 +26,9 @@ from darwindeck.genome.schema import (
     CardCondition,
     CardScoringRule,
     Suit,
+    HandEvaluationMethod,
+    CardValue,
+    HandEvaluation,
 )
 from darwindeck.genome.conditions import Condition, ConditionType, Operator, CompoundCondition, ConditionOrCompound
 
@@ -148,6 +151,15 @@ SUIT_TO_BYTE = {
     Suit.SPADES: 3,
 }
 
+# HandEvaluationMethod encoding
+HAND_EVAL_METHOD_MAP = {
+    HandEvaluationMethod.NONE: 0,
+    HandEvaluationMethod.HIGH_CARD: 1,
+    HandEvaluationMethod.POINT_TOTAL: 2,
+    HandEvaluationMethod.PATTERN_MATCH: 3,
+    HandEvaluationMethod.CARD_COUNT: 4,
+}
+
 
 def compile_card_scoring(rules: tuple) -> bytes:
     """Compile card scoring rules to bytecode.
@@ -176,6 +188,29 @@ def compile_card_scoring(rules: tuple) -> bytes:
         trigger = SCORING_TRIGGER_MAP.get(rule.trigger, 0)
 
         result += struct.pack("!BBhB", suit, rank, points, trigger)
+
+    return result
+
+
+def compile_card_values(values: tuple) -> bytes:
+    """Compile card values to bytecode.
+
+    Format:
+    - value_count (1 byte)
+    - For each value (3 bytes):
+      - rank (1 byte): 0-12 for 2-A
+      - value (1 byte): primary point value
+      - alternate_value (1 byte): 0 if none, else alternate value
+    """
+    if not values:
+        return bytes([0])
+
+    result = bytes([len(values)])
+    for cv in values:
+        rank = RANK_TO_BYTE.get(cv.rank, 0)
+        value = cv.value & 0xFF
+        alt = cv.alternate_value if cv.alternate_value else 0
+        result += bytes([rank, value, alt])
 
     return result
 
