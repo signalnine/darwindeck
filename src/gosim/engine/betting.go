@@ -354,6 +354,65 @@ func matchesPattern(hand []Card, p HandPattern) bool {
 	return true
 }
 
+// ============================================================================
+// Explicit Card Value Calculation (for Blackjack-style games)
+// ============================================================================
+
+// CalculateHandValue calculates hand value using explicit card values.
+// Handles Blackjack-style alternate values (e.g., Ace = 1 or 11).
+func CalculateHandValue(hand []Card, eval *HandEvaluation) int {
+	if eval == nil || eval.Method != EvalMethodPointTotal {
+		return calculateDefaultHandValue(hand)
+	}
+
+	// Build lookup map from explicit values
+	valueMap := make(map[uint8]CardValue)
+	for _, cv := range eval.CardValues {
+		valueMap[cv.Rank] = cv
+	}
+
+	total := 0
+	altCards := []CardValue{} // Track cards with alternate values
+
+	for _, card := range hand {
+		cv, ok := valueMap[card.Rank]
+		if ok {
+			// Use primary value
+			total += int(cv.Value)
+			// Track if this card has an alternate (higher) value
+			if cv.AltValue > cv.Value {
+				altCards = append(altCards, cv)
+			}
+		} else {
+			// Default: rank value + 2 (so rank 0 = 2, rank 1 = 3, etc.)
+			// This matches traditional pip values: rank 0=Ace(2 in default), etc.
+			// But for blackjack-like games, cards should be in CardValues
+			total += int(card.Rank) + 2
+		}
+	}
+
+	// Use alternate (higher) values where beneficial
+	// For Blackjack: Ace counts as 11 if it doesn't bust
+	for _, cv := range altCards {
+		diff := int(cv.AltValue) - int(cv.Value)
+		if total+diff <= int(eval.TargetValue) {
+			total += diff
+		}
+	}
+
+	return total
+}
+
+// calculateDefaultHandValue provides fallback pip value calculation
+func calculateDefaultHandValue(hand []Card) int {
+	total := 0
+	for _, card := range hand {
+		// Simple pip value: rank + 2 (so 0=2, 1=3, ..., 8=10, 9=J=11, 10=Q=12, 11=K=13, 12=A=14)
+		total += int(card.Rank) + 2
+	}
+	return total
+}
+
 // isSequence checks if hand contains a sequence of given length
 func isSequence(hand []Card, length int, wrap bool) bool {
 	if len(hand) < length {
