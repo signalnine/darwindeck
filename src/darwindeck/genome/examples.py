@@ -733,6 +733,23 @@ def create_blackjack_genome() -> GameGenome:
     - Higher hand wins the pot
     - Starting chips: 500, min bet: 25
     """
+    # Standard blackjack card values (all 13 ranks)
+    blackjack_values = (
+        CardValue(rank=Rank.ACE, value=1, alternate_value=11),  # Ace: 1 or 11
+        CardValue(rank=Rank.TWO, value=2),
+        CardValue(rank=Rank.THREE, value=3),
+        CardValue(rank=Rank.FOUR, value=4),
+        CardValue(rank=Rank.FIVE, value=5),
+        CardValue(rank=Rank.SIX, value=6),
+        CardValue(rank=Rank.SEVEN, value=7),
+        CardValue(rank=Rank.EIGHT, value=8),
+        CardValue(rank=Rank.NINE, value=9),
+        CardValue(rank=Rank.TEN, value=10),
+        CardValue(rank=Rank.JACK, value=10),
+        CardValue(rank=Rank.QUEEN, value=10),
+        CardValue(rank=Rank.KING, value=10),
+    )
+
     return GameGenome(
         schema_version="1.0",
         genome_id="blackjack",
@@ -746,7 +763,11 @@ def create_blackjack_genome() -> GameGenome:
         turn_structure=TurnStructure(
             phases=[
                 # Bet before seeing full hand
-                BettingPhase(min_bet=25, max_raises=1),
+                BettingPhase(
+                    min_bet=25,
+                    max_raises=1,
+                    showdown_method=ShowdownMethod.HAND_EVALUATION,
+                ),
                 # Hit - draw a card
                 DrawPhase(
                     source=Location.DECK,
@@ -769,7 +790,13 @@ def create_blackjack_genome() -> GameGenome:
         ],
         scoring_rules=[],
         max_turns=20,
-        player_count=2
+        player_count=2,
+        hand_evaluation=HandEvaluation(
+            method=HandEvaluationMethod.POINT_TOTAL,
+            card_values=blackjack_values,
+            target_value=21,
+            bust_threshold=22,
+        ),
     )
 
 
@@ -1041,6 +1068,73 @@ def create_simple_poker_genome() -> GameGenome:
 
     This is the first seed genome to use the betting system.
     """
+    # Standard poker hand patterns (10 hands, priority higher = better)
+    poker_patterns = (
+        HandPattern(
+            name="Royal Flush",
+            rank_priority=100,
+            required_count=5,
+            same_suit_count=5,
+            sequence_length=5,
+            required_ranks=(Rank.TEN, Rank.JACK, Rank.QUEEN, Rank.KING, Rank.ACE),
+        ),
+        HandPattern(
+            name="Straight Flush",
+            rank_priority=90,
+            required_count=5,
+            same_suit_count=5,
+            sequence_length=5,
+        ),
+        HandPattern(
+            name="Four of a Kind",
+            rank_priority=80,
+            required_count=5,
+            same_rank_groups=(4,),
+        ),
+        HandPattern(
+            name="Full House",
+            rank_priority=70,
+            required_count=5,
+            same_rank_groups=(3, 2),
+        ),
+        HandPattern(
+            name="Flush",
+            rank_priority=60,
+            required_count=5,
+            same_suit_count=5,
+        ),
+        HandPattern(
+            name="Straight",
+            rank_priority=50,
+            required_count=5,
+            sequence_length=5,
+            sequence_wrap=True,  # A-2-3-4-5 and 10-J-Q-K-A both valid
+        ),
+        HandPattern(
+            name="Three of a Kind",
+            rank_priority=40,
+            required_count=5,
+            same_rank_groups=(3,),
+        ),
+        HandPattern(
+            name="Two Pair",
+            rank_priority=30,
+            required_count=5,
+            same_rank_groups=(2, 2),
+        ),
+        HandPattern(
+            name="One Pair",
+            rank_priority=20,
+            required_count=5,
+            same_rank_groups=(2,),
+        ),
+        HandPattern(
+            name="High Card",
+            rank_priority=10,
+            required_count=5,
+        ),
+    )
+
     return GameGenome(
         schema_version="1.0",
         genome_id="simple-poker",
@@ -1056,6 +1150,7 @@ def create_simple_poker_genome() -> GameGenome:
                 BettingPhase(
                     min_bet=10,
                     max_raises=3,
+                    showdown_method=ShowdownMethod.HAND_EVALUATION,
                 ),
             ],
         ),
@@ -1066,6 +1161,10 @@ def create_simple_poker_genome() -> GameGenome:
         scoring_rules=[],
         max_turns=10,  # Poker hands are quick
         player_count=2,
+        hand_evaluation=HandEvaluation(
+            method=HandEvaluationMethod.PATTERN_MATCH,
+            patterns=poker_patterns,
+        ),
     )
 
 

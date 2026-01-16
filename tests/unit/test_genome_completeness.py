@@ -70,9 +70,14 @@ def check_genome_completeness(genome: GameGenome) -> CompletenessResult:
     # Check 1: Score-based win conditions require explicit scoring rules
     score_win_types = {"high_score", "low_score", "first_to_score"}
     if win_types & score_win_types:
-        # Check both old scoring_rules and new card_scoring
+        # Check scoring_rules, card_scoring, or hand_evaluation with card_values (blackjack)
         has_scoring = bool(genome.scoring_rules) or bool(genome.card_scoring)
-        if not has_scoring:
+        has_point_total = (
+            genome.hand_evaluation is not None
+            and genome.hand_evaluation.card_values is not None
+            and len(genome.hand_evaluation.card_values) > 0
+        )
+        if not has_scoring and not has_point_total:
             # Trick-taking games rely on implicit Hearts scoring
             if has_trick_phase:
                 dependencies.append(IncompleteDependency.HEARTS_SCORING)
@@ -117,8 +122,19 @@ def check_genome_completeness(genome: GameGenome) -> CompletenessResult:
 
     # Check 5: Betting without showdown resolution
     if has_betting_phase:
-        # Need either best_hand or explicit scoring for showdown
-        if "best_hand" not in win_types and not genome.scoring_rules:
+        # Need best_hand, scoring_rules, or hand_evaluation for showdown
+        has_showdown = (
+            "best_hand" in win_types
+            or genome.scoring_rules
+            or (
+                genome.hand_evaluation is not None
+                and (
+                    (genome.hand_evaluation.patterns is not None and len(genome.hand_evaluation.patterns) > 0)
+                    or (genome.hand_evaluation.card_values is not None and len(genome.hand_evaluation.card_values) > 0)
+                )
+            )
+        )
+        if not has_showdown:
             dependencies.append(IncompleteDependency.BETTING_NO_SHOWDOWN)
             warnings.append("Betting phase but no showdown resolution defined")
 
