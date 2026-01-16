@@ -5,8 +5,8 @@ executed by the Go engine, validating the entire pipeline.
 """
 
 import pytest
-from darwindeck.genome.bytecode import BytecodeCompiler
-from darwindeck.genome.examples import create_war_genome
+from darwindeck.genome.bytecode import BytecodeCompiler, BytecodeHeader
+from darwindeck.genome.examples import create_war_genome, create_hearts_genome
 
 
 def compile_genome(genome):
@@ -99,6 +99,40 @@ class TestBytecodeEquivalence:
         bytecode2 = compile_genome(genome)
 
         assert bytecode1 == bytecode2, "Bytecode compilation is not deterministic"
+
+    def test_hearts_bytecode_includes_card_scoring(self) -> None:
+        """Hearts genome bytecode includes explicit card_scoring section.
+
+        Hearts has two card scoring rules:
+        1. Any Heart card = 1 point (on TRICK_WIN)
+        2. Queen of Spades = 13 points (on TRICK_WIN)
+
+        This test verifies the bytecode header has a valid card_scoring_offset
+        and the section contains the expected number of rules.
+        """
+        genome = create_hearts_genome()
+        bytecode = compile_genome(genome)
+
+        header = BytecodeHeader.from_bytes(bytecode)
+
+        # Card scoring offset should be set (non-zero, positive)
+        assert header.card_scoring_offset > 0, "card_scoring_offset should be positive"
+
+        # Offset must be within bytecode bounds
+        assert header.card_scoring_offset < len(bytecode), \
+            f"card_scoring_offset {header.card_scoring_offset} exceeds bytecode length {len(bytecode)}"
+
+        # Read rule count at offset (2 bytes, big-endian)
+        offset = header.card_scoring_offset
+        rule_count = int.from_bytes(bytecode[offset:offset+2], 'big')
+        assert rule_count == 2, f"Expected 2 card scoring rules (Hearts + QS), got {rule_count}"
+
+        # Verify genome has the expected card_scoring rules for sanity
+        assert len(genome.card_scoring) == 2
+        # Rule 1: Hearts suit = 1 point
+        assert genome.card_scoring[0].points == 1
+        # Rule 2: Queen of Spades = 13 points
+        assert genome.card_scoring[1].points == 13
 
     @pytest.mark.skip(reason="Requires libcardsim.so to be built")
     def test_go_can_parse_bytecode(self) -> None:
