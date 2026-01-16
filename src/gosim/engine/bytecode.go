@@ -72,23 +72,25 @@ const (
 
 // BytecodeHeader matches Python bytecode format
 // V1 format: 36 bytes (no version byte prefix)
-// V2 format: 39 bytes (version byte at offset 0, struct at 1-36, tableau fields at 37-38)
+// V2 format: 47 bytes (version byte at offset 0, struct at 1-36, tableau at 37-38, scoring offsets at 39-46)
 type BytecodeHeader struct {
-	BytecodeVersion     uint8  // V2+: bytecode format version (at byte 0)
-	Version             uint32 // Legacy version field
-	GenomeIDHash        uint64
-	PlayerCount         uint32
-	MaxTurns            uint32
-	SetupOffset         int32
-	TurnStructureOffset int32
-	WinConditionsOffset int32
-	ScoringOffset       int32
-	TableauMode         uint8 // V2+: tableau mode (0=none, 1=war, 2=klondike, 3=build_sequences)
-	SequenceDirection   uint8 // V2+: sequence direction (0=ascending, 1=descending, 2=both)
+	BytecodeVersion       uint8  // V2+: bytecode format version (at byte 0)
+	Version               uint32 // Legacy version field
+	GenomeIDHash          uint64
+	PlayerCount           uint32
+	MaxTurns              uint32
+	SetupOffset           int32
+	TurnStructureOffset   int32
+	WinConditionsOffset   int32
+	ScoringOffset         int32
+	TableauMode           uint8 // V2+: tableau mode (0=none, 1=war, 2=klondike, 3=build_sequences)
+	SequenceDirection     uint8 // V2+: sequence direction (0=ascending, 1=descending, 2=both)
+	CardScoringOffset     int32 // V2+: offset to card scoring rules section
+	HandEvaluationOffset  int32 // V2+: offset to hand evaluation section
 }
 
 // ParseHeader extracts header from bytecode
-// Supports both V1 (36 bytes, no version prefix) and V2 (39 bytes, version at byte 0)
+// Supports both V1 (36 bytes, no version prefix) and V2 (47 bytes, version at byte 0)
 func ParseHeader(bytecode []byte) (*BytecodeHeader, error) {
 	if len(bytecode) < 36 {
 		return nil, errors.New("bytecode too short for header")
@@ -126,7 +128,7 @@ func parseV1Header(bytecode []byte) (*BytecodeHeader, error) {
 	return h, nil
 }
 
-// parseV2Header parses the new 39-byte header format (version byte at offset 0)
+// parseV2Header parses the V2 header format (version byte at offset 0)
 // Format:
 // - Byte 0: bytecode version (2)
 // - Bytes 1-4: legacy version (uint32)
@@ -139,6 +141,8 @@ func parseV1Header(bytecode []byte) (*BytecodeHeader, error) {
 // - Bytes 33-36: scoring_offset (int32)
 // - Byte 37: tableau_mode (uint8)
 // - Byte 38: sequence_direction (uint8)
+// - Bytes 39-42: card_scoring_offset (int32) [optional, for backwards compat]
+// - Bytes 43-46: hand_evaluation_offset (int32) [optional, for backwards compat]
 func parseV2Header(bytecode []byte) (*BytecodeHeader, error) {
 	if len(bytecode) < 39 {
 		return nil, fmt.Errorf("v2 bytecode too short: %d < 39", len(bytecode))
@@ -156,6 +160,13 @@ func parseV2Header(bytecode []byte) (*BytecodeHeader, error) {
 	h.ScoringOffset = int32(binary.BigEndian.Uint32(bytecode[33:37]))
 	h.TableauMode = bytecode[37]
 	h.SequenceDirection = bytecode[38]
+
+	// Parse new offsets if bytecode is long enough (backwards compatibility)
+	if len(bytecode) >= 47 {
+		h.CardScoringOffset = int32(binary.BigEndian.Uint32(bytecode[39:43]))
+		h.HandEvaluationOffset = int32(binary.BigEndian.Uint32(bytecode[43:47]))
+	}
+	// Otherwise leave CardScoringOffset and HandEvaluationOffset as 0 (their zero values)
 
 	return h, nil
 }
@@ -220,6 +231,8 @@ type Genome struct {
 	TurnPhases    []PhaseDescriptor
 	WinConditions []WinCondition
 	Effects       map[uint8]SpecialEffect // rank -> effect lookup
+	CardScoring   []CardScoringRule       // explicit card scoring rules
+	HandEval      *HandEvaluation         // hand evaluation method
 }
 
 type PhaseDescriptor struct {
@@ -280,6 +293,25 @@ func ParseGenome(bytecode []byte) (*Genome, error) {
 		return nil, fmt.Errorf("failed to parse effects: %w", err)
 	}
 	genome.Effects = effects
+
+	// Parse card_scoring if offset is valid (must be >= 47, the V2 header size)
+	// This check prevents misinterpreting old bytecode where bytes 39-46 were used for other data
+	if header.CardScoringOffset >= 47 && int(header.CardScoringOffset) < len(bytecode) {
+		scoring, err := ParseCardScoringRules(bytecode[header.CardScoringOffset:])
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse card_scoring: %w", err)
+		}
+		genome.CardScoring = scoring
+	}
+
+	// Parse hand_evaluation if offset is valid (must be >= 47, the V2 header size)
+	if header.HandEvaluationOffset >= 47 && int(header.HandEvaluationOffset) < len(bytecode) {
+		eval, err := ParseHandEvaluation(bytecode[header.HandEvaluationOffset:])
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse hand_evaluation: %w", err)
+		}
+		genome.HandEval = eval
+	}
 
 	return genome, nil
 }
