@@ -1421,6 +1421,13 @@ def create_default_pipeline(
         # Tableau mode mutations (low weight - significant structural changes)
         MutateTableauModeMutation(probability=min(0.05 * mult, 0.10)),       # 5% (10% aggressive)
         MutateSequenceDirectionMutation(probability=min(0.03 * mult, 0.06)), # 3% (6% aggressive)
+
+        # Self-describing genome mutations (card scoring, hand patterns, card values)
+        AddCardScoringMutation(probability=min(0.05 * mult, 0.10)),          # 5% (10% aggressive)
+        MutateCardScoringMutation(probability=min(0.10 * mult, 0.20)),       # 10% (20% aggressive)
+        RemoveCardScoringMutation(probability=min(0.03 * mult, 0.06)),       # 3% (6% aggressive)
+        MutateHandPatternMutation(probability=min(0.05 * mult, 0.10)),       # 5% (10% aggressive)
+        MutateCardValueMutation(probability=min(0.05 * mult, 0.10)),         # 5% (10% aggressive)
     ]
     return MutationPipeline(operators)
 

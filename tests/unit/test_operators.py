@@ -823,3 +823,69 @@ def test_mutate_card_value_preserves_alternate():
     # Find the Ace in mutated (should still have alternate_value)
     mutated_ace = next(cv for cv in mutated.hand_evaluation.card_values if cv.rank == ace_cv.rank)
     assert mutated_ace.alternate_value == 11
+
+
+# =====================================================================
+# Default Pipeline Tests
+# =====================================================================
+
+
+def test_self_describing_mutations_in_default_pipeline():
+    """New self-describing mutations are in the default pipeline."""
+    from darwindeck.evolution.operators import (
+        create_default_pipeline,
+        AddCardScoringMutation,
+        MutateCardScoringMutation,
+        RemoveCardScoringMutation,
+        MutateHandPatternMutation,
+        MutateCardValueMutation,
+    )
+
+    pipeline = create_default_pipeline()
+    operator_types = [type(op).__name__ for op in pipeline.operators]
+
+    assert "AddCardScoringMutation" in operator_types
+    assert "MutateCardScoringMutation" in operator_types
+    assert "RemoveCardScoringMutation" in operator_types
+    assert "MutateHandPatternMutation" in operator_types
+    assert "MutateCardValueMutation" in operator_types
+
+
+def test_self_describing_mutations_have_correct_probabilities():
+    """Self-describing mutations have expected probabilities."""
+    from darwindeck.evolution.operators import (
+        create_default_pipeline,
+        AddCardScoringMutation,
+        MutateCardScoringMutation,
+        RemoveCardScoringMutation,
+        MutateHandPatternMutation,
+        MutateCardValueMutation,
+    )
+
+    pipeline = create_default_pipeline()
+
+    # Find each operator and check probability
+    add_scoring = next(
+        op for op in pipeline.operators if isinstance(op, AddCardScoringMutation)
+    )
+    assert add_scoring.probability == 0.05
+
+    mutate_scoring = next(
+        op for op in pipeline.operators if isinstance(op, MutateCardScoringMutation)
+    )
+    assert mutate_scoring.probability == 0.10
+
+    remove_scoring = next(
+        op for op in pipeline.operators if isinstance(op, RemoveCardScoringMutation)
+    )
+    assert remove_scoring.probability == 0.03
+
+    mutate_pattern = next(
+        op for op in pipeline.operators if isinstance(op, MutateHandPatternMutation)
+    )
+    assert mutate_pattern.probability == 0.05
+
+    mutate_value = next(
+        op for op in pipeline.operators if isinstance(op, MutateCardValueMutation)
+    )
+    assert mutate_value.probability == 0.05
