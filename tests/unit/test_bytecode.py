@@ -22,16 +22,18 @@ def test_header_serialization() -> None:
         genome_id_hash=12345678901234567890,
         player_count=2,
         max_turns=100,
-        setup_offset=39,  # Updated for new header size
-        turn_structure_offset=47,
-        win_conditions_offset=103,
-        scoring_offset=123,
+        setup_offset=47,  # Updated for new header size (47 bytes)
+        turn_structure_offset=59,
+        win_conditions_offset=115,
+        scoring_offset=135,
         tableau_mode=1,  # WAR
         sequence_direction=0,  # ASCENDING
+        card_scoring_offset=150,
+        hand_evaluation_offset=170,
     )
 
     serialized = header.to_bytes()
-    assert len(serialized) == 39  # New header size
+    assert len(serialized) == 47  # New header size with card_scoring and hand_evaluation offsets
 
     # First byte should be bytecode version 2
     assert serialized[0] == 2
@@ -42,6 +44,8 @@ def test_header_serialization() -> None:
     assert deserialized.max_turns == 100
     assert deserialized.tableau_mode == 1
     assert deserialized.sequence_direction == 0
+    assert deserialized.card_scoring_offset == 150
+    assert deserialized.hand_evaluation_offset == 170
 
 
 def test_compile_war_genome() -> None:
@@ -189,7 +193,7 @@ def test_compile_genome_with_betting_phase() -> None:
     bytecode = compiler.compile_genome(genome)
 
     # Should compile without error
-    assert len(bytecode) > 36  # Header + data
+    assert len(bytecode) > 47  # Header + data
 
     # Header should parse
     header = BytecodeHeader.from_bytes(bytecode)

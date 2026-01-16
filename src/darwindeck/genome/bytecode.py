@@ -314,7 +314,7 @@ def compile_effects(effects: list) -> bytes:
 class BytecodeHeader:
     """Fixed-size header for bytecode blob.
 
-    Format (39 bytes total):
+    Format (47 bytes total):
     - Byte 0: bytecode version (single byte, currently 2)
     - Bytes 1-4: legacy version field (4 bytes, for compatibility)
     - Bytes 5-12: genome_id_hash (8 bytes)
@@ -326,6 +326,8 @@ class BytecodeHeader:
     - Bytes 33-36: scoring_offset (4 bytes)
     - Byte 37: tableau_mode (1 byte)
     - Byte 38: sequence_direction (1 byte)
+    - Bytes 39-42: card_scoring_offset (4 bytes)
+    - Bytes 43-46: hand_evaluation_offset (4 bytes)
     """
     version: int  # 4 bytes (legacy, kept for compatibility)
     genome_id_hash: int  # 8 bytes (hash of genome_id)
@@ -337,11 +339,13 @@ class BytecodeHeader:
     scoring_offset: int  # 4 bytes
     tableau_mode: int = 0  # 1 byte (TableauMode enum value)
     sequence_direction: int = 0  # 1 byte (SequenceDirection enum value)
+    card_scoring_offset: int = 0  # 4 bytes (offset to card scoring section)
+    hand_evaluation_offset: int = 0  # 4 bytes (offset to hand evaluation section)
 
     # Inner struct format (bytes 1-36): legacy version + core fields
     INNER_STRUCT_FORMAT = "!IQIIiiii"  # 36 bytes
 
-    HEADER_SIZE = 39  # Total header size including version byte and tableau fields
+    HEADER_SIZE = 47  # Total header size including version byte, tableau fields, and new offsets
 
     def to_bytes(self) -> bytes:
         # Byte 0: bytecode version
@@ -360,6 +364,8 @@ class BytecodeHeader:
         )
         # Bytes 37-38: tableau_mode and sequence_direction
         result += bytes([self.tableau_mode, self.sequence_direction])
+        # Bytes 39-46: card_scoring_offset and hand_evaluation_offset
+        result += struct.pack("!ii", self.card_scoring_offset, self.hand_evaluation_offset)
         return result
 
     @classmethod
@@ -369,7 +375,16 @@ class BytecodeHeader:
         # Parse bytes 37-38
         tableau_mode = data[37] if len(data) > 37 else 0
         sequence_direction = data[38] if len(data) > 38 else 0
-        return cls(*unpacked, tableau_mode=tableau_mode, sequence_direction=sequence_direction)
+        # Parse bytes 39-46: card_scoring_offset and hand_evaluation_offset
+        card_scoring_offset = struct.unpack("!i", data[39:43])[0] if len(data) > 42 else 0
+        hand_evaluation_offset = struct.unpack("!i", data[43:47])[0] if len(data) > 46 else 0
+        return cls(
+            *unpacked,
+            tableau_mode=tableau_mode,
+            sequence_direction=sequence_direction,
+            card_scoring_offset=card_scoring_offset,
+            hand_evaluation_offset=hand_evaluation_offset,
+        )
 
 
 class BytecodeCompiler:
