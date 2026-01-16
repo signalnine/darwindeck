@@ -257,3 +257,28 @@ def test_bytecode_tableau_mode_encoding():
     # Offset 38: sequence_direction (1=DESCENDING)
     assert bytecode[37] == 3  # SEQUENCE
     assert bytecode[38] == 1  # DESCENDING
+
+
+def test_compile_card_scoring_hearts():
+    """Test encoding Hearts-style card scoring rules."""
+    from darwindeck.genome.schema import CardScoringRule, CardCondition, ScoringTrigger, Suit, Rank
+    from darwindeck.genome.bytecode import compile_card_scoring
+
+    rules = (
+        CardScoringRule(
+            condition=CardCondition(suit=Suit.HEARTS),
+            points=1,
+            trigger=ScoringTrigger.TRICK_WIN,
+        ),
+        CardScoringRule(
+            condition=CardCondition(suit=Suit.SPADES, rank=Rank.QUEEN),
+            points=13,
+            trigger=ScoringTrigger.TRICK_WIN,
+        ),
+    )
+
+    bytecode = compile_card_scoring(rules)
+
+    # Format: count:2 + [suit:1, rank:1, points:2, trigger:1] * count
+    assert len(bytecode) == 2 + (5 * 2)  # 12 bytes
+    assert bytecode[0:2] == b'\x00\x02'  # 2 rules (big-endian)
