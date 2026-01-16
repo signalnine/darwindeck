@@ -175,6 +175,29 @@ class TriggerMode(Enum):
     DECK_EMPTY = "deck_empty"          # Check when deck is exhausted
 
 
+class PassAction(Enum):
+    """What happens when players pass consecutively."""
+    NONE = "none"                    # No special action
+    CLEAR_TABLEAU = "clear_tableau"  # Clear cards from tableau
+    END_ROUND = "end_round"          # End the current round
+    SKIP_PLAYER = "skip_player"      # Skip to next player
+
+
+class DeckEmptyAction(Enum):
+    """What happens when deck is empty."""
+    RESHUFFLE_DISCARD = "reshuffle_discard"  # Shuffle discard to form new deck
+    GAME_ENDS = "game_ends"                  # Game ends immediately
+    SKIP_DRAW = "skip_draw"                  # Skip draw phase
+
+
+class TieBreaker(Enum):
+    """How ties are resolved."""
+    ACTIVE_PLAYER = "active_player"  # Active player wins ties
+    ALTERNATING = "alternating"      # Alternate who wins ties
+    SPLIT = "split"                  # Split the winnings
+    BATTLE = "battle"                # Play tiebreaker round (War)
+
+
 class TableauMode(Enum):
     """How cards on the tableau interact."""
     NONE = "none"              # Cards accumulate, no interaction

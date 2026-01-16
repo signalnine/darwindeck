@@ -229,3 +229,28 @@ class TestWinConditionEnums:
         assert TriggerMode.THRESHOLD_GATE.value == "threshold_gate"
         assert TriggerMode.ALL_HANDS_EMPTY.value == "all_hands_empty"
         assert TriggerMode.DECK_EMPTY.value == "deck_empty"
+
+
+class TestGameRulesEnums:
+    def test_pass_action_values(self):
+        """PassAction enum has expected values."""
+        from darwindeck.genome.schema import PassAction
+        assert PassAction.NONE.value == "none"
+        assert PassAction.CLEAR_TABLEAU.value == "clear_tableau"
+        assert PassAction.END_ROUND.value == "end_round"
+        assert PassAction.SKIP_PLAYER.value == "skip_player"
+
+    def test_deck_empty_action_values(self):
+        """DeckEmptyAction enum has expected values."""
+        from darwindeck.genome.schema import DeckEmptyAction
+        assert DeckEmptyAction.RESHUFFLE_DISCARD.value == "reshuffle_discard"
+        assert DeckEmptyAction.GAME_ENDS.value == "game_ends"
+        assert DeckEmptyAction.SKIP_DRAW.value == "skip_draw"
+
+    def test_tie_breaker_values(self):
+        """TieBreaker enum has expected values."""
+        from darwindeck.genome.schema import TieBreaker
+        assert TieBreaker.ACTIVE_PLAYER.value == "active_player"
+        assert TieBreaker.ALTERNATING.value == "alternating"
+        assert TieBreaker.SPLIT.value == "split"
+        assert TieBreaker.BATTLE.value == "battle"
