@@ -1382,3 +1382,202 @@ func TestIsSequence_NonConsecutive(t *testing.T) {
 		t.Error("Expected false for non-consecutive hand")
 	}
 }
+
+// ============================================================================
+// Explicit Card Value Calculation Tests (Blackjack-style)
+// ============================================================================
+
+func TestCalculateHandValueBlackjack(t *testing.T) {
+	// In our Card representation: Rank 0=Ace, Rank 12=King
+	eval := &HandEvaluation{
+		Method:        EvalMethodPointTotal,
+		TargetValue:   21,
+		BustThreshold: 22,
+		CardValues: []CardValue{
+			{Rank: 0, Value: 1, AltValue: 11},  // Ace = 1 or 11
+			{Rank: 12, Value: 10, AltValue: 0}, // King = 10
+			{Rank: 11, Value: 10, AltValue: 0}, // Queen = 10
+			{Rank: 10, Value: 10, AltValue: 0}, // Jack = 10
+		},
+	}
+
+	// Ace + King = 21 (blackjack)
+	// Ace (rank 0) starts as 1, King (rank 12) = 10
+	// Total = 11, then Ace can upgrade to 11, so 11 + 10 = 21
+	hand := []Card{{Rank: 0, Suit: 0}, {Rank: 12, Suit: 0}}
+	value := CalculateHandValue(hand, eval)
+	if value != 21 {
+		t.Errorf("Ace + King should be 21, got %d", value)
+	}
+}
+
+func TestCalculateHandValueSoftHand(t *testing.T) {
+	eval := &HandEvaluation{
+		Method:        EvalMethodPointTotal,
+		TargetValue:   21,
+		BustThreshold: 22,
+		CardValues: []CardValue{
+			{Rank: 0, Value: 1, AltValue: 11}, // Ace = 1 or 11
+			{Rank: 5, Value: 6, AltValue: 0},  // 6 (rank 5 = card "6")
+		},
+	}
+
+	// Ace + 6 = 17 (soft, using Ace as 11)
+	// Ace starts as 1, 6 = 6, total = 7
+	// Ace can upgrade: 7 + 10 = 17 <= 21, so upgrade
+	hand := []Card{{Rank: 0, Suit: 0}, {Rank: 5, Suit: 0}}
+	value := CalculateHandValue(hand, eval)
+	if value != 17 {
+		t.Errorf("Ace + 6 should be 17 (soft), got %d", value)
+	}
+}
+
+func TestCalculateHandValueHardHand(t *testing.T) {
+	eval := &HandEvaluation{
+		Method:        EvalMethodPointTotal,
+		TargetValue:   21,
+		BustThreshold: 22,
+		CardValues: []CardValue{
+			{Rank: 0, Value: 1, AltValue: 11},  // Ace = 1 or 11
+			{Rank: 12, Value: 10, AltValue: 0}, // King = 10
+		},
+	}
+
+	// Ace + King + King = 21 (hard, Ace counts as 1)
+	// Ace = 1, King = 10, King = 10, total = 21
+	// Ace upgrade would be 21 + 10 = 31 > 21, so no upgrade
+	hand := []Card{{Rank: 0, Suit: 0}, {Rank: 12, Suit: 0}, {Rank: 12, Suit: 1}}
+	value := CalculateHandValue(hand, eval)
+	if value != 21 {
+		t.Errorf("Ace + King + King should be 21 (hard), got %d", value)
+	}
+}
+
+func TestCalculateHandValueTwoAces(t *testing.T) {
+	eval := &HandEvaluation{
+		Method:        EvalMethodPointTotal,
+		TargetValue:   21,
+		BustThreshold: 22,
+		CardValues: []CardValue{
+			{Rank: 0, Value: 1, AltValue: 11}, // Ace = 1 or 11
+		},
+	}
+
+	// Two Aces = 12 (one as 11, one as 1)
+	// Both start as 1, total = 2
+	// First Ace upgrades: 2 + 10 = 12 <= 21, upgrade
+	// Second Ace would be: 12 + 10 = 22 > 21, no upgrade
+	hand := []Card{{Rank: 0, Suit: 0}, {Rank: 0, Suit: 1}}
+	value := CalculateHandValue(hand, eval)
+	if value != 12 {
+		t.Errorf("Two Aces should be 12, got %d", value)
+	}
+}
+
+func TestCalculateHandValueBust(t *testing.T) {
+	eval := &HandEvaluation{
+		Method:        EvalMethodPointTotal,
+		TargetValue:   21,
+		BustThreshold: 22,
+		CardValues: []CardValue{
+			{Rank: 12, Value: 10, AltValue: 0}, // King = 10
+			{Rank: 11, Value: 10, AltValue: 0}, // Queen = 10
+			{Rank: 4, Value: 5, AltValue: 0},   // 5 (rank 4 = card "5")
+		},
+	}
+
+	// King + Queen + 5 = 25 (bust)
+	hand := []Card{{Rank: 12, Suit: 0}, {Rank: 11, Suit: 1}, {Rank: 4, Suit: 2}}
+	value := CalculateHandValue(hand, eval)
+	if value != 25 {
+		t.Errorf("K + Q + 5 should be 25 (bust), got %d", value)
+	}
+}
+
+func TestCalculateHandValueDefaultFallback(t *testing.T) {
+	// No CardValues defined for some cards, use default
+	eval := &HandEvaluation{
+		Method:        EvalMethodPointTotal,
+		TargetValue:   21,
+		BustThreshold: 22,
+		CardValues: []CardValue{
+			{Rank: 0, Value: 1, AltValue: 11}, // Only Ace defined
+		},
+	}
+
+	// Ace + card rank 3 (which is "4" in card terms, value = 3+2=5)
+	// Ace = 1, rank 3 = 5 (default), total = 6
+	// Ace upgrade: 6 + 10 = 16 <= 21, upgrade
+	hand := []Card{{Rank: 0, Suit: 0}, {Rank: 3, Suit: 0}}
+	value := CalculateHandValue(hand, eval)
+	if value != 16 {
+		t.Errorf("Ace + rank 3 should be 16 with default fallback, got %d", value)
+	}
+}
+
+func TestCalculateHandValueNilEval(t *testing.T) {
+	// With nil eval, should use default calculation
+	hand := []Card{{Rank: 5, Suit: 0}, {Rank: 3, Suit: 1}}
+	// Default: rank 5 + 2 = 7, rank 3 + 2 = 5, total = 12
+	value := CalculateHandValue(hand, nil)
+	if value != 12 {
+		t.Errorf("Default calculation for ranks 5+3 should be 12, got %d", value)
+	}
+}
+
+func TestCalculateHandValueWrongMethod(t *testing.T) {
+	eval := &HandEvaluation{
+		Method:      EvalMethodPatternMatch, // Not PointTotal
+		TargetValue: 21,
+		CardValues: []CardValue{
+			{Rank: 0, Value: 1, AltValue: 11},
+		},
+	}
+
+	// With wrong method, should use default calculation
+	hand := []Card{{Rank: 5, Suit: 0}, {Rank: 3, Suit: 1}}
+	// Default: rank 5 + 2 = 7, rank 3 + 2 = 5, total = 12
+	value := CalculateHandValue(hand, eval)
+	if value != 12 {
+		t.Errorf("Wrong method should use default calculation (12), got %d", value)
+	}
+}
+
+func TestCalculateHandValueEmptyHand(t *testing.T) {
+	eval := &HandEvaluation{
+		Method:        EvalMethodPointTotal,
+		TargetValue:   21,
+		BustThreshold: 22,
+		CardValues: []CardValue{
+			{Rank: 0, Value: 1, AltValue: 11},
+		},
+	}
+
+	hand := []Card{}
+	value := CalculateHandValue(hand, eval)
+	if value != 0 {
+		t.Errorf("Empty hand should be 0, got %d", value)
+	}
+}
+
+func TestCalculateDefaultHandValue(t *testing.T) {
+	// Test the default pip value calculation
+	hand := []Card{
+		{Rank: 0, Suit: 0},  // Ace: 0 + 2 = 2
+		{Rank: 5, Suit: 1},  // 6: 5 + 2 = 7
+		{Rank: 12, Suit: 2}, // King: 12 + 2 = 14
+	}
+	// Total = 2 + 7 + 14 = 23
+	value := calculateDefaultHandValue(hand)
+	if value != 23 {
+		t.Errorf("Default hand value should be 23, got %d", value)
+	}
+}
+
+func TestCalculateDefaultHandValueEmpty(t *testing.T) {
+	hand := []Card{}
+	value := calculateDefaultHandValue(hand)
+	if value != 0 {
+		t.Errorf("Empty hand default value should be 0, got %d", value)
+	}
+}
