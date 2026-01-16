@@ -125,6 +125,91 @@ func GenerateLegalMoves(state *GameState, genome *Genome) []LegalMove {
 
 			playMoveCount := 0
 
+			// SEQUENCE mode: special handling for tableau plays
+			if state.TableauMode == 3 && target == LocationTableau {
+				// Check if all piles are empty
+				allPilesEmpty := true
+				for _, pile := range state.Tableau {
+					if len(pile) > 0 {
+						allPilesEmpty = false
+						break
+					}
+				}
+
+				if allPilesEmpty || len(state.Tableau) == 0 {
+					// Empty tableau: any card can start a new pile
+					for cardIdx, card := range hand {
+						// Apply any existing condition
+						if len(conditionBytes) > 0 {
+							if !EvaluateCardCondition(state, currentPlayer, card, conditionBytes) {
+								continue
+							}
+						}
+						moves = append(moves, LegalMove{
+							PhaseIndex: phaseIdx,
+							CardIndex:  cardIdx,
+							TargetLoc:  target,
+						})
+						playMoveCount++
+					}
+				} else {
+					// Non-empty tableau: check each card against all piles
+					// Track which cards have been added to avoid duplicates
+					addedCards := make(map[int]bool)
+
+					for cardIdx, card := range hand {
+						// Apply any existing condition first
+						if len(conditionBytes) > 0 {
+							if !EvaluateCardCondition(state, currentPlayer, card, conditionBytes) {
+								continue
+							}
+						}
+
+						// Check if card can play on any existing pile
+						canPlayOnExisting := false
+						for _, pile := range state.Tableau {
+							if len(pile) > 0 {
+								topCard := pile[len(pile)-1]
+								if isValidSequencePlay(card, topCard, state.SequenceDirection) {
+									canPlayOnExisting = true
+									break
+								}
+							}
+						}
+
+						// Check if card can start a new pile on an empty slot
+						canStartNewPile := false
+						for _, pile := range state.Tableau {
+							if len(pile) == 0 {
+								canStartNewPile = true
+								break
+							}
+						}
+
+						// Add move if card can be played somewhere
+						if (canPlayOnExisting || canStartNewPile) && !addedCards[cardIdx] {
+							moves = append(moves, LegalMove{
+								PhaseIndex: phaseIdx,
+								CardIndex:  cardIdx,
+								TargetLoc:  target,
+							})
+							addedCards[cardIdx] = true
+							playMoveCount++
+						}
+					}
+				}
+
+				// If no valid plays but pass_if_unable is set, add pass move
+				if playMoveCount == 0 && passIfUnable {
+					moves = append(moves, LegalMove{
+						PhaseIndex: phaseIdx,
+						CardIndex:  MovePlayPass,
+						TargetLoc:  target,
+					})
+				}
+				continue // Skip normal play logic
+			}
+
 			// Single-card plays (standard)
 			if minCards <= 1 && maxCards >= 1 {
 				// Check each card in hand
@@ -579,6 +664,44 @@ func ApplyMove(state *GameState, move *LegalMove, genome *Genome) {
 	state.TurnNumber++
 }
 
+// calculateTrickPoints calculates points for cards in current trick.
+// Uses explicit CardScoring rules from genome if available, otherwise
+// falls back to implicit Hearts scoring for backwards compatibility.
+func calculateTrickPoints(state *GameState, genome *Genome, breakingSuit uint8) int32 {
+	points := int32(0)
+
+	// Use explicit scoring rules if available
+	if len(genome.CardScoring) > 0 {
+		for _, tc := range state.CurrentTrick {
+			for _, rule := range genome.CardScoring {
+				if rule.Trigger != TriggerTrickWin {
+					continue
+				}
+				// Check if card matches condition
+				suitMatch := rule.Suit == 255 || rule.Suit == tc.Card.Suit
+				rankMatch := rule.Rank == 255 || rule.Rank == tc.Card.Rank
+				if suitMatch && rankMatch {
+					points += int32(rule.Points)
+				}
+			}
+		}
+		return points
+	}
+
+	// Fallback to implicit Hearts scoring for backwards compatibility
+	for _, tc := range state.CurrentTrick {
+		if breakingSuit != 255 && tc.Card.Suit == breakingSuit {
+			points++ // Each breaking suit card = 1 point
+		}
+		// Queen of Spades = 13 points in Hearts
+		if tc.Card.Suit == 3 && tc.Card.Rank == 10 { // Spades (3), Queen (10)
+			points += 13
+		}
+	}
+
+	return points
+}
+
 // resolveTrick determines the winner and scores points
 func resolveTrick(state *GameState, genome *Genome, phase PhaseDescriptor) {
 	if len(state.CurrentTrick) == 0 {
@@ -655,17 +778,8 @@ func resolveTrick(state *GameState, genome *Genome, phase PhaseDescriptor) {
 
 	winner := state.CurrentTrick[winnerIdx].PlayerID
 
-	// Score points for Hearts-style games
-	points := int32(0)
-	for _, tc := range state.CurrentTrick {
-		if breakingSuit != 255 && tc.Card.Suit == breakingSuit {
-			points++ // Each Heart = 1 point
-		}
-		// Queen of Spades = 13 points in Hearts
-		if tc.Card.Suit == 3 && tc.Card.Rank == 10 { // Spades (3), Queen (10)
-			points += 13
-		}
-	}
+	// Calculate and award points for trick
+	points := calculateTrickPoints(state, genome, breakingSuit)
 	state.Players[winner].Score += points
 
 	// Track tricks won
@@ -945,4 +1059,44 @@ func reshuffleDeck(state *GameState) {
 
 	// Shuffle the deck using turn number as seed for determinism
 	state.ShuffleDeck(uint64(state.TurnNumber))
+}
+
+// isValidSequencePlay checks if card can be played on top of topCard according to sequence rules.
+// Rules:
+// - Cards must match suit
+// - Direction determines valid ranks:
+//   - ASCENDING (0): card.Rank must be exactly topCard.Rank + 1
+//   - DESCENDING (1): card.Rank must be exactly topCard.Rank - 1
+//   - BOTH (2): either direction is valid
+//
+// No wrapping: K (13) can't go to A (14) in ascending, 2 can't go to A in descending.
+// Rank encoding: 2-10 are face value, 11=J, 12=Q, 13=K, 14=A (Ace high)
+// Valid ascending range: 2 -> 3 -> ... -> 13 (K is the end, can't go to A which is 14)
+// Valid descending range: 13 -> 12 -> ... -> 2 (2 is the end)
+func isValidSequencePlay(card Card, topCard Card, direction uint8) bool {
+	// Must match suit
+	if card.Suit != topCard.Suit {
+		return false
+	}
+
+	switch direction {
+	case 0: // ASCENDING - card must be exactly 1 rank higher
+		// King (13) is the highest in ascending sequences - can't go to Ace (14)
+		if topCard.Rank == 13 {
+			return false // K is the end of ascending sequence
+		}
+		return card.Rank == topCard.Rank+1
+	case 1: // DESCENDING - card must be exactly 1 rank lower
+		// 2 is the lowest in descending sequences - can't go lower
+		if topCard.Rank == 2 {
+			return false // 2 is the end of descending sequence
+		}
+		return card.Rank == topCard.Rank-1
+	case 2: // BOTH - either direction is valid
+		// Apply both boundary checks
+		canAscend := topCard.Rank != 13 && card.Rank == topCard.Rank+1
+		canDescend := topCard.Rank != 2 && card.Rank == topCard.Rank-1
+		return canAscend || canDescend
+	}
+	return false
 }

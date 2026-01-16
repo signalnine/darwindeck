@@ -202,6 +202,322 @@ func TestApplyMoveTableauModeMatchRankNoMatch(t *testing.T) {
 	}
 }
 
+// TestSequenceModeEmptyTableau verifies that on empty tableau any card is playable
+func TestSequenceModeEmptyTableau(t *testing.T) {
+	state := NewGameState(2)
+	state.TableauMode = 3       // SEQUENCE
+	state.SequenceDirection = 0 // ASCENDING
+	state.NumPlayers = 2
+
+	// Empty tableau - 4 piles (one per suit)
+	state.Tableau = make([][]Card, 4)
+	for i := range state.Tableau {
+		state.Tableau[i] = []Card{}
+	}
+
+	// Player has cards of different suits
+	state.Players[0].Hand = []Card{
+		{Rank: 7, Suit: 0},  // 7 of spades
+		{Rank: 10, Suit: 1}, // 10 of hearts
+	}
+	state.CurrentPlayer = 0
+
+	genome := sequencePhaseGenome()
+	moves := GenerateLegalMoves(state, genome)
+
+	// Both cards should be playable on empty tableau (each can start a new pile)
+	tableauMoves := 0
+	for _, m := range moves {
+		if m.TargetLoc == LocationTableau {
+			tableauMoves++
+		}
+	}
+	if tableauMoves < 2 {
+		t.Errorf("Expected at least 2 tableau moves on empty tableau, got %d", tableauMoves)
+	}
+}
+
+// TestSequenceModeAscending verifies ascending sequence rules
+func TestSequenceModeAscending(t *testing.T) {
+	state := NewGameState(2)
+	state.TableauMode = 3       // SEQUENCE
+	state.SequenceDirection = 0 // ASCENDING
+	state.NumPlayers = 2
+
+	// Tableau has 7 of spades as top card in pile 0
+	state.Tableau = make([][]Card, 4)
+	state.Tableau[0] = []Card{{Rank: 7, Suit: 0}} // Spade pile with 7
+	state.Tableau[1] = []Card{}                   // Hearts pile empty
+	state.Tableau[2] = []Card{}                   // Diamonds pile empty
+	state.Tableau[3] = []Card{}                   // Clubs pile empty
+
+	// Player has: 6 (invalid descending), 8 (valid ascending), 9 (invalid not adjacent), wrong suit
+	state.Players[0].Hand = []Card{
+		{Rank: 6, Suit: 0}, // Invalid - descending from 7
+		{Rank: 8, Suit: 0}, // Valid - ascending from 7
+		{Rank: 9, Suit: 0}, // Invalid - not adjacent to 7
+		{Rank: 8, Suit: 1}, // Can start new hearts pile
+	}
+	state.CurrentPlayer = 0
+
+	genome := sequencePhaseGenome()
+	moves := GenerateLegalMoves(state, genome)
+
+	// Count valid tableau moves
+	// - 8 of spades can play on spade pile (ascending from 7)
+	// - 8 of hearts can start new hearts pile
+	// - 6 of spades can start new pile (on empty pile)
+	// - 9 of spades can start new pile (on empty pile)
+	// With 4 piles (3 empty), each card can potentially go to an empty pile
+	// But the key test: 8 of spades should be the ONLY card valid on the non-empty spade pile
+
+	// For a proper test, let's count moves that target the non-empty pile
+	validOnSpades := 0
+	for _, m := range moves {
+		if m.TargetLoc == LocationTableau {
+			// Check if this is for the 8 of spades
+			card := state.Players[0].Hand[m.CardIndex]
+			if card.Suit == 0 && card.Rank == 8 {
+				validOnSpades++
+			}
+		}
+	}
+
+	// The 8 of spades should be valid (at least one move for it)
+	if validOnSpades == 0 {
+		t.Errorf("Expected 8 of spades to be valid in ASCENDING mode, got 0 moves")
+	}
+}
+
+// TestSequenceModeDescending verifies descending sequence rules
+func TestSequenceModeDescending(t *testing.T) {
+	state := NewGameState(2)
+	state.TableauMode = 3       // SEQUENCE
+	state.SequenceDirection = 1 // DESCENDING
+	state.NumPlayers = 2
+
+	// Tableau has 7 of spades
+	state.Tableau = make([][]Card, 4)
+	state.Tableau[0] = []Card{{Rank: 7, Suit: 0}}
+	state.Tableau[1] = []Card{}
+	state.Tableau[2] = []Card{}
+	state.Tableau[3] = []Card{}
+
+	// Player has: 6 (valid descending), 8 (invalid ascending)
+	state.Players[0].Hand = []Card{
+		{Rank: 6, Suit: 0}, // Valid - descending from 7
+		{Rank: 8, Suit: 0}, // Invalid - ascending
+	}
+	state.CurrentPlayer = 0
+
+	genome := sequencePhaseGenome()
+	moves := GenerateLegalMoves(state, genome)
+
+	// The 6 of spades should be valid on the spade pile (descending from 7)
+	validSixOfSpades := false
+	for _, m := range moves {
+		if m.TargetLoc == LocationTableau {
+			card := state.Players[0].Hand[m.CardIndex]
+			if card.Suit == 0 && card.Rank == 6 {
+				validSixOfSpades = true
+			}
+		}
+	}
+
+	if !validSixOfSpades {
+		t.Errorf("Expected 6 of spades to be valid in DESCENDING mode")
+	}
+}
+
+// TestSequenceModeBoth verifies bidirectional sequence rules
+func TestSequenceModeBoth(t *testing.T) {
+	state := NewGameState(2)
+	state.TableauMode = 3       // SEQUENCE
+	state.SequenceDirection = 2 // BOTH
+	state.NumPlayers = 2
+
+	// Tableau has 7 of spades
+	state.Tableau = make([][]Card, 4)
+	state.Tableau[0] = []Card{{Rank: 7, Suit: 0}}
+	state.Tableau[1] = []Card{}
+	state.Tableau[2] = []Card{}
+	state.Tableau[3] = []Card{}
+
+	// Player has: 6 (valid desc), 8 (valid asc)
+	state.Players[0].Hand = []Card{
+		{Rank: 6, Suit: 0}, // Valid - descending from 7
+		{Rank: 8, Suit: 0}, // Valid - ascending from 7
+	}
+	state.CurrentPlayer = 0
+
+	genome := sequencePhaseGenome()
+	moves := GenerateLegalMoves(state, genome)
+
+	// Both 6 and 8 of spades should be valid with BOTH direction
+	validSix := false
+	validEight := false
+	for _, m := range moves {
+		if m.TargetLoc == LocationTableau {
+			card := state.Players[0].Hand[m.CardIndex]
+			if card.Suit == 0 && card.Rank == 6 {
+				validSix = true
+			}
+			if card.Suit == 0 && card.Rank == 8 {
+				validEight = true
+			}
+		}
+	}
+
+	if !validSix {
+		t.Errorf("Expected 6 of spades to be valid in BOTH direction mode")
+	}
+	if !validEight {
+		t.Errorf("Expected 8 of spades to be valid in BOTH direction mode")
+	}
+}
+
+// TestSequenceModeBoundaryKing verifies that K can't go higher in ascending mode
+func TestSequenceModeBoundaryKing(t *testing.T) {
+	state := NewGameState(2)
+	state.TableauMode = 3       // SEQUENCE
+	state.SequenceDirection = 0 // ASCENDING
+	state.NumPlayers = 2
+
+	// Tableau has King (rank 13) - can't go higher
+	state.Tableau = make([][]Card, 4)
+	state.Tableau[0] = []Card{{Rank: 13, Suit: 0}} // King of spades
+	state.Tableau[1] = []Card{}
+	state.Tableau[2] = []Card{}
+	state.Tableau[3] = []Card{}
+
+	// Player has Ace (rank 14 in our system) - can't play on King in ascending
+	state.Players[0].Hand = []Card{
+		{Rank: 14, Suit: 0}, // Ace of spades
+	}
+	state.CurrentPlayer = 0
+
+	genome := sequencePhaseGenome()
+	moves := GenerateLegalMoves(state, genome)
+
+	// Count moves that play Ace on the spade pile specifically (should be 0)
+	// The Ace can start a new pile on empty slots, but shouldn't wrap around King
+	aceOnKingPile := false
+	for _, m := range moves {
+		if m.TargetLoc == LocationTableau {
+			card := state.Players[0].Hand[m.CardIndex]
+			// For sequence mode with pile-specific targeting, this would need to check
+			// if the move is specifically for pile 0. For now, check that we have
+			// at least some moves (Ace can start new piles on empty slots)
+			if card.Rank == 14 && card.Suit == 0 {
+				// This is tricky - the current design may not track which pile
+				// Let's just verify the helper function rejects King->Ace
+				_ = card
+			}
+		}
+	}
+
+	// Verify the helper function directly
+	kingCard := Card{Rank: 13, Suit: 0}
+	aceCard := Card{Rank: 14, Suit: 0}
+
+	if isValidSequencePlay(aceCard, kingCard, 0) { // ASCENDING
+		aceOnKingPile = true
+	}
+
+	if aceOnKingPile {
+		t.Errorf("Ace should NOT be playable on King in ASCENDING mode (no wrapping)")
+	}
+}
+
+// TestSequenceModeBoundaryAce verifies that A can't go lower in descending mode
+func TestSequenceModeBoundaryAce(t *testing.T) {
+	state := NewGameState(2)
+	state.TableauMode = 3       // SEQUENCE
+	state.SequenceDirection = 1 // DESCENDING
+	state.NumPlayers = 2
+
+	// For ranks where 2 is the lowest playable rank
+	// Ace (14) is high, so descending from 2 has no valid play
+
+	// Tableau has 2 (rank 2) - can't go lower
+	state.Tableau = make([][]Card, 4)
+	state.Tableau[0] = []Card{{Rank: 2, Suit: 0}} // 2 of spades
+	state.Tableau[1] = []Card{}
+	state.Tableau[2] = []Card{}
+	state.Tableau[3] = []Card{}
+
+	// Player has Ace - in typical card games, Ace is high (14)
+	// So descending from 2 would need rank 1, which doesn't exist
+	state.Players[0].Hand = []Card{
+		{Rank: 14, Suit: 0}, // Ace of spades (high)
+	}
+	state.CurrentPlayer = 0
+
+	// Verify the helper function directly - 2 descending has no valid lower card
+	twoCard := Card{Rank: 2, Suit: 0}
+	aceCard := Card{Rank: 14, Suit: 0}
+
+	// Ace (14) is not rank 1, so it shouldn't be valid descending from 2
+	if isValidSequencePlay(aceCard, twoCard, 1) { // DESCENDING
+		t.Errorf("Ace (rank 14) should NOT be valid descending from 2 (would need rank 1)")
+	}
+}
+
+// TestSequenceModeSuitMatching verifies that cards must match suit
+func TestSequenceModeSuitMatching(t *testing.T) {
+	state := NewGameState(2)
+	state.TableauMode = 3       // SEQUENCE
+	state.SequenceDirection = 0 // ASCENDING
+	state.NumPlayers = 2
+
+	// Tableau has 7 of spades
+	state.Tableau = make([][]Card, 4)
+	state.Tableau[0] = []Card{{Rank: 7, Suit: 0}} // 7 of spades
+	state.Tableau[1] = []Card{}
+	state.Tableau[2] = []Card{}
+	state.Tableau[3] = []Card{}
+
+	// Verify the helper function - 8 of hearts should NOT play on spades pile
+	sevenSpades := Card{Rank: 7, Suit: 0}
+	eightHearts := Card{Rank: 8, Suit: 1}
+	eightSpades := Card{Rank: 8, Suit: 0}
+
+	if isValidSequencePlay(eightHearts, sevenSpades, 0) {
+		t.Errorf("8 of hearts should NOT be valid on 7 of spades (wrong suit)")
+	}
+
+	if !isValidSequencePlay(eightSpades, sevenSpades, 0) {
+		t.Errorf("8 of spades SHOULD be valid on 7 of spades (same suit, ascending)")
+	}
+}
+
+// Helper to create genome with SEQUENCE-compatible play phase
+func sequencePhaseGenome() *Genome {
+	return &Genome{
+		Header: &BytecodeHeader{
+			PlayerCount:       2,
+			TableauMode:       3, // SEQUENCE
+			SequenceDirection: 0, // ASCENDING (can be overridden by state)
+		},
+		TurnPhases: []PhaseDescriptor{
+			{
+				PhaseType: 2, // PlayPhase
+				Data: []byte{
+					byte(LocationTableau), // target = TABLEAU
+					1,                      // min_cards = 1
+					1,                      // max_cards = 1
+					0,                      // mandatory = false
+					1,                      // pass_if_unable = true
+					0, 0, 0, 0,             // conditionLen = 0 (no condition)
+				},
+			},
+		},
+		WinConditions: []WinCondition{
+			{WinType: 0, Threshold: 0}, // empty_hand
+		},
+	}
+}
+
 // Helper to create minimal genome with play phase targeting tableau
 func minimalPlayPhaseGenome() *Genome {
 	// Create a minimal genome with a play phase that targets tableau
@@ -229,4 +545,167 @@ func minimalPlayPhaseGenome() *Genome {
 		},
 	}
 	return genome
+}
+
+// TestCalculateTrickPointsExplicitScoring verifies that explicit CardScoring
+// rules are used when available
+func TestCalculateTrickPointsExplicitScoring(t *testing.T) {
+	state := NewGameState(2)
+
+	// Create genome with explicit scoring: Diamonds = 2 points
+	genome := &Genome{
+		CardScoring: []CardScoringRule{
+			{Suit: 1, Rank: 255, Points: 2, Trigger: TriggerTrickWin}, // Diamonds = 2 points
+		},
+	}
+
+	// Simulate trick with a Diamond
+	state.CurrentTrick = []TrickCard{
+		{Card: Card{Rank: 5, Suit: 1}, PlayerID: 0}, // 5 of Diamonds
+	}
+
+	points := calculateTrickPoints(state, genome, 255)
+
+	if points != 2 {
+		t.Errorf("Expected 2 points for Diamond, got %d", points)
+	}
+}
+
+// TestCalculateTrickPointsExplicitScoringMultipleRules verifies that multiple
+// scoring rules are applied correctly
+func TestCalculateTrickPointsExplicitScoringMultipleRules(t *testing.T) {
+	state := NewGameState(2)
+
+	// Create genome with Hearts-style explicit scoring
+	genome := &Genome{
+		CardScoring: []CardScoringRule{
+			{Suit: 0, Rank: 255, Points: 1, Trigger: TriggerTrickWin},  // Hearts = 1 point
+			{Suit: 3, Rank: 10, Points: 13, Trigger: TriggerTrickWin},  // Queen of Spades = 13 points
+		},
+	}
+
+	// Simulate trick with Queen of Spades and a Heart
+	state.CurrentTrick = []TrickCard{
+		{Card: Card{Rank: 10, Suit: 3}, PlayerID: 0}, // Queen of Spades
+		{Card: Card{Rank: 5, Suit: 0}, PlayerID: 1},  // 5 of Hearts
+	}
+
+	points := calculateTrickPoints(state, genome, 255)
+
+	// QS = 13, Heart = 1, total = 14
+	if points != 14 {
+		t.Errorf("Expected 14 points (QS + Heart), got %d", points)
+	}
+}
+
+// TestCalculateTrickPointsExplicitScoringSpecificRank verifies scoring rules
+// that match specific rank and suit
+func TestCalculateTrickPointsExplicitScoringSpecificRank(t *testing.T) {
+	state := NewGameState(2)
+
+	// Create genome with specific card scoring: 10 of Clubs = 5 points
+	genome := &Genome{
+		CardScoring: []CardScoringRule{
+			{Suit: 2, Rank: 8, Points: 5, Trigger: TriggerTrickWin}, // 10 of Clubs = 5 points (rank 8 = 10)
+		},
+	}
+
+	// Trick with 10 of Clubs
+	state.CurrentTrick = []TrickCard{
+		{Card: Card{Rank: 8, Suit: 2}, PlayerID: 0}, // 10 of Clubs
+	}
+
+	points := calculateTrickPoints(state, genome, 255)
+
+	if points != 5 {
+		t.Errorf("Expected 5 points for 10 of Clubs, got %d", points)
+	}
+
+	// Trick without 10 of Clubs
+	state.CurrentTrick = []TrickCard{
+		{Card: Card{Rank: 7, Suit: 2}, PlayerID: 0}, // 9 of Clubs (not 10)
+	}
+
+	points = calculateTrickPoints(state, genome, 255)
+
+	if points != 0 {
+		t.Errorf("Expected 0 points for 9 of Clubs (no rule match), got %d", points)
+	}
+}
+
+// TestCalculateTrickPointsFallbackScoring verifies that fallback Hearts scoring
+// is used when no explicit CardScoring rules exist
+func TestCalculateTrickPointsFallbackScoring(t *testing.T) {
+	state := NewGameState(2)
+
+	// Create genome with NO explicit scoring
+	genome := &Genome{
+		CardScoring: nil, // No explicit rules
+	}
+
+	// Trick with Queen of Spades and a Heart (suit 0)
+	state.CurrentTrick = []TrickCard{
+		{Card: Card{Rank: 10, Suit: 3}, PlayerID: 0}, // Queen of Spades
+		{Card: Card{Rank: 5, Suit: 0}, PlayerID: 1},  // 5 of Hearts
+	}
+
+	// breakingSuit = 0 (Hearts)
+	points := calculateTrickPoints(state, genome, 0)
+
+	// QS = 13 (hardcoded), Heart = 1 (breaking suit)
+	if points != 14 {
+		t.Errorf("Expected 14 points from fallback scoring (QS + Heart), got %d", points)
+	}
+}
+
+// TestCalculateTrickPointsIgnoresNonTrickTriggers verifies that only TRICK_WIN
+// triggered rules are applied
+func TestCalculateTrickPointsIgnoresNonTrickTriggers(t *testing.T) {
+	state := NewGameState(2)
+
+	// Create genome with mixed triggers - only TRICK_WIN should apply
+	genome := &Genome{
+		CardScoring: []CardScoringRule{
+			{Suit: 1, Rank: 255, Points: 2, Trigger: TriggerTrickWin}, // Diamonds on trick win
+			{Suit: 0, Rank: 255, Points: 5, Trigger: TriggerCapture},  // Hearts on capture (should NOT apply)
+		},
+	}
+
+	// Trick with Diamond and Heart
+	state.CurrentTrick = []TrickCard{
+		{Card: Card{Rank: 5, Suit: 1}, PlayerID: 0}, // 5 of Diamonds
+		{Card: Card{Rank: 3, Suit: 0}, PlayerID: 1}, // 5 of Hearts
+	}
+
+	points := calculateTrickPoints(state, genome, 255)
+
+	// Only Diamond rule applies (TRICK_WIN trigger), Heart rule is CAPTURE trigger
+	if points != 2 {
+		t.Errorf("Expected 2 points (only Diamond TRICK_WIN rule), got %d", points)
+	}
+}
+
+// TestCalculateTrickPointsNegativePoints verifies that negative points work
+func TestCalculateTrickPointsNegativePoints(t *testing.T) {
+	state := NewGameState(2)
+
+	// Create genome with negative scoring
+	genome := &Genome{
+		CardScoring: []CardScoringRule{
+			{Suit: 2, Rank: 255, Points: -3, Trigger: TriggerTrickWin}, // Clubs = -3 points
+		},
+	}
+
+	// Trick with two Clubs
+	state.CurrentTrick = []TrickCard{
+		{Card: Card{Rank: 5, Suit: 2}, PlayerID: 0}, // 7 of Clubs
+		{Card: Card{Rank: 3, Suit: 2}, PlayerID: 1}, // 5 of Clubs
+	}
+
+	points := calculateTrickPoints(state, genome, 255)
+
+	// Two clubs at -3 each = -6
+	if points != -6 {
+		t.Errorf("Expected -6 points for two Clubs, got %d", points)
+	}
 }
