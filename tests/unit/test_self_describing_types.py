@@ -298,3 +298,12 @@ class TestPhaseEnums:
         assert BreakingRule.NONE.value == "none"
         assert BreakingRule.CANNOT_LEAD_UNTIL_BROKEN.value == "cannot_lead_until_broken"
         assert BreakingRule.CANNOT_PLAY_UNTIL_BROKEN.value == "cannot_play_until_broken"
+
+
+class TestShowdownMethod:
+    def test_showdown_method_values(self):
+        """ShowdownMethod enum has expected values."""
+        from darwindeck.genome.schema import ShowdownMethod
+        assert ShowdownMethod.HAND_EVALUATION.value == "hand_evaluation"
+        assert ShowdownMethod.HIGHEST_CARD.value == "highest_card"
+        assert ShowdownMethod.FOLD_ONLY.value == "fold_only"

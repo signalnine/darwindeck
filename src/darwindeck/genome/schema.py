@@ -223,6 +223,13 @@ class BreakingRule(Enum):
     CANNOT_PLAY_UNTIL_BROKEN = "cannot_play_until_broken"  # Can't play suit at all until broken
 
 
+class ShowdownMethod(Enum):
+    """How betting showdown is resolved."""
+    HAND_EVALUATION = "hand_evaluation"  # Use HandEvaluation from genome
+    HIGHEST_CARD = "highest_card"        # Highest single card wins
+    FOLD_ONLY = "fold_only"              # Only way to win is if all others fold
+
+
 class TableauMode(Enum):
     """How cards on the tableau interact."""
     NONE = "none"              # Cards accumulate, no interaction
