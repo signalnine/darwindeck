@@ -5,7 +5,7 @@ executed by the Go engine, validating the entire pipeline.
 """
 
 import pytest
-from darwindeck.genome.bytecode import BytecodeCompiler, BytecodeHeader
+from darwindeck.genome.bytecode import BytecodeCompiler, BytecodeHeader, BYTECODE_VERSION
 from darwindeck.genome.examples import create_war_genome, create_hearts_genome
 
 
@@ -26,31 +26,27 @@ class TestBytecodeEquivalence:
         # Should be compact (<500 bytes for simple game)
         assert len(bytecode) < 500, f"Bytecode too large: {len(bytecode)} bytes"
 
-        # Should start with version (1) in first 4 bytes
-        import struct
-
-        version = struct.unpack("!I", bytecode[0:4])[0]
-        assert version == 1, f"Expected version 1, got {version}"
+        # Check bytecode format version at byte 0
+        bytecode_format_version = bytecode[0]
+        assert bytecode_format_version == BYTECODE_VERSION, \
+            f"Expected bytecode version {BYTECODE_VERSION}, got {bytecode_format_version}"
 
     def test_header_structure(self) -> None:
-        """Bytecode header should match Go expectations (36 bytes)."""
+        """Bytecode header should match expected structure."""
         genome = create_war_genome()
         bytecode = compile_genome(genome)
 
-        # Header is exactly 36 bytes
-        assert len(bytecode) >= 36
+        # Header is exactly HEADER_SIZE bytes
+        assert len(bytecode) >= BytecodeHeader.HEADER_SIZE
 
-        # Parse offsets (bytes 20-36)
-        import struct
-
-        offsets = struct.unpack("!iiii", bytecode[20:36])
-        setup_offset, turn_offset, win_offset, score_offset = offsets
+        # Parse header using BytecodeHeader class
+        header = BytecodeHeader.from_bytes(bytecode)
 
         # All offsets should be within bytecode length
-        assert 0 <= setup_offset < len(bytecode)
-        assert 0 <= turn_offset < len(bytecode)
-        assert 0 <= win_offset < len(bytecode)
-        # score_offset may be -1 if not used
+        assert 0 <= header.setup_offset < len(bytecode)
+        assert 0 <= header.turn_structure_offset < len(bytecode)
+        assert 0 <= header.win_conditions_offset < len(bytecode)
+        # scoring_offset may be -1 if not used
 
     def test_turn_structure_encoding(self) -> None:
         """Turn structure phases should be encoded correctly."""
@@ -59,8 +55,9 @@ class TestBytecodeEquivalence:
 
         import struct
 
-        # Get turn structure offset (byte 24-28)
-        turn_offset = struct.unpack("!i", bytecode[24:28])[0]
+        # Get turn structure offset from header
+        header = BytecodeHeader.from_bytes(bytecode)
+        turn_offset = header.turn_structure_offset
 
         # First 4 bytes at offset = phase count
         phase_count = struct.unpack("!I", bytecode[turn_offset : turn_offset + 4])[0]
@@ -75,8 +72,9 @@ class TestBytecodeEquivalence:
 
         import struct
 
-        # Get win conditions offset (byte 28-32)
-        win_offset = struct.unpack("!i", bytecode[28:32])[0]
+        # Get win conditions offset from header
+        header = BytecodeHeader.from_bytes(bytecode)
+        win_offset = header.win_conditions_offset
 
         # First 4 bytes at offset = win condition count
         win_count = struct.unpack("!I", bytecode[win_offset : win_offset + 4])[0]
