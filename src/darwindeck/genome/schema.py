@@ -404,7 +404,11 @@ class GameGenome:
     special_effects: list  # type: ignore
     win_conditions: list[WinCondition]
     scoring_rules: list  # type: ignore
-    max_turns: int = 100  # NEW: Termination guarantee (range: min_turns to 10000)
+    max_turns: int = 100  # Termination guarantee (range: min_turns to 10000)
     player_count: int = 2
-    # NEW: Validation constraints
     min_turns: int = 10  # Games ending too quickly are boring
+
+    # Self-describing fields for explicit game mechanics
+    card_scoring: tuple[CardScoringRule, ...] = ()
+    hand_evaluation: Optional[HandEvaluation] = None
+    game_rules: GameRules = field(default_factory=GameRules)

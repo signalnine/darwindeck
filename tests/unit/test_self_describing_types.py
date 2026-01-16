@@ -339,3 +339,30 @@ class TestWinConditionExtended:
             required_hand_size=5,
         )
         assert wc.required_hand_size == 5
+
+
+class TestGameGenomeExtended:
+    def test_genome_has_card_scoring(self):
+        """GameGenome has card_scoring field."""
+        from darwindeck.genome.examples import create_war_genome
+
+        genome = create_war_genome()
+        assert hasattr(genome, 'card_scoring')
+        assert genome.card_scoring == ()
+
+    def test_genome_has_hand_evaluation(self):
+        """GameGenome has hand_evaluation field."""
+        from darwindeck.genome.examples import create_war_genome
+
+        genome = create_war_genome()
+        assert hasattr(genome, 'hand_evaluation')
+        assert genome.hand_evaluation is None
+
+    def test_genome_has_game_rules(self):
+        """GameGenome has game_rules field."""
+        from darwindeck.genome.examples import create_war_genome
+        from darwindeck.genome.schema import GameRules
+
+        genome = create_war_genome()
+        assert hasattr(genome, 'game_rules')
+        assert isinstance(genome.game_rules, GameRules)
