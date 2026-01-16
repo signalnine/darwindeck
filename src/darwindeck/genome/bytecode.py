@@ -149,6 +149,37 @@ SUIT_TO_BYTE = {
 }
 
 
+def compile_card_scoring(rules: tuple) -> bytes:
+    """Compile card scoring rules to bytecode.
+
+    Format:
+    - rule_count (2 bytes, big-endian)
+    - For each rule (5 bytes):
+      - suit (1 byte): 0-3 for H/D/C/S, 255 for "any"
+      - rank (1 byte): 0-12 for 2-A, 255 for "any"
+      - points (2 bytes, big-endian, signed)
+      - trigger (1 byte): ScoringTrigger enum value
+    """
+    if not rules:
+        return struct.pack("!H", 0)  # 0 rules
+
+    result = struct.pack("!H", len(rules))
+    for rule in rules:
+        # Encode condition
+        suit = SUIT_TO_BYTE.get(rule.condition.suit, 255) if rule.condition.suit else 255
+        rank = RANK_TO_BYTE.get(rule.condition.rank, 255) if rule.condition.rank else 255
+
+        # Encode points (signed 16-bit)
+        points = rule.points
+
+        # Encode trigger
+        trigger = SCORING_TRIGGER_MAP.get(rule.trigger, 0)
+
+        result += struct.pack("!BBhB", suit, rank, points, trigger)
+
+    return result
+
+
 def compile_effects(effects: list) -> bytes:
     """Compile special effects to bytecode.
 
