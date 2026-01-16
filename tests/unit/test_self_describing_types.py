@@ -307,3 +307,35 @@ class TestShowdownMethod:
         assert ShowdownMethod.HAND_EVALUATION.value == "hand_evaluation"
         assert ShowdownMethod.HIGHEST_CARD.value == "highest_card"
         assert ShowdownMethod.FOLD_ONLY.value == "fold_only"
+
+
+class TestWinConditionExtended:
+    def test_win_condition_new_fields(self):
+        """WinCondition has new explicit fields."""
+        from darwindeck.genome.schema import WinCondition, WinComparison, TriggerMode
+        wc = WinCondition(
+            type="low_score",
+            threshold=100,
+            comparison=WinComparison.LOWEST,
+            trigger_mode=TriggerMode.THRESHOLD_GATE,
+        )
+        assert wc.comparison == WinComparison.LOWEST
+        assert wc.trigger_mode == TriggerMode.THRESHOLD_GATE
+
+    def test_win_condition_defaults(self):
+        """WinCondition new fields have sensible defaults."""
+        from darwindeck.genome.schema import WinCondition, WinComparison, TriggerMode
+        wc = WinCondition(type="empty_hand")
+        assert wc.comparison == WinComparison.NONE
+        assert wc.trigger_mode == TriggerMode.IMMEDIATE
+        assert wc.required_hand_size is None
+
+    def test_win_condition_best_hand(self):
+        """WinCondition for best_hand with required_hand_size."""
+        from darwindeck.genome.schema import WinCondition, WinComparison
+        wc = WinCondition(
+            type="best_hand",
+            comparison=WinComparison.HIGHEST,
+            required_hand_size=5,
+        )
+        assert wc.required_hand_size == 5
