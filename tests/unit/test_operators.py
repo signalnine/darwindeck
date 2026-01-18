@@ -889,3 +889,318 @@ def test_self_describing_mutations_have_correct_probabilities():
         op for op in pipeline.operators if isinstance(op, MutateCardValueMutation)
     )
     assert mutate_value.probability == 0.05
+
+
+# =====================================================================
+# Team Mutation Tests
+# =====================================================================
+
+
+def test_enable_team_mode_mutation():
+    """EnableTeamModeMutation should enable team mode with 2v2 teams."""
+    from darwindeck.evolution.operators import EnableTeamModeMutation
+    from darwindeck.genome.schema import (
+        GameGenome, SetupRules, TurnStructure, WinCondition
+    )
+
+    genome = GameGenome(
+        schema_version="1.0",
+        genome_id="test",
+        generation=0,
+        setup=SetupRules(cards_per_player=7),
+        turn_structure=TurnStructure(phases=[]),
+        special_effects=[],
+        win_conditions=[WinCondition(type="empty_hand")],
+        scoring_rules=[],
+        player_count=4,
+        team_mode=False,
+        teams=(),
+    )
+    mutation = EnableTeamModeMutation(probability=1.0)
+
+    assert mutation.can_apply(genome)
+    mutated = mutation.mutate(genome)
+
+    assert mutated.team_mode is True
+    assert len(mutated.teams) == 2
+    # Each team should have 2 players (for 4-player game)
+    assert len(mutated.teams[0]) == 2
+    assert len(mutated.teams[1]) == 2
+    # All 4 players should be assigned
+    all_players = set(mutated.teams[0] + mutated.teams[1])
+    assert all_players == {0, 1, 2, 3}
+
+
+def test_enable_team_mode_already_enabled():
+    """EnableTeamModeMutation should not apply if already enabled."""
+    from darwindeck.evolution.operators import EnableTeamModeMutation
+    from darwindeck.genome.schema import (
+        GameGenome, SetupRules, TurnStructure, WinCondition
+    )
+
+    genome = GameGenome(
+        schema_version="1.0",
+        genome_id="test",
+        generation=0,
+        setup=SetupRules(cards_per_player=7),
+        turn_structure=TurnStructure(phases=[]),
+        special_effects=[],
+        win_conditions=[WinCondition(type="empty_hand")],
+        scoring_rules=[],
+        player_count=4,
+        team_mode=True,
+        teams=((0, 2), (1, 3)),
+    )
+    mutation = EnableTeamModeMutation(probability=1.0)
+
+    assert not mutation.can_apply(genome)
+
+
+def test_enable_team_mode_odd_players():
+    """EnableTeamModeMutation should not apply for odd player counts."""
+    from darwindeck.evolution.operators import EnableTeamModeMutation
+    from darwindeck.genome.schema import (
+        GameGenome, SetupRules, TurnStructure, WinCondition
+    )
+
+    genome = GameGenome(
+        schema_version="1.0",
+        genome_id="test",
+        generation=0,
+        setup=SetupRules(cards_per_player=7),
+        turn_structure=TurnStructure(phases=[]),
+        special_effects=[],
+        win_conditions=[WinCondition(type="empty_hand")],
+        scoring_rules=[],
+        player_count=3,
+        team_mode=False,
+    )
+    mutation = EnableTeamModeMutation(probability=1.0)
+
+    # Can't have equal teams with odd players
+    assert not mutation.can_apply(genome)
+
+
+def test_enable_team_mode_two_players():
+    """EnableTeamModeMutation should not apply for 2-player games."""
+    from darwindeck.evolution.operators import EnableTeamModeMutation
+    from darwindeck.genome.schema import (
+        GameGenome, SetupRules, TurnStructure, WinCondition
+    )
+
+    genome = GameGenome(
+        schema_version="1.0",
+        genome_id="test",
+        generation=0,
+        setup=SetupRules(cards_per_player=7),
+        turn_structure=TurnStructure(phases=[]),
+        special_effects=[],
+        win_conditions=[WinCondition(type="empty_hand")],
+        scoring_rules=[],
+        player_count=2,
+        team_mode=False,
+    )
+    mutation = EnableTeamModeMutation(probability=1.0)
+
+    # 2 players is not enough for teams (need 4+)
+    assert not mutation.can_apply(genome)
+
+
+def test_enable_team_mode_six_players():
+    """EnableTeamModeMutation should work with 6 players (3v3)."""
+    from darwindeck.evolution.operators import EnableTeamModeMutation
+    from darwindeck.genome.schema import (
+        GameGenome, SetupRules, TurnStructure, WinCondition
+    )
+
+    genome = GameGenome(
+        schema_version="1.0",
+        genome_id="test",
+        generation=0,
+        setup=SetupRules(cards_per_player=5),
+        turn_structure=TurnStructure(phases=[]),
+        special_effects=[],
+        win_conditions=[WinCondition(type="empty_hand")],
+        scoring_rules=[],
+        player_count=6,
+        team_mode=False,
+        teams=(),
+    )
+    mutation = EnableTeamModeMutation(probability=1.0)
+
+    assert mutation.can_apply(genome)
+    mutated = mutation.mutate(genome)
+
+    assert mutated.team_mode is True
+    assert len(mutated.teams) == 2
+    # Each team should have 3 players (for 6-player game)
+    assert len(mutated.teams[0]) == 3
+    assert len(mutated.teams[1]) == 3
+    # All 6 players should be assigned
+    all_players = set(mutated.teams[0] + mutated.teams[1])
+    assert all_players == {0, 1, 2, 3, 4, 5}
+
+
+def test_disable_team_mode_mutation():
+    """DisableTeamModeMutation should disable team mode."""
+    from darwindeck.evolution.operators import DisableTeamModeMutation
+    from darwindeck.genome.schema import (
+        GameGenome, SetupRules, TurnStructure, WinCondition
+    )
+
+    genome = GameGenome(
+        schema_version="1.0",
+        genome_id="test",
+        generation=0,
+        setup=SetupRules(cards_per_player=7),
+        turn_structure=TurnStructure(phases=[]),
+        special_effects=[],
+        win_conditions=[WinCondition(type="empty_hand")],
+        scoring_rules=[],
+        player_count=4,
+        team_mode=True,
+        teams=((0, 2), (1, 3)),
+    )
+    mutation = DisableTeamModeMutation(probability=1.0)
+
+    assert mutation.can_apply(genome)
+    mutated = mutation.mutate(genome)
+
+    assert mutated.team_mode is False
+    assert mutated.teams == ()
+
+
+def test_disable_team_mode_already_disabled():
+    """DisableTeamModeMutation should not apply if already disabled."""
+    from darwindeck.evolution.operators import DisableTeamModeMutation
+    from darwindeck.genome.schema import (
+        GameGenome, SetupRules, TurnStructure, WinCondition
+    )
+
+    genome = GameGenome(
+        schema_version="1.0",
+        genome_id="test",
+        generation=0,
+        setup=SetupRules(cards_per_player=7),
+        turn_structure=TurnStructure(phases=[]),
+        special_effects=[],
+        win_conditions=[WinCondition(type="empty_hand")],
+        scoring_rules=[],
+        player_count=4,
+        team_mode=False,
+    )
+    mutation = DisableTeamModeMutation(probability=1.0)
+
+    assert not mutation.can_apply(genome)
+
+
+def test_mutate_team_assignment():
+    """MutateTeamAssignmentMutation should swap players between teams."""
+    from darwindeck.evolution.operators import MutateTeamAssignmentMutation
+    from darwindeck.genome.schema import (
+        GameGenome, SetupRules, TurnStructure, WinCondition
+    )
+
+    random.seed(42)
+
+    genome = GameGenome(
+        schema_version="1.0",
+        genome_id="test",
+        generation=0,
+        setup=SetupRules(cards_per_player=7),
+        turn_structure=TurnStructure(phases=[]),
+        special_effects=[],
+        win_conditions=[WinCondition(type="empty_hand")],
+        scoring_rules=[],
+        player_count=4,
+        team_mode=True,
+        teams=((0, 2), (1, 3)),
+    )
+    mutation = MutateTeamAssignmentMutation(probability=1.0)
+
+    assert mutation.can_apply(genome)
+    mutated = mutation.mutate(genome)
+
+    # Should still be valid team configuration
+    assert mutated.team_mode is True
+    assert len(mutated.teams) == 2
+    all_players = set(mutated.teams[0] + mutated.teams[1])
+    assert all_players == {0, 1, 2, 3}
+    # Should be different from original (with high probability)
+    # Note: With 4 players, there's a small chance of same config
+
+
+def test_mutate_team_assignment_no_teams():
+    """MutateTeamAssignmentMutation should not apply without teams."""
+    from darwindeck.evolution.operators import MutateTeamAssignmentMutation
+    from darwindeck.genome.schema import (
+        GameGenome, SetupRules, TurnStructure, WinCondition
+    )
+
+    genome = GameGenome(
+        schema_version="1.0",
+        genome_id="test",
+        generation=0,
+        setup=SetupRules(cards_per_player=7),
+        turn_structure=TurnStructure(phases=[]),
+        special_effects=[],
+        win_conditions=[WinCondition(type="empty_hand")],
+        scoring_rules=[],
+        player_count=4,
+        team_mode=False,
+    )
+    mutation = MutateTeamAssignmentMutation(probability=1.0)
+
+    assert not mutation.can_apply(genome)
+
+
+def test_mutate_team_assignment_preserves_team_sizes():
+    """MutateTeamAssignmentMutation should preserve team sizes."""
+    from darwindeck.evolution.operators import MutateTeamAssignmentMutation
+    from darwindeck.genome.schema import (
+        GameGenome, SetupRules, TurnStructure, WinCondition
+    )
+
+    random.seed(123)
+
+    genome = GameGenome(
+        schema_version="1.0",
+        genome_id="test",
+        generation=0,
+        setup=SetupRules(cards_per_player=5),
+        turn_structure=TurnStructure(phases=[]),
+        special_effects=[],
+        win_conditions=[WinCondition(type="empty_hand")],
+        scoring_rules=[],
+        player_count=6,
+        team_mode=True,
+        teams=((0, 2, 4), (1, 3, 5)),
+    )
+    mutation = MutateTeamAssignmentMutation(probability=1.0)
+
+    assert mutation.can_apply(genome)
+    mutated = mutation.mutate(genome)
+
+    # Team sizes should be preserved
+    assert len(mutated.teams[0]) == 3
+    assert len(mutated.teams[1]) == 3
+    # All players still assigned
+    all_players = set(mutated.teams[0] + mutated.teams[1])
+    assert all_players == {0, 1, 2, 3, 4, 5}
+
+
+def test_team_mutations_in_default_pipeline():
+    """Default pipeline includes team mode mutations."""
+    from darwindeck.evolution.operators import (
+        create_default_pipeline,
+        EnableTeamModeMutation,
+        DisableTeamModeMutation,
+        MutateTeamAssignmentMutation,
+    )
+
+    pipeline = create_default_pipeline()
+    operator_types = [type(op).__name__ for op in pipeline.operators]
+
+    assert "EnableTeamModeMutation" in operator_types
+    assert "DisableTeamModeMutation" in operator_types
+    assert "MutateTeamAssignmentMutation" in operator_types

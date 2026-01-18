@@ -1320,6 +1320,164 @@ class RemoveCardScoringMutation(MutationOperator):
         return replace(genome, card_scoring=new_scoring, generation=genome.generation + 1)
 
 
+class EnableTeamModeMutation(MutationOperator):
+    """Enables team mode with default 2v2 configuration.
+
+    For 4 players: Creates 2 teams of 2 (alternating: (0,2), (1,3))
+    For 6 players: Creates 2 teams of 3 (alternating)
+    Only applies to even player counts >= 4.
+    """
+
+    def __init__(self, probability: float = 0.03):
+        """Initialize team mode enabling mutation.
+
+        Args:
+            probability: Mutation probability (default: 3% - low weight as significant change)
+        """
+        super().__init__(probability)
+
+    def can_apply(self, genome: GameGenome) -> bool:
+        """Check if mutation can be applied.
+
+        Returns False if:
+        - Team mode is already enabled
+        - Player count is less than 4
+        - Player count is odd (can't form equal teams)
+        """
+        if genome.team_mode:
+            return False  # Already enabled
+        num_players = genome.player_count
+        if num_players < 4 or num_players % 2 != 0:
+            return False  # Need even number of 4+ players
+        return True
+
+    def mutate(self, genome: GameGenome) -> GameGenome:
+        """Enable team mode with alternating player assignment.
+
+        Args:
+            genome: Genome to mutate
+
+        Returns:
+            New genome with team mode enabled
+        """
+        if not self.can_apply(genome):
+            return genome
+
+        num_players = genome.player_count
+        # Create 2 teams with alternating player assignment
+        team0 = tuple(range(0, num_players, 2))  # Even indices: 0, 2, 4...
+        team1 = tuple(range(1, num_players, 2))  # Odd indices: 1, 3, 5...
+        return replace(
+            genome,
+            team_mode=True,
+            teams=(team0, team1),
+            generation=genome.generation + 1,
+        )
+
+
+class DisableTeamModeMutation(MutationOperator):
+    """Disables team mode, removing team assignments."""
+
+    def __init__(self, probability: float = 0.03):
+        """Initialize team mode disabling mutation.
+
+        Args:
+            probability: Mutation probability (default: 3% - low weight as significant change)
+        """
+        super().__init__(probability)
+
+    def can_apply(self, genome: GameGenome) -> bool:
+        """Check if mutation can be applied.
+
+        Returns False if team mode is already disabled.
+        """
+        return genome.team_mode
+
+    def mutate(self, genome: GameGenome) -> GameGenome:
+        """Disable team mode.
+
+        Args:
+            genome: Genome to mutate
+
+        Returns:
+            New genome with team mode disabled
+        """
+        if not self.can_apply(genome):
+            return genome
+
+        return replace(
+            genome,
+            team_mode=False,
+            teams=(),
+            generation=genome.generation + 1,
+        )
+
+
+class MutateTeamAssignmentMutation(MutationOperator):
+    """Swaps one player between teams.
+
+    Randomly selects one player from each team and swaps them,
+    maintaining valid team configuration.
+    """
+
+    def __init__(self, probability: float = 0.05):
+        """Initialize team assignment mutation.
+
+        Args:
+            probability: Mutation probability (default: 5%)
+        """
+        super().__init__(probability)
+
+    def can_apply(self, genome: GameGenome) -> bool:
+        """Check if mutation can be applied.
+
+        Returns False if:
+        - Team mode is not enabled
+        - Less than 2 teams exist
+        - Either of the first two teams has no players
+        """
+        if not genome.team_mode:
+            return False
+        if len(genome.teams) < 2:
+            return False
+        # Need at least 1 player in each of first 2 teams
+        if len(genome.teams[0]) < 1 or len(genome.teams[1]) < 1:
+            return False
+        return True
+
+    def mutate(self, genome: GameGenome) -> GameGenome:
+        """Swap one player between the first two teams.
+
+        Args:
+            genome: Genome to mutate
+
+        Returns:
+            New genome with swapped player assignments
+        """
+        if not self.can_apply(genome):
+            return genome
+
+        teams_list = [list(t) for t in genome.teams]
+
+        # Pick random player from each of first two teams
+        team0_idx = random.randrange(len(teams_list[0]))
+        team1_idx = random.randrange(len(teams_list[1]))
+
+        # Swap them
+        teams_list[0][team0_idx], teams_list[1][team1_idx] = (
+            teams_list[1][team1_idx], teams_list[0][team0_idx]
+        )
+
+        # Convert back to tuples (sorted for consistency)
+        new_teams = tuple(tuple(sorted(t)) for t in teams_list)
+
+        return replace(
+            genome,
+            teams=new_teams,
+            generation=genome.generation + 1,
+        )
+
+
 class CrossoverOperator:
     """Semantic crossover operator for game genomes.
 
@@ -1488,6 +1646,11 @@ def create_default_pipeline(
         RemoveCardScoringMutation(probability=min(0.03 * mult, 0.06)),       # 3% (6% aggressive)
         MutateHandPatternMutation(probability=min(0.05 * mult, 0.10)),       # 5% (10% aggressive)
         MutateCardValueMutation(probability=min(0.05 * mult, 0.10)),         # 5% (10% aggressive)
+
+        # Team play mutations (low weight - significant structural changes)
+        EnableTeamModeMutation(probability=min(0.03 * mult, 0.06)),          # 3% (6% aggressive)
+        DisableTeamModeMutation(probability=min(0.03 * mult, 0.06)),         # 3% (6% aggressive)
+        MutateTeamAssignmentMutation(probability=min(0.05 * mult, 0.10)),    # 5% (10% aggressive)
     ]
     return MutationPipeline(operators)
 
