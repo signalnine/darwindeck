@@ -291,6 +291,17 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 			}
 		}
 
+		// Check if this is a bidding phase
+		if hasBiddingMoves(moves) {
+			// Create AI type array for all players
+			aiTypes := make([]AIPlayerType, state.NumPlayers)
+			for i := range aiTypes {
+				aiTypes[i] = aiType
+			}
+			runBiddingRound(state, genome, aiTypes)
+			continue // Skip normal move application, re-evaluate moves after bidding
+		}
+
 		if len(moves) == 0 {
 			// No legal moves
 			// For blackjack, this means players can't draw anymore - determine winner
@@ -627,6 +638,12 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 				state.ResetHand()
 				continue // Skip normal move application
 			}
+		}
+
+		// Check if this is a bidding phase
+		if hasBiddingMoves(moves) {
+			runBiddingRoundAsymmetric(state, genome, p0AIType, p1AIType)
+			continue // Skip normal move application, re-evaluate moves after bidding
 		}
 
 		if len(moves) == 0 {
@@ -1197,6 +1214,17 @@ func hasBettingPhase(moves []engine.LegalMove) bool {
 	return false
 }
 
+// hasBiddingMoves checks if moves are from a bidding phase
+func hasBiddingMoves(moves []engine.LegalMove) bool {
+	for _, m := range moves {
+		// Bidding moves have CardIndex <= MoveBidOffset (-50)
+		if m.CardIndex <= engine.MoveBidOffset {
+			return true
+		}
+	}
+	return false
+}
+
 // getBettingPhaseData finds and parses the betting phase from genome
 func getBettingPhaseData(genome *engine.Genome) *engine.BettingPhaseData {
 	for _, phase := range genome.TurnPhases {
@@ -1441,4 +1469,168 @@ func runBettingRoundAsymmetric(state *engine.GameState, genome *engine.Genome, b
 	}
 
 	return "" // Success
+}
+
+// hasBiddingPhase checks if the genome has a BiddingPhase (phase type 7)
+func hasBiddingPhase(genome *engine.Genome) bool {
+	for _, phase := range genome.TurnPhases {
+		if phase.PhaseType == engine.PhaseTypeBidding {
+			return true
+		}
+	}
+	return false
+}
+
+// getBiddingPhaseData returns the BiddingPhase data from the genome, or nil if none exists
+func getBiddingPhaseData(genome *engine.Genome) []byte {
+	for _, phase := range genome.TurnPhases {
+		if phase.PhaseType == engine.PhaseTypeBidding {
+			return phase.Data
+		}
+	}
+	return nil
+}
+
+// selectGreedyBid estimates tricks and returns a bid value for greedy AI
+func selectGreedyBid(state *engine.GameState, biddingPhase engine.BiddingPhase, playerIdx int) engine.BidMove {
+	hand := state.Players[playerIdx].Hand
+	handSize := len(hand)
+
+	// Estimate tricks based on high cards
+	estimate := 0
+	emptyCard := engine.Card{}
+	for _, card := range hand {
+		if card == emptyCard { // Empty slot
+			continue
+		}
+		// Count high cards (Q=10, K=11, A=12 in 0-indexed)
+		if card.Rank >= 10 { // Queen or higher
+			estimate++
+		}
+		// Bonus for spades (trump) - assuming spades is suit 3
+		if card.Suit == 3 { // Spades
+			estimate++
+		}
+	}
+
+	// Cap estimate at hand size and adjust to be conservative
+	estimate = estimate / 2 // Be conservative
+	if estimate > handSize {
+		estimate = handSize
+	}
+
+	// Ensure within valid bid range
+	bid := estimate
+	if bid < int(biddingPhase.MinBid) {
+		bid = int(biddingPhase.MinBid)
+	}
+	effectiveMax := int(biddingPhase.MaxBid)
+	if handSize < effectiveMax {
+		effectiveMax = handSize
+	}
+	if bid > effectiveMax {
+		bid = effectiveMax
+	}
+
+	// Consider Nil bid for weak hands
+	if biddingPhase.AllowNil && estimate == 0 && biddingPhase.MinBid > 0 {
+		return engine.BidMove{Value: 0, IsNil: true}
+	}
+
+	return engine.BidMove{Value: bid, IsNil: false}
+}
+
+// runBiddingRound executes a complete bidding round for all players
+func runBiddingRound(state *engine.GameState, genome *engine.Genome, aiTypes []AIPlayerType) {
+	biddingData := getBiddingPhaseData(genome)
+	if biddingData == nil {
+		return
+	}
+	biddingPhase, _, bytesRead := engine.ParseBiddingPhase(biddingData)
+	if bytesRead == 0 {
+		return
+	}
+
+	// Reset bidding state
+	state.BiddingComplete = false
+	for i := 0; i < int(state.NumPlayers); i++ {
+		state.Players[i].CurrentBid = -1
+		state.Players[i].IsNilBid = false
+	}
+
+	// Each player bids in order starting from current player
+	startPlayer := int(state.CurrentPlayer)
+	for i := 0; i < int(state.NumPlayers); i++ {
+		playerIdx := (startPlayer + i) % int(state.NumPlayers)
+
+		// Get bid based on AI type
+		var bid engine.BidMove
+		aiType := aiTypes[playerIdx]
+		switch aiType {
+		case GreedyAI:
+			bid = selectGreedyBid(state, biddingPhase, playerIdx)
+		default: // RandomAI and MCTS use random for bidding
+			handSize := len(state.Players[playerIdx].Hand)
+			bidMoves := engine.GenerateBidMoves(biddingPhase, handSize)
+			if len(bidMoves) > 0 {
+				bid = bidMoves[rand.Intn(len(bidMoves))]
+			} else {
+				bid = engine.BidMove{Value: 1, IsNil: false}
+			}
+		}
+
+		engine.ApplyBidMove(state, playerIdx, bid)
+		state.TurnNumber++
+	}
+}
+
+// runBiddingRoundAsymmetric executes a complete bidding round with different AI per player (for skill evaluation)
+func runBiddingRoundAsymmetric(state *engine.GameState, genome *engine.Genome, p0AIType AIPlayerType, p1AIType AIPlayerType) {
+	biddingData := getBiddingPhaseData(genome)
+	if biddingData == nil {
+		return
+	}
+	biddingPhase, _, bytesRead := engine.ParseBiddingPhase(biddingData)
+	if bytesRead == 0 {
+		return
+	}
+
+	// Reset bidding state
+	state.BiddingComplete = false
+	for i := 0; i < int(state.NumPlayers); i++ {
+		state.Players[i].CurrentBid = -1
+		state.Players[i].IsNilBid = false
+	}
+
+	// Each player bids in order starting from current player
+	startPlayer := int(state.CurrentPlayer)
+	for i := 0; i < int(state.NumPlayers); i++ {
+		playerIdx := (startPlayer + i) % int(state.NumPlayers)
+
+		// Select AI based on current player
+		var aiType AIPlayerType
+		if playerIdx == 0 {
+			aiType = p0AIType
+		} else {
+			aiType = p1AIType
+		}
+
+		// Get bid based on AI type
+		var bid engine.BidMove
+		switch aiType {
+		case GreedyAI:
+			bid = selectGreedyBid(state, biddingPhase, playerIdx)
+		default: // RandomAI and MCTS use random for bidding
+			handSize := len(state.Players[playerIdx].Hand)
+			bidMoves := engine.GenerateBidMoves(biddingPhase, handSize)
+			if len(bidMoves) > 0 {
+				bid = bidMoves[rand.Intn(len(bidMoves))]
+			} else {
+				bid = engine.BidMove{Value: 1, IsNil: false}
+			}
+		}
+
+		engine.ApplyBidMove(state, playerIdx, bid)
+		state.TurnNumber++
+	}
 }
