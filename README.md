@@ -85,6 +85,59 @@ The describe command uses Claude to generate natural language game rules suitabl
 
 **Note:** Requires `ANTHROPIC_API_KEY` environment variable to be set.
 
+## Generating Rulebooks
+
+Generate comprehensive rulebooks in markdown format:
+
+```bash
+# Generate rulebook for a single genome
+uv run python -m darwindeck.cli.rulebook output/run1/rank01_GameName.json
+
+# Save to specific output directory
+uv run python -m darwindeck.cli.rulebook output/run1/rank01_GameName.json -o output/rulebooks/
+
+# Generate rulebooks for all genomes in an evolution output
+uv run python -m darwindeck.cli.rulebook output/evolution-run/ -o output/rulebooks/
+```
+
+Rulebooks include:
+- Complete setup instructions
+- Turn structure with all phases
+- Special rules and card effects
+- Edge case handling (empty deck, no valid plays, ties)
+- Win conditions
+
+**Note:** Requires `ANTHROPIC_API_KEY` environment variable to be set.
+
+## Interactive Playtesting
+
+Play evolved games against AI opponents:
+
+```bash
+# Play against greedy AI
+uv run python -m darwindeck.cli.playtest output/run1/rank01_GameName.json --difficulty greedy
+
+# Play against MCTS AI (stronger)
+uv run python -m darwindeck.cli.playtest output/run1/rank01_GameName.json --difficulty mcts
+
+# Use a specific seed for reproducibility
+uv run python -m darwindeck.cli.playtest output/run1/rank01_GameName.json --seed 12345
+
+# Choose which player slot you play
+uv run python -m darwindeck.cli.playtest output/run1/rank01_GameName.json --human-player 1
+```
+
+During playtest:
+- See your hand and game state
+- Select moves from legal options
+- Rate the game after completion (1-5 stars)
+- Results saved to `playtest_results.jsonl`
+
+AI difficulty levels:
+- `random`: Random legal moves (easiest)
+- `greedy`: Heuristic-based play (medium)
+- `mcts`: Monte Carlo tree search (hardest)
+
 ## Architecture
 
 ```

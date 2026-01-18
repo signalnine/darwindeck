@@ -49,15 +49,10 @@ This document tracks planned features, known limitations, and future work.
 
 ### Human Playtesting
 
-**Interactive Playtesting Tool**
-- [ ] CLI for playing evolved games manually
-- [ ] Human vs AI mode
-- [ ] Feedback collection for fitness refinement
-
-**Rule Booklet Generation**
-- [ ] PDF export of game rules
-- [ ] Include setup diagrams
-- [ ] Strategy hints from MCTS analysis
+**Feedback-Driven Evolution**
+- [ ] Use playtest ratings to adjust fitness function
+- [ ] Track which evolved mechanics humans find fun
+- [ ] A/B testing of rule variations
 
 ---
 
@@ -167,6 +162,43 @@ This document tracks planned features, known limitations, and future work.
 - [x] Python fitness calculation using real tension data
 - [x] Integration tests for complete pipeline
 
+### Interactive Playtesting Tool (Complete)
+- [x] CLI for playing evolved games manually (`darwindeck.cli.playtest`)
+- [x] Human vs AI mode (random, greedy, MCTS difficulties)
+- [x] Playtest result recording to JSONL
+- [x] Stuck state detection (repeated game states)
+- [x] Seed control for reproducible sessions
+
+### Rule Booklet Generation (Complete)
+- [x] LLM-powered rulebook generation (`darwindeck.cli.rulebook`)
+- [x] Markdown export of game rules
+- [x] Human-readable phase descriptions
+- [x] Special rules and edge case documentation
+- [x] Batch generation for evolution outputs
+
+### Self-Describing Genomes (Complete)
+- [x] `CardScoringRule` dataclass for explicit card point values
+- [x] `HandEvaluationMethod` enum for poker hands, blackjack, etc.
+- [x] `CardValue` dataclass for point totals
+- [x] `CardCondition` for matching cards by rank/suit
+- [x] `ScoringTrigger` enum for when scoring applies
+- [x] Genomes now contain all information needed for rulebook generation
+
+### Semantic Coherence (Complete)
+- [x] `SemanticCoherenceChecker` validates mechanics support each other
+- [x] Detects orphaned scoring rules (no triggers)
+- [x] Detects win conditions without supporting mechanics
+- [x] Detects betting phases without chips
+- [x] Coherent mutation operators add supporting infrastructure
+- [x] Integration with evolution pipeline (pre-simulation validation)
+
+### Tableau Modes (Complete)
+- [x] `TableauMode` enum (NONE, SHARED, PER_PLAYER)
+- [x] SHARED: Single tableau all players interact with
+- [x] PER_PLAYER: Each player has their own tableau
+- [x] NONE: No tableau in game
+- [x] Go simulation support for all modes
+
 ---
 
 ## Contributing
@@ -188,3 +220,6 @@ To work on a roadmap item:
 | 2026-01-11 | 0.1.2 | Confirmed multiplayer (2-4 players) fully functional |
 | 2026-01-12 | 0.2.0 | Betting/wagering system complete - poker-style games now evolvable |
 | 2026-01-12 | 0.2.1 | Tension curve analysis complete - real game tension tracking in fitness |
+| 2026-01-17 | 0.3.0 | Interactive playtest CLI and LLM rulebook generation |
+| 2026-01-17 | 0.3.1 | Self-describing genomes with CardScoringRule, HandEvaluationMethod |
+| 2026-01-17 | 0.3.2 | Semantic coherence checking and coherent mutation operators |
