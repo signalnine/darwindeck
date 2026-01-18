@@ -1204,3 +1204,65 @@ def test_team_mutations_in_default_pipeline():
     assert "EnableTeamModeMutation" in operator_types
     assert "DisableTeamModeMutation" in operator_types
     assert "MutateTeamAssignmentMutation" in operator_types
+
+
+def test_cleanup_orphaned_resources_removes_chips_without_betting():
+    """CleanupOrphanedResourcesMutation removes chips when no BettingPhase exists."""
+    from darwindeck.evolution.operators import CleanupOrphanedResourcesMutation
+    from darwindeck.genome.examples import create_war_genome
+    from dataclasses import replace
+
+    # Create a genome with orphaned chips (chips but no BettingPhase)
+    genome = create_war_genome()
+    genome_with_chips = replace(
+        genome,
+        setup=replace(genome.setup, starting_chips=1000)
+    )
+
+    # Verify it has chips but no betting phase
+    from darwindeck.genome.schema import BettingPhase
+    has_betting = any(isinstance(p, BettingPhase) for p in genome_with_chips.turn_structure.phases)
+    assert genome_with_chips.setup.starting_chips == 1000
+    assert not has_betting
+
+    # Apply cleanup mutation
+    mutation = CleanupOrphanedResourcesMutation(probability=1.0)
+    mutated = mutation.mutate(genome_with_chips)
+
+    # Chips should be removed
+    assert mutated.setup.starting_chips == 0
+
+
+def test_cleanup_orphaned_resources_preserves_valid_chips():
+    """CleanupOrphanedResourcesMutation preserves chips when BettingPhase exists."""
+    from darwindeck.evolution.operators import CleanupOrphanedResourcesMutation
+    from darwindeck.genome.examples import create_simple_poker_genome
+
+    # Simple poker has both chips and betting phase
+    genome = create_simple_poker_genome()
+
+    # Verify it has chips and betting phase
+    from darwindeck.genome.schema import BettingPhase
+    has_betting = any(isinstance(p, BettingPhase) for p in genome.turn_structure.phases)
+    assert genome.setup.starting_chips > 0
+    assert has_betting
+
+    # Apply cleanup mutation
+    mutation = CleanupOrphanedResourcesMutation(probability=1.0)
+    mutated = mutation.mutate(genome)
+
+    # Chips should be preserved
+    assert mutated.setup.starting_chips == genome.setup.starting_chips
+
+
+def test_cleanup_orphaned_resources_in_default_pipeline():
+    """Default pipeline includes cleanup mutation."""
+    from darwindeck.evolution.operators import (
+        create_default_pipeline,
+        CleanupOrphanedResourcesMutation,
+    )
+
+    pipeline = create_default_pipeline()
+    operator_types = [type(op).__name__ for op in pipeline.operators]
+
+    assert "CleanupOrphanedResourcesMutation" in operator_types
