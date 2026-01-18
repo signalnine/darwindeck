@@ -33,6 +33,18 @@ from darwindeck.bindings.cardsim.BatchRequest import (
 from darwindeck.evolution.fitness_full import SimulationResults
 
 
+def _parse_team_wins(result) -> tuple[int, ...] | None:
+    """Parse team_wins array from FlatBuffers result.
+
+    Returns:
+        Tuple of team win counts, or None if not a team game.
+    """
+    team_wins_len = result.TeamWinsLength()
+    if team_wins_len > 0:
+        return tuple(result.TeamWins(i) for i in range(team_wins_len))
+    return None
+
+
 class GoSimulator:
     """Wrapper for Go simulation engine via CGo."""
 
@@ -133,10 +145,7 @@ class GoSimulator:
                 result_player_count = 2
 
             # Read team_wins array (None if not a team game)
-            team_wins_len = result.TeamWinsLength()
-            team_wins = None
-            if team_wins_len > 0:
-                team_wins = tuple(result.TeamWins(i) for i in range(team_wins_len))
+            team_wins = _parse_team_wins(result)
 
             return SimulationResults(
                 total_games=result.TotalGames(),
@@ -304,10 +313,7 @@ class GoSimulator:
                 result_player_count = 2
 
             # Read team_wins array (None if not a team game)
-            team_wins_len = result.TeamWinsLength()
-            team_wins = None
-            if team_wins_len > 0:
-                team_wins = tuple(result.TeamWins(i) for i in range(team_wins_len))
+            team_wins = _parse_team_wins(result)
 
             return SimulationResults(
                 total_games=result.TotalGames(),
