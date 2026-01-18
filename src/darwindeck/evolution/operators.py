@@ -1016,6 +1016,40 @@ class MutateStartingChipsMutation(MutationOperator):
             return replace(genome, setup=new_setup, generation=genome.generation + 1)
 
 
+class CleanupOrphanedResourcesMutation(MutationOperator):
+    """Remove orphaned resources that lack supporting mechanics.
+
+    This is a "repair" mutation that fixes incoherent states caused by crossover
+    or other mutations. It detects and removes resources that have no use:
+    - starting_chips without any BettingPhase
+    - (extensible for other coherence fixes)
+
+    This mutation has high probability since it only makes changes when needed.
+    """
+
+    def __init__(self, probability: float = 0.50):
+        super().__init__(probability)
+
+    def mutate(self, genome: GameGenome) -> GameGenome:
+        modified = False
+        new_setup = genome.setup
+
+        # Check for orphaned chips
+        has_betting_phase = any(
+            isinstance(p, BettingPhase)
+            for p in genome.turn_structure.phases
+        )
+
+        if genome.setup.starting_chips > 0 and not has_betting_phase:
+            # Remove orphaned chips
+            new_setup = replace(new_setup, starting_chips=0)
+            modified = True
+
+        if modified:
+            return replace(genome, setup=new_setup, generation=genome.generation + 1)
+        return genome
+
+
 class MutateTableauModeMutation(MutationOperator):
     """Change the tableau interaction mode.
 
@@ -1651,6 +1685,9 @@ def create_default_pipeline(
         EnableTeamModeMutation(probability=min(0.03 * mult, 0.06)),          # 3% (6% aggressive)
         DisableTeamModeMutation(probability=min(0.03 * mult, 0.06)),         # 3% (6% aggressive)
         MutateTeamAssignmentMutation(probability=min(0.05 * mult, 0.10)),    # 5% (10% aggressive)
+
+        # Coherence repair mutations (high probability - only change when needed)
+        CleanupOrphanedResourcesMutation(probability=0.50),                   # 50% (always)
     ]
     return MutationPipeline(operators)
 
