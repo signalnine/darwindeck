@@ -107,6 +107,12 @@ class SimulationResults:
     closest_margin: float = 1.0
     trailing_winners: int = 0  # Games where winner was behind at midpoint
 
+    # Solitaire detection metrics
+    move_disruption_events: int = 0
+    contention_events: int = 0
+    forced_response_events: int = 0
+    opponent_turn_count: int = 0
+
     @property
     def player0_wins(self) -> int:
         """Backward compatibility property."""
