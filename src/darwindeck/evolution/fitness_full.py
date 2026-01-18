@@ -3,6 +3,7 @@
 from dataclasses import dataclass, field
 from typing import Dict, Optional
 from darwindeck.genome.schema import GameGenome, PlayPhase, DrawPhase, TableauMode
+from darwindeck.genome.validator import GenomeValidator
 
 
 # Preset weight configurations for different game styles

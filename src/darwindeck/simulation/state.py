@@ -76,6 +76,7 @@ class GameState:
     discard: tuple[Card, ...]
     turn: int
     active_player: int
+    current_phase: int = 0  # Track which phase within the turn structure
 
     # Game-family specific (typed extensions, not Dict[str, Any])
     tableau: Optional[tuple[tuple[Card, ...], ...]] = None  # For solitaire-style
@@ -102,6 +103,7 @@ class GameState:
             "discard": self.discard,
             "turn": self.turn,
             "active_player": self.active_player,
+            "current_phase": self.current_phase,
             "tableau": self.tableau,
             "community": self.community,
             "pot": self.pot,

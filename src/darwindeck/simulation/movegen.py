@@ -64,11 +64,19 @@ class LegalMove:
 
 
 def generate_legal_moves(state: GameState, genome: GameGenome) -> List[Union[LegalMove, BettingMove]]:
-    """Generate all legal moves for current player."""
+    """Generate all legal moves for current player in the current phase."""
     moves: List[Union[LegalMove, BettingMove]] = []
     current_player = state.active_player
 
-    for phase_idx, phase in enumerate(genome.turn_structure.phases):
+    # Only generate moves for the current phase
+    phase_idx = state.current_phase
+    if phase_idx >= len(genome.turn_structure.phases):
+        return moves
+
+    phase = genome.turn_structure.phases[phase_idx]
+
+    # Process just this phase (removed for loop - single phase only)
+    if True:  # Keep indentation structure for minimal diff
         if isinstance(phase, BettingPhase):
             # Generate betting moves
             betting_moves = generate_betting_moves(state, phase, current_player)
@@ -122,7 +130,7 @@ def generate_legal_moves(state: GameState, genome: GameGenome) -> List[Union[Leg
             # TrickPhase: play cards following suit rules
             hand = state.players[current_player].hand
             if len(hand) == 0:
-                continue
+                return moves  # No cards to play
 
             # Determine if we're leading or following
             is_leading = len(state.current_trick) == 0
@@ -290,9 +298,16 @@ def apply_move(state: GameState, move: LegalMove, genome: GameGenome) -> GameSta
             num_players = len(state.players)
             if len(state.current_trick) >= num_players:
                 # Resolve trick - winner takes the cards
-                state = resolve_trick(state, phase)
-                # Don't advance turn normally - resolve_trick sets next player
+                state = resolve_trick(state, phase, genome)
+                # resolve_trick handles phase advancement
                 return state
+
+            # Trick not complete - advance to next player but stay in same phase
+            next_player = (state.active_player + 1) % len(state.players)
+            return state.copy_with(
+                active_player=next_player,
+                turn=state.turn + 1,
+            )
 
     elif isinstance(phase, ClaimPhase):
         if move.card_index >= 0:
@@ -353,13 +368,24 @@ def apply_move(state: GameState, move: LegalMove, genome: GameGenome) -> GameSta
 
         # MOVE_DRAW_PASS means skip drawing - no state change needed
 
-    # Advance turn
-    next_player = (state.active_player + 1) % len(state.players)
-    new_turn = state.turn + 1
+    # Advance phase and player
+    num_phases = len(genome.turn_structure.phases)
+    next_phase = state.current_phase + 1
+
+    # If all phases completed for this turn cycle, reset to phase 0 and advance turn
+    if next_phase >= num_phases:
+        next_phase = 0
+        next_player = (state.active_player + 1) % len(state.players)
+        new_turn = state.turn + 1
+    else:
+        # Stay on same player for next phase in their turn
+        next_player = state.active_player
+        new_turn = state.turn
 
     return state.copy_with(
         active_player=next_player,
-        turn=new_turn
+        turn=new_turn,
+        current_phase=next_phase
     )
 
 
@@ -505,14 +531,14 @@ def resolve_war_battle(state: GameState) -> GameState:
     )
 
 
-def resolve_trick(state: GameState, phase: TrickPhase) -> GameState:
+def resolve_trick(state: GameState, phase: TrickPhase, genome: GameGenome) -> GameState:
     """Resolve a completed trick.
 
     The winner is determined by:
     1. Highest trump card (if trump suit is set and trump was played)
     2. Highest card of lead suit
 
-    Winner takes the trick cards and leads next.
+    Winner takes the trick cards and leads next phase.
     """
     if len(state.current_trick) == 0:
         return state
@@ -581,12 +607,20 @@ def resolve_trick(state: GameState, phase: TrickPhase) -> GameState:
         for i, p in enumerate(state.players)
     )
 
-    # Clear current trick and set winner as next player
+    # Advance to next phase, winner leads
+    num_phases = len(genome.turn_structure.phases)
+    next_phase = state.current_phase + 1
+
+    # If all phases completed, reset to phase 0
+    if next_phase >= num_phases:
+        next_phase = 0
+
     return state.copy_with(
         players=new_players,
         current_trick=(),
         active_player=winner_player_id,
         turn=state.turn + 1,
+        current_phase=next_phase,
     )
 
 
@@ -936,9 +970,11 @@ def apply_betting_move(state: GameState, move: BettingMove, phase: BettingPhase)
         return state  # No change
 
     elif move.action == BettingAction.BET:
+        new_chips = player.chips - phase.min_bet
         new_player = player.copy_with(
-            chips=player.chips - phase.min_bet,
+            chips=new_chips,
             current_bet=phase.min_bet,
+            is_all_in=new_chips <= 0,
         )
         new_players = _update_player_tuple(state.players, state.active_player, new_player)
         return state.copy_with(
@@ -949,9 +985,13 @@ def apply_betting_move(state: GameState, move: BettingMove, phase: BettingPhase)
 
     elif move.action == BettingAction.CALL:
         to_call = state.current_bet - player.current_bet
+        # Guard against negative to_call (defensive)
+        to_call = max(0, to_call)
+        new_chips = player.chips - to_call
         new_player = player.copy_with(
-            chips=player.chips - to_call,
+            chips=new_chips,
             current_bet=state.current_bet,
+            is_all_in=new_chips <= 0,
         )
         new_players = _update_player_tuple(state.players, state.active_player, new_player)
         return state.copy_with(
@@ -963,9 +1003,11 @@ def apply_betting_move(state: GameState, move: BettingMove, phase: BettingPhase)
         to_call = state.current_bet - player.current_bet
         raise_amount = to_call + phase.min_bet
         new_current_bet = state.current_bet + phase.min_bet
+        new_chips = player.chips - raise_amount
         new_player = player.copy_with(
-            chips=player.chips - raise_amount,
+            chips=new_chips,
             current_bet=new_current_bet,
+            is_all_in=new_chips <= 0,
         )
         new_players = _update_player_tuple(state.players, state.active_player, new_player)
         return state.copy_with(
@@ -1002,6 +1044,21 @@ def apply_betting_move(state: GameState, move: BettingMove, phase: BettingPhase)
 def count_active_players(state: GameState) -> int:
     """Count players who haven't folded."""
     return sum(1 for p in state.players if not p.has_folded)
+
+
+def count_acting_players(state: GameState) -> int:
+    """Count players who can still take betting actions.
+
+    A player can act if they:
+    - Have not folded
+    - Are not all-in
+    - Have chips remaining
+    """
+    count = 0
+    for player in state.players:
+        if not player.has_folded and not player.is_all_in and player.chips > 0:
+            count += 1
+    return count
 
 
 def all_bets_matched(state: GameState) -> bool:

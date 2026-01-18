@@ -41,7 +41,7 @@ class SemanticCoherenceChecker:
             for p in genome.turn_structure.phases
         )
 
-        has_scoring = bool(genome.scoring_rules)
+        has_scoring = bool(genome.scoring_rules) or bool(genome.card_scoring)
         is_trick_based = genome.turn_structure.is_trick_based
 
         for wc in genome.win_conditions:
@@ -54,7 +54,7 @@ class SemanticCoherenceChecker:
             elif wc.type in self.SCORING_WIN_CONDITIONS:
                 if not has_scoring and not is_trick_based:
                     violations.append(
-                        f"Win condition '{wc.type}' requires scoring_rules or is_trick_based"
+                        f"Win condition '{wc.type}' requires scoring rules (scoring_rules or card_scoring) or is_trick_based"
                     )
 
         return violations

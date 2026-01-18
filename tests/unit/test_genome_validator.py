@@ -32,8 +32,8 @@ class TestGenomeValidator:
             card_scoring=(),  # No scoring!
         )
         errors = GenomeValidator.validate(genome)
-        assert len(errors) == 1
-        assert "Score-based win condition requires" in errors[0]
+        assert len(errors) >= 1
+        assert any("Score-based win condition requires" in e for e in errors)
 
     def test_best_hand_requires_pattern_match(self):
         """best_hand win without PATTERN_MATCH fails validation."""
@@ -49,8 +49,8 @@ class TestGenomeValidator:
             hand_evaluation=None,  # No hand evaluation!
         )
         errors = GenomeValidator.validate(genome)
-        assert len(errors) == 1
-        assert "best_hand win condition requires" in errors[0]
+        assert len(errors) >= 1
+        assert any("best_hand win condition requires" in e for e in errors)
 
     def test_betting_requires_chips(self):
         """BettingPhase without starting_chips fails validation."""

@@ -569,6 +569,9 @@ class ModifyWinConditionMutation(MutationOperator):
     def _change_win_condition_type(self, genome: GameGenome) -> GameGenome:
         """Change type of a random win condition.
 
+        Ensures coherent mutations: when changing to a scoring-based win type,
+        adds scoring rules if genome lacks them.
+
         Args:
             genome: Source genome
 
@@ -584,7 +587,8 @@ class ModifyWinConditionMutation(MutationOperator):
         new_type = random.choice(available_types)
 
         # Set threshold based on new type
-        if new_type in ["first_to_score", "high_score", "low_score"]:
+        scoring_based_types = ["first_to_score", "high_score", "low_score"]
+        if new_type in scoring_based_types:
             # Score-based: use reasonable threshold
             new_threshold = random.choice([50, 100, 200, 500])
         else:
@@ -599,6 +603,24 @@ class ModifyWinConditionMutation(MutationOperator):
             for i, wc in enumerate(genome.win_conditions)
         ]
 
+        # COHERENCE: Ensure scoring rules exist for scoring-based win conditions
+        new_card_scoring = genome.card_scoring
+        if new_type in scoring_based_types:
+            # Check if genome lacks scoring
+            has_scoring = (
+                len(genome.card_scoring) > 0 or
+                len(genome.scoring_rules) > 0 or
+                genome.turn_structure.is_trick_based  # Trick games track score via captures
+            )
+            if not has_scoring:
+                # Add basic scoring rule: all cards = 1 point when played
+                basic_scoring = CardScoringRule(
+                    condition=CardCondition(),  # Match any card
+                    points=1,
+                    trigger=ScoringTrigger.PLAY,
+                )
+                new_card_scoring = (basic_scoring,)
+
         # Return new genome (immutable)
         return GameGenome(
             schema_version=genome.schema_version,
@@ -612,6 +634,7 @@ class ModifyWinConditionMutation(MutationOperator):
             max_turns=genome.max_turns,
             min_turns=genome.min_turns,
             player_count=genome.player_count,
+            card_scoring=new_card_scoring,
         )
 
     def _change_threshold(self, genome: GameGenome) -> GameGenome:
@@ -668,6 +691,9 @@ class ModifyWinConditionMutation(MutationOperator):
     def _add_win_condition(self, genome: GameGenome) -> GameGenome:
         """Add a new win condition (up to 3 total).
 
+        Ensures coherent mutations: when adding a scoring-based win type,
+        adds scoring rules if genome lacks them.
+
         Args:
             genome: Source genome
 
@@ -678,7 +704,8 @@ class ModifyWinConditionMutation(MutationOperator):
         new_type = random.choice(self.WIN_CONDITION_TYPES)
 
         # Set threshold if needed
-        if new_type in ["first_to_score", "high_score", "low_score"]:
+        scoring_based_types = ["first_to_score", "high_score", "low_score"]
+        if new_type in scoring_based_types:
             new_threshold = random.choice([50, 100, 200, 500])
         else:
             new_threshold = None
@@ -688,6 +715,24 @@ class ModifyWinConditionMutation(MutationOperator):
 
         # Add to existing list
         new_win_conditions = list(genome.win_conditions) + [new_wc]
+
+        # COHERENCE: Ensure scoring rules exist for scoring-based win conditions
+        new_card_scoring = genome.card_scoring
+        if new_type in scoring_based_types:
+            # Check if genome lacks scoring
+            has_scoring = (
+                len(genome.card_scoring) > 0 or
+                len(genome.scoring_rules) > 0 or
+                genome.turn_structure.is_trick_based  # Trick games track score via captures
+            )
+            if not has_scoring:
+                # Add basic scoring rule: all cards = 1 point when played
+                basic_scoring = CardScoringRule(
+                    condition=CardCondition(),  # Match any card
+                    points=1,
+                    trigger=ScoringTrigger.PLAY,
+                )
+                new_card_scoring = (basic_scoring,)
 
         # Return new genome
         return GameGenome(
@@ -702,6 +747,7 @@ class ModifyWinConditionMutation(MutationOperator):
             max_turns=genome.max_turns,
             min_turns=genome.min_turns,
             player_count=genome.player_count,
+            card_scoring=new_card_scoring,
         )
 
 
@@ -922,7 +968,11 @@ class MutateBettingPhaseMutation(MutationOperator):
 
 
 class MutateStartingChipsMutation(MutationOperator):
-    """Mutate starting_chips in setup, ensuring min_bet <= starting_chips."""
+    """Mutate starting_chips in setup, ensuring coherent betting.
+
+    Ensures coherent mutations: when enabling betting (adding chips to a
+    genome with 0 chips), also adds a BettingPhase if none exists.
+    """
 
     def __init__(self, probability: float = 0.10):
         super().__init__(probability)
@@ -946,6 +996,16 @@ class MutateStartingChipsMutation(MutationOperator):
             if isinstance(phase, BettingPhase) and phase.min_bet > new_chips:
                 phases[i] = replace(phase, min_bet=max(1, new_chips // 10))
                 phases_modified = True
+
+        # COHERENCE: When enabling betting (0 -> chips), ensure BettingPhase exists
+        has_betting_phase = any(isinstance(p, BettingPhase) for p in phases)
+        if current_chips == 0 and not has_betting_phase:
+            # Add BettingPhase with min_bet = 10% of chips, reasonable max_raises
+            min_bet = max(1, new_chips // 10)
+            betting_phase = BettingPhase(min_bet=min_bet, max_raises=3)
+            # Insert at beginning of turn (before draw/play phases)
+            phases.insert(0, betting_phase)
+            phases_modified = True
 
         new_setup = replace(genome.setup, starting_chips=new_chips)
 

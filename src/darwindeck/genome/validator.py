@@ -3,8 +3,11 @@
 from typing import List
 from darwindeck.genome.schema import (
     GameGenome, BettingPhase, HandEvaluationMethod, TableauMode,
-    ShowdownMethod,
+    ShowdownMethod, TrickPhase, PlayPhase, DiscardPhase, DrawPhase,
 )
+
+# Standard deck size
+STANDARD_DECK_SIZE = 52
 
 
 class GenomeValidator:
@@ -14,6 +17,14 @@ class GenomeValidator:
     def validate(genome: GameGenome) -> List[str]:
         """Return list of validation errors (empty = valid)."""
         errors: List[str] = []
+
+        # Check 0: Setup requires valid number of cards
+        cards_needed = genome.setup.cards_per_player * genome.player_count
+        cards_needed += genome.setup.initial_discard_count
+        if cards_needed > STANDARD_DECK_SIZE:
+            errors.append(
+                f"Setup requires {cards_needed} cards but deck only has {STANDARD_DECK_SIZE}"
+            )
 
         # Get win condition types
         win_types = {wc.type for wc in genome.win_conditions}
@@ -75,6 +86,30 @@ class GenomeValidator:
                         errors.append(
                             f"HandPattern '{pattern.name}': same_rank_groups sum "
                             f"({group_sum}) exceeds required_count ({pattern.required_count})"
+                        )
+
+        # Check 7: Game must have card play phases (not just betting)
+        card_play_phases = (TrickPhase, PlayPhase, DiscardPhase, DrawPhase)
+        has_card_play = any(
+            isinstance(p, card_play_phases)
+            for p in genome.turn_structure.phases
+        )
+        if not has_card_play:
+            errors.append(
+                "Game has no card play phases (needs TrickPhase, PlayPhase, DiscardPhase, or DrawPhase)"
+            )
+
+        # Check 8: Betting min_bet should allow meaningful play
+        for phase in genome.turn_structure.phases:
+            if isinstance(phase, BettingPhase):
+                starting = genome.setup.starting_chips
+                if starting > 0 and phase.min_bet > 0:
+                    # If min_bet > starting_chips / 2, players can only bet once
+                    # This allows 50/100 (2 bets possible) but catches 67/100 (1 bet)
+                    if phase.min_bet > starting // 2:
+                        errors.append(
+                            f"BettingPhase min_bet ({phase.min_bet}) is too high "
+                            f"relative to starting_chips ({starting}) - limits meaningful betting"
                         )
 
         return errors

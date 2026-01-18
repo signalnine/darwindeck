@@ -63,6 +63,10 @@ def test_tension_curve_with_real_data() -> None:
         lead_changes=5,
         decisive_turn_pct=0.8,
         closest_margin=0.1,
+        # Required for playability gate
+        total_decisions=500,      # 5 decisions per game
+        forced_decisions=100,     # 20% forced
+        total_valid_moves=1500,   # 3 choices per decision avg
     )
 
     evaluator = FitnessEvaluator()

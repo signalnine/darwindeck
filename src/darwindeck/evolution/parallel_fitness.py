@@ -20,6 +20,7 @@ from dataclasses import dataclass
 _mp_context = mp.get_context('spawn')
 
 from darwindeck.genome.schema import GameGenome
+from darwindeck.genome.validator import GenomeValidator
 from darwindeck.evolution.fitness_full import FitnessMetrics, FitnessEvaluator, SimulationResults
 from darwindeck.simulation.go_simulator import GoSimulator
 
@@ -137,6 +138,27 @@ def _evaluate_task(task: EvaluationTask) -> FitnessMetrics:
         raise RuntimeError("Worker evaluator not initialized")
     if _worker_simulator is None:
         raise RuntimeError("Worker simulator not initialized")
+
+    # STRUCTURAL VALIDATION: Check genome is valid before expensive simulation
+    # This catches issues like: no card play phases, impossible card counts,
+    # missing required fields for win conditions, etc.
+    validation_errors = GenomeValidator.validate(task.genome)
+    if validation_errors:
+        # Return zero fitness without running simulation (saves compute)
+        return FitnessMetrics(
+            decision_density=0.0,
+            comeback_potential=0.0,
+            tension_curve=0.0,
+            interaction_frequency=0.0,
+            rules_complexity=0.0,
+            session_length=0.0,
+            skill_vs_luck=0.0,
+            bluffing_depth=0.0,
+            betting_engagement=0.0,
+            total_fitness=0.0,
+            games_simulated=0,
+            valid=False,  # Mark as structurally invalid
+        )
 
     # Run real simulations using Go engine
     results = _worker_simulator.simulate(

@@ -14,6 +14,7 @@ from darwindeck.simulation.state import GameState, PlayerState, Card
 from darwindeck.simulation.movegen import (
     LegalMove, BettingMove, BettingAction,
     generate_legal_moves, apply_move, apply_betting_move, check_win_conditions,
+    all_bets_matched, count_active_players, count_acting_players,
 )
 from darwindeck.playtest.stuck import StuckDetector
 from darwindeck.playtest.display import StateRenderer, MovePresenter
@@ -60,6 +61,9 @@ class PlaytestSession:
         self.move_history: list[dict] = []
         self.human_player_idx = self.rng.randint(0, 1)
         self.state: Optional[GameState] = None
+
+        # Betting round state
+        self._needs_to_act: list[bool] = []
 
     def _record_move(self, turn: int, player: str, move_data: dict) -> None:
         """Record move in history."""
@@ -165,6 +169,12 @@ class PlaytestSession:
             # Generate legal moves
             moves = generate_legal_moves(self.state, self.genome)
 
+            # Check if betting phase should auto-complete (no one can act)
+            if not moves and self._should_auto_complete_betting():
+                self._advance_phase()
+                self._reset_betting_state()
+                continue
+
             # Get move based on current player
             if self.state.active_player == self.human_player_idx:
                 # Human turn
@@ -195,7 +205,7 @@ class PlaytestSession:
                         phase = self.genome.turn_structure.phases[result.move.phase_index]
                         if isinstance(phase, BettingPhase):
                             self.state = apply_betting_move(self.state, result.move, phase)
-                        self._advance_turn()
+                        self._handle_betting_completion(result.move, self.human_player_idx)
                     else:
                         self._record_move(self.state.turn, "human", {"card_index": result.move.card_index})
                         self.state = apply_move(self.state, result.move, self.genome)
@@ -207,10 +217,11 @@ class PlaytestSession:
                     if isinstance(move, BettingMove):
                         output_fn(f"AI: {move.action.value}")
                         self._record_move(self.state.turn, "ai", {"action": move.action.value})
+                        ai_player_idx = self.state.active_player  # Capture BEFORE state changes
                         phase = self.genome.turn_structure.phases[move.phase_index]
                         if isinstance(phase, BettingPhase):
                             self.state = apply_betting_move(self.state, move, phase)
-                        self._advance_turn()
+                        self._handle_betting_completion(move, ai_player_idx)
                     else:
                         output_fn(f"AI plays: card {move.card_index + 1}")
                         self._record_move(self.state.turn, "ai", {"card_index": move.card_index})
@@ -248,6 +259,152 @@ class PlaytestSession:
                 active_player=next_player,
                 turn=self.state.turn + 1,
             )
+
+    def _should_auto_complete_betting(self) -> bool:
+        """Check if current betting phase should auto-complete.
+
+        Returns True if:
+        - Current phase is a BettingPhase
+        - No one can act (all folded, all-in, or no chips)
+        - Bets are matched among active players
+        """
+        if not self.state:
+            return False
+
+        phase = self.genome.turn_structure.phases[self.state.current_phase]
+        if not isinstance(phase, BettingPhase):
+            return False
+
+        # Check if no one can act and bets are matched
+        if count_acting_players(self.state) == 0 and all_bets_matched(self.state):
+            return True
+
+        # Also complete if only one player remains
+        if count_active_players(self.state) <= 1:
+            return True
+
+        return False
+
+    def _init_betting_round(self) -> None:
+        """Initialize needs_to_act for a new betting round."""
+        if not self.state:
+            return
+        self._needs_to_act = []
+        for player in self.state.players:
+            # Player needs to act if they can act
+            can_act = not player.has_folded and not player.is_all_in and player.chips > 0
+            self._needs_to_act.append(can_act)
+
+    def _reset_needs_to_act_for_bet_increase(self, acting_player: int) -> None:
+        """Reset needs_to_act when bet increases (BET/RAISE/ALL_IN with chips)."""
+        if not self.state:
+            return
+        for i, player in enumerate(self.state.players):
+            if i == acting_player:
+                self._needs_to_act[i] = False  # Acting player just acted
+            elif not player.has_folded and not player.is_all_in and player.chips > 0:
+                self._needs_to_act[i] = True  # Everyone else must respond
+
+    def _advance_to_next_acting_player(self) -> None:
+        """Advance to the next player who needs to act."""
+        if not self.state:
+            return
+
+        num_players = len(self.state.players)
+        next_player = (self.state.active_player + 1) % num_players
+
+        # Find next player who needs to act
+        for _ in range(num_players):
+            if self._needs_to_act[next_player]:
+                break
+            next_player = (next_player + 1) % num_players
+
+        self.state = self.state.copy_with(
+            active_player=next_player,
+            turn=self.state.turn + 1,
+        )
+
+    def _handle_betting_completion(self, move: BettingMove, player_idx: int) -> None:
+        """Check if betting round is complete and advance phase if so."""
+        if not self.state:
+            return
+
+        # Initialize needs_to_act if not set
+        if not self._needs_to_act:
+            self._init_betting_round()
+
+        # Mark current player as having acted
+        self._needs_to_act[player_idx] = False
+
+        # If bet increased, everyone else needs to act again
+        if move.action in (BettingAction.BET, BettingAction.RAISE):
+            self._reset_needs_to_act_for_bet_increase(player_idx)
+        elif move.action == BettingAction.ALL_IN:
+            # ALL_IN may increase bet - reset others to act
+            self._reset_needs_to_act_for_bet_increase(player_idx)
+
+        # Check termination: only one player remains
+        if count_active_players(self.state) <= 1:
+            self._advance_phase()
+            self._reset_betting_state()
+            return
+
+        # Check termination: all remaining players are all-in (no one can act)
+        if count_acting_players(self.state) == 0:
+            self._advance_phase()
+            self._reset_betting_state()
+            return
+
+        # Check termination: everyone has acted and bets matched
+        if not any(self._needs_to_act) and all_bets_matched(self.state):
+            self._advance_phase()
+            self._reset_betting_state()
+            return
+
+        # Otherwise advance to next player who can act
+        self._advance_to_next_acting_player()
+
+    def _advance_phase(self) -> None:
+        """Advance to the next phase in the turn structure."""
+        if not self.state:
+            return
+
+        num_phases = len(self.genome.turn_structure.phases)
+        next_phase = self.state.current_phase + 1
+
+        if next_phase >= num_phases:
+            # Wrap to first phase and advance turn
+            next_phase = 0
+            next_player = (self.state.active_player + 1) % len(self.state.players)
+            self.state = self.state.copy_with(
+                current_phase=next_phase,
+                active_player=next_player,
+                turn=self.state.turn + 1,
+            )
+        else:
+            # Just advance phase, keep same player
+            self.state = self.state.copy_with(
+                current_phase=next_phase,
+                turn=self.state.turn + 1,
+            )
+
+    def _reset_betting_state(self) -> None:
+        """Reset betting state for new round."""
+        if not self.state:
+            return
+
+        # Reset player betting states
+        new_players = tuple(
+            p.copy_with(current_bet=0)
+            for p in self.state.players
+        )
+        self.state = self.state.copy_with(
+            players=new_players,
+            current_bet=0,
+            raise_count=0,
+        )
+        # Clear needs_to_act for next betting round
+        self._needs_to_act = []
 
     def _ai_select_move(self, moves: List[Union[LegalMove, BettingMove]]) -> Optional[Union[LegalMove, BettingMove]]:
         """Select move using AI strategy."""

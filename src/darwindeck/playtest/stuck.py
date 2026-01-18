@@ -66,5 +66,13 @@ class StuckDetector:
             len(state.deck),
             state.discard[-1] if state.discard else None,
             state.active_player,
+            # Include betting state to avoid false positives during betting rounds
+            state.pot,
+            state.current_bet,
+            state.raise_count,
+            tuple(p.chips for p in state.players),
+            tuple(p.current_bet for p in state.players),
+            tuple(p.has_folded for p in state.players),
+            tuple(p.is_all_in for p in state.players),
         )
         return hash(key)
