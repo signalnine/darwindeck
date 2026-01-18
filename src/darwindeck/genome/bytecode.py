@@ -15,6 +15,8 @@ from darwindeck.genome.schema import (
     TrickPhase,
     ClaimPhase,
     BettingPhase,
+    BiddingPhase,
+    ContractScoring,
     WinCondition,
     Location,
     EffectType,
@@ -106,6 +108,12 @@ class OpCode(IntEnum):
     # Special Effects (60-69)
     EFFECT_HEADER = 60
     EFFECT_ENTRY = 61
+    # Phase-specific opcodes (70-79)
+    BIDDING_PHASE = 70
+
+
+# Opcode constant for external use
+OPCODE_BIDDING_PHASE = 70
 
 
 # Rank to bytecode mapping
@@ -304,6 +312,48 @@ def compile_teams(teams: tuple[tuple[int, ...], ...]) -> bytes:
         result.append(len(team))  # team_size
         result.extend(team)  # player indices
     return bytes(result)
+
+
+def compile_bidding_phase(phase: BiddingPhase, scoring: ContractScoring = None) -> bytes:
+    """Compile BiddingPhase to bytecode.
+
+    Format: [opcode=70] [min_bid] [max_bid] [flags] [scoring_data...]
+    flags byte: bit 0 = allow_nil
+    scoring_data: 12 bytes of ContractScoring
+
+    Total: 16 bytes (4 header + 12 scoring)
+    """
+    if scoring is None:
+        scoring = ContractScoring()
+
+    flags = 0
+    if phase.allow_nil:
+        flags |= 0x01
+
+    result = bytes([
+        OPCODE_BIDDING_PHASE,
+        phase.min_bid,
+        phase.max_bid,
+        flags,
+    ])
+
+    # Append ContractScoring (12 bytes)
+    result += bytes([
+        scoring.points_per_trick_bid,
+        scoring.overtrick_points,
+        scoring.failed_contract_penalty,
+    ])
+    # nil_bonus as uint16 little-endian
+    result += scoring.nil_bonus.to_bytes(2, 'little')
+    # nil_penalty as uint16 little-endian
+    result += scoring.nil_penalty.to_bytes(2, 'little')
+    result += bytes([scoring.bag_limit])
+    # bag_penalty as uint16 little-endian
+    result += scoring.bag_penalty.to_bytes(2, 'little')
+    # reserved 2 bytes
+    result += bytes([0, 0])
+
+    return result
 
 
 def compile_effects(effects: list) -> bytes:
@@ -531,6 +581,8 @@ class BytecodeCompiler:
                 result += self._compile_claim_phase(phase)
             elif isinstance(phase, BettingPhase):
                 result += self._compile_betting_phase(phase)
+            elif isinstance(phase, BiddingPhase):
+                result += self._compile_bidding_phase_internal(phase)
             else:
                 # Unknown phase type, skip
                 pass
@@ -652,6 +704,17 @@ class BytecodeCompiler:
         max_raises = phase.max_raises
 
         return struct.pack("!BII", phase_type, min_bet, max_raises)
+
+    def _compile_bidding_phase_internal(self, phase: BiddingPhase) -> bytes:
+        """Encode BiddingPhase to bytecode using module-level function.
+
+        Go format: phase_type:1 + bidding_data:16
+        Total: 17 bytes (1 type + 16 bidding phase data)
+        """
+        phase_type = 7  # BiddingPhase (new phase type)
+        # Use the module-level compile_bidding_phase function
+        bidding_data = compile_bidding_phase(phase)
+        return bytes([phase_type]) + bidding_data
 
     def _suit_to_code(self, suit) -> int:
         """Map Suit enum to code."""
