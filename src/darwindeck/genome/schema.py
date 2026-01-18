@@ -423,3 +423,7 @@ class GameGenome:
     card_scoring: tuple[CardScoringRule, ...] = ()
     hand_evaluation: Optional[HandEvaluation] = None
     game_rules: GameRules = field(default_factory=GameRules)
+
+    # Team play configuration
+    team_mode: bool = False  # When True, win conditions evaluate team aggregates
+    teams: tuple[tuple[int, ...], ...] = ()  # e.g., ((0, 2), (1, 3)) for 2v2
