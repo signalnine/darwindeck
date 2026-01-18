@@ -33,6 +33,10 @@ type PlayerState struct {
 	CurrentBet int64 // Current bet in this round (int64 for precision)
 	HasFolded  bool  // Folded this round
 	IsAllIn    bool  // Track all-in status (can't act but still in hand)
+	// Bidding fields (reset each hand)
+	CurrentBid int8 // -1 = not bid, 0+ = bid amount
+	IsNilBid   bool // True if this is a Nil bid
+	TricksWon  int8 // Tricks won this hand
 }
 
 // Claim represents a bluffing claim for games like I Doubt It, Cheat, BS
@@ -89,6 +93,10 @@ type GameState struct {
 	TeamScores   []int32 // Score for each team (nil if no teams)
 	PlayerToTeam []int8  // Maps player index -> team index (-1 if no teams)
 	WinningTeam  int8    // -1 = no winner yet, 0+ = winning team index
+	// Bidding fields (for Spades-style contract bidding)
+	BiddingComplete bool   // True when all players have bid
+	TeamContracts   []int8 // Contract per team (sum of non-Nil bids)
+	AccumulatedBags []int8 // Bags per team, persists across hands
 }
 
 // StatePool manages GameState memory
@@ -136,6 +144,10 @@ func (s *GameState) Reset() {
 		s.Players[i].CurrentBet = 0
 		s.Players[i].HasFolded = false
 		s.Players[i].IsAllIn = false
+		// Bidding fields
+		s.Players[i].CurrentBid = -1
+		s.Players[i].IsNilBid = false
+		s.Players[i].TricksWon = 0
 	}
 
 	s.Deck = s.Deck[:0]
@@ -171,6 +183,10 @@ func (s *GameState) Reset() {
 	s.TeamScores = nil
 	s.PlayerToTeam = nil
 	s.WinningTeam = -1
+	// Bidding state
+	s.BiddingComplete = false
+	s.TeamContracts = nil
+	s.AccumulatedBags = nil
 }
 
 // Clone creates a deep copy for MCTS tree search
@@ -190,6 +206,10 @@ func (s *GameState) Clone() *GameState {
 		clone.Players[i].CurrentBet = s.Players[i].CurrentBet
 		clone.Players[i].HasFolded = s.Players[i].HasFolded
 		clone.Players[i].IsAllIn = s.Players[i].IsAllIn
+		// Bidding fields
+		clone.Players[i].CurrentBid = s.Players[i].CurrentBid
+		clone.Players[i].IsNilBid = s.Players[i].IsNilBid
+		clone.Players[i].TricksWon = s.Players[i].TricksWon
 	}
 
 	clone.Deck = append(clone.Deck, s.Deck...)
@@ -249,6 +269,17 @@ func (s *GameState) Clone() *GameState {
 		copy(clone.PlayerToTeam, s.PlayerToTeam)
 	}
 	clone.WinningTeam = s.WinningTeam
+
+	// Clone bidding fields
+	clone.BiddingComplete = s.BiddingComplete
+	if s.TeamContracts != nil {
+		clone.TeamContracts = make([]int8, len(s.TeamContracts))
+		copy(clone.TeamContracts, s.TeamContracts)
+	}
+	if s.AccumulatedBags != nil {
+		clone.AccumulatedBags = make([]int8, len(s.AccumulatedBags))
+		copy(clone.AccumulatedBags, s.AccumulatedBags)
+	}
 
 	return clone
 }

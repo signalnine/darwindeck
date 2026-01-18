@@ -300,3 +300,160 @@ func TestGameStateResetClearsTeams(t *testing.T) {
 
 	PutState(state)
 }
+
+func TestPlayerStateBidFields(t *testing.T) {
+	player := PlayerState{
+		CurrentBid: -1,
+		IsNilBid:   false,
+		TricksWon:  0,
+	}
+
+	if player.CurrentBid != -1 {
+		t.Errorf("Expected CurrentBid -1, got %d", player.CurrentBid)
+	}
+	if player.IsNilBid != false {
+		t.Errorf("Expected IsNilBid false")
+	}
+	if player.TricksWon != 0 {
+		t.Errorf("Expected TricksWon 0, got %d", player.TricksWon)
+	}
+}
+
+func TestGameStateAccumulatedBags(t *testing.T) {
+	state := &GameState{
+		NumPlayers:      4,
+		AccumulatedBags: []int8{0, 0},
+	}
+
+	if len(state.AccumulatedBags) != 2 {
+		t.Errorf("Expected 2 teams for bags, got %d", len(state.AccumulatedBags))
+	}
+}
+
+func TestGameStateBiddingFields(t *testing.T) {
+	state := &GameState{
+		NumPlayers:      4,
+		BiddingComplete: false,
+		TeamContracts:   []int8{5, 6},
+		AccumulatedBags: []int8{2, 3},
+	}
+
+	if state.BiddingComplete != false {
+		t.Errorf("Expected BiddingComplete false")
+	}
+	if len(state.TeamContracts) != 2 {
+		t.Errorf("Expected 2 team contracts, got %d", len(state.TeamContracts))
+	}
+	if state.TeamContracts[0] != 5 || state.TeamContracts[1] != 6 {
+		t.Errorf("Expected TeamContracts [5,6], got %v", state.TeamContracts)
+	}
+	if state.AccumulatedBags[0] != 2 || state.AccumulatedBags[1] != 3 {
+		t.Errorf("Expected AccumulatedBags [2,3], got %v", state.AccumulatedBags)
+	}
+}
+
+func TestGameStateResetClearsBidding(t *testing.T) {
+	state := GetState()
+	// Set up bidding state
+	state.Players[0].CurrentBid = 5
+	state.Players[0].IsNilBid = true
+	state.Players[0].TricksWon = 3
+	state.BiddingComplete = true
+	state.TeamContracts = []int8{8, 9}
+	state.AccumulatedBags = []int8{5, 4}
+
+	state.Reset()
+
+	// Player bidding fields should be reset
+	if state.Players[0].CurrentBid != -1 {
+		t.Errorf("Expected CurrentBid -1 after reset, got %d", state.Players[0].CurrentBid)
+	}
+	if state.Players[0].IsNilBid != false {
+		t.Errorf("Expected IsNilBid false after reset")
+	}
+	if state.Players[0].TricksWon != 0 {
+		t.Errorf("Expected TricksWon 0 after reset, got %d", state.Players[0].TricksWon)
+	}
+
+	// GameState bidding fields should be reset
+	if state.BiddingComplete != false {
+		t.Errorf("Expected BiddingComplete false after reset")
+	}
+	if state.TeamContracts != nil {
+		t.Errorf("Expected nil TeamContracts after reset, got %v", state.TeamContracts)
+	}
+	if state.AccumulatedBags != nil {
+		t.Errorf("Expected nil AccumulatedBags after reset, got %v", state.AccumulatedBags)
+	}
+
+	PutState(state)
+}
+
+func TestGameStateCloneWithBidding(t *testing.T) {
+	original := &GameState{
+		NumPlayers:      4,
+		Players:         make([]PlayerState, 4),
+		BiddingComplete: true,
+		TeamContracts:   []int8{8, 9},
+		AccumulatedBags: []int8{5, 4},
+	}
+	original.Players[0].CurrentBid = 5
+	original.Players[0].IsNilBid = true
+	original.Players[0].TricksWon = 3
+
+	clone := original.Clone()
+
+	// Verify clone has same values
+	if clone.Players[0].CurrentBid != 5 {
+		t.Errorf("Clone CurrentBid should be 5, got %d", clone.Players[0].CurrentBid)
+	}
+	if clone.Players[0].IsNilBid != true {
+		t.Errorf("Clone IsNilBid should be true")
+	}
+	if clone.Players[0].TricksWon != 3 {
+		t.Errorf("Clone TricksWon should be 3, got %d", clone.Players[0].TricksWon)
+	}
+	if clone.BiddingComplete != true {
+		t.Errorf("Clone BiddingComplete should be true")
+	}
+	if clone.TeamContracts[0] != 8 || clone.TeamContracts[1] != 9 {
+		t.Errorf("Clone TeamContracts should be [8,9], got %v", clone.TeamContracts)
+	}
+
+	// Modify clone and verify original unchanged
+	clone.Players[0].CurrentBid = 10
+	clone.TeamContracts[0] = 20
+	clone.AccumulatedBags[0] = 99
+
+	if original.Players[0].CurrentBid != 5 {
+		t.Error("Clone modified original player CurrentBid")
+	}
+	if original.TeamContracts[0] != 8 {
+		t.Error("Clone modified original TeamContracts")
+	}
+	if original.AccumulatedBags[0] != 5 {
+		t.Error("Clone modified original AccumulatedBags")
+	}
+}
+
+func TestGameStateCloneWithNilBidding(t *testing.T) {
+	original := &GameState{
+		NumPlayers:      2,
+		Players:         make([]PlayerState, 4),
+		BiddingComplete: false,
+		TeamContracts:   nil,
+		AccumulatedBags: nil,
+	}
+
+	clone := original.Clone()
+
+	if clone.BiddingComplete != false {
+		t.Errorf("Clone BiddingComplete should be false")
+	}
+	if clone.TeamContracts != nil {
+		t.Errorf("Clone should have nil TeamContracts, got %v", clone.TeamContracts)
+	}
+	if clone.AccumulatedBags != nil {
+		t.Errorf("Clone should have nil AccumulatedBags, got %v", clone.AccumulatedBags)
+	}
+}
