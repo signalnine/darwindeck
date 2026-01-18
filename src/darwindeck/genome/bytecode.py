@@ -478,13 +478,22 @@ class BytecodeHeader:
 class BytecodeCompiler:
     """Compiles GameGenome to bytecode."""
 
-    def __init__(self):
+    def __init__(self, genome: GameGenome = None):
         self.offset = BytecodeHeader.HEADER_SIZE  # After header (39 bytes)
+        self.genome = genome
+
+    def compile(self) -> bytes:
+        """Compile the genome to bytecode (requires genome passed to constructor)."""
+        if self.genome is None:
+            raise ValueError("No genome provided to BytecodeCompiler")
+        return self.compile_genome(self.genome)
 
     def compile_genome(self, genome: GameGenome) -> bytes:
         """Convert genome to bytecode blob."""
         # Reset offset for each genome (instance is reused across compilations)
         self.offset = BytecodeHeader.HEADER_SIZE  # After header (53 bytes)
+        # Store genome for use by phase compilation methods
+        self.genome = genome
 
         # Compile sections
         setup_offset = self.offset
@@ -712,8 +721,9 @@ class BytecodeCompiler:
         Total: 17 bytes (1 type + 16 bidding phase data)
         """
         phase_type = 7  # BiddingPhase (new phase type)
-        # Use the module-level compile_bidding_phase function
-        bidding_data = compile_bidding_phase(phase)
+        # Use genome's contract_scoring if available
+        scoring = self.genome.contract_scoring if self.genome.contract_scoring else None
+        bidding_data = compile_bidding_phase(phase, scoring)
         return bytes([phase_type]) + bidding_data
 
     def _suit_to_code(self, suit) -> int:
