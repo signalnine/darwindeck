@@ -319,6 +319,17 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 			metrics.ForcedDecisions++
 		}
 
+		// BEFORE selecting/applying move: snapshot state for disruption tracking
+		numPlayers := int(state.NumPlayers)
+		actingPlayer := int(state.CurrentPlayer) // Capture BEFORE ApplyMove changes it
+		var nextPlayerIdx int
+		var movesBefore []engine.LegalMove
+		if numPlayers > 1 {
+			// Track the NEXT player who will act (their options may change)
+			nextPlayerIdx = (actingPlayer + 1) % numPlayers
+			movesBefore = getLegalMovesForPlayer(state, genome, nextPlayerIdx)
+		}
+
 		// Select and apply move based on AI type
 		var move *engine.LegalMove
 
@@ -384,6 +395,16 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 		trackBluffingMetrics(state, move, genome, &metrics)
 
 		engine.ApplyMove(state, move, genome)
+
+		// Track move disruption - did this turn change next player's options?
+		// Note: actingPlayer and nextPlayerIdx captured BEFORE ApplyMove
+		if numPlayers > 1 && movesBefore != nil {
+			movesAfter := getLegalMovesForPlayer(state, genome, nextPlayerIdx)
+			if movesDisrupted(movesBefore, movesAfter) {
+				metrics.MoveDisruptionEvents++
+			}
+			metrics.OpponentTurnCount++
+		}
 
 		// Update tension tracking after move
 		tensionMetrics.Update(state, detector)
@@ -601,6 +622,17 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 			metrics.ForcedDecisions++
 		}
 
+		// BEFORE selecting/applying move: snapshot state for disruption tracking
+		numPlayers := int(state.NumPlayers)
+		actingPlayer := int(state.CurrentPlayer) // Capture BEFORE ApplyMove changes it
+		var nextPlayerIdx int
+		var movesBefore []engine.LegalMove
+		if numPlayers > 1 {
+			// Track the NEXT player who will act (their options may change)
+			nextPlayerIdx = (actingPlayer + 1) % numPlayers
+			movesBefore = getLegalMovesForPlayer(state, genome, nextPlayerIdx)
+		}
+
 		// Select AI based on current player
 		var aiType AIPlayerType
 		if state.CurrentPlayer == 0 {
@@ -657,6 +689,16 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 		trackBluffingMetrics(state, move, genome, &metrics)
 
 		engine.ApplyMove(state, move, genome)
+
+		// Track move disruption - did this turn change next player's options?
+		// Note: actingPlayer and nextPlayerIdx captured BEFORE ApplyMove
+		if numPlayers > 1 && movesBefore != nil {
+			movesAfter := getLegalMovesForPlayer(state, genome, nextPlayerIdx)
+			if movesDisrupted(movesBefore, movesAfter) {
+				metrics.MoveDisruptionEvents++
+			}
+			metrics.OpponentTurnCount++
+		}
 
 		// Update tension tracking after move
 		tensionMetrics.Update(state, detector)
@@ -794,6 +836,55 @@ func isInteraction(state *engine.GameState, move *engine.LegalMove, genome *engi
 	return false
 }
 
+// movesDisrupted compares two move slices to detect if options changed.
+// Returns true if the available moves are different (disrupted).
+// Uses a hash-based approach for efficiency with large move sets.
+func movesDisrupted(before, after []engine.LegalMove) bool {
+	// Quick length check
+	if len(before) != len(after) {
+		return true
+	}
+	if len(before) == 0 {
+		return false // Both empty = no disruption
+	}
+
+	// Build a simple signature for each move set
+	// Signature: count moves by (phaseIndex, targetLoc) pairs
+	beforeSig := make(map[uint32]int)
+	afterSig := make(map[uint32]int)
+
+	for _, m := range before {
+		key := uint32(m.PhaseIndex)<<16 | uint32(m.TargetLoc)
+		beforeSig[key]++
+	}
+	for _, m := range after {
+		key := uint32(m.PhaseIndex)<<16 | uint32(m.TargetLoc)
+		afterSig[key]++
+	}
+
+	// Compare signatures
+	if len(beforeSig) != len(afterSig) {
+		return true
+	}
+	for k, v := range beforeSig {
+		if afterSig[k] != v {
+			return true
+		}
+	}
+	return false
+}
+
+// getLegalMovesForPlayer generates legal moves for a specific player
+// without mutating the game state's CurrentPlayer field.
+func getLegalMovesForPlayer(state *engine.GameState, genome *engine.Genome, playerIdx int) []engine.LegalMove {
+	// Save and restore CurrentPlayer to avoid side effects
+	originalPlayer := state.CurrentPlayer
+	state.CurrentPlayer = uint8(playerIdx)
+	moves := engine.GenerateLegalMoves(state, genome)
+	state.CurrentPlayer = originalPlayer
+	return moves
+}
+
 // setupDeck creates and shuffles a standard 52-card deck
 func setupDeck(state *engine.GameState, seed uint64) {
 	// Create standard 52-card deck
@@ -900,6 +991,12 @@ func aggregateResults(results []GameResult) AggregatedStats {
 		if result.Metrics.WinnerWasTrailing {
 			stats.TrailingWinners++
 		}
+
+		// Solitaire detection metrics
+		stats.MoveDisruptionEvents += result.Metrics.MoveDisruptionEvents
+		stats.ContentionEvents += result.Metrics.ContentionEvents
+		stats.ForcedResponseEvents += result.Metrics.ForcedResponseEvents
+		stats.OpponentTurnCount += result.Metrics.OpponentTurnCount
 	}
 
 	// Calculate averages
