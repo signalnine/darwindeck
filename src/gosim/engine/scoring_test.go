@@ -112,6 +112,94 @@ func TestEvaluateContractsBagPenalty(t *testing.T) {
 	}
 }
 
+func TestEvaluateContractsAllNilTeam(t *testing.T) {
+	// Edge case: Both players on a team bid Nil
+	// Team contract should be 0, and any tricks won become overtricks (bags)
+	state := &GameState{
+		NumPlayers: 4,
+		Players: []PlayerState{
+			{CurrentBid: 0, IsNilBid: true, TricksWon: 0}, // Team 0, Nil success
+			{CurrentBid: 5, IsNilBid: false, TricksWon: 6},
+			{CurrentBid: 0, IsNilBid: true, TricksWon: 0}, // Team 0, Nil success
+			{CurrentBid: 8, IsNilBid: false, TricksWon: 7},
+		},
+		TeamScores:      []int32{0, 0},
+		TeamContracts:   []int8{0, 13}, // Team 0: 0+0=0 (both Nil), Team 1: 5+8=13
+		AccumulatedBags: []int8{0, 0},
+		PlayerToTeam:    []int8{0, 1, 0, 1},
+	}
+
+	scoring := ContractScoring{
+		PointsPerTrickBid:     10,
+		OvertrickPoints:       1,
+		FailedContractPenalty: 10,
+		NilBonus:              100,
+		NilPenalty:            100,
+		BagLimit:              10,
+		BagPenalty:            100,
+	}
+
+	EvaluateContracts(state, &scoring)
+
+	// Team 0: Both Nil success (+200), contract 0 made with 0 tricks = +0, total = 200
+	if state.TeamScores[0] != 200 {
+		t.Errorf("Team 0 expected 200 (2x Nil bonus), got %d", state.TeamScores[0])
+	}
+	if state.AccumulatedBags[0] != 0 {
+		t.Errorf("Team 0 expected 0 bags, got %d", state.AccumulatedBags[0])
+	}
+
+	// Team 1: contract 13, got 13 (6+7), made +130, 0 bags
+	if state.TeamScores[1] != 130 {
+		t.Errorf("Team 1 expected 130, got %d", state.TeamScores[1])
+	}
+}
+
+func TestEvaluateContractsAllNilTeamOneFails(t *testing.T) {
+	// Edge case: Both players on team bid Nil, one fails
+	// The failed Nil player's tricks become overtricks (bags)
+	state := &GameState{
+		NumPlayers: 4,
+		Players: []PlayerState{
+			{CurrentBid: 0, IsNilBid: true, TricksWon: 0}, // Team 0, Nil success
+			{CurrentBid: 5, IsNilBid: false, TricksWon: 5},
+			{CurrentBid: 0, IsNilBid: true, TricksWon: 3}, // Team 0, Nil FAIL (won 3 tricks)
+			{CurrentBid: 8, IsNilBid: false, TricksWon: 5},
+		},
+		TeamScores:      []int32{0, 0},
+		TeamContracts:   []int8{0, 13}, // Team 0: 0+0=0 (both Nil), Team 1: 5+8=13
+		AccumulatedBags: []int8{0, 0},
+		PlayerToTeam:    []int8{0, 1, 0, 1},
+	}
+
+	scoring := ContractScoring{
+		PointsPerTrickBid:     10,
+		OvertrickPoints:       1,
+		FailedContractPenalty: 10,
+		NilBonus:              100,
+		NilPenalty:            100,
+		BagLimit:              10,
+		BagPenalty:            100,
+	}
+
+	EvaluateContracts(state, &scoring)
+
+	// Team 0: Nil success +100, Nil fail -100, contract 0 made, 3 overtricks +3
+	// Total: 100 - 100 + 0 + 3 = 3
+	if state.TeamScores[0] != 3 {
+		t.Errorf("Team 0 expected 3, got %d", state.TeamScores[0])
+	}
+	// The 3 tricks become bags
+	if state.AccumulatedBags[0] != 3 {
+		t.Errorf("Team 0 expected 3 bags from failed Nil, got %d", state.AccumulatedBags[0])
+	}
+
+	// Team 1: contract 13, got 10, failed -130
+	if state.TeamScores[1] != -130 {
+		t.Errorf("Team 1 expected -130, got %d", state.TeamScores[1])
+	}
+}
+
 func TestResetHandState(t *testing.T) {
 	state := &GameState{
 		NumPlayers: 4,
