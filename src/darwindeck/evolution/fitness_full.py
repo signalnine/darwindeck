@@ -113,6 +113,9 @@ class SimulationResults:
     forced_response_events: int = 0
     opponent_turn_count: int = 0
 
+    # Team play metrics
+    team_wins: tuple[int, ...] | None = None  # Win count per team (None if not a team game)
+
     @property
     def player0_wins(self) -> int:
         """Backward compatibility property."""

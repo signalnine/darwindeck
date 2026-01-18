@@ -132,6 +132,12 @@ class GoSimulator:
             if result_player_count == 0:
                 result_player_count = 2
 
+            # Read team_wins array (None if not a team game)
+            team_wins_len = result.TeamWinsLength()
+            team_wins = None
+            if team_wins_len > 0:
+                team_wins = tuple(result.TeamWins(i) for i in range(team_wins_len))
+
             return SimulationResults(
                 total_games=result.TotalGames(),
                 wins=wins,
@@ -168,6 +174,8 @@ class GoSimulator:
                 contention_events=result.ContentionEvents(),
                 forced_response_events=result.ForcedResponseEvents(),
                 opponent_turn_count=result.OpponentTurnCount(),
+                # Team play metrics
+                team_wins=team_wins,
             )
         except Exception as e:
             # Return error results for simulation failures
@@ -295,6 +303,12 @@ class GoSimulator:
             if result_player_count == 0:
                 result_player_count = 2
 
+            # Read team_wins array (None if not a team game)
+            team_wins_len = result.TeamWinsLength()
+            team_wins = None
+            if team_wins_len > 0:
+                team_wins = tuple(result.TeamWins(i) for i in range(team_wins_len))
+
             return SimulationResults(
                 total_games=result.TotalGames(),
                 wins=wins,
@@ -330,6 +344,8 @@ class GoSimulator:
                 contention_events=result.ContentionEvents(),
                 forced_response_events=result.ForcedResponseEvents(),
                 opponent_turn_count=result.OpponentTurnCount(),
+                # Team play metrics
+                team_wins=team_wins,
             )
         except Exception as e:
             return SimulationResults(
