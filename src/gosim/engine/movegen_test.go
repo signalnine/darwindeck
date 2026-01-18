@@ -1340,3 +1340,104 @@ func TestGenerateBidMovesHandSizeLimit(t *testing.T) {
 		t.Errorf("Expected 6 moves, got %d", len(moves))
 	}
 }
+
+// =========================================================================
+// ApplyBidMove Tests
+// =========================================================================
+
+func TestApplyBidMoveBasic(t *testing.T) {
+	state := NewGameState(4)
+	state.NumPlayers = 4
+
+	// Setup: player 0 bids 5
+	bid := BidMove{Value: 5, IsNil: false}
+	ApplyBidMove(state, 0, bid)
+
+	if state.Players[0].CurrentBid != 5 {
+		t.Errorf("Expected CurrentBid 5, got %d", state.Players[0].CurrentBid)
+	}
+	if state.Players[0].IsNilBid {
+		t.Errorf("Expected IsNilBid false")
+	}
+	// Not all players bid yet
+	if state.BiddingComplete {
+		t.Errorf("BiddingComplete should be false (not all players bid)")
+	}
+}
+
+func TestApplyBidMoveNil(t *testing.T) {
+	state := NewGameState(4)
+	state.NumPlayers = 4
+
+	// Player 0 bids Nil
+	bid := BidMove{Value: 0, IsNil: true}
+	ApplyBidMove(state, 0, bid)
+
+	if state.Players[0].CurrentBid != 0 {
+		t.Errorf("Expected CurrentBid 0, got %d", state.Players[0].CurrentBid)
+	}
+	if !state.Players[0].IsNilBid {
+		t.Errorf("Expected IsNilBid true")
+	}
+}
+
+func TestApplyBidMoveAllPlayersComplete(t *testing.T) {
+	state := NewGameState(4)
+	state.NumPlayers = 4
+
+	// All 4 players bid
+	ApplyBidMove(state, 0, BidMove{Value: 3, IsNil: false})
+	ApplyBidMove(state, 1, BidMove{Value: 4, IsNil: false})
+	ApplyBidMove(state, 2, BidMove{Value: 2, IsNil: false})
+	ApplyBidMove(state, 3, BidMove{Value: 4, IsNil: false})
+
+	if !state.BiddingComplete {
+		t.Errorf("BiddingComplete should be true after all players bid")
+	}
+}
+
+func TestApplyBidMoveTeamContracts(t *testing.T) {
+	state := NewGameState(4)
+	state.NumPlayers = 4
+	state.PlayerToTeam = []int8{0, 1, 0, 1} // Team 0 = P0,P2; Team 1 = P1,P3
+	state.TeamScores = []int32{0, 0}
+
+	// Player 0 (team 0) bids 3
+	ApplyBidMove(state, 0, BidMove{Value: 3, IsNil: false})
+	// Player 1 (team 1) bids 4
+	ApplyBidMove(state, 1, BidMove{Value: 4, IsNil: false})
+	// Player 2 (team 0) bids 5
+	ApplyBidMove(state, 2, BidMove{Value: 5, IsNil: false})
+	// Player 3 (team 1) bids Nil
+	ApplyBidMove(state, 3, BidMove{Value: 0, IsNil: true})
+
+	// Team contracts should be sum of non-Nil bids
+	// Team 0: 3 + 5 = 8
+	// Team 1: 4 + 0 (Nil excluded) = 4
+	if len(state.TeamContracts) != 2 {
+		t.Fatalf("Expected 2 team contracts, got %d", len(state.TeamContracts))
+	}
+	if state.TeamContracts[0] != 8 {
+		t.Errorf("Team 0 contract should be 8, got %d", state.TeamContracts[0])
+	}
+	if state.TeamContracts[1] != 4 {
+		t.Errorf("Team 1 contract should be 4, got %d", state.TeamContracts[1])
+	}
+}
+
+func TestApplyBidMoveNoTeams(t *testing.T) {
+	state := NewGameState(2)
+	state.NumPlayers = 2
+	// No team configuration
+
+	ApplyBidMove(state, 0, BidMove{Value: 5, IsNil: false})
+	ApplyBidMove(state, 1, BidMove{Value: 6, IsNil: false})
+
+	if !state.BiddingComplete {
+		t.Errorf("BiddingComplete should be true after all players bid")
+	}
+	// TeamContracts should be nil or empty (no teams)
+	if len(state.TeamContracts) != 0 {
+		t.Errorf("TeamContracts should be empty for non-team game")
+	}
+}

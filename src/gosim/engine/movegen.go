@@ -1148,6 +1148,63 @@ type BidMove struct {
 	IsNil bool
 }
 
+// ApplyBidMove applies a bid from a player and checks if bidding is complete.
+// When all players have bid, it sets BiddingComplete and calculates TeamContracts.
+func ApplyBidMove(state *GameState, playerIdx int, bid BidMove) {
+	if playerIdx < 0 || playerIdx >= len(state.Players) {
+		return
+	}
+
+	// Set player's bid
+	state.Players[playerIdx].CurrentBid = int8(bid.Value)
+	state.Players[playerIdx].IsNilBid = bid.IsNil
+
+	// Check if all players have bid
+	allBid := true
+	for i := 0; i < int(state.NumPlayers); i++ {
+		if state.Players[i].CurrentBid < 0 {
+			allBid = false
+			break
+		}
+	}
+
+	if allBid {
+		state.BiddingComplete = true
+		calculateTeamContracts(state)
+	}
+}
+
+// calculateTeamContracts sums non-Nil bids for each team.
+// Call after all players have bid.
+func calculateTeamContracts(state *GameState) {
+	// Skip if no teams configured
+	if state.PlayerToTeam == nil || len(state.TeamScores) == 0 {
+		return
+	}
+
+	numTeams := len(state.TeamScores)
+	state.TeamContracts = make([]int8, numTeams)
+
+	for i := 0; i < int(state.NumPlayers); i++ {
+		// Skip Nil bids (they don't count toward team contract)
+		if state.Players[i].IsNilBid {
+			continue
+		}
+
+		// Get team for this player
+		if i >= len(state.PlayerToTeam) {
+			continue
+		}
+		teamIdx := state.PlayerToTeam[i]
+		if teamIdx < 0 || int(teamIdx) >= numTeams {
+			continue
+		}
+
+		// Add bid to team contract
+		state.TeamContracts[teamIdx] += state.Players[i].CurrentBid
+	}
+}
+
 // GenerateBidMoves generates valid bid options for the current player
 func GenerateBidMoves(phase BiddingPhase, handSize int) []BidMove {
 	moves := []BidMove{}
