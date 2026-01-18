@@ -1266,3 +1266,172 @@ def test_cleanup_orphaned_resources_in_default_pipeline():
     operator_types = [type(op).__name__ for op in pipeline.operators]
 
     assert "CleanupOrphanedResourcesMutation" in operator_types
+
+
+# =====================================================================
+# Bidding Mutation Tests (for Spades-style trick-taking games)
+# =====================================================================
+
+
+def test_add_bidding_phase_mutation():
+    """AddBiddingPhaseMutation adds bidding to trick-taking games."""
+    from darwindeck.evolution.operators import AddBiddingPhaseMutation
+    from darwindeck.genome.examples import create_spades_genome
+    from darwindeck.genome.schema import BiddingPhase
+
+    # Create a spades genome without bidding
+    genome = create_spades_genome()
+    # Remove existing bidding if present (spades might already have it)
+    phases_without_bidding = tuple(p for p in genome.turn_structure.phases if not isinstance(p, BiddingPhase))
+    genome = replace(genome,
+        turn_structure=replace(genome.turn_structure, phases=phases_without_bidding),
+        contract_scoring=None
+    )
+
+    # Verify no bidding phase
+    has_bidding = any(isinstance(p, BiddingPhase) for p in genome.turn_structure.phases)
+    assert not has_bidding
+
+    mutation = AddBiddingPhaseMutation(probability=1.0)
+    mutated = mutation.mutate(genome)
+
+    # Should now have bidding phase
+    has_bidding = any(isinstance(p, BiddingPhase) for p in mutated.turn_structure.phases)
+    assert has_bidding
+
+    # Should also have contract_scoring
+    assert mutated.contract_scoring is not None
+
+
+def test_remove_bidding_phase_mutation():
+    """RemoveBiddingPhaseMutation removes bidding from games."""
+    from darwindeck.evolution.operators import RemoveBiddingPhaseMutation
+    from darwindeck.genome.schema import (
+        GameGenome, SetupRules, TurnStructure, WinCondition,
+        BiddingPhase, TrickPhase, ContractScoring, Suit
+    )
+
+    genome = GameGenome(
+        schema_version="1.0",
+        genome_id="test",
+        generation=0,
+        setup=SetupRules(cards_per_player=13),
+        turn_structure=TurnStructure(
+            phases=[BiddingPhase(), TrickPhase(trump_suit=Suit.SPADES)],
+            is_trick_based=True
+        ),
+        special_effects=[],
+        win_conditions=[WinCondition(type="score_threshold", threshold=500)],
+        scoring_rules=[],
+        contract_scoring=ContractScoring(),
+    )
+
+    mutation = RemoveBiddingPhaseMutation(probability=1.0)
+    mutated = mutation.mutate(genome)
+
+    # Should have no bidding phase
+    has_bidding = any(isinstance(p, BiddingPhase) for p in mutated.turn_structure.phases)
+    assert not has_bidding
+
+    # Should also remove contract_scoring
+    assert mutated.contract_scoring is None
+
+
+def test_cleanup_orphaned_contract_scoring():
+    """CleanupOrphanedResourcesMutation removes orphaned contract_scoring."""
+    from darwindeck.evolution.operators import CleanupOrphanedResourcesMutation
+    from darwindeck.genome.schema import (
+        GameGenome, SetupRules, TurnStructure, WinCondition,
+        TrickPhase, ContractScoring, Suit
+    )
+
+    # Genome with ContractScoring but no BiddingPhase (orphaned)
+    genome = GameGenome(
+        schema_version="1.0",
+        genome_id="test",
+        generation=0,
+        setup=SetupRules(cards_per_player=13),
+        turn_structure=TurnStructure(
+            phases=[TrickPhase(trump_suit=Suit.SPADES)],
+            is_trick_based=True
+        ),
+        special_effects=[],
+        win_conditions=[WinCondition(type="score_threshold", threshold=500)],
+        scoring_rules=[],
+        contract_scoring=ContractScoring(),  # Orphaned!
+    )
+
+    mutation = CleanupOrphanedResourcesMutation(probability=1.0)
+    mutated = mutation.mutate(genome)
+
+    # Should remove orphaned contract_scoring
+    assert mutated.contract_scoring is None
+
+
+def test_add_bidding_phase_mutation_only_for_trick_games():
+    """AddBiddingPhaseMutation only applies to games with TrickPhase."""
+    from darwindeck.evolution.operators import AddBiddingPhaseMutation
+    from darwindeck.genome.examples import create_war_genome
+    from darwindeck.genome.schema import BiddingPhase
+
+    # War game has no TrickPhase
+    genome = create_war_genome()
+
+    mutation = AddBiddingPhaseMutation(probability=1.0)
+
+    # Should not be able to apply
+    assert not mutation.can_apply(genome)
+
+    # Mutation should return unchanged
+    mutated = mutation.mutate(genome)
+    has_bidding = any(isinstance(p, BiddingPhase) for p in mutated.turn_structure.phases)
+    assert not has_bidding
+
+
+def test_add_bidding_phase_mutation_already_has_bidding():
+    """AddBiddingPhaseMutation doesn't add second bidding phase."""
+    from darwindeck.evolution.operators import AddBiddingPhaseMutation
+    from darwindeck.genome.schema import (
+        GameGenome, SetupRules, TurnStructure, WinCondition,
+        BiddingPhase, TrickPhase, ContractScoring, Suit
+    )
+
+    genome = GameGenome(
+        schema_version="1.0",
+        genome_id="test",
+        generation=0,
+        setup=SetupRules(cards_per_player=13),
+        turn_structure=TurnStructure(
+            phases=[BiddingPhase(), TrickPhase(trump_suit=Suit.SPADES)],
+            is_trick_based=True
+        ),
+        special_effects=[],
+        win_conditions=[WinCondition(type="score_threshold", threshold=500)],
+        scoring_rules=[],
+        contract_scoring=ContractScoring(),
+    )
+
+    mutation = AddBiddingPhaseMutation(probability=1.0)
+
+    # Should not be able to apply (already has bidding)
+    assert not mutation.can_apply(genome)
+
+    # Mutation should return unchanged
+    mutated = mutation.mutate(genome)
+    bidding_count = sum(1 for p in mutated.turn_structure.phases if isinstance(p, BiddingPhase))
+    assert bidding_count == 1
+
+
+def test_bidding_mutations_in_default_pipeline():
+    """Default pipeline includes bidding mutations."""
+    from darwindeck.evolution.operators import (
+        create_default_pipeline,
+        AddBiddingPhaseMutation,
+        RemoveBiddingPhaseMutation,
+    )
+
+    pipeline = create_default_pipeline()
+    operator_types = [type(op).__name__ for op in pipeline.operators]
+
+    assert "AddBiddingPhaseMutation" in operator_types
+    assert "RemoveBiddingPhaseMutation" in operator_types
