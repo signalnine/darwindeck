@@ -103,6 +103,12 @@ type AggregatedStats struct {
 	DecisiveTurnPct float32 // Average decisive turn percentage
 	ClosestMargin   float32 // Average closest margin
 	TrailingWinners uint32  // Games where winner was behind at midpoint
+
+	// Solitaire detection metrics (interaction quality)
+	MoveDisruptionEvents uint64 // Opponent turns that changed waiting player's legal moves
+	ContentionEvents     uint64 // Times players competed for same resource
+	ForcedResponseEvents uint64 // Turns where legal moves significantly constrained
+	OpponentTurnCount    uint64 // Total opponent turns (denominator for rates)
 }
 
 // RunBatch simulates multiple games with the same genome and AI configuration
