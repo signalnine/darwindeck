@@ -17,6 +17,21 @@ func GetRootAsBatchRequest(buf []byte, offset flatbuffers.UOffsetT) *BatchReques
 	return x
 }
 
+func FinishBatchRequestBuffer(builder *flatbuffers.Builder, offset flatbuffers.UOffsetT) {
+	builder.Finish(offset)
+}
+
+func GetSizePrefixedRootAsBatchRequest(buf []byte, offset flatbuffers.UOffsetT) *BatchRequest {
+	n := flatbuffers.GetUOffsetT(buf[offset+flatbuffers.SizeUint32:])
+	x := &BatchRequest{}
+	x.Init(buf, n+offset+flatbuffers.SizeUint32)
+	return x
+}
+
+func FinishSizePrefixedBatchRequestBuffer(builder *flatbuffers.Builder, offset flatbuffers.UOffsetT) {
+	builder.FinishSizePrefixed(offset)
+}
+
 func (rcv *BatchRequest) Init(buf []byte, i flatbuffers.UOffsetT) {
 	rcv._tab.Bytes = buf
 	rcv._tab.Pos = i

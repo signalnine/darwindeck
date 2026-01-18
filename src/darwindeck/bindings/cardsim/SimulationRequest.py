@@ -3,17 +3,23 @@
 # namespace: cardsim
 
 import flatbuffers
+from flatbuffers.compat import import_numpy
+np = import_numpy()
 
 class SimulationRequest(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAsSimulationRequest(cls, buf, offset):
+    def GetRootAs(cls, buf, offset=0):
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
         x = SimulationRequest()
         x.Init(buf, n + offset)
         return x
 
+    @classmethod
+    def GetRootAsSimulationRequest(cls, buf, offset=0):
+        """This method is deprecated. Please switch to GetRootAs."""
+        return cls.GetRootAs(buf, offset)
     # SimulationRequest
     def Init(self, buf, pos):
         self._tab = flatbuffers.table.Table(buf, pos)
@@ -39,6 +45,11 @@ class SimulationRequest(object):
         if o != 0:
             return self._tab.VectorLen(o)
         return 0
+
+    # SimulationRequest
+    def GenomeBytecodeIsNone(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(4))
+        return o == 0
 
     # SimulationRequest
     def NumGames(self):
@@ -105,6 +116,11 @@ class SimulationRequest(object):
         return 0
 
     # SimulationRequest
+    def AiTypesIsNone(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(18))
+        return o == 0
+
+    # SimulationRequest
     def PlayerCount(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(20))
         if o != 0:
@@ -118,17 +134,86 @@ class SimulationRequest(object):
             return self._tab.Get(flatbuffers.number_types.Uint32Flags, o + self._tab.Pos)
         return 0
 
-def SimulationRequestStart(builder): builder.StartObject(10)
-def SimulationRequestAddGenomeBytecode(builder, genomeBytecode): builder.PrependUOffsetTRelativeSlot(0, flatbuffers.number_types.UOffsetTFlags.py_type(genomeBytecode), 0)
-def SimulationRequestStartGenomeBytecodeVector(builder, numElems): return builder.StartVector(1, numElems, 1)
-def SimulationRequestAddNumGames(builder, numGames): builder.PrependUint32Slot(1, numGames, 0)
-def SimulationRequestAddAiPlayerType(builder, aiPlayerType): builder.PrependUint8Slot(2, aiPlayerType, 0)
-def SimulationRequestAddMctsIterations(builder, mctsIterations): builder.PrependUint32Slot(3, mctsIterations, 0)
-def SimulationRequestAddRandomSeed(builder, randomSeed): builder.PrependUint64Slot(4, randomSeed, 0)
-def SimulationRequestAddPlayer0AiType(builder, player0AiType): builder.PrependUint8Slot(5, player0AiType, 0)
-def SimulationRequestAddPlayer1AiType(builder, player1AiType): builder.PrependUint8Slot(6, player1AiType, 0)
-def SimulationRequestAddAiTypes(builder, aiTypes): builder.PrependUOffsetTRelativeSlot(7, flatbuffers.number_types.UOffsetTFlags.py_type(aiTypes), 0)
-def SimulationRequestStartAiTypesVector(builder, numElems): return builder.StartVector(1, numElems, 1)
-def SimulationRequestAddPlayerCount(builder, playerCount): builder.PrependUint8Slot(8, playerCount, 0)
-def SimulationRequestAddStartingChips(builder, startingChips): builder.PrependUint32Slot(9, startingChips, 0)
-def SimulationRequestEnd(builder): return builder.EndObject()
+def SimulationRequestStart(builder):
+    builder.StartObject(10)
+
+def Start(builder):
+    SimulationRequestStart(builder)
+
+def SimulationRequestAddGenomeBytecode(builder, genomeBytecode):
+    builder.PrependUOffsetTRelativeSlot(0, flatbuffers.number_types.UOffsetTFlags.py_type(genomeBytecode), 0)
+
+def AddGenomeBytecode(builder, genomeBytecode):
+    SimulationRequestAddGenomeBytecode(builder, genomeBytecode)
+
+def SimulationRequestStartGenomeBytecodeVector(builder, numElems):
+    return builder.StartVector(1, numElems, 1)
+
+def StartGenomeBytecodeVector(builder, numElems):
+    return SimulationRequestStartGenomeBytecodeVector(builder, numElems)
+
+def SimulationRequestAddNumGames(builder, numGames):
+    builder.PrependUint32Slot(1, numGames, 0)
+
+def AddNumGames(builder, numGames):
+    SimulationRequestAddNumGames(builder, numGames)
+
+def SimulationRequestAddAiPlayerType(builder, aiPlayerType):
+    builder.PrependUint8Slot(2, aiPlayerType, 0)
+
+def AddAiPlayerType(builder, aiPlayerType):
+    SimulationRequestAddAiPlayerType(builder, aiPlayerType)
+
+def SimulationRequestAddMctsIterations(builder, mctsIterations):
+    builder.PrependUint32Slot(3, mctsIterations, 0)
+
+def AddMctsIterations(builder, mctsIterations):
+    SimulationRequestAddMctsIterations(builder, mctsIterations)
+
+def SimulationRequestAddRandomSeed(builder, randomSeed):
+    builder.PrependUint64Slot(4, randomSeed, 0)
+
+def AddRandomSeed(builder, randomSeed):
+    SimulationRequestAddRandomSeed(builder, randomSeed)
+
+def SimulationRequestAddPlayer0AiType(builder, player0AiType):
+    builder.PrependUint8Slot(5, player0AiType, 0)
+
+def AddPlayer0AiType(builder, player0AiType):
+    SimulationRequestAddPlayer0AiType(builder, player0AiType)
+
+def SimulationRequestAddPlayer1AiType(builder, player1AiType):
+    builder.PrependUint8Slot(6, player1AiType, 0)
+
+def AddPlayer1AiType(builder, player1AiType):
+    SimulationRequestAddPlayer1AiType(builder, player1AiType)
+
+def SimulationRequestAddAiTypes(builder, aiTypes):
+    builder.PrependUOffsetTRelativeSlot(7, flatbuffers.number_types.UOffsetTFlags.py_type(aiTypes), 0)
+
+def AddAiTypes(builder, aiTypes):
+    SimulationRequestAddAiTypes(builder, aiTypes)
+
+def SimulationRequestStartAiTypesVector(builder, numElems):
+    return builder.StartVector(1, numElems, 1)
+
+def StartAiTypesVector(builder, numElems):
+    return SimulationRequestStartAiTypesVector(builder, numElems)
+
+def SimulationRequestAddPlayerCount(builder, playerCount):
+    builder.PrependUint8Slot(8, playerCount, 0)
+
+def AddPlayerCount(builder, playerCount):
+    SimulationRequestAddPlayerCount(builder, playerCount)
+
+def SimulationRequestAddStartingChips(builder, startingChips):
+    builder.PrependUint32Slot(9, startingChips, 0)
+
+def AddStartingChips(builder, startingChips):
+    SimulationRequestAddStartingChips(builder, startingChips)
+
+def SimulationRequestEnd(builder):
+    return builder.EndObject()
+
+def End(builder):
+    return SimulationRequestEnd(builder)

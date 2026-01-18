@@ -17,6 +17,21 @@ func GetRootAsSimulationRequest(buf []byte, offset flatbuffers.UOffsetT) *Simula
 	return x
 }
 
+func FinishSimulationRequestBuffer(builder *flatbuffers.Builder, offset flatbuffers.UOffsetT) {
+	builder.Finish(offset)
+}
+
+func GetSizePrefixedRootAsSimulationRequest(buf []byte, offset flatbuffers.UOffsetT) *SimulationRequest {
+	n := flatbuffers.GetUOffsetT(buf[offset+flatbuffers.SizeUint32:])
+	x := &SimulationRequest{}
+	x.Init(buf, n+offset+flatbuffers.SizeUint32)
+	return x
+}
+
+func FinishSizePrefixedSimulationRequestBuffer(builder *flatbuffers.Builder, offset flatbuffers.UOffsetT) {
+	builder.FinishSizePrefixed(offset)
+}
+
 func (rcv *SimulationRequest) Init(buf []byte, i flatbuffers.UOffsetT) {
 	rcv._tab.Bytes = buf
 	rcv._tab.Pos = i

@@ -3,17 +3,23 @@
 # namespace: cardsim
 
 import flatbuffers
+from flatbuffers.compat import import_numpy
+np = import_numpy()
 
 class SimulationResult(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAsSimulationResult(cls, buf, offset):
+    def GetRootAs(cls, buf, offset=0):
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
         x = SimulationResult()
         x.Init(buf, n + offset)
         return x
 
+    @classmethod
+    def GetRootAsSimulationResult(cls, buf, offset=0):
+        """This method is deprecated. Please switch to GetRootAs."""
+        return cls.GetRootAs(buf, offset)
     # SimulationResult
     def Init(self, buf, pos):
         self._tab = flatbuffers.table.Table(buf, pos)
@@ -53,10 +59,44 @@ class SimulationResult(object):
             return self._tab.String(o + self._tab.Pos)
         return None
 
-def SimulationResultStart(builder): builder.StartObject(5)
-def SimulationResultAddWinner(builder, winner): builder.PrependInt8Slot(0, winner, 0)
-def SimulationResultAddTotalTurns(builder, totalTurns): builder.PrependUint32Slot(1, totalTurns, 0)
-def SimulationResultAddGameDurationNs(builder, gameDurationNs): builder.PrependUint64Slot(2, gameDurationNs, 0)
-def SimulationResultAddErrorCode(builder, errorCode): builder.PrependUint8Slot(3, errorCode, 0)
-def SimulationResultAddErrorMessage(builder, errorMessage): builder.PrependUOffsetTRelativeSlot(4, flatbuffers.number_types.UOffsetTFlags.py_type(errorMessage), 0)
-def SimulationResultEnd(builder): return builder.EndObject()
+def SimulationResultStart(builder):
+    builder.StartObject(5)
+
+def Start(builder):
+    SimulationResultStart(builder)
+
+def SimulationResultAddWinner(builder, winner):
+    builder.PrependInt8Slot(0, winner, 0)
+
+def AddWinner(builder, winner):
+    SimulationResultAddWinner(builder, winner)
+
+def SimulationResultAddTotalTurns(builder, totalTurns):
+    builder.PrependUint32Slot(1, totalTurns, 0)
+
+def AddTotalTurns(builder, totalTurns):
+    SimulationResultAddTotalTurns(builder, totalTurns)
+
+def SimulationResultAddGameDurationNs(builder, gameDurationNs):
+    builder.PrependUint64Slot(2, gameDurationNs, 0)
+
+def AddGameDurationNs(builder, gameDurationNs):
+    SimulationResultAddGameDurationNs(builder, gameDurationNs)
+
+def SimulationResultAddErrorCode(builder, errorCode):
+    builder.PrependUint8Slot(3, errorCode, 0)
+
+def AddErrorCode(builder, errorCode):
+    SimulationResultAddErrorCode(builder, errorCode)
+
+def SimulationResultAddErrorMessage(builder, errorMessage):
+    builder.PrependUOffsetTRelativeSlot(4, flatbuffers.number_types.UOffsetTFlags.py_type(errorMessage), 0)
+
+def AddErrorMessage(builder, errorMessage):
+    SimulationResultAddErrorMessage(builder, errorMessage)
+
+def SimulationResultEnd(builder):
+    return builder.EndObject()
+
+def End(builder):
+    return SimulationResultEnd(builder)

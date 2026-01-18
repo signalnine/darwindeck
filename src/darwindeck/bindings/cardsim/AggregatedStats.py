@@ -3,17 +3,23 @@
 # namespace: cardsim
 
 import flatbuffers
+from flatbuffers.compat import import_numpy
+np = import_numpy()
 
 class AggregatedStats(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAsAggregatedStats(cls, buf, offset):
+    def GetRootAs(cls, buf, offset=0):
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
         x = AggregatedStats()
         x.Init(buf, n + offset)
         return x
 
+    @classmethod
+    def GetRootAsAggregatedStats(cls, buf, offset=0):
+        """This method is deprecated. Please switch to GetRootAs."""
+        return cls.GetRootAs(buf, offset)
     # AggregatedStats
     def Init(self, buf, pos):
         self._tab = flatbuffers.table.Table(buf, pos)
@@ -95,6 +101,11 @@ class AggregatedStats(object):
         if o != 0:
             return self._tab.VectorLen(o)
         return 0
+
+    # AggregatedStats
+    def WinsIsNone(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(20))
+        return o == 0
 
     # AggregatedStats
     def PlayerCount(self):
@@ -180,128 +191,315 @@ class AggregatedStats(object):
             return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
         return 0
 
-    # AggregatedStats (legacy field, not in schema)
-    def AvgFinalChips(self, j):
-        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(46))
-        if o != 0:
-            a = self._tab.Vector(o)
-            return self._tab.Get(flatbuffers.number_types.Float32Flags, a + flatbuffers.number_types.UOffsetTFlags.py_type(j * 4))
-        return 0
-
-    # AggregatedStats (legacy field, not in schema)
-    def FoldRate(self):
-        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(48))
-        if o != 0:
-            return self._tab.Get(flatbuffers.number_types.Float32Flags, o + self._tab.Pos)
-        return 0.0
-
-    # AggregatedStats (legacy field, not in schema)
-    def TotalPotsWon(self):
-        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(50))
-        if o != 0:
-            return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
-        return 0
-
-    # AggregatedStats - Tension metrics
-    def LeadChanges(self):
-        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(52))
-        if o != 0:
-            return self._tab.Get(flatbuffers.number_types.Uint32Flags, o + self._tab.Pos)
-        return 0
-
     # AggregatedStats
-    def DecisiveTurnPct(self):
-        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(54))
-        if o != 0:
-            return self._tab.Get(flatbuffers.number_types.Float32Flags, o + self._tab.Pos)
-        return 1.0
-
-    # AggregatedStats
-    def ClosestMargin(self):
-        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(56))
-        if o != 0:
-            return self._tab.Get(flatbuffers.number_types.Float32Flags, o + self._tab.Pos)
-        return 1.0
-
-    # AggregatedStats - Betting metrics
     def TotalBets(self):
-        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(58))
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(46))
         if o != 0:
             return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
         return 0
 
     # AggregatedStats
     def BettingBluffs(self):
-        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(60))
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(48))
         if o != 0:
             return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
         return 0
 
     # AggregatedStats
     def FoldWins(self):
-        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(62))
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(50))
         if o != 0:
             return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
         return 0
 
     # AggregatedStats
     def ShowdownWins(self):
-        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(64))
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(52))
         if o != 0:
             return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
         return 0
 
     # AggregatedStats
     def AllInCount(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(54))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
+        return 0
+
+    # AggregatedStats
+    def LeadChanges(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(56))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint32Flags, o + self._tab.Pos)
+        return 0
+
+    # AggregatedStats
+    def DecisiveTurnPct(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(58))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Float32Flags, o + self._tab.Pos)
+        return 1.0
+
+    # AggregatedStats
+    def ClosestMargin(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(60))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Float32Flags, o + self._tab.Pos)
+        return 1.0
+
+    # AggregatedStats
+    def TrailingWinners(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(62))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint32Flags, o + self._tab.Pos)
+        return 0
+
+    # AggregatedStats
+    def MoveDisruptionEvents(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(64))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
+        return 0
+
+    # AggregatedStats
+    def ContentionEvents(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(66))
         if o != 0:
             return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
         return 0
 
-    # AggregatedStats - Trailing winner frequency (comeback metric)
-    def TrailingWinners(self):
+    # AggregatedStats
+    def ForcedResponseEvents(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(68))
         if o != 0:
-            return self._tab.Get(flatbuffers.number_types.Uint32Flags, o + self._tab.Pos)
+            return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
         return 0
 
-def AggregatedStatsStart(builder): builder.StartObject(33)
-def AggregatedStatsAddTotalGames(builder, totalGames): builder.PrependUint32Slot(0, totalGames, 0)
-def AggregatedStatsAddPlayer0Wins(builder, player0Wins): builder.PrependUint32Slot(1, player0Wins, 0)
-def AggregatedStatsAddPlayer1Wins(builder, player1Wins): builder.PrependUint32Slot(2, player1Wins, 0)
-def AggregatedStatsAddDraws(builder, draws): builder.PrependUint32Slot(3, draws, 0)
-def AggregatedStatsAddAvgTurns(builder, avgTurns): builder.PrependFloat32Slot(4, avgTurns, 0.0)
-def AggregatedStatsAddMedianTurns(builder, medianTurns): builder.PrependUint32Slot(5, medianTurns, 0)
-def AggregatedStatsAddAvgDurationNs(builder, avgDurationNs): builder.PrependUint64Slot(6, avgDurationNs, 0)
-def AggregatedStatsAddErrors(builder, errors): builder.PrependUint32Slot(7, errors, 0)
-def AggregatedStatsAddWins(builder, wins): builder.PrependUOffsetTRelativeSlot(8, flatbuffers.number_types.UOffsetTFlags.py_type(wins), 0)
-def AggregatedStatsStartWinsVector(builder, numElems): return builder.StartVector(4, numElems, 4)
-def AggregatedStatsAddPlayerCount(builder, playerCount): builder.PrependUint8Slot(9, playerCount, 0)
-def AggregatedStatsAddTotalDecisions(builder, totalDecisions): builder.PrependUint64Slot(10, totalDecisions, 0)
-def AggregatedStatsAddTotalValidMoves(builder, totalValidMoves): builder.PrependUint64Slot(11, totalValidMoves, 0)
-def AggregatedStatsAddForcedDecisions(builder, forcedDecisions): builder.PrependUint64Slot(12, forcedDecisions, 0)
-def AggregatedStatsAddTotalHandSize(builder, totalHandSize): builder.PrependUint64Slot(13, totalHandSize, 0)
-def AggregatedStatsAddTotalInteractions(builder, totalInteractions): builder.PrependUint64Slot(14, totalInteractions, 0)
-def AggregatedStatsAddTotalActions(builder, totalActions): builder.PrependUint64Slot(15, totalActions, 0)
-def AggregatedStatsAddTotalClaims(builder, totalClaims): builder.PrependUint64Slot(16, totalClaims, 0)
-def AggregatedStatsAddTotalBluffs(builder, totalBluffs): builder.PrependUint64Slot(17, totalBluffs, 0)
-def AggregatedStatsAddTotalChallenges(builder, totalChallenges): builder.PrependUint64Slot(18, totalChallenges, 0)
-def AggregatedStatsAddSuccessfulBluffs(builder, successfulBluffs): builder.PrependUint64Slot(19, successfulBluffs, 0)
-def AggregatedStatsAddSuccessfulCatches(builder, successfulCatches): builder.PrependUint64Slot(20, successfulCatches, 0)
-# Legacy fields (not in schema but in Go bindings)
-def AggregatedStatsAddAvgFinalChips(builder, avgFinalChips): builder.PrependUOffsetTRelativeSlot(21, flatbuffers.number_types.UOffsetTFlags.py_type(avgFinalChips), 0)
-def AggregatedStatsAddFoldRate(builder, foldRate): builder.PrependFloat32Slot(22, foldRate, 0.0)
-def AggregatedStatsAddTotalPotsWon(builder, totalPotsWon): builder.PrependUint64Slot(23, totalPotsWon, 0)
-# Tension metrics
-def AggregatedStatsAddLeadChanges(builder, leadChanges): builder.PrependUint32Slot(24, leadChanges, 0)
-def AggregatedStatsAddDecisiveTurnPct(builder, decisiveTurnPct): builder.PrependFloat32Slot(25, decisiveTurnPct, 1.0)
-def AggregatedStatsAddClosestMargin(builder, closestMargin): builder.PrependFloat32Slot(26, closestMargin, 1.0)
-# Betting metrics
-def AggregatedStatsAddTotalBets(builder, totalBets): builder.PrependUint64Slot(27, totalBets, 0)
-def AggregatedStatsAddBettingBluffs(builder, bettingBluffs): builder.PrependUint64Slot(28, bettingBluffs, 0)
-def AggregatedStatsAddFoldWins(builder, foldWins): builder.PrependUint64Slot(29, foldWins, 0)
-def AggregatedStatsAddShowdownWins(builder, showdownWins): builder.PrependUint64Slot(30, showdownWins, 0)
-def AggregatedStatsAddAllInCount(builder, allInCount): builder.PrependUint64Slot(31, allInCount, 0)
-# Trailing winner frequency (comeback metric)
-def AggregatedStatsAddTrailingWinners(builder, trailingWinners): builder.PrependUint32Slot(32, trailingWinners, 0)
-def AggregatedStatsEnd(builder): return builder.EndObject()
+    # AggregatedStats
+    def OpponentTurnCount(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(70))
+        if o != 0:
+            return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
+        return 0
+
+def AggregatedStatsStart(builder):
+    builder.StartObject(34)
+
+def Start(builder):
+    AggregatedStatsStart(builder)
+
+def AggregatedStatsAddTotalGames(builder, totalGames):
+    builder.PrependUint32Slot(0, totalGames, 0)
+
+def AddTotalGames(builder, totalGames):
+    AggregatedStatsAddTotalGames(builder, totalGames)
+
+def AggregatedStatsAddPlayer0Wins(builder, player0Wins):
+    builder.PrependUint32Slot(1, player0Wins, 0)
+
+def AddPlayer0Wins(builder, player0Wins):
+    AggregatedStatsAddPlayer0Wins(builder, player0Wins)
+
+def AggregatedStatsAddPlayer1Wins(builder, player1Wins):
+    builder.PrependUint32Slot(2, player1Wins, 0)
+
+def AddPlayer1Wins(builder, player1Wins):
+    AggregatedStatsAddPlayer1Wins(builder, player1Wins)
+
+def AggregatedStatsAddDraws(builder, draws):
+    builder.PrependUint32Slot(3, draws, 0)
+
+def AddDraws(builder, draws):
+    AggregatedStatsAddDraws(builder, draws)
+
+def AggregatedStatsAddAvgTurns(builder, avgTurns):
+    builder.PrependFloat32Slot(4, avgTurns, 0.0)
+
+def AddAvgTurns(builder, avgTurns):
+    AggregatedStatsAddAvgTurns(builder, avgTurns)
+
+def AggregatedStatsAddMedianTurns(builder, medianTurns):
+    builder.PrependUint32Slot(5, medianTurns, 0)
+
+def AddMedianTurns(builder, medianTurns):
+    AggregatedStatsAddMedianTurns(builder, medianTurns)
+
+def AggregatedStatsAddAvgDurationNs(builder, avgDurationNs):
+    builder.PrependUint64Slot(6, avgDurationNs, 0)
+
+def AddAvgDurationNs(builder, avgDurationNs):
+    AggregatedStatsAddAvgDurationNs(builder, avgDurationNs)
+
+def AggregatedStatsAddErrors(builder, errors):
+    builder.PrependUint32Slot(7, errors, 0)
+
+def AddErrors(builder, errors):
+    AggregatedStatsAddErrors(builder, errors)
+
+def AggregatedStatsAddWins(builder, wins):
+    builder.PrependUOffsetTRelativeSlot(8, flatbuffers.number_types.UOffsetTFlags.py_type(wins), 0)
+
+def AddWins(builder, wins):
+    AggregatedStatsAddWins(builder, wins)
+
+def AggregatedStatsStartWinsVector(builder, numElems):
+    return builder.StartVector(4, numElems, 4)
+
+def StartWinsVector(builder, numElems):
+    return AggregatedStatsStartWinsVector(builder, numElems)
+
+def AggregatedStatsAddPlayerCount(builder, playerCount):
+    builder.PrependUint8Slot(9, playerCount, 0)
+
+def AddPlayerCount(builder, playerCount):
+    AggregatedStatsAddPlayerCount(builder, playerCount)
+
+def AggregatedStatsAddTotalDecisions(builder, totalDecisions):
+    builder.PrependUint64Slot(10, totalDecisions, 0)
+
+def AddTotalDecisions(builder, totalDecisions):
+    AggregatedStatsAddTotalDecisions(builder, totalDecisions)
+
+def AggregatedStatsAddTotalValidMoves(builder, totalValidMoves):
+    builder.PrependUint64Slot(11, totalValidMoves, 0)
+
+def AddTotalValidMoves(builder, totalValidMoves):
+    AggregatedStatsAddTotalValidMoves(builder, totalValidMoves)
+
+def AggregatedStatsAddForcedDecisions(builder, forcedDecisions):
+    builder.PrependUint64Slot(12, forcedDecisions, 0)
+
+def AddForcedDecisions(builder, forcedDecisions):
+    AggregatedStatsAddForcedDecisions(builder, forcedDecisions)
+
+def AggregatedStatsAddTotalHandSize(builder, totalHandSize):
+    builder.PrependUint64Slot(13, totalHandSize, 0)
+
+def AddTotalHandSize(builder, totalHandSize):
+    AggregatedStatsAddTotalHandSize(builder, totalHandSize)
+
+def AggregatedStatsAddTotalInteractions(builder, totalInteractions):
+    builder.PrependUint64Slot(14, totalInteractions, 0)
+
+def AddTotalInteractions(builder, totalInteractions):
+    AggregatedStatsAddTotalInteractions(builder, totalInteractions)
+
+def AggregatedStatsAddTotalActions(builder, totalActions):
+    builder.PrependUint64Slot(15, totalActions, 0)
+
+def AddTotalActions(builder, totalActions):
+    AggregatedStatsAddTotalActions(builder, totalActions)
+
+def AggregatedStatsAddTotalClaims(builder, totalClaims):
+    builder.PrependUint64Slot(16, totalClaims, 0)
+
+def AddTotalClaims(builder, totalClaims):
+    AggregatedStatsAddTotalClaims(builder, totalClaims)
+
+def AggregatedStatsAddTotalBluffs(builder, totalBluffs):
+    builder.PrependUint64Slot(17, totalBluffs, 0)
+
+def AddTotalBluffs(builder, totalBluffs):
+    AggregatedStatsAddTotalBluffs(builder, totalBluffs)
+
+def AggregatedStatsAddTotalChallenges(builder, totalChallenges):
+    builder.PrependUint64Slot(18, totalChallenges, 0)
+
+def AddTotalChallenges(builder, totalChallenges):
+    AggregatedStatsAddTotalChallenges(builder, totalChallenges)
+
+def AggregatedStatsAddSuccessfulBluffs(builder, successfulBluffs):
+    builder.PrependUint64Slot(19, successfulBluffs, 0)
+
+def AddSuccessfulBluffs(builder, successfulBluffs):
+    AggregatedStatsAddSuccessfulBluffs(builder, successfulBluffs)
+
+def AggregatedStatsAddSuccessfulCatches(builder, successfulCatches):
+    builder.PrependUint64Slot(20, successfulCatches, 0)
+
+def AddSuccessfulCatches(builder, successfulCatches):
+    AggregatedStatsAddSuccessfulCatches(builder, successfulCatches)
+
+def AggregatedStatsAddTotalBets(builder, totalBets):
+    builder.PrependUint64Slot(21, totalBets, 0)
+
+def AddTotalBets(builder, totalBets):
+    AggregatedStatsAddTotalBets(builder, totalBets)
+
+def AggregatedStatsAddBettingBluffs(builder, bettingBluffs):
+    builder.PrependUint64Slot(22, bettingBluffs, 0)
+
+def AddBettingBluffs(builder, bettingBluffs):
+    AggregatedStatsAddBettingBluffs(builder, bettingBluffs)
+
+def AggregatedStatsAddFoldWins(builder, foldWins):
+    builder.PrependUint64Slot(23, foldWins, 0)
+
+def AddFoldWins(builder, foldWins):
+    AggregatedStatsAddFoldWins(builder, foldWins)
+
+def AggregatedStatsAddShowdownWins(builder, showdownWins):
+    builder.PrependUint64Slot(24, showdownWins, 0)
+
+def AddShowdownWins(builder, showdownWins):
+    AggregatedStatsAddShowdownWins(builder, showdownWins)
+
+def AggregatedStatsAddAllInCount(builder, allInCount):
+    builder.PrependUint64Slot(25, allInCount, 0)
+
+def AddAllInCount(builder, allInCount):
+    AggregatedStatsAddAllInCount(builder, allInCount)
+
+def AggregatedStatsAddLeadChanges(builder, leadChanges):
+    builder.PrependUint32Slot(26, leadChanges, 0)
+
+def AddLeadChanges(builder, leadChanges):
+    AggregatedStatsAddLeadChanges(builder, leadChanges)
+
+def AggregatedStatsAddDecisiveTurnPct(builder, decisiveTurnPct):
+    builder.PrependFloat32Slot(27, decisiveTurnPct, 1.0)
+
+def AddDecisiveTurnPct(builder, decisiveTurnPct):
+    AggregatedStatsAddDecisiveTurnPct(builder, decisiveTurnPct)
+
+def AggregatedStatsAddClosestMargin(builder, closestMargin):
+    builder.PrependFloat32Slot(28, closestMargin, 1.0)
+
+def AddClosestMargin(builder, closestMargin):
+    AggregatedStatsAddClosestMargin(builder, closestMargin)
+
+def AggregatedStatsAddTrailingWinners(builder, trailingWinners):
+    builder.PrependUint32Slot(29, trailingWinners, 0)
+
+def AddTrailingWinners(builder, trailingWinners):
+    AggregatedStatsAddTrailingWinners(builder, trailingWinners)
+
+def AggregatedStatsAddMoveDisruptionEvents(builder, moveDisruptionEvents):
+    builder.PrependUint64Slot(30, moveDisruptionEvents, 0)
+
+def AddMoveDisruptionEvents(builder, moveDisruptionEvents):
+    AggregatedStatsAddMoveDisruptionEvents(builder, moveDisruptionEvents)
+
+def AggregatedStatsAddContentionEvents(builder, contentionEvents):
+    builder.PrependUint64Slot(31, contentionEvents, 0)
+
+def AddContentionEvents(builder, contentionEvents):
+    AggregatedStatsAddContentionEvents(builder, contentionEvents)
+
+def AggregatedStatsAddForcedResponseEvents(builder, forcedResponseEvents):
+    builder.PrependUint64Slot(32, forcedResponseEvents, 0)
+
+def AddForcedResponseEvents(builder, forcedResponseEvents):
+    AggregatedStatsAddForcedResponseEvents(builder, forcedResponseEvents)
+
+def AggregatedStatsAddOpponentTurnCount(builder, opponentTurnCount):
+    builder.PrependUint64Slot(33, opponentTurnCount, 0)
+
+def AddOpponentTurnCount(builder, opponentTurnCount):
+    AggregatedStatsAddOpponentTurnCount(builder, opponentTurnCount)
+
+def AggregatedStatsEnd(builder):
+    return builder.EndObject()
+
+def End(builder):
+    return AggregatedStatsEnd(builder)

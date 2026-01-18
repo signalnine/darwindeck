@@ -3,17 +3,23 @@
 # namespace: cardsim
 
 import flatbuffers
+from flatbuffers.compat import import_numpy
+np = import_numpy()
 
 class BatchRequest(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAsBatchRequest(cls, buf, offset):
+    def GetRootAs(cls, buf, offset=0):
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
         x = BatchRequest()
         x.Init(buf, n + offset)
         return x
 
+    @classmethod
+    def GetRootAsBatchRequest(cls, buf, offset=0):
+        """This method is deprecated. Please switch to GetRootAs."""
+        return cls.GetRootAs(buf, offset)
     # BatchRequest
     def Init(self, buf, pos):
         self._tab = flatbuffers.table.Table(buf, pos)
@@ -25,7 +31,7 @@ class BatchRequest(object):
             x = self._tab.Vector(o)
             x += flatbuffers.number_types.UOffsetTFlags.py_type(j) * 4
             x = self._tab.Indirect(x)
-            from .SimulationRequest import SimulationRequest
+            from cardsim.SimulationRequest import SimulationRequest
             obj = SimulationRequest()
             obj.Init(self._tab.Bytes, x)
             return obj
@@ -39,14 +45,43 @@ class BatchRequest(object):
         return 0
 
     # BatchRequest
+    def RequestsIsNone(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(4))
+        return o == 0
+
+    # BatchRequest
     def BatchId(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(6))
         if o != 0:
             return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
         return 0
 
-def BatchRequestStart(builder): builder.StartObject(2)
-def BatchRequestAddRequests(builder, requests): builder.PrependUOffsetTRelativeSlot(0, flatbuffers.number_types.UOffsetTFlags.py_type(requests), 0)
-def BatchRequestStartRequestsVector(builder, numElems): return builder.StartVector(4, numElems, 4)
-def BatchRequestAddBatchId(builder, batchId): builder.PrependUint64Slot(1, batchId, 0)
-def BatchRequestEnd(builder): return builder.EndObject()
+def BatchRequestStart(builder):
+    builder.StartObject(2)
+
+def Start(builder):
+    BatchRequestStart(builder)
+
+def BatchRequestAddRequests(builder, requests):
+    builder.PrependUOffsetTRelativeSlot(0, flatbuffers.number_types.UOffsetTFlags.py_type(requests), 0)
+
+def AddRequests(builder, requests):
+    BatchRequestAddRequests(builder, requests)
+
+def BatchRequestStartRequestsVector(builder, numElems):
+    return builder.StartVector(4, numElems, 4)
+
+def StartRequestsVector(builder, numElems):
+    return BatchRequestStartRequestsVector(builder, numElems)
+
+def BatchRequestAddBatchId(builder, batchId):
+    builder.PrependUint64Slot(1, batchId, 0)
+
+def AddBatchId(builder, batchId):
+    BatchRequestAddBatchId(builder, batchId)
+
+def BatchRequestEnd(builder):
+    return builder.EndObject()
+
+def End(builder):
+    return BatchRequestEnd(builder)
