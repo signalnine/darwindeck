@@ -4,6 +4,7 @@ from typing import List, Set
 from darwindeck.genome.schema import (
     GameGenome, BettingPhase, HandEvaluationMethod, TableauMode,
     ShowdownMethod, TrickPhase, PlayPhase, DiscardPhase, DrawPhase,
+    BiddingPhase,
 )
 
 # Standard deck size
@@ -114,6 +115,29 @@ class GenomeValidator:
 
         # Check 9: Team configuration validation
         GenomeValidator._validate_teams(genome, errors)
+
+        # Check 10: Bidding configuration validation
+        errors.extend(GenomeValidator._validate_bidding(genome))
+
+        return errors
+
+    @staticmethod
+    def _validate_bidding(genome: GameGenome) -> List[str]:
+        """Validate bidding phase configuration."""
+        errors: List[str] = []
+
+        has_bidding_phase = any(
+            isinstance(p, BiddingPhase) for p in genome.turn_structure.phases
+        )
+        has_trick_phase = any(
+            isinstance(p, TrickPhase) for p in genome.turn_structure.phases
+        )
+
+        if has_bidding_phase and not has_trick_phase:
+            errors.append("BiddingPhase requires at least one TrickPhase (contracts need tricks)")
+
+        if genome.contract_scoring is not None and not has_bidding_phase:
+            errors.append("ContractScoring requires BiddingPhase")
 
         return errors
 

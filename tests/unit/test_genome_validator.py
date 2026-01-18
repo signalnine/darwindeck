@@ -206,3 +206,75 @@ class TestTeamValidation:
         # Should not have team-related errors because team_mode is False
         team_errors = [e for e in errors if "team" in e.lower()]
         assert len(team_errors) == 0, f"Expected no team errors but got: {team_errors}"
+
+
+class TestBiddingValidation:
+    """Tests for bidding phase validation."""
+
+    def test_bidding_phase_requires_trick_phase(self):
+        """BiddingPhase requires at least one TrickPhase."""
+        from darwindeck.genome.schema import BiddingPhase
+
+        # Genome with BiddingPhase but no TrickPhase
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="test",
+            generation=0,
+            setup=SetupRules(cards_per_player=5),
+            turn_structure=TurnStructure(
+                phases=[BiddingPhase(), PlayPhase(target=Location.DISCARD)]
+            ),
+            special_effects=[],
+            win_conditions=[WinCondition(type="all_hands_empty")],
+            scoring_rules=[],
+        )
+
+        errors = GenomeValidator.validate(genome)
+        assert any("BiddingPhase requires" in e and "TrickPhase" in e for e in errors)
+
+    def test_contract_scoring_requires_bidding_phase(self):
+        """ContractScoring requires BiddingPhase."""
+        from darwindeck.genome.schema import TrickPhase, ContractScoring, Suit
+
+        # Genome with ContractScoring but no BiddingPhase
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="test",
+            generation=0,
+            setup=SetupRules(cards_per_player=13),
+            turn_structure=TurnStructure(
+                phases=[TrickPhase(trump_suit=Suit.SPADES)],
+                is_trick_based=True
+            ),
+            special_effects=[],
+            win_conditions=[WinCondition(type="score_threshold", threshold=500)],
+            scoring_rules=[],
+            contract_scoring=ContractScoring(),
+        )
+
+        errors = GenomeValidator.validate(genome)
+        assert any("ContractScoring requires" in e and "BiddingPhase" in e for e in errors)
+
+    def test_valid_bidding_config_passes(self):
+        """Valid bidding configuration with TrickPhase passes."""
+        from darwindeck.genome.schema import BiddingPhase, TrickPhase, ContractScoring, Suit
+
+        # Valid: BiddingPhase with TrickPhase and ContractScoring
+        genome = GameGenome(
+            schema_version="1.0",
+            genome_id="test",
+            generation=0,
+            setup=SetupRules(cards_per_player=13),
+            turn_structure=TurnStructure(
+                phases=[BiddingPhase(), TrickPhase(trump_suit=Suit.SPADES)],
+                is_trick_based=True
+            ),
+            special_effects=[],
+            win_conditions=[WinCondition(type="score_threshold", threshold=500)],
+            scoring_rules=[],
+            contract_scoring=ContractScoring(),
+        )
+
+        errors = GenomeValidator.validate(genome)
+        bidding_errors = [e for e in errors if "Bidding" in e or "Contract" in e]
+        assert len(bidding_errors) == 0, f"Expected no bidding errors but got: {bidding_errors}"
