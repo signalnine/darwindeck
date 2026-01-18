@@ -81,56 +81,91 @@ git commit -m "feat(go): add solitaire detection fields to AggregatedStats"
 **Files:**
 - Modify: `src/gosim/simulation/runner.go`
 
+**CRITICAL FIX:** Must capture player index and moves BEFORE ApplyMove, compare AFTER.
+The `CurrentPlayer` advances after ApplyMove, so we must store the "next player" index beforehand.
+
 **Step 1: Create helper function to compare move sets**
 
 Add after `isInteraction` function (around line 783):
 
 ```go
-// compareLegalMoves checks if two move slices have the same moves
-// Returns true if different (move set was disrupted)
+// movesDisrupted compares two move slices to detect if options changed.
+// Returns true if the available moves are different (disrupted).
+// Uses a hash-based approach for efficiency with large move sets.
 func movesDisrupted(before, after []engine.LegalMove) bool {
+	// Quick length check
 	if len(before) != len(after) {
 		return true
 	}
-	// Quick check: compare first few moves (order may vary)
-	// For performance, just check count difference
+	if len(before) == 0 {
+		return false // Both empty = no disruption
+	}
+
+	// Build a simple signature for each move set
+	// Signature: count moves by (phaseIndex, targetLoc) pairs
+	beforeSig := make(map[uint32]int)
+	afterSig := make(map[uint32]int)
+
+	for _, m := range before {
+		key := uint32(m.PhaseIndex)<<16 | uint32(m.TargetLoc)
+		beforeSig[key]++
+	}
+	for _, m := range after {
+		key := uint32(m.PhaseIndex)<<16 | uint32(m.TargetLoc)
+		afterSig[key]++
+	}
+
+	// Compare signatures
+	if len(beforeSig) != len(afterSig) {
+		return true
+	}
+	for k, v := range beforeSig {
+		if afterSig[k] != v {
+			return true
+		}
+	}
 	return false
 }
 
-// countLegalMoves returns the number of legal moves for a player
-func countLegalMovesForPlayer(state *engine.GameState, genome *engine.Genome, playerIdx int) int {
-	// Temporarily switch current player to count their moves
+// getLegalMovesForPlayer generates legal moves for a specific player
+// without mutating the game state's CurrentPlayer field.
+func getLegalMovesForPlayer(state *engine.GameState, genome *engine.Genome, playerIdx int) []engine.LegalMove {
+	// Save and restore CurrentPlayer to avoid side effects
 	originalPlayer := state.CurrentPlayer
 	state.CurrentPlayer = playerIdx
 	moves := engine.GenerateLegalMoves(state, genome)
 	state.CurrentPlayer = originalPlayer
-	return len(moves)
+	return moves
 }
 ```
 
 **Step 2: Track move disruption in game loop**
 
-In `RunSingleGame` function, find the main game loop (around line 340). Add tracking before the move is applied:
+In `RunSingleGame` function, find the main game loop (around line 340).
+
+**CRITICAL:** Capture indices and moves BEFORE the move is applied:
 
 ```go
-// Track opponent's legal moves BEFORE this player's turn
-var opponentMoveCountBefore int
+// BEFORE selecting/applying move: snapshot state for disruption tracking
 numPlayers := len(state.Players)
+actingPlayer := state.CurrentPlayer  // Capture BEFORE ApplyMove changes it
+var nextPlayerIdx int
+var movesBefore []engine.LegalMove
 if numPlayers > 1 {
-	// Get next player (opponent in 2-player game)
-	nextPlayer := (state.CurrentPlayer + 1) % numPlayers
-	opponentMoveCountBefore = countLegalMovesForPlayer(state, genome, nextPlayer)
+	// Track the NEXT player who will act (their options may change)
+	nextPlayerIdx = (actingPlayer + 1) % numPlayers
+	movesBefore = getLegalMovesForPlayer(state, genome, nextPlayerIdx)
 }
 ```
 
-After the move is applied (after `engine.ApplyMove`), add:
+**AFTER** `engine.ApplyMove(state, move, genome)`, add:
 
 ```go
-// Track move disruption - did this turn change opponent's options?
-if numPlayers > 1 {
-	nextPlayer := (state.CurrentPlayer + 1) % numPlayers
-	opponentMoveCountAfter := countLegalMovesForPlayer(state, genome, nextPlayer)
-	if opponentMoveCountAfter != opponentMoveCountBefore {
+// Track move disruption - did this turn change next player's options?
+// Note: actingPlayer and nextPlayerIdx captured BEFORE ApplyMove
+if numPlayers > 1 && movesBefore != nil {
+	movesAfter := getLegalMovesForPlayer(state, genome, nextPlayerIdx)
+	if movesDisrupted(movesBefore, movesAfter) {
 		metrics.MoveDisruptionEvents++
 	}
 	metrics.OpponentTurnCount++
@@ -147,7 +182,7 @@ cd src/gosim && go test ./simulation -v -run TestRunSingleGame
 
 ```bash
 git add src/gosim/simulation/runner.go
-git commit -m "feat(go): implement move disruption tracking"
+git commit -m "feat(go): implement move disruption tracking with proper player indexing"
 ```
 
 ---
@@ -157,32 +192,37 @@ git commit -m "feat(go): implement move disruption tracking"
 **Files:**
 - Modify: `src/gosim/simulation/runner.go`
 
+**CRITICAL FIX:** Make contention detection generic by measuring shared resource access,
+not game-specific mechanics. Contention = multiple players could have taken the same action.
+
 **Step 1: Create contention detection helper**
 
 Add after move disruption helpers:
 
 ```go
-// isContentionEvent checks if a move competes for shared resources
-func isContentionEvent(state *engine.GameState, move *engine.LegalMove, genome *engine.Genome) bool {
-	// Contention 1: Drawing from deck when scarce (<=10 cards)
-	if move.SourceLoc == engine.LocationDeck && len(state.Deck) <= 10 {
-		return true
-	}
+// isContentionEvent detects when a player takes an action that opponents
+// could also have taken - indicating competition for shared resources.
+// This is generic across game types.
+func isContentionEvent(state *engine.GameState, move *engine.LegalMove, genome *engine.Genome, actingPlayer int) bool {
+	// Generic contention: could any opponent have made a similar move?
+	// "Similar" = same phase type and target location
 
-	// Contention 2: Tableau capture that opponent could also make
-	if move.TargetLoc == engine.LocationTableau {
-		// If playing to tableau causes a capture, check if opponent had matching card
-		if move.CardIndex >= 0 && move.CardIndex < len(state.Players[state.CurrentPlayer].Hand) {
-			playedCard := state.Players[state.CurrentPlayer].Hand[move.CardIndex]
-			// Check if any opponent has a card of same rank (could have captured)
-			for i, player := range state.Players {
-				if i == state.CurrentPlayer {
-					continue
-				}
-				for _, card := range player.Hand {
-					if card.Rank == playedCard.Rank {
-						return true // Opponent could have played this rank too
-					}
+	for playerIdx := range state.Players {
+		if playerIdx == actingPlayer {
+			continue
+		}
+
+		// Get opponent's legal moves (without mutating state)
+		opponentMoves := getLegalMovesForPlayer(state, genome, playerIdx)
+
+		for _, oppMove := range opponentMoves {
+			// Contention if opponent could target the same location in same phase type
+			if oppMove.PhaseIndex == move.PhaseIndex && oppMove.TargetLoc == move.TargetLoc {
+				// For shared locations (deck, tableau, discard), this is contention
+				if move.TargetLoc == engine.LocationTableau ||
+					move.SourceLoc == engine.LocationDeck ||
+					move.TargetLoc == engine.LocationDiscard {
+					return true
 				}
 			}
 		}
@@ -194,11 +234,11 @@ func isContentionEvent(state *engine.GameState, move *engine.LegalMove, genome *
 
 **Step 2: Add contention tracking to game loop**
 
-In the main game loop, after the move is selected but before applying:
+In the main game loop, BEFORE ApplyMove (using captured `actingPlayer`):
 
 ```go
-// Track resource contention
-if isContentionEvent(state, move, genome) {
+// Track resource contention - could opponents have made similar move?
+if isContentionEvent(state, move, genome, actingPlayer) {
 	metrics.ContentionEvents++
 }
 ```
@@ -213,7 +253,7 @@ cd src/gosim && go test ./simulation -v
 
 ```bash
 git add src/gosim/simulation/runner.go
-git commit -m "feat(go): implement resource contention tracking"
+git commit -m "feat(go): implement generic resource contention tracking"
 ```
 
 ---
@@ -223,24 +263,30 @@ git commit -m "feat(go): implement resource contention tracking"
 **Files:**
 - Modify: `src/gosim/simulation/runner.go`
 
-**Step 1: Add forced response detection to game loop**
+**Note:** This integrates with Task 3's disruption tracking code. The forced response
+detection uses the same `movesBefore`/`movesAfter` data already collected.
 
-Modify the move disruption tracking section to also detect forced responses:
+**Step 1: Extend disruption tracking to include forced response**
+
+Update the post-ApplyMove tracking code (from Task 3) to also detect forced responses:
 
 ```go
-// Track move disruption and forced response
-if numPlayers > 1 {
-	nextPlayer := (state.CurrentPlayer + 1) % numPlayers
-	opponentMoveCountAfter := countLegalMovesForPlayer(state, genome, nextPlayer)
+// Track move disruption AND forced response
+// Note: actingPlayer, nextPlayerIdx, movesBefore captured BEFORE ApplyMove
+if numPlayers > 1 && movesBefore != nil {
+	movesAfter := getLegalMovesForPlayer(state, genome, nextPlayerIdx)
 
 	// Move disruption: any change in available moves
-	if opponentMoveCountAfter != opponentMoveCountBefore {
+	if movesDisrupted(movesBefore, movesAfter) {
 		metrics.MoveDisruptionEvents++
 	}
 
 	// Forced response: moves dropped by >30%
-	if opponentMoveCountBefore > 0 {
-		ratio := float64(opponentMoveCountAfter) / float64(opponentMoveCountBefore)
+	// This indicates the opponent MUST react (fewer options available)
+	beforeCount := len(movesBefore)
+	afterCount := len(movesAfter)
+	if beforeCount > 0 && afterCount < beforeCount {
+		ratio := float64(afterCount) / float64(beforeCount)
 		if ratio < 0.7 {
 			metrics.ForcedResponseEvents++
 		}
@@ -641,7 +687,204 @@ git commit -m "test: add solitaire detection integration tests"
 
 ---
 
-## Task 15: Run Evolution and Validate
+## Task 15: Unit Tests for Go Helper Functions
+
+**Files:**
+- Create: `src/gosim/simulation/solitaire_test.go`
+
+**Step 1: Write unit tests for helper functions**
+
+```go
+package simulation
+
+import (
+	"testing"
+
+	"github.com/signalnine/darwindeck/gosim/engine"
+)
+
+func TestMovesDisrupted_DifferentLength(t *testing.T) {
+	before := []engine.LegalMove{{PhaseIndex: 0, TargetLoc: 1}}
+	after := []engine.LegalMove{{PhaseIndex: 0, TargetLoc: 1}, {PhaseIndex: 0, TargetLoc: 2}}
+
+	if !movesDisrupted(before, after) {
+		t.Error("Expected disruption when move counts differ")
+	}
+}
+
+func TestMovesDisrupted_SameLength_DifferentMoves(t *testing.T) {
+	before := []engine.LegalMove{{PhaseIndex: 0, TargetLoc: 1}}
+	after := []engine.LegalMove{{PhaseIndex: 0, TargetLoc: 2}}
+
+	if !movesDisrupted(before, after) {
+		t.Error("Expected disruption when moves differ")
+	}
+}
+
+func TestMovesDisrupted_Identical(t *testing.T) {
+	before := []engine.LegalMove{{PhaseIndex: 0, TargetLoc: 1}, {PhaseIndex: 1, TargetLoc: 2}}
+	after := []engine.LegalMove{{PhaseIndex: 0, TargetLoc: 1}, {PhaseIndex: 1, TargetLoc: 2}}
+
+	if movesDisrupted(before, after) {
+		t.Error("Expected no disruption when moves are identical")
+	}
+}
+
+func TestMovesDisrupted_BothEmpty(t *testing.T) {
+	before := []engine.LegalMove{}
+	after := []engine.LegalMove{}
+
+	if movesDisrupted(before, after) {
+		t.Error("Expected no disruption when both empty")
+	}
+}
+
+func TestMovesDisrupted_OneEmpty(t *testing.T) {
+	before := []engine.LegalMove{{PhaseIndex: 0, TargetLoc: 1}}
+	after := []engine.LegalMove{}
+
+	if !movesDisrupted(before, after) {
+		t.Error("Expected disruption when one is empty")
+	}
+}
+```
+
+**Step 2: Run the tests**
+
+```bash
+cd src/gosim && go test ./simulation -v -run TestMovesDisrupted
+```
+
+**Step 3: Commit**
+
+```bash
+git add src/gosim/simulation/solitaire_test.go
+git commit -m "test(go): add unit tests for solitaire detection helpers"
+```
+
+---
+
+## Task 16: Performance Benchmark
+
+**Files:**
+- Modify: `src/gosim/simulation/runner_test.go` (add benchmark)
+
+**Step 1: Add benchmark for move generation overhead**
+
+```go
+func BenchmarkSolitaireMetricsOverhead(b *testing.B) {
+	// Load a simple genome for benchmarking
+	genome := createTestGenome() // Use existing test helper
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		// Simulate a game with metrics tracking
+		RunSingleGame(genome, RandomAI, 0, uint64(i))
+	}
+}
+```
+
+**Step 2: Run benchmark comparing with/without metrics**
+
+```bash
+cd src/gosim/simulation && go test -bench=BenchmarkSolitaireMetrics -benchmem -benchtime=10s
+```
+
+**Step 3: Document results**
+
+Record the overhead percentage. If >20% slowdown, consider optimizing or making metrics optional.
+
+**Step 4: Commit**
+
+```bash
+git add src/gosim/simulation/runner_test.go
+git commit -m "bench(go): add solitaire metrics overhead benchmark"
+```
+
+---
+
+## Task 17: Validation Baseline Comparison
+
+**Files:**
+- Create: `scripts/compare_interaction_metrics.py`
+
+**Step 1: Create comparison script**
+
+```python
+#!/usr/bin/env python3
+"""Compare old vs new interaction_frequency on seed games."""
+import json
+from pathlib import Path
+from darwindeck.genome.serialization import genome_from_dict
+from darwindeck.simulation.go_simulator import GoSimulator
+from darwindeck.evolution.fitness_full import FitnessEvaluator
+
+def main():
+    simulator = GoSimulator(seed=42)
+    evaluator = FitnessEvaluator(style='balanced')
+
+    seed_dirs = [
+        Path("seeds/shedding"),
+        Path("seeds/trick_taking"),
+        Path("seeds/betting"),
+    ]
+
+    print("Game | Old Metric | New Metric | Diff")
+    print("-" * 50)
+
+    for seed_dir in seed_dirs:
+        if not seed_dir.exists():
+            continue
+        for genome_file in seed_dir.glob("*.json"):
+            with open(genome_file) as f:
+                genome = genome_from_dict(json.load(f))
+
+            results = simulator.simulate(genome, num_games=100)
+
+            # Calculate new metric
+            if results.opponent_turn_count > 0:
+                disruption = results.move_disruption_events / results.opponent_turn_count
+                forced = results.forced_response_events / results.opponent_turn_count
+                contention = results.contention_events / max(1, results.total_actions)
+                new_metric = (disruption + forced + contention) / 3.0
+            else:
+                new_metric = 0.0
+
+            # Calculate old metric
+            if results.total_actions > 0:
+                old_metric = results.total_interactions / results.total_actions
+            else:
+                old_metric = 0.0
+
+            diff = new_metric - old_metric
+            print(f"{genome_file.stem:20} | {old_metric:.3f} | {new_metric:.3f} | {diff:+.3f}")
+
+if __name__ == "__main__":
+    main()
+```
+
+**Step 2: Run comparison**
+
+```bash
+uv run python scripts/compare_interaction_metrics.py
+```
+
+**Step 3: Analyze results**
+
+- New metric should discriminate better between interactive and solitaire games
+- Trick-taking games should score higher than simple shedding games
+- Document findings in commit message
+
+**Step 4: Commit**
+
+```bash
+git add scripts/compare_interaction_metrics.py
+git commit -m "tool: add script to compare old vs new interaction metrics"
+```
+
+---
+
+## Task 18: Run Evolution and Validate
 
 **Step 1: Run short evolution**
 
@@ -705,6 +948,18 @@ Replaces crude interaction_frequency with average of three signals."
 | 12 | Update go_simulator.py | go_simulator.py |
 | 13 | Update fitness calculation | fitness_full.py |
 | 14 | Integration tests | test_solitaire_detection.py |
-| 15 | Evolution validation | (manual) |
+| 15 | Unit tests for helpers | solitaire_test.go |
+| 16 | Performance benchmark | runner_test.go |
+| 17 | Validation baseline comparison | compare_interaction_metrics.py |
+| 18 | Evolution validation | (manual) |
 
-**Total: 15 tasks**
+**Total: 18 tasks**
+
+## Critical Fixes Applied (from multi-agent review)
+
+1. **Player index bug** - Capture `actingPlayer` and `nextPlayerIdx` BEFORE `ApplyMove`
+2. **Move set comparison** - Proper hash-based signature comparison, not stub code
+3. **Generic contention** - Detect shared resource access, not game-specific mechanics
+4. **Unit tests** - Added Task 15 for helper function testing
+5. **Performance benchmark** - Added Task 16 to measure overhead
+6. **Validation baseline** - Added Task 17 to compare old vs new metrics
