@@ -9,7 +9,7 @@ from dataclasses import replace
 from darwindeck.genome.schema import (
     GameGenome, WinCondition, SetupRules, TurnStructure,
     PlayPhase, DrawPhase, DiscardPhase, TrickPhase, ClaimPhase,
-    BettingPhase,
+    BettingPhase, BiddingPhase, ContractScoring,
     Location, Suit, SpecialEffect, EffectType, TargetSelector, Rank,
     TableauMode, SequenceDirection,
     CardScoringRule, CardCondition, ScoringTrigger,
@@ -1016,13 +1016,77 @@ class MutateStartingChipsMutation(MutationOperator):
             return replace(genome, setup=new_setup, generation=genome.generation + 1)
 
 
+class AddBiddingPhaseMutation(MutationOperator):
+    """Add BiddingPhase to trick-taking games.
+
+    Only applies if game has TrickPhase but no BiddingPhase.
+    Inserts BiddingPhase before first TrickPhase.
+    Also adds default ContractScoring.
+    """
+
+    def __init__(self, probability: float = 0.05):
+        super().__init__(probability)
+
+    def can_apply(self, genome: GameGenome) -> bool:
+        has_bidding = any(isinstance(p, BiddingPhase) for p in genome.turn_structure.phases)
+        has_trick = any(isinstance(p, TrickPhase) for p in genome.turn_structure.phases)
+        return not has_bidding and has_trick
+
+    def mutate(self, genome: GameGenome) -> GameGenome:
+        if not self.can_apply(genome):
+            return genome
+
+        phases = list(genome.turn_structure.phases)
+
+        # Find first TrickPhase and insert BiddingPhase before it
+        for i, phase in enumerate(phases):
+            if isinstance(phase, TrickPhase):
+                phases.insert(i, BiddingPhase())
+                break
+
+        new_turn = replace(genome.turn_structure, phases=tuple(phases))
+        return replace(
+            genome,
+            turn_structure=new_turn,
+            contract_scoring=ContractScoring(),
+            generation=genome.generation + 1
+        )
+
+
+class RemoveBiddingPhaseMutation(MutationOperator):
+    """Remove BiddingPhase from genome.
+
+    Also removes ContractScoring.
+    """
+
+    def __init__(self, probability: float = 0.05):
+        super().__init__(probability)
+
+    def can_apply(self, genome: GameGenome) -> bool:
+        return any(isinstance(p, BiddingPhase) for p in genome.turn_structure.phases)
+
+    def mutate(self, genome: GameGenome) -> GameGenome:
+        if not self.can_apply(genome):
+            return genome
+
+        phases = [p for p in genome.turn_structure.phases if not isinstance(p, BiddingPhase)]
+        new_turn = replace(genome.turn_structure, phases=tuple(phases))
+
+        return replace(
+            genome,
+            turn_structure=new_turn,
+            contract_scoring=None,
+            generation=genome.generation + 1
+        )
+
+
 class CleanupOrphanedResourcesMutation(MutationOperator):
     """Remove orphaned resources that lack supporting mechanics.
 
     This is a "repair" mutation that fixes incoherent states caused by crossover
     or other mutations. It detects and removes resources that have no use:
     - starting_chips without any BettingPhase
-    - (extensible for other coherence fixes)
+    - contract_scoring without any BiddingPhase
 
     This mutation has high probability since it only makes changes when needed.
     """
@@ -1033,6 +1097,7 @@ class CleanupOrphanedResourcesMutation(MutationOperator):
     def mutate(self, genome: GameGenome) -> GameGenome:
         modified = False
         new_setup = genome.setup
+        new_contract_scoring = genome.contract_scoring
 
         # Check for orphaned chips
         has_betting_phase = any(
@@ -1045,8 +1110,24 @@ class CleanupOrphanedResourcesMutation(MutationOperator):
             new_setup = replace(new_setup, starting_chips=0)
             modified = True
 
+        # Check for orphaned contract_scoring
+        has_bidding_phase = any(
+            isinstance(p, BiddingPhase)
+            for p in genome.turn_structure.phases
+        )
+
+        if genome.contract_scoring is not None and not has_bidding_phase:
+            # Remove orphaned contract_scoring
+            new_contract_scoring = None
+            modified = True
+
         if modified:
-            return replace(genome, setup=new_setup, generation=genome.generation + 1)
+            return replace(
+                genome,
+                setup=new_setup,
+                contract_scoring=new_contract_scoring,
+                generation=genome.generation + 1
+            )
         return genome
 
 
@@ -1664,11 +1745,15 @@ def create_default_pipeline(
         RemoveEffectMutation(probability=min(0.10 * mult, 0.2)),        # 10% (20% aggressive)
         MutateEffectMutation(probability=min(0.15 * mult, 0.3)),        # 15% (30% aggressive)
 
-        # Betting mutations
+        # Betting mutations (poker-style chip betting)
         AddBettingPhaseMutation(probability=min(0.05 * mult, 0.15)),    # 5% (10% aggressive)
         RemoveBettingPhaseMutation(probability=min(0.05 * mult, 0.15)), # 5% (10% aggressive)
         MutateBettingPhaseMutation(probability=min(0.10 * mult, 0.2)),  # 10% (20% aggressive)
         MutateStartingChipsMutation(probability=min(0.10 * mult, 0.2)), # 10% (20% aggressive)
+
+        # Bidding mutations (Spades-style contract bidding for trick-taking games)
+        AddBiddingPhaseMutation(probability=min(0.05 * mult, 0.10)),    # 5% (10% aggressive)
+        RemoveBiddingPhaseMutation(probability=min(0.05 * mult, 0.10)), # 5% (10% aggressive)
 
         # Tableau mode mutations (low weight - significant structural changes)
         MutateTableauModeMutation(probability=min(0.05 * mult, 0.10)),       # 5% (10% aggressive)
