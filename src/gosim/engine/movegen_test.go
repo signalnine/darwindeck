@@ -709,3 +709,318 @@ func TestCalculateTrickPointsNegativePoints(t *testing.T) {
 		t.Errorf("Expected -6 points for two Clubs, got %d", points)
 	}
 }
+
+// =========================================================================
+// Team Win Condition Tests
+// =========================================================================
+
+// TestCheckWinConditionsTeamWinEmptyHand verifies that when a player on a team
+// wins by emptying their hand, the team is also marked as winner
+func TestCheckWinConditionsTeamWinEmptyHand(t *testing.T) {
+	state := NewGameState(4)
+	state.NumPlayers = 4
+
+	// Setup teams: Team 0 = Players 0,2; Team 1 = Players 1,3
+	state.PlayerToTeam = []int8{0, 1, 0, 1}
+	state.TeamScores = []int32{0, 0}
+	state.WinnerID = -1
+	state.WinningTeam = -1
+
+	// Player 2 (Team 0) has empty hand
+	state.Players[0].Hand = []Card{{Rank: 5, Suit: 0}}
+	state.Players[1].Hand = []Card{{Rank: 6, Suit: 1}}
+	state.Players[2].Hand = []Card{} // Empty - should win!
+	state.Players[3].Hand = []Card{{Rank: 7, Suit: 2}}
+
+	genome := &Genome{
+		WinConditions: []WinCondition{
+			{WinType: 0, Threshold: 0}, // empty_hand wins
+		},
+	}
+
+	winner := CheckWinConditions(state, genome)
+
+	// Player 2 should win
+	if winner != 2 {
+		t.Errorf("Expected player 2 to win (empty hand), got %d", winner)
+	}
+
+	// WinningTeam should be set to player 2's team (Team 0)
+	if state.WinningTeam != 0 {
+		t.Errorf("Expected WinningTeam to be 0 (player 2's team), got %d", state.WinningTeam)
+	}
+}
+
+// TestCheckWinConditionsTeamWinHighScore verifies score-based team wins
+func TestCheckWinConditionsTeamWinHighScore(t *testing.T) {
+	state := NewGameState(4)
+	state.NumPlayers = 4
+
+	// Setup teams: Team 0 = Players 0,2; Team 1 = Players 1,3
+	state.PlayerToTeam = []int8{0, 1, 0, 1}
+	state.TeamScores = []int32{30, 20} // Team 0 has higher score
+	state.WinnerID = -1
+	state.WinningTeam = -1
+
+	// Individual scores (team 0 members have higher total)
+	state.Players[0].Score = 15
+	state.Players[1].Score = 10
+	state.Players[2].Score = 15
+	state.Players[3].Score = 10
+
+	// Give everyone cards so empty_hand doesn't trigger
+	for i := 0; i < 4; i++ {
+		state.Players[i].Hand = []Card{{Rank: uint8(i + 2), Suit: 0}}
+	}
+
+	genome := &Genome{
+		WinConditions: []WinCondition{
+			{WinType: 1, Threshold: 10}, // high_score with threshold 10
+		},
+	}
+
+	winner := CheckWinConditions(state, genome)
+
+	// Player 0 or 2 should win (highest individual score, both have 15)
+	// The first player checked with highest score wins
+	if winner != 0 {
+		t.Errorf("Expected player 0 to win (highest score first checked), got %d", winner)
+	}
+
+	// WinningTeam should be set to the winner's team (Team 0)
+	if state.WinningTeam != 0 {
+		t.Errorf("Expected WinningTeam to be 0 (player 0's team), got %d", state.WinningTeam)
+	}
+}
+
+// TestCheckWinConditionsNoTeams verifies that non-team games still work
+// and WinningTeam stays -1
+func TestCheckWinConditionsNoTeams(t *testing.T) {
+	state := NewGameState(2)
+	state.NumPlayers = 2
+
+	// No team configuration
+	state.PlayerToTeam = nil
+	state.TeamScores = nil
+	state.WinnerID = -1
+	state.WinningTeam = -1
+
+	// Player 1 has empty hand
+	state.Players[0].Hand = []Card{{Rank: 5, Suit: 0}}
+	state.Players[1].Hand = []Card{} // Empty - should win!
+
+	genome := &Genome{
+		WinConditions: []WinCondition{
+			{WinType: 0, Threshold: 0}, // empty_hand wins
+		},
+	}
+
+	winner := CheckWinConditions(state, genome)
+
+	// Player 1 should win
+	if winner != 1 {
+		t.Errorf("Expected player 1 to win (empty hand), got %d", winner)
+	}
+
+	// WinningTeam should stay -1 (no teams configured)
+	if state.WinningTeam != -1 {
+		t.Errorf("Expected WinningTeam to be -1 (no teams), got %d", state.WinningTeam)
+	}
+}
+
+// TestCheckWinConditionsTeamWinLowScore verifies low score wins (like Hearts)
+func TestCheckWinConditionsTeamWinLowScore(t *testing.T) {
+	state := NewGameState(4)
+	state.NumPlayers = 4
+
+	// Setup teams
+	state.PlayerToTeam = []int8{0, 1, 0, 1}
+	state.TeamScores = []int32{10, 50} // Team 0 has lower score
+	state.WinnerID = -1
+	state.WinningTeam = -1
+
+	// Individual scores - player 0 has lowest
+	state.Players[0].Score = 5
+	state.Players[1].Score = 25
+	state.Players[2].Score = 5
+	state.Players[3].Score = 25
+
+	// One player crosses threshold to trigger win check
+	state.Players[1].Score = 100 // Triggers end
+
+	// Give everyone cards
+	for i := 0; i < 4; i++ {
+		state.Players[i].Hand = []Card{{Rank: uint8(i + 2), Suit: 0}}
+	}
+
+	genome := &Genome{
+		WinConditions: []WinCondition{
+			{WinType: 4, Threshold: 100}, // low_score wins when someone hits 100
+		},
+	}
+
+	winner := CheckWinConditions(state, genome)
+
+	// Player 0 should win (lowest score = 5)
+	if winner != 0 {
+		t.Errorf("Expected player 0 to win (lowest score), got %d", winner)
+	}
+
+	// WinningTeam should be player 0's team (Team 0)
+	if state.WinningTeam != 0 {
+		t.Errorf("Expected WinningTeam to be 0 (player 0's team), got %d", state.WinningTeam)
+	}
+}
+
+// TestCheckWinConditionsTeamWinFirstToScore verifies first-to-threshold wins
+func TestCheckWinConditionsTeamWinFirstToScore(t *testing.T) {
+	state := NewGameState(4)
+	state.NumPlayers = 4
+
+	// Setup teams: Team 0 = Players 0,2; Team 1 = Players 1,3
+	state.PlayerToTeam = []int8{0, 1, 0, 1}
+	state.TeamScores = []int32{0, 0}
+	state.WinnerID = -1
+	state.WinningTeam = -1
+
+	// Player 3 (Team 1) reaches threshold first
+	state.Players[0].Score = 5
+	state.Players[1].Score = 8
+	state.Players[2].Score = 7
+	state.Players[3].Score = 10 // First to 10!
+
+	// Give everyone cards
+	for i := 0; i < 4; i++ {
+		state.Players[i].Hand = []Card{{Rank: uint8(i + 2), Suit: 0}}
+	}
+
+	genome := &Genome{
+		WinConditions: []WinCondition{
+			{WinType: 2, Threshold: 10}, // first_to_score 10
+		},
+	}
+
+	winner := CheckWinConditions(state, genome)
+
+	// Player 3 should win (first to reach 10)
+	if winner != 3 {
+		t.Errorf("Expected player 3 to win (first to 10), got %d", winner)
+	}
+
+	// WinningTeam should be player 3's team (Team 1)
+	if state.WinningTeam != 1 {
+		t.Errorf("Expected WinningTeam to be 1 (player 3's team), got %d", state.WinningTeam)
+	}
+}
+
+// TestCheckWinConditionsTeamWinCaptureAll verifies capture-all wins (War)
+func TestCheckWinConditionsTeamWinCaptureAll(t *testing.T) {
+	state := NewGameState(4)
+	state.NumPlayers = 4
+
+	// Setup teams
+	state.PlayerToTeam = []int8{0, 1, 0, 1}
+	state.TeamScores = []int32{0, 0}
+	state.WinnerID = -1
+	state.WinningTeam = -1
+
+	// Player 2 (Team 0) has all 52 cards
+	state.Players[0].Hand = []Card{}
+	state.Players[1].Hand = []Card{}
+	state.Players[2].Hand = make([]Card, 52) // All 52 cards!
+	state.Players[3].Hand = []Card{}
+
+	genome := &Genome{
+		WinConditions: []WinCondition{
+			{WinType: 3, Threshold: 52}, // capture_all
+		},
+	}
+
+	winner := CheckWinConditions(state, genome)
+
+	// Player 2 should win
+	if winner != 2 {
+		t.Errorf("Expected player 2 to win (has all cards), got %d", winner)
+	}
+
+	// WinningTeam should be player 2's team (Team 0)
+	if state.WinningTeam != 0 {
+		t.Errorf("Expected WinningTeam to be 0 (player 2's team), got %d", state.WinningTeam)
+	}
+}
+
+// TestCheckWinConditionsTeamWinAllHandsEmpty verifies trick-taking hand end
+func TestCheckWinConditionsTeamWinAllHandsEmpty(t *testing.T) {
+	state := NewGameState(4)
+	state.NumPlayers = 4
+
+	// Setup teams
+	state.PlayerToTeam = []int8{0, 1, 0, 1}
+	state.TeamScores = []int32{0, 0}
+	state.WinnerID = -1
+	state.WinningTeam = -1
+
+	// All hands empty - player with lowest score wins
+	state.Players[0].Hand = []Card{}
+	state.Players[1].Hand = []Card{}
+	state.Players[2].Hand = []Card{}
+	state.Players[3].Hand = []Card{}
+
+	// Scores: player 1 has lowest
+	state.Players[0].Score = 20
+	state.Players[1].Score = 5 // Lowest!
+	state.Players[2].Score = 15
+	state.Players[3].Score = 10
+
+	genome := &Genome{
+		WinConditions: []WinCondition{
+			{WinType: 5, Threshold: 0}, // all_hands_empty
+		},
+	}
+
+	winner := CheckWinConditions(state, genome)
+
+	// Player 1 should win (lowest score when all hands empty)
+	if winner != 1 {
+		t.Errorf("Expected player 1 to win (lowest score), got %d", winner)
+	}
+
+	// WinningTeam should be player 1's team (Team 1)
+	if state.WinningTeam != 1 {
+		t.Errorf("Expected WinningTeam to be 1 (player 1's team), got %d", state.WinningTeam)
+	}
+}
+
+// TestCheckWinConditionsTeamPlayerOutOfBounds verifies safe handling of edge cases
+func TestCheckWinConditionsTeamPlayerOutOfBounds(t *testing.T) {
+	state := NewGameState(2)
+	state.NumPlayers = 2
+
+	// PlayerToTeam has fewer entries than NumPlayers (edge case)
+	state.PlayerToTeam = []int8{0} // Only player 0 mapped
+	state.TeamScores = []int32{0}
+	state.WinnerID = -1
+	state.WinningTeam = -1
+
+	// Player 1 wins but isn't in PlayerToTeam
+	state.Players[0].Hand = []Card{{Rank: 5, Suit: 0}}
+	state.Players[1].Hand = []Card{} // Wins!
+
+	genome := &Genome{
+		WinConditions: []WinCondition{
+			{WinType: 0, Threshold: 0}, // empty_hand wins
+		},
+	}
+
+	winner := CheckWinConditions(state, genome)
+
+	// Player 1 should win
+	if winner != 1 {
+		t.Errorf("Expected player 1 to win, got %d", winner)
+	}
+
+	// WinningTeam should stay -1 (player 1 not in PlayerToTeam)
+	if state.WinningTeam != -1 {
+		t.Errorf("Expected WinningTeam to be -1 (player not in team map), got %d", state.WinningTeam)
+	}
+}
