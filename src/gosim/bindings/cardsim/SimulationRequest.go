@@ -205,8 +205,40 @@ func (rcv *SimulationRequest) MutateStartingChips(n uint32) bool {
 	return rcv._tab.MutateUint32Slot(22, n)
 }
 
+func (rcv *SimulationRequest) TeamMode() bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(24))
+	if o != 0 {
+		return rcv._tab.GetBool(o + rcv._tab.Pos)
+	}
+	return false
+}
+
+func (rcv *SimulationRequest) MutateTeamMode(n bool) bool {
+	return rcv._tab.MutateBoolSlot(24, n)
+}
+
+func (rcv *SimulationRequest) Teams(obj *TeamAssignment, j int) bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(26))
+	if o != 0 {
+		x := rcv._tab.Vector(o)
+		x += flatbuffers.UOffsetT(j) * 4
+		x = rcv._tab.Indirect(x)
+		obj.Init(rcv._tab.Bytes, x)
+		return true
+	}
+	return false
+}
+
+func (rcv *SimulationRequest) TeamsLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(26))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
 func SimulationRequestStart(builder *flatbuffers.Builder) {
-	builder.StartObject(10)
+	builder.StartObject(12)
 }
 func SimulationRequestAddGenomeBytecode(builder *flatbuffers.Builder, genomeBytecode flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(genomeBytecode), 0)
@@ -243,6 +275,15 @@ func SimulationRequestAddPlayerCount(builder *flatbuffers.Builder, playerCount b
 }
 func SimulationRequestAddStartingChips(builder *flatbuffers.Builder, startingChips uint32) {
 	builder.PrependUint32Slot(9, startingChips, 0)
+}
+func SimulationRequestAddTeamMode(builder *flatbuffers.Builder, teamMode bool) {
+	builder.PrependBoolSlot(10, teamMode, false)
+}
+func SimulationRequestAddTeams(builder *flatbuffers.Builder, teams flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(11, flatbuffers.UOffsetT(teams), 0)
+}
+func SimulationRequestStartTeamsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(4, numElems, 4)
 }
 func SimulationRequestEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

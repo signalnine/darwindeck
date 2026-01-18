@@ -463,8 +463,46 @@ func (rcv *AggregatedStats) MutateOpponentTurnCount(n uint64) bool {
 	return rcv._tab.MutateUint64Slot(70, n)
 }
 
+func (rcv *AggregatedStats) TeamWins(j int) uint32 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(72))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.GetUint32(a + flatbuffers.UOffsetT(j*4))
+	}
+	return 0
+}
+
+func (rcv *AggregatedStats) TeamWinsLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(72))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
+func (rcv *AggregatedStats) MutateTeamWins(j int, n uint32) bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(72))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.MutateUint32(a+flatbuffers.UOffsetT(j*4), n)
+	}
+	return false
+}
+
+func (rcv *AggregatedStats) WinningTeamAvg() float32 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(74))
+	if o != 0 {
+		return rcv._tab.GetFloat32(o + rcv._tab.Pos)
+	}
+	return -1.0
+}
+
+func (rcv *AggregatedStats) MutateWinningTeamAvg(n float32) bool {
+	return rcv._tab.MutateFloat32Slot(74, n)
+}
+
 func AggregatedStatsStart(builder *flatbuffers.Builder) {
-	builder.StartObject(34)
+	builder.StartObject(36)
 }
 func AggregatedStatsAddTotalGames(builder *flatbuffers.Builder, totalGames uint32) {
 	builder.PrependUint32Slot(0, totalGames, 0)
@@ -570,6 +608,15 @@ func AggregatedStatsAddForcedResponseEvents(builder *flatbuffers.Builder, forced
 }
 func AggregatedStatsAddOpponentTurnCount(builder *flatbuffers.Builder, opponentTurnCount uint64) {
 	builder.PrependUint64Slot(33, opponentTurnCount, 0)
+}
+func AggregatedStatsAddTeamWins(builder *flatbuffers.Builder, teamWins flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(34, flatbuffers.UOffsetT(teamWins), 0)
+}
+func AggregatedStatsStartTeamWinsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(4, numElems, 4)
+}
+func AggregatedStatsAddWinningTeamAvg(builder *flatbuffers.Builder, winningTeamAvg float32) {
+	builder.PrependFloat32Slot(35, winningTeamAvg, -1.0)
 }
 func AggregatedStatsEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

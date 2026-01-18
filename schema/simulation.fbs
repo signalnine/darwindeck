@@ -1,6 +1,11 @@
 // Flatbuffers schema for Python↔Go simulation interface
 namespace cardsim;
 
+// Team configuration for team-based games
+table TeamAssignment {
+  player_indices: [ubyte];  // Players on this team (e.g., [0, 2] for players 0 and 2)
+}
+
 // Single simulation request
 table SimulationRequest {
   genome_bytecode: [ubyte] (required);  // Compiled genome from Python
@@ -18,6 +23,10 @@ table SimulationRequest {
 
   // Betting game parameters
   starting_chips: uint32;                // Starting chip count for betting games (0 = no betting)
+
+  // Team mode configuration
+  team_mode: bool = false;               // Whether this is a team game
+  teams: [TeamAssignment];               // Team assignments (empty if team_mode is false)
 }
 
 // Batch of simulation requests
@@ -85,6 +94,10 @@ table AggregatedStats {
   contention_events: uint64 = 0;
   forced_response_events: uint64 = 0;
   opponent_turn_count: uint64 = 0;
+
+  // Team mode metrics
+  team_wins: [uint32];                   // Win count per team (team 0, team 1, etc.)
+  winning_team_avg: float = -1.0;        // Average winning team index (-1 if no teams)
 }
 
 // Batch response
