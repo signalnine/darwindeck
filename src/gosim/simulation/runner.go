@@ -185,14 +185,26 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 		}
 	}
 
-	// Deal initial cards to discard pile (for Uno-style games)
-	// The first card goes face-up to start the discard pile
+	// Deal initial cards to discard/tableau
+	// For TableauMode games (Scopa), cards go to Tableau[0]
+	// For other games (Uno), cards go to Discard
 	if initialDiscardCount > 0 && len(state.Deck) >= initialDiscardCount {
+		// Initialize tableau pile if needed for TableauMode games
+		if state.TableauMode != 0 && len(state.Tableau) == 0 {
+			state.Tableau = make([][]engine.Card, 1)
+			state.Tableau[0] = make([]engine.Card, 0, initialDiscardCount)
+		}
 		for i := 0; i < initialDiscardCount; i++ {
 			if len(state.Deck) > 0 {
 				card := state.Deck[len(state.Deck)-1]
 				state.Deck = state.Deck[:len(state.Deck)-1]
-				state.Discard = append(state.Discard, card)
+				if state.TableauMode != 0 {
+					// Scopa/MATCH_RANK/SEQUENCE: cards go to tableau[0]
+					state.Tableau[0] = append(state.Tableau[0], card)
+				} else {
+					// Uno-style: cards go to discard
+					state.Discard = append(state.Discard, card)
+				}
 			}
 		}
 	}
@@ -537,14 +549,26 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 		}
 	}
 
-	// Deal initial cards to discard pile (for Uno-style games)
-	// The first card goes face-up to start the discard pile
+	// Deal initial cards to discard/tableau
+	// For TableauMode games (Scopa), cards go to Tableau[0]
+	// For other games (Uno), cards go to Discard
 	if initialDiscardCount > 0 && len(state.Deck) >= initialDiscardCount {
+		// Initialize tableau pile if needed for TableauMode games
+		if state.TableauMode != 0 && len(state.Tableau) == 0 {
+			state.Tableau = make([][]engine.Card, 1)
+			state.Tableau[0] = make([]engine.Card, 0, initialDiscardCount)
+		}
 		for i := 0; i < initialDiscardCount; i++ {
 			if len(state.Deck) > 0 {
 				card := state.Deck[len(state.Deck)-1]
 				state.Deck = state.Deck[:len(state.Deck)-1]
-				state.Discard = append(state.Discard, card)
+				if state.TableauMode != 0 {
+					// Scopa/MATCH_RANK/SEQUENCE: cards go to tableau[0]
+					state.Tableau[0] = append(state.Tableau[0], card)
+				} else {
+					// Uno-style: cards go to discard
+					state.Discard = append(state.Discard, card)
+				}
 			}
 		}
 	}

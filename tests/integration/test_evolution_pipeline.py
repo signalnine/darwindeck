@@ -90,8 +90,12 @@ def test_evolution_engine_evaluation():
     # All individuals should be evaluated
     assert all(ind.evaluated for ind in engine.population.individuals)
 
-    # All should have fitness assigned
-    assert all(ind.fitness > 0 for ind in engine.population.individuals)
+    # All should have fitness assigned (>= 0, some may be invalid with fitness 0)
+    assert all(ind.fitness >= 0 for ind in engine.population.individuals)
+
+    # At least some individuals should have positive fitness
+    positive_fitness_count = sum(1 for ind in engine.population.individuals if ind.fitness > 0)
+    assert positive_fitness_count > 0, "Expected at least some individuals to have positive fitness"
 
 
 def test_evolution_engine_tournament_selection():

@@ -157,6 +157,8 @@ class TestTensionMetricsIntegration:
             draws=0,
             avg_turns=50.0,
             errors=0,
+            total_decisions=500,  # 5 decisions per game
+            total_valid_moves=1000,  # 2 valid moves per decision
             lead_changes=0,
             decisive_turn_pct=1.0,
             closest_margin=1.0,
@@ -170,6 +172,8 @@ class TestTensionMetricsIntegration:
             draws=0,
             avg_turns=50.0,
             errors=0,
+            total_decisions=500,  # 5 decisions per game
+            total_valid_moves=1000,  # 2 valid moves per decision
             lead_changes=25,  # Many lead changes
             decisive_turn_pct=0.8,  # Many decisive turns
             closest_margin=0.1,  # Very close game
@@ -353,6 +357,8 @@ class TestTensionMetricsSanity:
             draws=0,
             avg_turns=100.0,  # 100 turns
             errors=0,
+            total_decisions=500,  # 5 decisions per game
+            total_valid_moves=1000,  # 2 valid moves per decision
             lead_changes=5,  # 5 lead changes
             decisive_turn_pct=0.6,  # 60% decisive
             closest_margin=0.2,  # 20% margin
