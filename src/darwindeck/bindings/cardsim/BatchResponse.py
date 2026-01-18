@@ -3,17 +3,23 @@
 # namespace: cardsim
 
 import flatbuffers
+from flatbuffers.compat import import_numpy
+np = import_numpy()
 
 class BatchResponse(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAsBatchResponse(cls, buf, offset):
+    def GetRootAs(cls, buf, offset=0):
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
         x = BatchResponse()
         x.Init(buf, n + offset)
         return x
 
+    @classmethod
+    def GetRootAsBatchResponse(cls, buf, offset=0):
+        """This method is deprecated. Please switch to GetRootAs."""
+        return cls.GetRootAs(buf, offset)
     # BatchResponse
     def Init(self, buf, pos):
         self._tab = flatbuffers.table.Table(buf, pos)
@@ -32,7 +38,7 @@ class BatchResponse(object):
             x = self._tab.Vector(o)
             x += flatbuffers.number_types.UOffsetTFlags.py_type(j) * 4
             x = self._tab.Indirect(x)
-            from .AggregatedStats import AggregatedStats
+            from cardsim.AggregatedStats import AggregatedStats
             obj = AggregatedStats()
             obj.Init(self._tab.Bytes, x)
             return obj
@@ -46,15 +52,49 @@ class BatchResponse(object):
         return 0
 
     # BatchResponse
+    def ResultsIsNone(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(6))
+        return o == 0
+
+    # BatchResponse
     def TotalDurationNs(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(8))
         if o != 0:
             return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
         return 0
 
-def BatchResponseStart(builder): builder.StartObject(3)
-def BatchResponseAddBatchId(builder, batchId): builder.PrependUint64Slot(0, batchId, 0)
-def BatchResponseAddResults(builder, results): builder.PrependUOffsetTRelativeSlot(1, flatbuffers.number_types.UOffsetTFlags.py_type(results), 0)
-def BatchResponseStartResultsVector(builder, numElems): return builder.StartVector(4, numElems, 4)
-def BatchResponseAddTotalDurationNs(builder, totalDurationNs): builder.PrependUint64Slot(2, totalDurationNs, 0)
-def BatchResponseEnd(builder): return builder.EndObject()
+def BatchResponseStart(builder):
+    builder.StartObject(3)
+
+def Start(builder):
+    BatchResponseStart(builder)
+
+def BatchResponseAddBatchId(builder, batchId):
+    builder.PrependUint64Slot(0, batchId, 0)
+
+def AddBatchId(builder, batchId):
+    BatchResponseAddBatchId(builder, batchId)
+
+def BatchResponseAddResults(builder, results):
+    builder.PrependUOffsetTRelativeSlot(1, flatbuffers.number_types.UOffsetTFlags.py_type(results), 0)
+
+def AddResults(builder, results):
+    BatchResponseAddResults(builder, results)
+
+def BatchResponseStartResultsVector(builder, numElems):
+    return builder.StartVector(4, numElems, 4)
+
+def StartResultsVector(builder, numElems):
+    return BatchResponseStartResultsVector(builder, numElems)
+
+def BatchResponseAddTotalDurationNs(builder, totalDurationNs):
+    builder.PrependUint64Slot(2, totalDurationNs, 0)
+
+def AddTotalDurationNs(builder, totalDurationNs):
+    BatchResponseAddTotalDurationNs(builder, totalDurationNs)
+
+def BatchResponseEnd(builder):
+    return builder.EndObject()
+
+def End(builder):
+    return BatchResponseEnd(builder)
