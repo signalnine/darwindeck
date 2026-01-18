@@ -79,6 +79,12 @@ table AggregatedStats {
   decisive_turn_pct: float32 = 1.0;
   closest_margin: float32 = 1.0;
   trailing_winners: uint32 = 0;    // Games where winner was behind at midpoint
+
+  // Solitaire detection metrics (interaction quality)
+  move_disruption_events: uint64 = 0;
+  contention_events: uint64 = 0;
+  forced_response_events: uint64 = 0;
+  opponent_turn_count: uint64 = 0;
 }
 
 // Batch response
