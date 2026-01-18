@@ -1083,6 +1083,76 @@ def create_spades_genome() -> GameGenome:
     )
 
 
+def create_partnership_spades_genome() -> GameGenome:
+    """Create Partnership Spades card game genome.
+
+    Partnership Spades is a classic 4-player trick-taking game where two
+    partnerships compete. Partners sit across from each other (0,2 vs 1,3)
+    and combine their scores.
+
+    Features:
+    - 4 players in 2 teams (players 0,2 vs players 1,3)
+    - Spades are always trump
+    - Must follow suit if able
+    - Spades cannot be led until "broken"
+    - Team scores are combined (tricks won by partners count together)
+    - First team to reach 500 points wins
+
+    This is the first seed genome to demonstrate team play functionality.
+    Partners sit across the table from each other, alternating seats.
+    """
+    return GameGenome(
+        schema_version="1.0",
+        genome_id="partnership-spades",
+        generation=0,
+        setup=SetupRules(
+            cards_per_player=13,  # 4 players x 13 cards = 52 (full deck)
+            initial_deck="standard_52",
+            initial_discard_count=0,
+            trump_suit=Suit.SPADES
+        ),
+        turn_structure=TurnStructure(
+            phases=[
+                TrickPhase(
+                    lead_suit_required=True,
+                    trump_suit=Suit.SPADES,
+                    high_card_wins=True,
+                    breaking_suit=Suit.SPADES  # Can't lead spades until broken
+                )
+            ],
+            is_trick_based=True,
+            tricks_per_hand=13  # 13 tricks per hand
+        ),
+        special_effects=[],
+        win_conditions=[
+            WinCondition(
+                type="score_threshold",
+                threshold=500,  # First team to 500 points wins
+                comparison=WinComparison.HIGHEST,
+                trigger_mode=TriggerMode.THRESHOLD_GATE,
+            ),
+            WinCondition(
+                type="all_hands_empty",
+                threshold=0
+            )
+        ],
+        # Card scoring: each trick won is worth 10 points
+        card_scoring=(
+            CardScoringRule(
+                condition=CardCondition(),  # All cards in trick
+                points=10,
+                trigger=ScoringTrigger.TRICK_WIN,
+            ),
+        ),
+        scoring_rules=[],
+        max_turns=200,
+        player_count=4,
+        # Team configuration: players 0,2 are Team 0, players 1,3 are Team 1
+        team_mode=True,
+        teams=((0, 2), (1, 3)),  # Partnership: players sit across the table
+    )
+
+
 def create_uno_genome() -> GameGenome:
     """
     Uno-style game with special effects.
@@ -1253,7 +1323,7 @@ def create_simple_poker_genome() -> GameGenome:
 def get_seed_genomes() -> List[GameGenome]:
     """Get all seed genomes for initial population in Phase 4.
 
-    Returns a diverse set of 18 games to seed the genetic algorithm:
+    Returns a diverse set of 19 games to seed the genetic algorithm:
 
     Luck-based:
     - War: Pure luck baseline
@@ -1264,6 +1334,7 @@ def get_seed_genomes() -> List[GameGenome]:
     - Scotch Whist: Trump-based trick-taking
     - Knock-Out Whist: Elimination trick-taking
     - Spades: Trick-taking with fixed trump
+    - Partnership Spades: Team-based trick-taking (first team game)
 
     Shedding/Matching:
     - Crazy 8s: Matching with wildcards
@@ -1294,6 +1365,7 @@ def get_seed_genomes() -> List[GameGenome]:
         create_scotch_whist_genome(),
         create_knockout_whist_genome(),
         create_spades_genome(),
+        create_partnership_spades_genome(),  # First team game
         # Shedding/Matching
         create_crazy_eights_genome(),
         create_old_maid_genome(),

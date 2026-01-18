@@ -69,3 +69,69 @@ def test_sequence_direction_only_with_sequence_mode():
                 SequenceDirection.DESCENDING,
                 SequenceDirection.BOTH,
             ), f"Genome {genome.genome_id} has SEQUENCE mode but invalid direction"
+
+
+def test_partnership_spades_genome():
+    """Partnership Spades should be a valid team game genome."""
+    from darwindeck.genome.examples import create_partnership_spades_genome
+    from darwindeck.genome.validator import GenomeValidator
+
+    genome = create_partnership_spades_genome()
+
+    # Basic structure
+    assert genome.genome_id == "partnership-spades"
+    assert genome.setup.cards_per_player == 13
+    assert genome.player_count == 4
+
+    # Team configuration
+    assert genome.team_mode is True
+    assert len(genome.teams) == 2
+    assert genome.teams[0] == (0, 2)
+    assert genome.teams[1] == (1, 3)
+
+    # Trick-taking structure
+    assert genome.turn_structure.is_trick_based is True
+    assert genome.turn_structure.tricks_per_hand == 13
+
+    # Validate with GenomeValidator (returns list of errors, empty = valid)
+    errors = GenomeValidator.validate(genome)
+    assert len(errors) == 0, f"Validation errors: {errors}"
+
+
+def test_partnership_spades_in_seed_genomes():
+    """Partnership Spades should be included in the seed genomes list."""
+    from darwindeck.genome.examples import get_seed_genomes
+
+    genomes = get_seed_genomes()
+    genome_ids = [g.genome_id for g in genomes]
+    assert "partnership-spades" in genome_ids
+
+
+def test_team_genomes_have_valid_team_config():
+    """All team mode genomes should have valid team configuration."""
+    from darwindeck.genome.examples import get_seed_genomes
+    from darwindeck.genome.validator import GenomeValidator
+
+    genomes = get_seed_genomes()
+
+    for genome in genomes:
+        if genome.team_mode:
+            # Team genomes should pass validation (returns list of errors, empty = valid)
+            errors = GenomeValidator.validate(genome)
+            assert len(errors) == 0, (
+                f"Team genome {genome.genome_id} failed validation: {errors}"
+            )
+
+            # All players should be assigned to exactly one team
+            all_players = set()
+            for team in genome.teams:
+                for player in team:
+                    assert player not in all_players, (
+                        f"Player {player} in multiple teams in {genome.genome_id}"
+                    )
+                    all_players.add(player)
+
+            expected_players = set(range(genome.player_count))
+            assert all_players == expected_players, (
+                f"Not all players assigned to teams in {genome.genome_id}"
+            )
