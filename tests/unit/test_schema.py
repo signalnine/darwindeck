@@ -83,3 +83,27 @@ def test_setup_rules_tableau_mode_explicit():
     )
     assert setup.tableau_mode == TableauMode.WAR
     assert setup.sequence_direction == SequenceDirection.ASCENDING
+
+
+def test_bidding_phase_defaults():
+    """BiddingPhase has correct defaults."""
+    from darwindeck.genome.schema import BiddingPhase
+
+    phase = BiddingPhase()
+    assert phase.min_bid == 1
+    assert phase.max_bid == 13
+    assert phase.allow_nil == True
+
+
+def test_contract_scoring_defaults():
+    """ContractScoring has correct defaults."""
+    from darwindeck.genome.schema import ContractScoring
+
+    scoring = ContractScoring()
+    assert scoring.points_per_trick_bid == 10
+    assert scoring.overtrick_points == 1
+    assert scoring.failed_contract_penalty == 10
+    assert scoring.nil_bonus == 100
+    assert scoring.nil_penalty == 100
+    assert scoring.bag_limit == 10
+    assert scoring.bag_penalty == 100

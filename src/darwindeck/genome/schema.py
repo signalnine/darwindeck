@@ -328,6 +328,34 @@ class BettingPhase:
 
 
 @dataclass(frozen=True)
+class BiddingPhase:
+    """Phase where players declare their contract (expected tricks).
+
+    Used in trick-taking games like Spades where players bid the number
+    of tricks they expect to win before play begins.
+    """
+    min_bid: int = 1          # Minimum bid allowed (1 = no Nil, 0 = allow Nil)
+    max_bid: int = 13         # Maximum bid (validated against hand size at runtime)
+    allow_nil: bool = True    # Allow bidding exactly 0 (Nil)
+
+
+@dataclass(frozen=True)
+class ContractScoring:
+    """Scoring rules for bid contracts.
+
+    Defines how points are awarded for making/failing contracts
+    and the bag penalty system.
+    """
+    points_per_trick_bid: int = 10     # Base points per bid trick
+    overtrick_points: int = 1          # Points per trick over contract (bags)
+    failed_contract_penalty: int = 10  # Multiplier for failed contract
+    nil_bonus: int = 100               # Points for successful Nil
+    nil_penalty: int = 100             # Penalty for failed Nil
+    bag_limit: int = 10                # Accumulated overtricks before penalty
+    bag_penalty: int = 100             # Penalty when bag limit reached
+
+
+@dataclass(frozen=True)
 class TrickPhase:
     """
     Trick-taking phase for games like Hearts, Spades, Bridge.
@@ -423,6 +451,9 @@ class GameGenome:
     card_scoring: tuple[CardScoringRule, ...] = ()
     hand_evaluation: Optional[HandEvaluation] = None
     game_rules: GameRules = field(default_factory=GameRules)
+
+    # Contract scoring (for bidding games)
+    contract_scoring: Optional[ContractScoring] = None
 
     # Team play configuration
     team_mode: bool = False  # When True, win conditions evaluate team aggregates
