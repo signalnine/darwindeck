@@ -60,6 +60,7 @@ type GameMetrics struct {
 // GameResult holds the outcome of a single game
 type GameResult struct {
 	WinnerID       int8
+	WinningTeam    int8   // -1 = no teams or no winner, 0+ = winning team index
 	TurnCount      uint32
 	DurationNs     uint64
 	Error          string
@@ -109,6 +110,9 @@ type AggregatedStats struct {
 	ContentionEvents     uint64 // Times players competed for same resource
 	ForcedResponseEvents uint64 // Turns where legal moves significantly constrained
 	OpponentTurnCount    uint64 // Total opponent turns (denominator for rates)
+
+	// Team play metrics
+	TeamWins []uint32 // Win count per team (nil if no teams)
 }
 
 // RunBatch simulates multiple games with the same genome and AI configuration
@@ -165,6 +169,15 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 	state.TableauMode = genome.Header.TableauMode
 	state.SequenceDirection = genome.Header.SequenceDirection
 
+	// Initialize teams if configured
+	if genome.Header.TeamMode && genome.Header.TeamCount > 0 && genome.Header.TeamDataOffset > 0 {
+		teamDataOffset := genome.Header.TeamDataOffset
+		if teamDataOffset < len(genome.Bytecode) {
+			teams := engine.ParseTeams(genome.Bytecode[teamDataOffset:])
+			state.InitializeTeams(teams)
+		}
+	}
+
 	// Deal cards to each player
 	for i := 0; i < cardsPerPlayer; i++ {
 		for p := 0; p < numPlayers; p++ {
@@ -205,10 +218,11 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 			metrics.ClosestMargin = tensionMetrics.ClosestMargin
 			metrics.WinnerWasTrailing = tensionMetrics.WinnerWasTrailing
 			return GameResult{
-				WinnerID:   winner,
-				TurnCount:  state.TurnNumber,
-				DurationNs: uint64(time.Since(start).Nanoseconds()),
-				Metrics:    metrics,
+				WinnerID:    winner,
+				WinningTeam: state.WinningTeam,
+				TurnCount:   state.TurnNumber,
+				DurationNs:  uint64(time.Since(start).Nanoseconds()),
+				Metrics:     metrics,
 			}
 		}
 
@@ -227,11 +241,12 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 					metrics.ClosestMargin = tensionMetrics.ClosestMargin
 					metrics.WinnerWasTrailing = tensionMetrics.WinnerWasTrailing
 					return GameResult{
-						WinnerID:   -1,
-						TurnCount:  state.TurnNumber,
-						DurationNs: uint64(time.Since(start).Nanoseconds()),
-						Error:      err,
-						Metrics:    metrics,
+						WinnerID:    -1,
+						WinningTeam: -1,
+						TurnCount:   state.TurnNumber,
+						DurationNs:  uint64(time.Since(start).Nanoseconds()),
+						Error:       err,
+						Metrics:     metrics,
 					}
 				}
 
@@ -290,10 +305,11 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 				metrics.ClosestMargin = tensionMetrics.ClosestMargin
 				metrics.WinnerWasTrailing = tensionMetrics.WinnerWasTrailing
 				return GameResult{
-					WinnerID:   winner,
-					TurnCount:  state.TurnNumber,
-					DurationNs: uint64(time.Since(start).Nanoseconds()),
-					Metrics:    metrics,
+					WinnerID:    winner,
+					WinningTeam: state.WinningTeam,
+					TurnCount:   state.TurnNumber,
+					DurationNs:  uint64(time.Since(start).Nanoseconds()),
+					Metrics:     metrics,
 				}
 			}
 			// For other games, no legal moves means stuck
@@ -303,11 +319,12 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 			metrics.ClosestMargin = tensionMetrics.ClosestMargin
 			metrics.WinnerWasTrailing = tensionMetrics.WinnerWasTrailing
 			return GameResult{
-				WinnerID:   -1,
-				TurnCount:  state.TurnNumber,
-				DurationNs: uint64(time.Since(start).Nanoseconds()),
-				Error:      "no legal moves",
-				Metrics:    metrics,
+				WinnerID:    -1,
+				WinningTeam: -1,
+				TurnCount:   state.TurnNumber,
+				DurationNs:  uint64(time.Since(start).Nanoseconds()),
+				Error:       "no legal moves",
+				Metrics:     metrics,
 			}
 		}
 
@@ -377,11 +394,12 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 			metrics.ClosestMargin = tensionMetrics.ClosestMargin
 			metrics.WinnerWasTrailing = tensionMetrics.WinnerWasTrailing
 			return GameResult{
-				WinnerID:   -1,
-				TurnCount:  state.TurnNumber,
-				DurationNs: uint64(time.Since(start).Nanoseconds()),
-				Error:      "AI returned nil move",
-				Metrics:    metrics,
+				WinnerID:    -1,
+				WinningTeam: -1,
+				TurnCount:   state.TurnNumber,
+				DurationNs:  uint64(time.Since(start).Nanoseconds()),
+				Error:       "AI returned nil move",
+				Metrics:     metrics,
 			}
 		}
 
@@ -436,10 +454,11 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 	metrics.ClosestMargin = tensionMetrics.ClosestMargin
 	metrics.WinnerWasTrailing = tensionMetrics.WinnerWasTrailing
 	return GameResult{
-		WinnerID:   -1,
-		TurnCount:  state.TurnNumber,
-		DurationNs: uint64(time.Since(start).Nanoseconds()),
-		Metrics:    metrics,
+		WinnerID:    -1,
+		WinningTeam: -1,
+		TurnCount:   state.TurnNumber,
+		DurationNs:  uint64(time.Since(start).Nanoseconds()),
+		Metrics:     metrics,
 	}
 }
 
@@ -492,6 +511,15 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 	state.TableauMode = genome.Header.TableauMode
 	state.SequenceDirection = genome.Header.SequenceDirection
 
+	// Initialize teams if configured
+	if genome.Header.TeamMode && genome.Header.TeamCount > 0 && genome.Header.TeamDataOffset > 0 {
+		teamDataOffset := genome.Header.TeamDataOffset
+		if teamDataOffset < len(genome.Bytecode) {
+			teams := engine.ParseTeams(genome.Bytecode[teamDataOffset:])
+			state.InitializeTeams(teams)
+		}
+	}
+
 	for i := 0; i < cardsPerPlayer; i++ {
 		for p := 0; p < numPlayers; p++ {
 			state.DrawCard(uint8(p), engine.LocationDeck)
@@ -529,10 +557,11 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 			metrics.ClosestMargin = tensionMetrics.ClosestMargin
 			metrics.WinnerWasTrailing = tensionMetrics.WinnerWasTrailing
 			return GameResult{
-				WinnerID:   winner,
-				TurnCount:  state.TurnNumber,
-				DurationNs: uint64(time.Since(start).Nanoseconds()),
-				Metrics:    metrics,
+				WinnerID:    winner,
+				WinningTeam: state.WinningTeam,
+				TurnCount:   state.TurnNumber,
+				DurationNs:  uint64(time.Since(start).Nanoseconds()),
+				Metrics:     metrics,
 			}
 		}
 
@@ -550,11 +579,12 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 					metrics.ClosestMargin = tensionMetrics.ClosestMargin
 					metrics.WinnerWasTrailing = tensionMetrics.WinnerWasTrailing
 					return GameResult{
-						WinnerID:   -1,
-						TurnCount:  state.TurnNumber,
-						DurationNs: uint64(time.Since(start).Nanoseconds()),
-						Error:      err,
-						Metrics:    metrics,
+						WinnerID:    -1,
+						WinningTeam: -1,
+						TurnCount:   state.TurnNumber,
+						DurationNs:  uint64(time.Since(start).Nanoseconds()),
+						Error:       err,
+						Metrics:     metrics,
 					}
 				}
 
@@ -613,10 +643,11 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 				metrics.ClosestMargin = tensionMetrics.ClosestMargin
 				metrics.WinnerWasTrailing = tensionMetrics.WinnerWasTrailing
 				return GameResult{
-					WinnerID:   winner,
-					TurnCount:  state.TurnNumber,
-					DurationNs: uint64(time.Since(start).Nanoseconds()),
-					Metrics:    metrics,
+					WinnerID:    winner,
+					WinningTeam: state.WinningTeam,
+					TurnCount:   state.TurnNumber,
+					DurationNs:  uint64(time.Since(start).Nanoseconds()),
+					Metrics:     metrics,
 				}
 			}
 			// For other games, no legal moves means stuck
@@ -626,11 +657,12 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 			metrics.ClosestMargin = tensionMetrics.ClosestMargin
 			metrics.WinnerWasTrailing = tensionMetrics.WinnerWasTrailing
 			return GameResult{
-				WinnerID:   -1,
-				TurnCount:  state.TurnNumber,
-				DurationNs: uint64(time.Since(start).Nanoseconds()),
-				Error:      "no legal moves",
-				Metrics:    metrics,
+				WinnerID:    -1,
+				WinningTeam: -1,
+				TurnCount:   state.TurnNumber,
+				DurationNs:  uint64(time.Since(start).Nanoseconds()),
+				Error:       "no legal moves",
+				Metrics:     metrics,
 			}
 		}
 
@@ -691,11 +723,12 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 			metrics.ClosestMargin = tensionMetrics.ClosestMargin
 			metrics.WinnerWasTrailing = tensionMetrics.WinnerWasTrailing
 			return GameResult{
-				WinnerID:   -1,
-				TurnCount:  state.TurnNumber,
-				DurationNs: uint64(time.Since(start).Nanoseconds()),
-				Error:      "AI returned nil move",
-				Metrics:    metrics,
+				WinnerID:    -1,
+				WinningTeam: -1,
+				TurnCount:   state.TurnNumber,
+				DurationNs:  uint64(time.Since(start).Nanoseconds()),
+				Error:       "AI returned nil move",
+				Metrics:     metrics,
 			}
 		}
 
@@ -749,10 +782,11 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 	metrics.ClosestMargin = tensionMetrics.ClosestMargin
 	metrics.WinnerWasTrailing = tensionMetrics.WinnerWasTrailing
 	return GameResult{
-		WinnerID:   -1,
-		TurnCount:  state.TurnNumber,
-		DurationNs: uint64(time.Since(start).Nanoseconds()),
-		Metrics:    metrics,
+		WinnerID:    -1,
+		WinningTeam: -1,
+		TurnCount:   state.TurnNumber,
+		DurationNs:  uint64(time.Since(start).Nanoseconds()),
+		Metrics:     metrics,
 	}
 }
 
@@ -1015,6 +1049,31 @@ func aggregateResults(results []GameResult) AggregatedStats {
 	turnCounts := make([]uint32, 0, len(results))
 	totalDuration := uint64(0)
 
+	// Detect team count by scanning ALL results for the maximum winning team index.
+	// This handles the case where one team never wins in the sample.
+	var teamWins []uint32
+	maxTeamIdx := int8(-1)
+	for _, r := range results {
+		if r.WinningTeam > maxTeamIdx {
+			maxTeamIdx = r.WinningTeam
+		}
+	}
+	if maxTeamIdx >= 0 {
+		// Found at least one team game, allocate team wins slice
+		// Use maxTeamIdx + 1 as the minimum, but this only counts teams that have won.
+		// For proper team count, we need to know the expected number of teams.
+		// Heuristic: check if this looks like a 2-team game (indices 0 and 1 expected)
+		teamCount := int(maxTeamIdx) + 1
+		if teamCount < 2 {
+			// If only team 0 has won, assume there are at least 2 teams
+			teamCount = 2
+		}
+		if teamCount > 4 {
+			teamCount = 4
+		}
+		teamWins = make([]uint32, teamCount)
+	}
+
 	for _, result := range results {
 		if result.Error != "" {
 			stats.Errors++
@@ -1026,6 +1085,11 @@ func aggregateResults(results []GameResult) AggregatedStats {
 			stats.Wins[result.WinnerID]++
 		} else {
 			stats.Draws++
+		}
+
+		// Track team wins
+		if teamWins != nil && result.WinningTeam >= 0 && int(result.WinningTeam) < len(teamWins) {
+			teamWins[result.WinningTeam]++
 		}
 
 		turnCounts = append(turnCounts, result.TurnCount)
@@ -1091,6 +1155,9 @@ func aggregateResults(results []GameResult) AggregatedStats {
 	if stats.TotalGames > 0 {
 		stats.AvgDurationNs = totalDuration / uint64(stats.TotalGames)
 	}
+
+	// Set team wins if this was a team game
+	stats.TeamWins = teamWins
 
 	return stats
 }

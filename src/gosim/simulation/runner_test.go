@@ -173,6 +173,229 @@ func TestRunnerSetsTableauModeSequence(t *testing.T) {
 	_ = result
 }
 
+// =========================================================================
+// Team Play Tests
+// =========================================================================
+
+// TestRunBatchWithTeams verifies that team wins are tracked when team mode is enabled
+func TestRunBatchWithTeams(t *testing.T) {
+	// Create bytecode with team configuration
+	bytecode := makeTeamBytecode()
+
+	genome, err := engine.ParseGenome(bytecode)
+	if err != nil {
+		t.Fatalf("ParseGenome failed: %v", err)
+	}
+
+	// Verify genome parsed team config correctly
+	if !genome.Header.TeamMode {
+		t.Fatal("Expected TeamMode=true in genome header")
+	}
+	if genome.Header.TeamCount != 2 {
+		t.Errorf("Expected TeamCount=2, got %d", genome.Header.TeamCount)
+	}
+
+	stats := RunBatch(genome, 10, RandomAI, 0, 42)
+
+	// Verify team wins are tracked
+	if stats.TeamWins == nil {
+		t.Error("TeamWins should not be nil for team games")
+	}
+	if len(stats.TeamWins) != 2 {
+		t.Errorf("Expected 2 teams, got %d", len(stats.TeamWins))
+	}
+
+	// Team wins should sum to total wins (games with winners)
+	teamWinsSum := stats.TeamWins[0] + stats.TeamWins[1]
+	totalWins := uint32(0)
+	for _, w := range stats.Wins {
+		totalWins += w
+	}
+	// Note: Draws may not have team assignments, so team wins <= total wins
+	if teamWinsSum > totalWins {
+		t.Errorf("Team wins sum (%d) should be <= total wins (%d)", teamWinsSum, totalWins)
+	}
+
+	t.Logf("Team results: Team0=%d Team1=%d, Player wins: P0=%d P1=%d P2=%d P3=%d",
+		stats.TeamWins[0], stats.TeamWins[1],
+		stats.Wins[0], stats.Wins[1], stats.Wins[2], stats.Wins[3])
+}
+
+// TestRunBatchNoTeams verifies that non-team games have nil TeamWins
+func TestRunBatchNoTeams(t *testing.T) {
+	// Load golden War genome (non-team)
+	goldenPath := filepath.Join("..", "..", "..", "tests", "golden", "war_genome.bin")
+	bytecode, err := os.ReadFile(goldenPath)
+	if err != nil {
+		t.Fatalf("Failed to read golden file: %v", err)
+	}
+
+	genome, err := engine.ParseGenome(bytecode)
+	if err != nil {
+		t.Fatalf("Failed to parse genome: %v", err)
+	}
+
+	// Verify not a team game
+	if genome.Header.TeamMode {
+		t.Skip("Golden genome has team mode enabled, skipping non-team test")
+	}
+
+	stats := RunBatch(genome, 10, RandomAI, 0, 42)
+
+	// TeamWins should be nil for non-team games
+	if stats.TeamWins != nil {
+		t.Error("TeamWins should be nil for non-team games")
+	}
+}
+
+// TestRunSingleGameWithTeams verifies that GameResult includes team info
+func TestRunSingleGameWithTeams(t *testing.T) {
+	bytecode := makeTeamBytecode()
+
+	genome, err := engine.ParseGenome(bytecode)
+	if err != nil {
+		t.Fatalf("ParseGenome failed: %v", err)
+	}
+
+	result := RunSingleGame(genome, RandomAI, 0, 12345)
+
+	// If there was a winner, WinningTeam should be set
+	if result.WinnerID >= 0 && result.WinningTeam < 0 {
+		t.Errorf("WinnerID=%d but WinningTeam=%d (should be >= 0 for team games)",
+			result.WinnerID, result.WinningTeam)
+	}
+
+	// WinningTeam should be in valid range
+	if result.WinningTeam >= 0 && result.WinningTeam > 1 {
+		t.Errorf("WinningTeam=%d out of range (expected 0 or 1)", result.WinningTeam)
+	}
+
+	t.Logf("Game result: WinnerID=%d, WinningTeam=%d, Turns=%d",
+		result.WinnerID, result.WinningTeam, result.TurnCount)
+}
+
+// TestRunBatchParallelWithTeams verifies parallel execution also tracks teams
+func TestRunBatchParallelWithTeams(t *testing.T) {
+	bytecode := makeTeamBytecode()
+
+	genome, err := engine.ParseGenome(bytecode)
+	if err != nil {
+		t.Fatalf("ParseGenome failed: %v", err)
+	}
+
+	stats := RunBatchParallel(genome, 20, RandomAI, 0, 42)
+
+	// Verify team wins are tracked
+	if stats.TeamWins == nil {
+		t.Error("TeamWins should not be nil for team games (parallel)")
+	}
+	if len(stats.TeamWins) != 2 {
+		t.Errorf("Expected 2 teams (parallel), got %d", len(stats.TeamWins))
+	}
+
+	t.Logf("Parallel team results: Team0=%d Team1=%d", stats.TeamWins[0], stats.TeamWins[1])
+}
+
+// makeTeamBytecode creates a minimal V2 bytecode with team configuration.
+// 4 players, 2 teams: Team 0 = Players 0,2; Team 1 = Players 1,3
+func makeTeamBytecode() []byte {
+	// V2 header with teams is 53 bytes, then we need:
+	// - Setup section (12 bytes)
+	// - Turn structure (minimal)
+	// - Win conditions
+	// - Team data section
+
+	// Total layout:
+	// Bytes 0: version (2)
+	// Bytes 1-4: legacy version
+	// Bytes 5-12: genome_id_hash
+	// Bytes 13-16: player_count (4 players)
+	// Bytes 17-20: max_turns
+	// Bytes 21-24: setup_offset
+	// Bytes 25-28: turn_structure_offset
+	// Bytes 29-32: win_conditions_offset
+	// Bytes 33-36: scoring_offset
+	// Byte 37: tableau_mode
+	// Byte 38: sequence_direction
+	// Bytes 39-42: card_scoring_offset
+	// Bytes 43-46: hand_evaluation_offset
+	// Byte 47: team_mode (1 = enabled)
+	// Byte 48: team_count (2)
+	// Bytes 49-52: team_data_offset
+	// Bytes 53+: section data
+
+	bytecode := make([]byte, 150) // Plenty of room
+
+	// Header (53 bytes for V2 with teams)
+	bytecode[0] = 2                            // Version 2
+	bytecode[13], bytecode[14] = 0, 0          // player_count (big endian)
+	bytecode[15], bytecode[16] = 0, 4          // 4 players
+	bytecode[17], bytecode[18] = 0, 0          // max_turns (big endian)
+	bytecode[19], bytecode[20] = 0, 200        // 200 max turns
+	bytecode[21], bytecode[22] = 0, 0          // setup_offset
+	bytecode[23], bytecode[24] = 0, 53         // -> byte 53
+	bytecode[25], bytecode[26] = 0, 0          // turn_structure_offset
+	bytecode[27], bytecode[28] = 0, 65         // -> byte 65 (53 + 12)
+	bytecode[29], bytecode[30] = 0, 0          // win_conditions_offset
+	bytecode[31], bytecode[32] = 0, 87         // -> byte 87 (65 + 22)
+	bytecode[37] = 1                           // tableau_mode = WAR
+	bytecode[47] = 1                           // team_mode = true
+	bytecode[48] = 2                           // team_count = 2
+	bytecode[49], bytecode[50] = 0, 0          // team_data_offset (big endian)
+	bytecode[51], bytecode[52] = 0, 92         // -> byte 92
+
+	// Setup section at offset 53 (12 bytes)
+	// cards_per_player = 13 (each player gets 13 cards for 4-player)
+	bytecode[53], bytecode[54] = 0, 0
+	bytecode[55], bytecode[56] = 0, 13
+	// initial_discard_count = 0
+	// starting_chips = 0
+	// (bytes 57-64 already 0)
+
+	// Turn structure at offset 65 (22 bytes)
+	// Phase count = 2
+	bytecode[65], bytecode[66] = 0, 0
+	bytecode[67], bytecode[68] = 0, 2
+
+	// Phase 1: DrawPhase (type=1, 7 bytes: source + count + mandatory + has_condition)
+	bytecode[69] = 1 // PhaseTypeDraw
+	bytecode[70] = 0 // source = deck
+	bytecode[71], bytecode[72] = 0, 0
+	bytecode[73], bytecode[74] = 0, 1 // count = 1
+	bytecode[75] = 1                   // mandatory = true
+	bytecode[76] = 0                   // has_condition = false
+
+	// Phase 2: PlayPhase (type=2, 9 bytes)
+	bytecode[77] = 2 // PhaseTypePlay
+	bytecode[78] = 3 // target = tableau
+	bytecode[79] = 1 // min = 1
+	bytecode[80] = 1 // max = 1
+	bytecode[81] = 1 // mandatory = true
+	bytecode[82] = 0 // pass_if_unable = false
+	// conditionLen = 0 (4 bytes)
+	// bytes 83-86 already 0
+
+	// Win conditions at offset 87 (5 bytes)
+	// Count = 1
+	bytecode[87], bytecode[88] = 0, 0
+	bytecode[89], bytecode[90] = 0, 1
+	// empty_hand win condition
+	bytecode[91] = 0 // WinType = empty_hand
+	// threshold = 0 (4 bytes already 0)
+
+	// Team data at offset 92
+	// Format: [num_teams: 1][team0_size: 1][p0, p2][team1_size: 1][p1, p3]
+	bytecode[92] = 2  // num_teams = 2
+	bytecode[93] = 2  // team0 size = 2
+	bytecode[94] = 0  // player 0
+	bytecode[95] = 2  // player 2
+	bytecode[96] = 2  // team1 size = 2
+	bytecode[97] = 1  // player 1
+	bytecode[98] = 3  // player 3
+
+	return bytecode[:99]
+}
+
 // makeV2BytecodeWithTableauMode creates a minimal v2 bytecode with specified tableau mode.
 // V2 format: 39-byte header + minimal turn structure + win conditions
 func makeV2BytecodeWithTableauMode(tableauMode uint8, seqDir uint8) []byte {
