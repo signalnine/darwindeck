@@ -52,6 +52,12 @@ type AggStats struct {
 	DecisiveTurnPct  float32
 	ClosestMargin    float32
 	TrailingWinners  uint32
+
+	// Solitaire detection metrics
+	MoveDisruptionEvents uint64
+	ContentionEvents     uint64
+	ForcedResponseEvents uint64
+	OpponentTurnCount    uint64
 }
 
 //export SimulateBatch
@@ -182,6 +188,11 @@ func SimulateBatch(requestPtr unsafe.Pointer, requestLen C.int, responseLen *C.i
 			DecisiveTurnPct:  simStats.DecisiveTurnPct,
 			ClosestMargin:    simStats.ClosestMargin,
 			TrailingWinners:  simStats.TrailingWinners,
+			// Solitaire detection metrics
+			MoveDisruptionEvents: simStats.MoveDisruptionEvents,
+			ContentionEvents:     simStats.ContentionEvents,
+			ForcedResponseEvents: simStats.ForcedResponseEvents,
+			OpponentTurnCount:    simStats.OpponentTurnCount,
 		}
 
 		// Serialize result
@@ -285,6 +296,11 @@ func serializeStats(builder *flatbuffers.Builder, stats *AggStats) flatbuffers.U
 	cardsim.AggregatedStatsAddDecisiveTurnPct(builder, stats.DecisiveTurnPct)
 	cardsim.AggregatedStatsAddClosestMargin(builder, stats.ClosestMargin)
 	cardsim.AggregatedStatsAddTrailingWinners(builder, stats.TrailingWinners)
+	// Solitaire detection metrics
+	cardsim.AggregatedStatsAddMoveDisruptionEvents(builder, stats.MoveDisruptionEvents)
+	cardsim.AggregatedStatsAddContentionEvents(builder, stats.ContentionEvents)
+	cardsim.AggregatedStatsAddForcedResponseEvents(builder, stats.ForcedResponseEvents)
+	cardsim.AggregatedStatsAddOpponentTurnCount(builder, stats.OpponentTurnCount)
 	return cardsim.AggregatedStatsEnd(builder)
 }
 
