@@ -446,21 +446,29 @@ class FitnessEvaluator:
             length_bonus = min(1.0, max(0.0, (results.avg_turns - 20) / 50.0))
             tension_curve = min(0.6, turn_score * 0.6 + length_bonus * 0.4)
 
-        # 4. Interaction frequency - use real data if available, else heuristic
-        if hasattr(results, 'total_actions') and results.total_actions > 0:
-            # Real instrumentation available (Phase 1)
-            interaction_ratio = results.total_interactions / results.total_actions
+        # 4. Interaction frequency - improved multi-signal approach
+        if results.opponent_turn_count > 0:
+            # Three signals, each 0.0-1.0
+            move_disruption = min(1.0, results.move_disruption_events / results.opponent_turn_count)
+            forced_response = min(1.0, results.forced_response_events / results.opponent_turn_count)
 
-            # Score: Direct ratio of interactions to actions
-            # 0.0 = no interaction (solitaire), 0.5 = half actions interactive,
-            # 1.0 = all actions affect opponents (very interactive)
+            # Contention uses total_actions as denominator
+            if results.total_actions > 0:
+                contention = min(1.0, results.contention_events / results.total_actions)
+            else:
+                contention = 0.0
+
+            # Average the three signals
+            interaction_frequency = (move_disruption + contention + forced_response) / 3.0
+        elif hasattr(results, 'total_actions') and results.total_actions > 0:
+            # Fallback to old metric if new fields not available
+            interaction_ratio = results.total_interactions / results.total_actions
             interaction_frequency = min(1.0, interaction_ratio)
         else:
-            # Fallback to heuristic (current implementation)
+            # Final fallback to heuristic
             special_effects_score = min(1.0, len(genome.special_effects) / 3.0)
             trick_based_score = 0.3 if genome.turn_structure.is_trick_based else 0.0
             multi_phase_score = min(0.4, len(genome.turn_structure.phases) / 10.0)
-
             interaction_frequency = min(1.0,
                 special_effects_score * 0.4 +
                 trick_based_score +
