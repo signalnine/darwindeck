@@ -17,6 +17,7 @@ const (
 	PhaseTypeTrick   = 4
 	PhaseTypeBetting = 5
 	PhaseTypeClaim   = 6
+	PhaseTypeBidding = 7
 )
 
 const (

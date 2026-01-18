@@ -49,6 +49,13 @@ const (
 	MoveBettingFold  = -15
 )
 
+// Special CardIndex values for BiddingPhase
+// Encoded as -(bid_value + 50) to avoid collision with other move types
+// CardIndex -50 = bid 0 (Nil), -51 = bid 1, etc.
+const (
+	MoveBidOffset = -50 // CardIndex = -(bid_value + 50)
+)
+
 // LegalMove represents a possible action
 type LegalMove struct {
 	PhaseIndex int
@@ -453,6 +460,39 @@ func GenerateLegalMoves(state *GameState, genome *Genome) []LegalMove {
 					})
 				}
 			}
+
+		case 7: // BiddingPhase
+			// Skip if bidding already complete
+			if state.BiddingComplete {
+				continue
+			}
+
+			// Skip if this player has already bid
+			if state.Players[currentPlayer].CurrentBid >= 0 {
+				continue
+			}
+
+			// Parse bidding phase data
+			biddingPhase, _, _ := ParseBiddingPhase(phase.Data)
+
+			// Generate bid moves
+			handSize := len(state.Players[currentPlayer].Hand)
+			bidMoves := GenerateBidMoves(biddingPhase, handSize)
+
+			// Encode bids as LegalMove using CardIndex = -(bid_value + 50)
+			for _, bid := range bidMoves {
+				cardIndex := MoveBidOffset - bid.Value
+				// If Nil bid, encode specially: -50 with IsNil flag via TargetLoc
+				targetLoc := LocationDeck // Default, unused
+				if bid.IsNil {
+					targetLoc = LocationDiscard // Use as marker for Nil
+				}
+				moves = append(moves, LegalMove{
+					PhaseIndex: phaseIdx,
+					CardIndex:  cardIndex,
+					TargetLoc:  targetLoc,
+				})
+			}
 		}
 	}
 
@@ -672,6 +712,22 @@ func ApplyMove(state *GameState, move *LegalMove, genome *Genome) {
 			state.CurrentClaim = nil
 			// After pass, this player makes the next claim
 			// Don't advance turn - current player will claim
+			state.TurnNumber++
+			return
+		}
+
+	case 7: // BiddingPhase
+		// Decode bid from CardIndex = -(bid_value + 50)
+		if move.CardIndex <= MoveBidOffset {
+			bidValue := MoveBidOffset - move.CardIndex
+			isNil := move.TargetLoc == LocationDiscard // Nil marker
+
+			bid := BidMove{Value: bidValue, IsNil: isNil}
+			ApplyBidMove(state, int(currentPlayer), bid)
+
+			// Don't advance turn for bidding - round continues until all players bid
+			// The next player to bid is determined by clockwise order
+			state.CurrentPlayer = (state.CurrentPlayer + 1) % state.NumPlayers
 			state.TurnNumber++
 			return
 		}
