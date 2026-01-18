@@ -73,20 +73,26 @@ const (
 // BytecodeHeader matches Python bytecode format
 // V1 format: 36 bytes (no version byte prefix)
 // V2 format: 47 bytes (version byte at offset 0, struct at 1-36, tableau at 37-38, scoring offsets at 39-46)
+// V2 with teams: 53 bytes (adds team fields at bytes 47-52)
 type BytecodeHeader struct {
-	BytecodeVersion       uint8  // V2+: bytecode format version (at byte 0)
-	Version               uint32 // Legacy version field
-	GenomeIDHash          uint64
-	PlayerCount           uint32
-	MaxTurns              uint32
-	SetupOffset           int32
-	TurnStructureOffset   int32
-	WinConditionsOffset   int32
-	ScoringOffset         int32
-	TableauMode           uint8 // V2+: tableau mode (0=none, 1=war, 2=klondike, 3=build_sequences)
-	SequenceDirection     uint8 // V2+: sequence direction (0=ascending, 1=descending, 2=both)
-	CardScoringOffset     int32 // V2+: offset to card scoring rules section
-	HandEvaluationOffset  int32 // V2+: offset to hand evaluation section
+	BytecodeVersion      uint8  // V2+: bytecode format version (at byte 0)
+	Version              uint32 // Legacy version field
+	GenomeIDHash         uint64
+	PlayerCount          uint32
+	MaxTurns             uint32
+	SetupOffset          int32
+	TurnStructureOffset  int32
+	WinConditionsOffset  int32
+	ScoringOffset        int32
+	TableauMode          uint8 // V2+: tableau mode (0=none, 1=war, 2=klondike, 3=build_sequences)
+	SequenceDirection    uint8 // V2+: sequence direction (0=ascending, 1=descending, 2=both)
+	CardScoringOffset    int32 // V2+: offset to card scoring rules section
+	HandEvaluationOffset int32 // V2+: offset to hand evaluation section
+
+	// Team fields (bytes 47-52)
+	TeamMode       bool // V2+: true if team play is enabled
+	TeamCount      int  // V2+: number of teams
+	TeamDataOffset int  // V2+: offset to team data section in bytecode
 }
 
 // ParseHeader extracts header from bytecode
@@ -168,7 +174,46 @@ func parseV2Header(bytecode []byte) (*BytecodeHeader, error) {
 	}
 	// Otherwise leave CardScoringOffset and HandEvaluationOffset as 0 (their zero values)
 
+	// Parse team fields (bytes 47-52) if bytecode is long enough
+	if len(bytecode) >= 53 {
+		h.TeamMode = bytecode[47] != 0
+		h.TeamCount = int(bytecode[48])
+		h.TeamDataOffset = int(binary.BigEndian.Uint32(bytecode[49:53]))
+	}
+	// Otherwise leave team fields as their zero values (TeamMode=false, TeamCount=0, TeamDataOffset=0)
+
 	return h, nil
+}
+
+// ParseTeams extracts team assignments from bytecode team data.
+// Format: [num_teams: 1 byte][team_size: 1 byte][player_indices: size bytes]...
+// Returns a slice of teams, where each team is a slice of player indices.
+func ParseTeams(data []byte) [][]int {
+	if len(data) == 0 {
+		return nil
+	}
+
+	numTeams := int(data[0])
+	if numTeams == 0 {
+		return [][]int{}
+	}
+
+	teams := make([][]int, numTeams)
+	offset := 1
+
+	for i := 0; i < numTeams && offset < len(data); i++ {
+		teamSize := int(data[offset])
+		offset++
+
+		team := make([]int, teamSize)
+		for j := 0; j < teamSize && offset < len(data); j++ {
+			team[j] = int(data[offset])
+			offset++
+		}
+		teams[i] = team
+	}
+
+	return teams
 }
 
 // ScoringTrigger constants define when card scoring rules apply

@@ -3,6 +3,7 @@ package engine
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -629,5 +630,127 @@ func TestParseGenomeVersion2(t *testing.T) {
 	}
 	if genome.Header.MaxTurns != 100 {
 		t.Errorf("Expected MaxTurns 100, got %d", genome.Header.MaxTurns)
+	}
+}
+
+func TestBytecodeHeaderTeamFields(t *testing.T) {
+	// Create minimal bytecode with team fields
+	// Header size is 53 bytes for V2 with team fields
+	bytecode := make([]byte, 60)
+	bytecode[0] = 2  // version = 2 (V2 format)
+	bytecode[16] = 4 // num_players = 4 (at byte 13-16 for V2)
+	// ... other header fields (set offsets to avoid parse errors) ...
+	bytecode[28] = 53 // turn_structure_offset = 53
+	bytecode[32] = 57 // win_conditions_offset = 57
+	// Bytes 47-52: team fields
+	bytecode[47] = 1 // team_mode = true
+	bytecode[48] = 2 // team_count = 2
+	// team_data_offset = 53 (big-endian)
+	bytecode[49] = 0
+	bytecode[50] = 0
+	bytecode[51] = 0
+	bytecode[52] = 53
+	// Team data at offset 53
+	bytecode[53] = 2 // num_teams
+	bytecode[54] = 2 // team 0 size
+	bytecode[55] = 0 // team 0 player 0
+	bytecode[56] = 2 // team 0 player 2
+	bytecode[57] = 2 // team 1 size
+	bytecode[58] = 1 // team 1 player 1
+	bytecode[59] = 3 // team 1 player 3
+
+	header, err := ParseHeader(bytecode)
+	if err != nil {
+		t.Fatalf("ParseHeader failed: %v", err)
+	}
+
+	if !header.TeamMode {
+		t.Error("Expected TeamMode to be true")
+	}
+	if header.TeamCount != 2 {
+		t.Errorf("Expected TeamCount 2, got %d", header.TeamCount)
+	}
+	if header.TeamDataOffset != 53 {
+		t.Errorf("Expected TeamDataOffset 53, got %d", header.TeamDataOffset)
+	}
+}
+
+func TestParseTeams(t *testing.T) {
+	// Team data format: [num_teams][team_size][players...][team_size][players...]
+	teamData := []byte{
+		2,       // num_teams = 2
+		2, 0, 2, // team 0: size=2, players=[0, 2]
+		2, 1, 3, // team 1: size=2, players=[1, 3]
+	}
+
+	teams := ParseTeams(teamData)
+
+	if len(teams) != 2 {
+		t.Fatalf("Expected 2 teams, got %d", len(teams))
+	}
+	if !reflect.DeepEqual(teams[0], []int{0, 2}) {
+		t.Errorf("Team 0 expected [0, 2], got %v", teams[0])
+	}
+	if !reflect.DeepEqual(teams[1], []int{1, 3}) {
+		t.Errorf("Team 1 expected [1, 3], got %v", teams[1])
+	}
+}
+
+func TestParseTeamsEmpty(t *testing.T) {
+	teamData := []byte{0} // num_teams = 0
+
+	teams := ParseTeams(teamData)
+
+	if len(teams) != 0 {
+		t.Errorf("Expected 0 teams, got %d", len(teams))
+	}
+}
+
+func TestBytecodeHeaderNoTeams(t *testing.T) {
+	// Header without teams (team_mode = false)
+	// Need at least 53 bytes for V2 header with team fields
+	bytecode := make([]byte, 60)
+	bytecode[0] = 2  // version = 2 (V2 format)
+	bytecode[28] = 53 // turn_structure_offset
+	bytecode[32] = 57 // win_conditions_offset
+	bytecode[47] = 0 // team_mode = false
+	bytecode[48] = 0 // team_count = 0
+
+	header, err := ParseHeader(bytecode)
+	if err != nil {
+		t.Fatalf("ParseHeader failed: %v", err)
+	}
+
+	if header.TeamMode {
+		t.Error("Expected TeamMode to be false")
+	}
+	if header.TeamCount != 0 {
+		t.Errorf("Expected TeamCount 0, got %d", header.TeamCount)
+	}
+}
+
+func TestParseTeamsNil(t *testing.T) {
+	// Empty byte slice should return nil/empty
+	teams := ParseTeams([]byte{})
+
+	if teams != nil {
+		t.Errorf("Expected nil for empty data, got %v", teams)
+	}
+}
+
+func TestParseTeamsSingleTeam(t *testing.T) {
+	// Single team with 3 players
+	teamData := []byte{
+		1,          // num_teams = 1
+		3, 0, 1, 2, // team 0: size=3, players=[0, 1, 2]
+	}
+
+	teams := ParseTeams(teamData)
+
+	if len(teams) != 1 {
+		t.Fatalf("Expected 1 team, got %d", len(teams))
+	}
+	if !reflect.DeepEqual(teams[0], []int{0, 1, 2}) {
+		t.Errorf("Team 0 expected [0, 1, 2], got %v", teams[0])
 	}
 }
