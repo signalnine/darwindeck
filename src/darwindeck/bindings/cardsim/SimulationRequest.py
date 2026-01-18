@@ -134,8 +134,40 @@ class SimulationRequest(object):
             return self._tab.Get(flatbuffers.number_types.Uint32Flags, o + self._tab.Pos)
         return 0
 
+    # SimulationRequest
+    def TeamMode(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(24))
+        if o != 0:
+            return bool(self._tab.Get(flatbuffers.number_types.BoolFlags, o + self._tab.Pos))
+        return False
+
+    # SimulationRequest
+    def Teams(self, j):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(26))
+        if o != 0:
+            x = self._tab.Vector(o)
+            x += flatbuffers.number_types.UOffsetTFlags.py_type(j) * 4
+            x = self._tab.Indirect(x)
+            from darwindeck.bindings.cardsim.TeamAssignment import TeamAssignment
+            obj = TeamAssignment()
+            obj.Init(self._tab.Bytes, x)
+            return obj
+        return None
+
+    # SimulationRequest
+    def TeamsLength(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(26))
+        if o != 0:
+            return self._tab.VectorLen(o)
+        return 0
+
+    # SimulationRequest
+    def TeamsIsNone(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(26))
+        return o == 0
+
 def SimulationRequestStart(builder):
-    builder.StartObject(10)
+    builder.StartObject(12)
 
 def Start(builder):
     SimulationRequestStart(builder)
@@ -211,6 +243,24 @@ def SimulationRequestAddStartingChips(builder, startingChips):
 
 def AddStartingChips(builder, startingChips):
     SimulationRequestAddStartingChips(builder, startingChips)
+
+def SimulationRequestAddTeamMode(builder, teamMode):
+    builder.PrependBoolSlot(10, teamMode, False)
+
+def AddTeamMode(builder, teamMode):
+    SimulationRequestAddTeamMode(builder, teamMode)
+
+def SimulationRequestAddTeams(builder, teams):
+    builder.PrependUOffsetTRelativeSlot(11, flatbuffers.number_types.UOffsetTFlags.py_type(teams), 0)
+
+def AddTeams(builder, teams):
+    SimulationRequestAddTeams(builder, teams)
+
+def SimulationRequestStartTeamsVector(builder, numElems):
+    return builder.StartVector(4, numElems, 4)
+
+def StartTeamsVector(builder, numElems):
+    return SimulationRequestStartTeamsVector(builder, numElems)
 
 def SimulationRequestEnd(builder):
     return builder.EndObject()
