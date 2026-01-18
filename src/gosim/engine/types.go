@@ -85,6 +85,10 @@ type GameState struct {
 	HasStood []bool // Track which players have stood (for blackjack)
 	// President/climbing game state
 	ConsecutivePasses int // Track consecutive passes (for clearing tableau)
+	// Team play fields
+	TeamScores   []int32 // Score for each team (nil if no teams)
+	PlayerToTeam []int8  // Maps player index -> team index (-1 if no teams)
+	WinningTeam  int8    // -1 = no winner yet, 0+ = winning team index
 }
 
 // StatePool manages GameState memory
@@ -163,6 +167,10 @@ func (s *GameState) Reset() {
 	}
 	// President state
 	s.ConsecutivePasses = 0
+	// Team state
+	s.TeamScores = nil
+	s.PlayerToTeam = nil
+	s.WinningTeam = -1
 }
 
 // Clone creates a deep copy for MCTS tree search
@@ -231,6 +239,17 @@ func (s *GameState) Clone() *GameState {
 	// Clone President state
 	clone.ConsecutivePasses = s.ConsecutivePasses
 
+	// Clone team fields
+	if s.TeamScores != nil {
+		clone.TeamScores = make([]int32, len(s.TeamScores))
+		copy(clone.TeamScores, s.TeamScores)
+	}
+	if s.PlayerToTeam != nil {
+		clone.PlayerToTeam = make([]int8, len(s.PlayerToTeam))
+		copy(clone.PlayerToTeam, s.PlayerToTeam)
+	}
+	clone.WinningTeam = s.WinningTeam
+
 	return clone
 }
 
@@ -260,4 +279,35 @@ func (gs *GameState) ResetHand() {
 	gs.RaiseCount = 0
 	gs.BettingComplete = false
 	gs.BettingStartPlayer = (gs.BettingStartPlayer + 1) % len(gs.Players)
+}
+
+// BuildPlayerToTeamLookup creates a lookup table from player index to team index.
+// teams is a slice of slices, where each inner slice contains player indices for that team.
+func BuildPlayerToTeamLookup(teams [][]int, numPlayers int) []int8 {
+	lookup := make([]int8, numPlayers)
+	for i := range lookup {
+		lookup[i] = -1 // Default: not on any team
+	}
+	for teamIdx, team := range teams {
+		for _, playerIdx := range team {
+			if playerIdx >= 0 && playerIdx < numPlayers {
+				lookup[playerIdx] = int8(teamIdx)
+			}
+		}
+	}
+	return lookup
+}
+
+// InitializeTeams sets up team tracking for a game.
+func (s *GameState) InitializeTeams(teams [][]int) {
+	if len(teams) == 0 {
+		s.TeamScores = nil
+		s.PlayerToTeam = nil
+		s.WinningTeam = -1
+		return
+	}
+
+	s.TeamScores = make([]int32, len(teams))
+	s.PlayerToTeam = BuildPlayerToTeamLookup(teams, int(s.NumPlayers))
+	s.WinningTeam = -1
 }

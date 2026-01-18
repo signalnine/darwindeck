@@ -123,3 +123,180 @@ func TestGameStateHasTableauMode(t *testing.T) {
 		t.Errorf("Expected SequenceDirection 2, got %d", state.SequenceDirection)
 	}
 }
+
+func TestGameStateTeamScores(t *testing.T) {
+	state := &GameState{
+		NumPlayers:   4,
+		TeamScores:   []int32{0, 0},
+		PlayerToTeam: []int8{0, 1, 0, 1}, // Players 0,2 on team 0; Players 1,3 on team 1
+		WinningTeam:  -1,
+	}
+
+	if len(state.TeamScores) != 2 {
+		t.Errorf("Expected 2 team scores, got %d", len(state.TeamScores))
+	}
+	if state.PlayerToTeam[0] != 0 || state.PlayerToTeam[2] != 0 {
+		t.Error("Players 0 and 2 should be on team 0")
+	}
+	if state.PlayerToTeam[1] != 1 || state.PlayerToTeam[3] != 1 {
+		t.Error("Players 1 and 3 should be on team 1")
+	}
+	if state.WinningTeam != -1 {
+		t.Errorf("WinningTeam should be -1 initially, got %d", state.WinningTeam)
+	}
+}
+
+func TestBuildPlayerToTeamLookup(t *testing.T) {
+	teams := [][]int{{0, 2}, {1, 3}}
+	lookup := BuildPlayerToTeamLookup(teams, 4)
+
+	if len(lookup) != 4 {
+		t.Errorf("Expected lookup for 4 players, got %d", len(lookup))
+	}
+	if lookup[0] != 0 || lookup[2] != 0 {
+		t.Error("Players 0 and 2 should map to team 0")
+	}
+	if lookup[1] != 1 || lookup[3] != 1 {
+		t.Error("Players 1 and 3 should map to team 1")
+	}
+}
+
+func TestBuildPlayerToTeamLookupEmpty(t *testing.T) {
+	// Test with empty teams
+	lookup := BuildPlayerToTeamLookup([][]int{}, 4)
+
+	if len(lookup) != 4 {
+		t.Errorf("Expected lookup for 4 players, got %d", len(lookup))
+	}
+	for i, v := range lookup {
+		if v != -1 {
+			t.Errorf("Player %d should map to -1 (no team), got %d", i, v)
+		}
+	}
+}
+
+func TestBuildPlayerToTeamLookupOutOfBounds(t *testing.T) {
+	// Test with out-of-bounds player indices (should be ignored)
+	teams := [][]int{{0, 10}, {1, -5}} // 10 and -5 are out of bounds for 4 players
+	lookup := BuildPlayerToTeamLookup(teams, 4)
+
+	if len(lookup) != 4 {
+		t.Errorf("Expected lookup for 4 players, got %d", len(lookup))
+	}
+	if lookup[0] != 0 {
+		t.Errorf("Player 0 should map to team 0, got %d", lookup[0])
+	}
+	if lookup[1] != 1 {
+		t.Errorf("Player 1 should map to team 1, got %d", lookup[1])
+	}
+	// Out-of-bounds indices should be ignored, leaving default -1
+	if lookup[2] != -1 {
+		t.Errorf("Player 2 should be -1 (no team), got %d", lookup[2])
+	}
+	if lookup[3] != -1 {
+		t.Errorf("Player 3 should be -1 (no team), got %d", lookup[3])
+	}
+}
+
+func TestInitializeTeams(t *testing.T) {
+	state := &GameState{
+		NumPlayers: 4,
+	}
+	teams := [][]int{{0, 2}, {1, 3}}
+	state.InitializeTeams(teams)
+
+	if len(state.TeamScores) != 2 {
+		t.Errorf("Expected 2 team scores, got %d", len(state.TeamScores))
+	}
+	if len(state.PlayerToTeam) != 4 {
+		t.Errorf("Expected PlayerToTeam for 4 players, got %d", len(state.PlayerToTeam))
+	}
+	if state.WinningTeam != -1 {
+		t.Errorf("WinningTeam should be -1 after init, got %d", state.WinningTeam)
+	}
+}
+
+func TestInitializeTeamsEmpty(t *testing.T) {
+	state := &GameState{
+		NumPlayers: 4,
+	}
+	state.InitializeTeams([][]int{})
+
+	if state.TeamScores != nil {
+		t.Errorf("Expected nil TeamScores for empty teams, got %v", state.TeamScores)
+	}
+	if state.PlayerToTeam != nil {
+		t.Errorf("Expected nil PlayerToTeam for empty teams, got %v", state.PlayerToTeam)
+	}
+	if state.WinningTeam != -1 {
+		t.Errorf("WinningTeam should be -1, got %d", state.WinningTeam)
+	}
+}
+
+func TestGameStateCloneWithTeams(t *testing.T) {
+	original := &GameState{
+		NumPlayers:   4,
+		Players:      make([]PlayerState, 4),
+		TeamScores:   []int32{10, 20},
+		PlayerToTeam: []int8{0, 1, 0, 1},
+		WinningTeam:  -1,
+	}
+
+	clone := original.Clone()
+
+	// Modify clone
+	clone.TeamScores[0] = 100
+	clone.PlayerToTeam[0] = 1
+
+	// Original should be unchanged
+	if original.TeamScores[0] != 10 {
+		t.Error("Clone modified original TeamScores")
+	}
+	if original.PlayerToTeam[0] != 0 {
+		t.Error("Clone modified original PlayerToTeam")
+	}
+}
+
+func TestGameStateCloneWithNilTeams(t *testing.T) {
+	original := &GameState{
+		NumPlayers:   2,
+		Players:      make([]PlayerState, 4),
+		TeamScores:   nil,
+		PlayerToTeam: nil,
+		WinningTeam:  -1,
+	}
+
+	clone := original.Clone()
+
+	if clone.TeamScores != nil {
+		t.Errorf("Clone should have nil TeamScores, got %v", clone.TeamScores)
+	}
+	if clone.PlayerToTeam != nil {
+		t.Errorf("Clone should have nil PlayerToTeam, got %v", clone.PlayerToTeam)
+	}
+	if clone.WinningTeam != -1 {
+		t.Errorf("Clone WinningTeam should be -1, got %d", clone.WinningTeam)
+	}
+}
+
+func TestGameStateResetClearsTeams(t *testing.T) {
+	state := GetState()
+	state.TeamScores = []int32{10, 20}
+	state.PlayerToTeam = []int8{0, 1, 0, 1}
+	state.WinningTeam = 1
+
+	state.Reset()
+
+	// After reset, team fields should be cleared
+	if state.TeamScores != nil {
+		t.Errorf("Expected nil TeamScores after reset, got %v", state.TeamScores)
+	}
+	if state.PlayerToTeam != nil {
+		t.Errorf("Expected nil PlayerToTeam after reset, got %v", state.PlayerToTeam)
+	}
+	if state.WinningTeam != -1 {
+		t.Errorf("WinningTeam should be -1 after reset, got %d", state.WinningTeam)
+	}
+
+	PutState(state)
+}
