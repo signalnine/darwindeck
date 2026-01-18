@@ -10,6 +10,8 @@ from darwindeck.genome.schema import (
     DiscardPhase,
     TrickPhase,
     BettingPhase,
+    BiddingPhase,
+    ContractScoring,
     WinCondition,
     Location,
     Suit,
@@ -1028,21 +1030,13 @@ def create_president_genome() -> GameGenome:
 
 
 def create_spades_genome() -> GameGenome:
-    """Create Spades card game genome.
+    """Create Spades card game genome with bidding.
 
     Classic trick-taking with bidding:
     - Spades are always trump
-    - Must follow suit if able
-    - Spades cannot be led until "broken"
     - Players bid number of tricks they'll win
     - Score points for meeting/exceeding bid
-    - Penalty for "bags" (overtricks)
-
-    Simplified version:
-    - No bidding (just play tricks)
-    - Spades always trump
-    - Breaking spades rule included
-    - Most tricks wins
+    - Bag penalty for too many overtricks
     """
     return GameGenome(
         schema_version="1.0",
@@ -1056,35 +1050,38 @@ def create_spades_genome() -> GameGenome:
         ),
         turn_structure=TurnStructure(
             phases=[
+                BiddingPhase(min_bid=1, max_bid=13, allow_nil=True),
                 TrickPhase(
                     lead_suit_required=True,
                     trump_suit=Suit.SPADES,
                     high_card_wins=True,
                     breaking_suit=Suit.SPADES  # Can't lead spades until broken
-                )
+                ),
             ],
             is_trick_based=True,
             tricks_per_hand=13
         ),
         special_effects=[],
         win_conditions=[
-            WinCondition(
-                type="most_tricks",
-                threshold=0
-            ),
-            WinCondition(
-                type="all_hands_empty",
-                threshold=0
-            )
+            WinCondition(type="score_threshold", threshold=500),
         ],
         scoring_rules=[],
+        contract_scoring=ContractScoring(
+            points_per_trick_bid=10,
+            overtrick_points=1,
+            failed_contract_penalty=10,
+            nil_bonus=100,
+            nil_penalty=100,
+            bag_limit=10,
+            bag_penalty=100,
+        ),
         max_turns=200,
         player_count=4
     )
 
 
 def create_partnership_spades_genome() -> GameGenome:
-    """Create Partnership Spades card game genome.
+    """Create Partnership Spades card game genome with bidding.
 
     Partnership Spades is a classic 4-player trick-taking game where two
     partnerships compete. Partners sit across from each other (0,2 vs 1,3)
@@ -1093,12 +1090,13 @@ def create_partnership_spades_genome() -> GameGenome:
     Features:
     - 4 players in 2 teams (players 0,2 vs players 1,3)
     - Spades are always trump
-    - Must follow suit if able
-    - Spades cannot be led until "broken"
-    - Team scores are combined (tricks won by partners count together)
+    - Players bid number of tricks they'll win
+    - Team bids are combined
+    - Score points for meeting/exceeding contract
+    - Bag penalty for too many overtricks
     - First team to reach 500 points wins
 
-    This is the first seed genome to demonstrate team play functionality.
+    This seed genome demonstrates team play with bidding functionality.
     Partners sit across the table from each other, alternating seats.
     """
     return GameGenome(
@@ -1113,12 +1111,13 @@ def create_partnership_spades_genome() -> GameGenome:
         ),
         turn_structure=TurnStructure(
             phases=[
+                BiddingPhase(min_bid=1, max_bid=13, allow_nil=True),
                 TrickPhase(
                     lead_suit_required=True,
                     trump_suit=Suit.SPADES,
                     high_card_wins=True,
                     breaking_suit=Suit.SPADES  # Can't lead spades until broken
-                )
+                ),
             ],
             is_trick_based=True,
             tricks_per_hand=13  # 13 tricks per hand
@@ -1131,20 +1130,17 @@ def create_partnership_spades_genome() -> GameGenome:
                 comparison=WinComparison.HIGHEST,
                 trigger_mode=TriggerMode.THRESHOLD_GATE,
             ),
-            WinCondition(
-                type="all_hands_empty",
-                threshold=0
-            )
         ],
-        # Card scoring: each trick won is worth 10 points
-        card_scoring=(
-            CardScoringRule(
-                condition=CardCondition(),  # All cards in trick
-                points=10,
-                trigger=ScoringTrigger.TRICK_WIN,
-            ),
-        ),
         scoring_rules=[],
+        contract_scoring=ContractScoring(
+            points_per_trick_bid=10,
+            overtrick_points=1,
+            failed_contract_penalty=10,
+            nil_bonus=100,
+            nil_penalty=100,
+            bag_limit=10,
+            bag_penalty=100,
+        ),
         max_turns=200,
         player_count=4,
         # Team configuration: players 0,2 are Team 0, players 1,3 are Team 1

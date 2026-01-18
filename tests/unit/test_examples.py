@@ -135,3 +135,27 @@ def test_team_genomes_have_valid_team_config():
             assert all_players == expected_players, (
                 f"Not all players assigned to teams in {genome.genome_id}"
             )
+
+
+def test_spades_genome_has_bidding():
+    """Spades genome should have BiddingPhase and ContractScoring."""
+    from darwindeck.genome.examples import create_spades_genome
+    from darwindeck.genome.schema import BiddingPhase
+
+    genome = create_spades_genome()
+
+    has_bidding = any(isinstance(p, BiddingPhase) for p in genome.turn_structure.phases)
+    assert has_bidding, "Spades should have BiddingPhase"
+    assert genome.contract_scoring is not None, "Spades should have ContractScoring"
+
+
+def test_partnership_spades_genome_has_bidding():
+    """Partnership Spades genome should have BiddingPhase."""
+    from darwindeck.genome.examples import create_partnership_spades_genome
+    from darwindeck.genome.schema import BiddingPhase
+
+    genome = create_partnership_spades_genome()
+
+    has_bidding = any(isinstance(p, BiddingPhase) for p in genome.turn_structure.phases)
+    assert has_bidding, "Partnership Spades should have BiddingPhase"
+    assert genome.contract_scoring is not None
