@@ -5,7 +5,7 @@ This document tracks planned features, known limitations, and future work.
 ## Current Status
 
 **Core System: Complete**
-- Genome schema with 18 seed games (including 4 betting games)
+- Genome schema with 19 seed games (including 4 betting games)
 - Go simulation engine (39x speedup over Python)
 - Genetic algorithm with mutation, crossover, selection
 - Two-tier skill evaluation (Greedy + MCTS)
@@ -14,19 +14,13 @@ This document tracks planned features, known limitations, and future work.
 - Multiplayer support (2-4 players)
 - Card-triggered special effects
 - Betting/wagering system for poker-style games
+- Team/partnership play with shared scoring
 
 ---
 
 ## Planned Features
 
 ### Schema Extensions
-
-**Team Play**
-- [ ] Partnership tracking
-- [ ] Shared scoring between teammates
-- [ ] Team-based win conditions
-
-**Use cases:** Spades (partnership), Bridge, Euchre
 
 **Bidding/Contracts**
 - [ ] `BiddingPhase` - Contract declarations
@@ -209,6 +203,19 @@ This document tracks planned features, known limitations, and future work.
 - [x] Python fitness calculation using average of three signals
 - [x] Comparison script for validating metrics across game types
 
+### Team Play (Complete)
+- [x] `team_mode` and `teams` fields in GameGenome
+- [x] Flexible team configurations (2v2, 3v1, etc.)
+- [x] Dual scoring (individual + team) tracked simultaneously
+- [x] Team-based win condition evaluation
+- [x] Precomputed `PlayerToTeam` lookup for O(1) team identification
+- [x] Bytecode encoding with team data section
+- [x] FlatBuffers schema with `TeamAssignment` table
+- [x] Go simulation with `TeamScores`, `PlayerToTeam`, `WinningTeam`
+- [x] Team mutation operators (EnableTeamMode, DisableTeamMode, MutateTeamAssignment)
+- [x] Partnership Spades seed game
+- [x] Full integration tests for team game simulation
+
 ---
 
 ## Contributing
@@ -234,3 +241,4 @@ To work on a roadmap item:
 | 2026-01-17 | 0.3.1 | Self-describing genomes with CardScoringRule, HandEvaluationMethod |
 | 2026-01-17 | 0.3.2 | Semantic coherence checking and coherent mutation operators |
 | 2026-01-17 | 0.3.3 | Interaction metrics with multi-signal solitaire detection |
+| 2026-01-17 | 0.4.0 | Team play support - partnership games now evolvable |
