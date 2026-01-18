@@ -1290,3 +1290,53 @@ func TestDualScoringIntegrationGoFishSet(t *testing.T) {
 		t.Errorf("Team 0 should have 0 points, got %d", state.TeamScores[0])
 	}
 }
+
+// =========================================================================
+// Bid Move Generation Tests
+// =========================================================================
+
+func TestGenerateBidMoves(t *testing.T) {
+	phase := BiddingPhase{MinBid: 1, MaxBid: 13, AllowNil: true}
+	handSize := 13
+
+	moves := GenerateBidMoves(phase, handSize)
+
+	// Should have 14 moves: Nil (0) + bids 1-13
+	if len(moves) != 14 {
+		t.Errorf("Expected 14 moves, got %d", len(moves))
+	}
+
+	// First move should be Nil
+	if moves[0].Value != 0 || !moves[0].IsNil {
+		t.Errorf("First move should be Nil bid")
+	}
+
+	// Last move should be bid 13
+	if moves[13].Value != 13 {
+		t.Errorf("Last move should be bid 13, got %d", moves[13].Value)
+	}
+}
+
+func TestGenerateBidMovesNoNil(t *testing.T) {
+	phase := BiddingPhase{MinBid: 1, MaxBid: 13, AllowNil: false}
+	handSize := 13
+
+	moves := GenerateBidMoves(phase, handSize)
+
+	// Should have 13 moves: bids 1-13 (no Nil)
+	if len(moves) != 13 {
+		t.Errorf("Expected 13 moves, got %d", len(moves))
+	}
+}
+
+func TestGenerateBidMovesHandSizeLimit(t *testing.T) {
+	phase := BiddingPhase{MinBid: 1, MaxBid: 13, AllowNil: true}
+	handSize := 5 // Only 5 cards in hand
+
+	moves := GenerateBidMoves(phase, handSize)
+
+	// Should have 6 moves: Nil (0) + bids 1-5
+	if len(moves) != 6 {
+		t.Errorf("Expected 6 moves, got %d", len(moves))
+	}
+}

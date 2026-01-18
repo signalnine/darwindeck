@@ -1141,3 +1141,32 @@ func isValidSequencePlay(card Card, topCard Card, direction uint8) bool {
 	}
 	return false
 }
+
+// BidMove represents a bid action in a bidding phase
+type BidMove struct {
+	Value int
+	IsNil bool
+}
+
+// GenerateBidMoves generates valid bid options for the current player
+func GenerateBidMoves(phase BiddingPhase, handSize int) []BidMove {
+	moves := []BidMove{}
+
+	// Validate max_bid against actual hand size
+	effectiveMax := phase.MaxBid
+	if handSize < effectiveMax {
+		effectiveMax = handSize
+	}
+
+	// Add Nil option if allowed and min_bid > 0
+	if phase.AllowNil && phase.MinBid > 0 {
+		moves = append(moves, BidMove{Value: 0, IsNil: true})
+	}
+
+	// Generate valid bid range
+	for bid := phase.MinBid; bid <= effectiveMax; bid++ {
+		moves = append(moves, BidMove{Value: bid, IsNil: false})
+	}
+
+	return moves
+}
