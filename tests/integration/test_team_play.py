@@ -10,13 +10,16 @@ from darwindeck.genome.bytecode import BytecodeCompiler, BytecodeHeader
 from darwindeck.genome.validator import GenomeValidator
 
 
-def _go_simulator_available() -> bool:
-    """Check if Go simulator is available."""
-    try:
-        from darwindeck.bindings.cgo_bridge import simulate_batch
-        return True
-    except (ImportError, OSError):
-        return False
+# Check if Go simulator is available
+GO_SIMULATOR_AVAILABLE = False
+GO_SIMULATOR_ERROR = "Unknown error"
+try:
+    from darwindeck.simulation.go_simulator import GoSimulator
+    GO_SIMULATOR_AVAILABLE = True
+except (ImportError, OSError) as e:
+    GO_SIMULATOR_ERROR = str(e)
+except Exception as e:
+    GO_SIMULATOR_ERROR = f"Unexpected error: {str(e)}"
 
 
 class TestTeamGenomeCompilation:
@@ -101,16 +104,14 @@ class TestTeamGenomeValidation:
 
 
 @pytest.mark.skipif(
-    not _go_simulator_available(),
-    reason="Go simulator not available (libcardsim.so not built)"
+    not GO_SIMULATOR_AVAILABLE,
+    reason=f"Go simulator not available: {GO_SIMULATOR_ERROR}"
 )
 class TestTeamGameSimulation:
     """Integration tests for team game simulation via CGo."""
 
     def test_team_game_simulation_via_cgo(self):
         """Partnership Spades should simulate via CGo and track team wins."""
-        from darwindeck.simulation.go_simulator import GoSimulator
-
         genome = create_partnership_spades_genome()
         simulator = GoSimulator(seed=42)
 
@@ -141,8 +142,6 @@ class TestTeamGameSimulation:
 
     def test_non_team_game_has_no_team_wins(self):
         """Non-team games should have None for team_wins."""
-        from darwindeck.simulation.go_simulator import GoSimulator
-
         genome = create_war_genome()
         simulator = GoSimulator(seed=42)
 
@@ -156,8 +155,6 @@ class TestTeamGameSimulation:
 
     def test_team_game_with_asymmetric_ai(self):
         """Partnership Spades should work with asymmetric AI types."""
-        from darwindeck.simulation.go_simulator import GoSimulator
-
         genome = create_partnership_spades_genome()
         simulator = GoSimulator(seed=42)
 
