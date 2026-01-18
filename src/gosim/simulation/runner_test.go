@@ -94,6 +94,34 @@ func BenchmarkRunSingleGame(b *testing.B) {
 	}
 }
 
+// BenchmarkSolitaireMetricsOverhead measures the overhead of solitaire detection metrics.
+// Solitaire detection adds per-turn work:
+//   - getLegalMovesForPlayer: Generate opponent's legal moves before each turn
+//   - movesDisrupted: Compare move sets before/after to detect disruption
+//   - isContentionEvent: Check if opponents could make similar moves
+//
+// This benchmark runs the full simulation including these metrics.
+// Compare with historical benchmarks to assess overhead impact.
+// Target: <20% overhead vs baseline simulation without solitaire tracking.
+func BenchmarkSolitaireMetricsOverhead(b *testing.B) {
+	// Load the golden genome from bytecode file
+	goldenPath := filepath.Join("..", "..", "..", "tests", "golden", "war_genome.bin")
+	bytecodeData, err := os.ReadFile(goldenPath)
+	if err != nil {
+		b.Fatalf("Failed to read golden genome: %v", err)
+	}
+
+	genome, err := engine.ParseGenome(bytecodeData)
+	if err != nil {
+		b.Fatalf("Failed to parse genome: %v", err)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		RunSingleGame(genome, RandomAI, 0, uint64(i))
+	}
+}
+
 func TestRunnerSetsTableauMode(t *testing.T) {
 	// Create a v2 bytecode with WAR mode
 	bytecode := makeV2BytecodeWithTableauMode(1, 0) // TableauMode = WAR, SequenceDirection = ASC
