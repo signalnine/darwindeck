@@ -435,3 +435,285 @@ RANK_VALUES = {
 def get_rank_value(card: Card) -> int:
     return RANK_VALUES[card.rank]
 ```
+
+## Genome Validation and Coherence
+
+The system has two levels of validation to ensure evolved games are playable:
+
+### Structural Validation (`GenomeValidator`)
+
+Located in `src/darwindeck/genome/validator.py`. Checks basic structural requirements:
+
+```python
+from darwindeck.genome.validator import GenomeValidator
+
+errors = GenomeValidator.validate(genome)
+if errors:
+    print("Invalid genome:", errors)
+```
+
+**Validates:**
+- At least one card play phase exists
+- Card counts don't exceed deck size (52 cards)
+- Score-based win conditions have scoring rules
+- BettingPhase with HAND_EVALUATION showdown has hand_evaluation config
+
+### Semantic Coherence (`SemanticCoherenceChecker`)
+
+Located in `src/darwindeck/evolution/coherence.py`. Checks that mechanics support each other:
+
+```python
+from darwindeck.evolution.coherence import SemanticCoherenceChecker
+
+checker = SemanticCoherenceChecker()
+result = checker.check(genome)
+if not result.coherent:
+    print("Incoherent:", result.violations)
+```
+
+**Validates:**
+- Capture win conditions (`capture_all`, `most_captured`) have tableau phases
+- Scoring win conditions (`high_score`, `low_score`, `first_to_score`) have scoring rules OR is_trick_based
+- `starting_chips > 0` has at least one `BettingPhase`
+
+### Coherent Mutation Operators
+
+Mutation operators in `src/darwindeck/evolution/operators.py` are designed to produce coherent genomes:
+
+- `ModifyWinConditionMutation` - When changing to scoring-based win condition, automatically adds `card_scoring` if missing
+- `MutateStartingChipsMutation` - When enabling betting (0 → chips), automatically adds `BettingPhase`
+
+**Key principle:** Mutations that add a mechanic must also add its supporting infrastructure.
+
+## Self-Describing Genome Features
+
+The genome schema (`src/darwindeck/genome/schema.py`) includes explicit self-describing fields:
+
+### Card Scoring (`card_scoring`)
+
+```python
+card_scoring: tuple[CardScoringRule, ...] = ()
+
+# Example: Hearts are worth 1 point when captured in tricks
+CardScoringRule(
+    condition=CardCondition(suit=Suit.HEARTS),
+    points=1,
+    trigger=ScoringTrigger.TRICK_WIN
+)
+```
+
+**Triggers:** `TRICK_WIN`, `CAPTURE`, `PLAY`, `HAND_END`, `SET_COMPLETE`
+
+### Hand Evaluation (`hand_evaluation`)
+
+For poker-style games with pattern matching:
+
+```python
+hand_evaluation: Optional[HandEvaluation] = None
+
+HandEvaluation(
+    method=HandEvaluationMethod.PATTERN_MATCH,
+    patterns=[
+        HandPattern(name="flush", priority=5, ...),
+        HandPattern(name="straight", priority=4, ...),
+    ]
+)
+```
+
+**Methods:** `NONE`, `HIGH_CARD`, `POINT_TOTAL`, `PATTERN_MATCH`, `CARD_COUNT`
+
+### Card Values (`card_values`)
+
+For blackjack-style point totals:
+
+```python
+card_values: tuple[CardValue, ...] = ()
+
+CardValue(
+    condition=CardCondition(rank=Rank.ACE),
+    value=11,
+    alternate_value=1  # Ace can be 1 or 11
+)
+```
+
+## Evolution Pipeline
+
+### Pipeline Flow
+
+```
+Seed Genomes → Population Init → [Mutation/Crossover → Validation → Simulation → Fitness → Selection] × N generations
+```
+
+### Validation Integration
+
+Validation happens at multiple stages:
+
+1. **Before Simulation** (`parallel_fitness.py`): `GenomeValidator.validate()` - structurally invalid genomes get zero fitness without running expensive simulation
+2. **After Evolution** (`evolve.py`): `SemanticCoherenceChecker` - incoherent genomes are skipped when saving top results
+3. **During Mutation**: Operators ensure coherent changes
+
+### Fitness Evaluation Flow
+
+```python
+# In parallel_fitness.py _evaluate_task()
+1. GenomeValidator.validate(genome)  # Structural check
+   → If errors: return FitnessMetrics(valid=False, total_fitness=0.0)
+
+2. simulator.simulate(genome, num_games=100)  # Go engine
+   → Returns SimulationResults with game stats
+
+3. evaluator.evaluate(genome, results)  # Calculate metrics
+   → Returns FitnessMetrics with decision_density, comeback_potential, etc.
+```
+
+### Skill Evaluation
+
+Top genomes undergo skill evaluation to measure strategic depth:
+
+- **Greedy vs Random:** Does obvious strategy beat random play?
+- **MCTS vs Random:** Does deep lookahead provide advantage?
+- **FPA (First Player Advantage):** Penalize games where P0 always wins
+
+```bash
+# In evolution output:
+HighTell: greedy=98% mcts=88% skill=0.93
+```
+
+## Playtest System
+
+### CLI Playtest
+
+```bash
+# Interactive playtest with human player
+uv run python -m darwindeck.cli.playtest path/to/genome.json --difficulty greedy --seed 42
+
+# Options:
+--difficulty random|greedy|mcts  # AI opponent strength
+--seed N                          # Reproducible games
+```
+
+### Rulebook Generation
+
+```bash
+# Generate human-readable rules
+uv run python -m darwindeck.cli.rulebook path/to/genome.json --output rulebook.md
+```
+
+### PlaytestSession API
+
+```python
+from darwindeck.playtest.session import PlaytestSession, SessionConfig
+from darwindeck.genome.serialization import genome_from_dict
+
+config = SessionConfig(difficulty='greedy', seed=42)
+session = PlaytestSession(genome, config)
+session.run()  # Interactive game loop
+```
+
+### Stuck Detection
+
+The `StuckDetector` in `src/darwindeck/playtest/stuck.py` prevents infinite loops:
+- Tracks game state hashes
+- Detects repeated states (cycles)
+- Enforces max turn limits
+
+## Common Issues and Debugging
+
+### "Score-based win condition requires scoring_rules"
+
+**Cause:** Genome has `high_score`/`low_score`/`first_to_score` win condition but no scoring mechanism.
+
+**Fix:** Either:
+1. Add `card_scoring` rules to genome
+2. Set `turn_structure.is_trick_based = True` (trick games track score via captures)
+3. Add `scoring_rules` (legacy field)
+
+### "starting_chips but no BettingPhase"
+
+**Cause:** Genome has chips but no betting round to use them.
+
+**Fix:** Add a `BettingPhase` to `turn_structure.phases`.
+
+### Games Getting Stuck in Betting
+
+**Symptoms:** Betting phase never completes, infinite loop.
+
+**Common causes:**
+1. `is_all_in` not set when chips depleted (fixed in `movegen.py`)
+2. No player can act but phase doesn't advance (fixed with `_should_auto_complete_betting()`)
+
+**Debug:** Check `count_acting_players()` - if 0, betting should auto-complete.
+
+### Genome Loading
+
+```python
+# From JSON file
+import json
+from darwindeck.genome.serialization import genome_from_dict
+
+with open('genome.json') as f:
+    genome = genome_from_dict(json.load(f))
+
+# From JSON string
+from darwindeck.genome.serialization import genome_from_json
+genome = genome_from_json(json_string)
+```
+
+## CLI Commands
+
+### Evolution
+
+```bash
+# Basic evolution
+uv run python -m darwindeck.cli.evolve --generations 50 --population-size 30
+
+# With style preset
+uv run python -m darwindeck.cli.evolve --style bluffing
+
+# Skip expensive skill evaluation
+uv run python -m darwindeck.cli.evolve --skip-skill-eval
+
+# Full options
+uv run python -m darwindeck.cli.evolve \
+    --generations 100 \
+    --population-size 50 \
+    --style balanced \
+    --player-count 2 \
+    --output-dir output/my-run \
+    --save-top-n 20 \
+    --verbose
+```
+
+### Playtest
+
+```bash
+uv run python -m darwindeck.cli.playtest genome.json --difficulty greedy
+```
+
+### Rulebook
+
+```bash
+uv run python -m darwindeck.cli.rulebook genome.json --output rules.md
+```
+
+### Describe (AI-generated game description)
+
+```bash
+uv run python -m darwindeck.cli.describe genome.json
+```
+
+## Key Files Reference
+
+| File | Purpose |
+|------|---------|
+| `src/darwindeck/genome/schema.py` | GameGenome dataclass, all game components |
+| `src/darwindeck/genome/validator.py` | Structural validation |
+| `src/darwindeck/evolution/coherence.py` | Semantic coherence checking |
+| `src/darwindeck/evolution/operators.py` | Mutation and crossover operators |
+| `src/darwindeck/evolution/fitness_full.py` | Fitness metrics and evaluation |
+| `src/darwindeck/evolution/parallel_fitness.py` | Parallel genome evaluation |
+| `src/darwindeck/simulation/movegen.py` | Move generation and application |
+| `src/darwindeck/simulation/go_simulator.py` | Go engine interface |
+| `src/darwindeck/playtest/session.py` | Interactive playtest session |
+| `src/gosim/engine/` | Go simulation core |
+| `src/gosim/mcts/` | MCTS AI implementation |
