@@ -30,6 +30,12 @@ type GameMetrics struct {
 	TotalActions      uint64 // Total actions taken
 	TotalHandSize     uint64 // Sum of hand sizes at each decision (for filtering ratio)
 
+	// Solitaire detection metrics (interaction quality)
+	MoveDisruptionEvents uint64 // Opponent turns that changed waiting player's legal moves
+	ContentionEvents     uint64 // Times players competed for same resource
+	ForcedResponseEvents uint64 // Turns where legal moves significantly constrained
+	OpponentTurnCount    uint64 // Total opponent turns (denominator for rates)
+
 	// Bluffing metrics (ClaimPhase games)
 	TotalClaims       uint64 // Number of claims made
 	TotalBluffs       uint64 // Claims where cards didn't match claimed rank
