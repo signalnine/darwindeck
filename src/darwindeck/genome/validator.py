@@ -1,6 +1,6 @@
 """Genome validation to catch invalid field combinations."""
 
-from typing import List
+from typing import List, Set
 from darwindeck.genome.schema import (
     GameGenome, BettingPhase, HandEvaluationMethod, TableauMode,
     ShowdownMethod, TrickPhase, PlayPhase, DiscardPhase, DrawPhase,
@@ -112,4 +112,45 @@ class GenomeValidator:
                             f"relative to starting_chips ({starting}) - limits meaningful betting"
                         )
 
+        # Check 9: Team configuration validation
+        GenomeValidator._validate_teams(genome, errors)
+
         return errors
+
+    @staticmethod
+    def _validate_teams(genome: GameGenome, errors: List[str]) -> None:
+        """Validate team configuration if team_mode is enabled."""
+        if not genome.team_mode:
+            return  # Skip validation if team_mode is False
+
+        num_players = genome.player_count
+
+        # Must have at least 2 teams
+        if len(genome.teams) < 2:
+            errors.append(f"Team mode requires at least 2 teams, got {len(genome.teams)}")
+            return
+
+        # Collect all player indices
+        all_players: Set[int] = set()
+        for team_idx, team in enumerate(genome.teams):
+            if len(team) == 0:
+                errors.append(f"Team {team_idx} is empty")
+                continue
+            for player_idx in team:
+                # Check for out-of-range
+                if player_idx < 0 or player_idx >= num_players:
+                    errors.append(
+                        f"Player index {player_idx} out of range [0, {num_players})"
+                    )
+                # Check for duplicates
+                if player_idx in all_players:
+                    errors.append(
+                        f"Duplicate player {player_idx} appears in multiple teams"
+                    )
+                all_players.add(player_idx)
+
+        # Check all players are assigned
+        expected_players = set(range(num_players))
+        missing = expected_players - all_players
+        if missing:
+            errors.append(f"Players not assigned to any team: {sorted(missing)}")
