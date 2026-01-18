@@ -394,6 +394,11 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 		// Track bluffing metrics before ApplyMove changes state
 		trackBluffingMetrics(state, move, genome, &metrics)
 
+		// Track resource contention - could opponents have made similar move?
+		if isContentionEvent(state, move, genome, actingPlayer) {
+			metrics.ContentionEvents++
+		}
+
 		engine.ApplyMove(state, move, genome)
 
 		// Track move disruption - did this turn change next player's options?
@@ -688,6 +693,11 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 		// Track bluffing metrics before ApplyMove changes state
 		trackBluffingMetrics(state, move, genome, &metrics)
 
+		// Track resource contention - could opponents have made similar move?
+		if isContentionEvent(state, move, genome, actingPlayer) {
+			metrics.ContentionEvents++
+		}
+
 		engine.ApplyMove(state, move, genome)
 
 		// Track move disruption - did this turn change next player's options?
@@ -871,6 +881,37 @@ func movesDisrupted(before, after []engine.LegalMove) bool {
 			return true
 		}
 	}
+	return false
+}
+
+// isContentionEvent detects when a player takes an action that opponents
+// could also have taken - indicating competition for shared resources.
+// This is generic across game types.
+func isContentionEvent(state *engine.GameState, move *engine.LegalMove, genome *engine.Genome, actingPlayer int) bool {
+	// Generic contention: could any opponent have made a similar move?
+	// "Similar" = same phase and target location
+
+	for playerIdx := range state.Players {
+		if playerIdx == actingPlayer {
+			continue
+		}
+
+		// Get opponent's legal moves (without mutating state)
+		opponentMoves := getLegalMovesForPlayer(state, genome, playerIdx)
+
+		for _, oppMove := range opponentMoves {
+			// Contention if opponent could target the same location in same phase
+			if oppMove.PhaseIndex == move.PhaseIndex && oppMove.TargetLoc == move.TargetLoc {
+				// For shared locations (tableau, discard, deck draws), this is contention
+				if move.TargetLoc == engine.LocationTableau ||
+					move.TargetLoc == engine.LocationDiscard ||
+					move.TargetLoc == engine.LocationDeck {
+					return true
+				}
+			}
+		}
+	}
+
 	return false
 }
 
