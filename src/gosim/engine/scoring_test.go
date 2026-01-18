@@ -111,3 +111,46 @@ func TestEvaluateContractsBagPenalty(t *testing.T) {
 		t.Errorf("Team 0 expected 2 bags after penalty, got %d", state.AccumulatedBags[0])
 	}
 }
+
+func TestResetHandState(t *testing.T) {
+	state := &GameState{
+		NumPlayers: 4,
+		Players: []PlayerState{
+			{CurrentBid: 3, IsNilBid: false, TricksWon: 4},
+			{CurrentBid: 2, IsNilBid: true, TricksWon: 0},
+			{CurrentBid: 4, IsNilBid: false, TricksWon: 5},
+			{CurrentBid: 4, IsNilBid: false, TricksWon: 4},
+		},
+		BiddingComplete: true,
+		TeamContracts:   []int8{5, 8},
+		TeamScores:      []int32{100, 50},
+		AccumulatedBags: []int8{3, 7},
+	}
+
+	ResetHandState(state)
+
+	// Per-hand state should be reset
+	for i, player := range state.Players {
+		if player.CurrentBid != -1 {
+			t.Errorf("Player %d CurrentBid should be -1, got %d", i, player.CurrentBid)
+		}
+		if player.IsNilBid {
+			t.Errorf("Player %d IsNilBid should be false", i)
+		}
+		if player.TricksWon != 0 {
+			t.Errorf("Player %d TricksWon should be 0, got %d", i, player.TricksWon)
+		}
+	}
+
+	if state.BiddingComplete {
+		t.Errorf("BiddingComplete should be false")
+	}
+
+	// TeamScores and AccumulatedBags should persist
+	if state.TeamScores[0] != 100 || state.TeamScores[1] != 50 {
+		t.Errorf("TeamScores should persist")
+	}
+	if state.AccumulatedBags[0] != 3 || state.AccumulatedBags[1] != 7 {
+		t.Errorf("AccumulatedBags should persist")
+	}
+}

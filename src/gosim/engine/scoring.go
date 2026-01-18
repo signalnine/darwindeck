@@ -57,3 +57,19 @@ func getTeamPlayers(state *GameState, teamIdx int) []int {
 	}
 	return players
 }
+
+// ResetHandState clears per-hand state for the next hand.
+// AccumulatedBags and TeamScores persist across hands.
+func ResetHandState(state *GameState) {
+	for i := range state.Players {
+		state.Players[i].CurrentBid = -1
+		state.Players[i].IsNilBid = false
+		state.Players[i].TricksWon = 0
+	}
+	state.BiddingComplete = false
+
+	// Reset team contracts but keep scores and bags
+	for i := range state.TeamContracts {
+		state.TeamContracts[i] = 0
+	}
+}
