@@ -431,6 +431,69 @@ func (g *Genome) parseTurnStructure() error {
 
 const OP_EFFECT_HEADER = 60
 
+// OPCODE_BIDDING_PHASE is the opcode for BiddingPhase in bytecode
+const OPCODE_BIDDING_PHASE = 70
+
+// BiddingPhase holds parsed bidding phase parameters for contract games (Spades, Bridge)
+type BiddingPhase struct {
+	MinBid   int
+	MaxBid   int
+	AllowNil bool
+}
+
+// ContractScoring holds scoring parameters for contract-based games
+type ContractScoring struct {
+	PointsPerTrickBid     int
+	OvertrickPoints       int
+	FailedContractPenalty int
+	NilBonus              int
+	NilPenalty            int
+	BagLimit              int
+	BagPenalty            int
+}
+
+// ParseBiddingPhase extracts bidding phase configuration from bytecode.
+// Format (16 bytes total):
+// - Byte 0: opcode (70)
+// - Byte 1: min_bid
+// - Byte 2: max_bid
+// - Byte 3: flags (bit 0 = allow_nil)
+// - Bytes 4-15: ContractScoring (12 bytes)
+//   - Byte 4: points_per_trick_bid
+//   - Byte 5: overtrick_points
+//   - Byte 6: failed_contract_penalty
+//   - Bytes 7-8: nil_bonus (uint16 LE)
+//   - Bytes 9-10: nil_penalty (uint16 LE)
+//   - Byte 11: bag_limit
+//   - Bytes 12-13: bag_penalty (uint16 LE)
+//   - Bytes 14-15: reserved
+//
+// Returns the parsed phase, scoring, and number of bytes consumed.
+// If data is too short, returns zero values with consumed=0.
+func ParseBiddingPhase(data []byte) (BiddingPhase, ContractScoring, int) {
+	if len(data) < 16 {
+		return BiddingPhase{}, ContractScoring{}, 0
+	}
+
+	phase := BiddingPhase{
+		MinBid:   int(data[1]),
+		MaxBid:   int(data[2]),
+		AllowNil: data[3]&0x01 != 0,
+	}
+
+	scoring := ContractScoring{
+		PointsPerTrickBid:     int(data[4]),
+		OvertrickPoints:       int(data[5]),
+		FailedContractPenalty: int(data[6]),
+		NilBonus:              int(data[7]) | int(data[8])<<8,
+		NilPenalty:            int(data[9]) | int(data[10])<<8,
+		BagLimit:              int(data[11]),
+		BagPenalty:            int(data[12]) | int(data[13])<<8,
+	}
+
+	return phase, scoring, 16
+}
+
 // parseEffects extracts special effects from bytecode
 func parseEffects(data []byte, offset int) (map[uint8]SpecialEffect, int, error) {
 	effects := make(map[uint8]SpecialEffect)

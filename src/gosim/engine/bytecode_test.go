@@ -754,3 +754,113 @@ func TestParseTeamsSingleTeam(t *testing.T) {
 		t.Errorf("Team 0 expected [0, 1, 2], got %v", teams[0])
 	}
 }
+
+func TestParseBiddingPhase(t *testing.T) {
+	// Bytecode: [70] [1] [13] [0x01] [scoring 12 bytes]
+	// Note: opcode is 70 (from Python OPCODE_BIDDING_PHASE)
+	bytecode := []byte{
+		70,       // opcode
+		1,        // min_bid
+		13,       // max_bid
+		0x01,     // flags (allow_nil)
+		// ContractScoring (12 bytes)
+		10,       // points_per_trick_bid
+		1,        // overtrick_points
+		10,       // failed_contract_penalty
+		100, 0,   // nil_bonus (uint16 LE)
+		100, 0,   // nil_penalty (uint16 LE)
+		10,       // bag_limit
+		100, 0,   // bag_penalty (uint16 LE)
+		0, 0,     // reserved
+	}
+
+	phase, scoring, consumed := ParseBiddingPhase(bytecode)
+
+	if phase.MinBid != 1 {
+		t.Errorf("Expected MinBid 1, got %d", phase.MinBid)
+	}
+	if phase.MaxBid != 13 {
+		t.Errorf("Expected MaxBid 13, got %d", phase.MaxBid)
+	}
+	if !phase.AllowNil {
+		t.Errorf("Expected AllowNil true")
+	}
+	if scoring.PointsPerTrickBid != 10 {
+		t.Errorf("Expected PointsPerTrickBid 10, got %d", scoring.PointsPerTrickBid)
+	}
+	if consumed != 16 {
+		t.Errorf("Expected 16 bytes consumed, got %d", consumed)
+	}
+}
+
+func TestParseBiddingPhaseAllFields(t *testing.T) {
+	// Test all ContractScoring fields are parsed correctly
+	bytecode := []byte{
+		70,        // opcode
+		2,         // min_bid
+		7,         // max_bid
+		0x00,      // flags (no allow_nil)
+		// ContractScoring (12 bytes)
+		20,        // points_per_trick_bid
+		5,         // overtrick_points
+		50,        // failed_contract_penalty
+		200, 0,    // nil_bonus (uint16 LE) = 200
+		150, 0,    // nil_penalty (uint16 LE) = 150
+		7,         // bag_limit
+		50, 0,     // bag_penalty (uint16 LE) = 50
+		0, 0,      // reserved
+	}
+
+	phase, scoring, consumed := ParseBiddingPhase(bytecode)
+
+	if phase.MinBid != 2 {
+		t.Errorf("Expected MinBid 2, got %d", phase.MinBid)
+	}
+	if phase.MaxBid != 7 {
+		t.Errorf("Expected MaxBid 7, got %d", phase.MaxBid)
+	}
+	if phase.AllowNil {
+		t.Errorf("Expected AllowNil false")
+	}
+	if scoring.PointsPerTrickBid != 20 {
+		t.Errorf("Expected PointsPerTrickBid 20, got %d", scoring.PointsPerTrickBid)
+	}
+	if scoring.OvertrickPoints != 5 {
+		t.Errorf("Expected OvertrickPoints 5, got %d", scoring.OvertrickPoints)
+	}
+	if scoring.FailedContractPenalty != 50 {
+		t.Errorf("Expected FailedContractPenalty 50, got %d", scoring.FailedContractPenalty)
+	}
+	if scoring.NilBonus != 200 {
+		t.Errorf("Expected NilBonus 200, got %d", scoring.NilBonus)
+	}
+	if scoring.NilPenalty != 150 {
+		t.Errorf("Expected NilPenalty 150, got %d", scoring.NilPenalty)
+	}
+	if scoring.BagLimit != 7 {
+		t.Errorf("Expected BagLimit 7, got %d", scoring.BagLimit)
+	}
+	if scoring.BagPenalty != 50 {
+		t.Errorf("Expected BagPenalty 50, got %d", scoring.BagPenalty)
+	}
+	if consumed != 16 {
+		t.Errorf("Expected 16 bytes consumed, got %d", consumed)
+	}
+}
+
+func TestParseBiddingPhaseTooShort(t *testing.T) {
+	// Data too short (need at least 16 bytes)
+	bytecode := []byte{70, 1, 13, 0x01, 10, 1, 10}
+
+	phase, scoring, consumed := ParseBiddingPhase(bytecode)
+
+	if consumed != 0 {
+		t.Errorf("Expected 0 bytes consumed for short data, got %d", consumed)
+	}
+	if phase.MinBid != 0 {
+		t.Errorf("Expected zero value for MinBid, got %d", phase.MinBid)
+	}
+	if scoring.PointsPerTrickBid != 0 {
+		t.Errorf("Expected zero value for PointsPerTrickBid, got %d", scoring.PointsPerTrickBid)
+	}
+}
