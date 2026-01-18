@@ -467,3 +467,25 @@ def test_bytecode_no_teams_has_zero_team_mode():
     header = BytecodeHeader.from_bytes(bytecode)
     assert header.team_mode is False
     assert header.team_count == 0
+
+
+def test_compile_bidding_phase():
+    """BiddingPhase compiles to correct bytecode."""
+    from darwindeck.genome.schema import BiddingPhase, ContractScoring
+    from darwindeck.genome.bytecode import compile_bidding_phase, OPCODE_BIDDING_PHASE
+
+    phase = BiddingPhase(min_bid=1, max_bid=13, allow_nil=True)
+    scoring = ContractScoring()
+
+    bytecode = compile_bidding_phase(phase, scoring)
+
+    # Opcode 70 for BiddingPhase
+    assert bytecode[0] == OPCODE_BIDDING_PHASE
+    # min_bid = 1
+    assert bytecode[1] == 1
+    # max_bid = 13
+    assert bytecode[2] == 13
+    # flags: bit 0 = allow_nil (1)
+    assert bytecode[3] == 0x01
+    # ContractScoring follows (12 bytes)
+    assert len(bytecode) == 4 + 12  # 16 bytes total
