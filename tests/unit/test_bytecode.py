@@ -22,18 +22,21 @@ def test_header_serialization() -> None:
         genome_id_hash=12345678901234567890,
         player_count=2,
         max_turns=100,
-        setup_offset=47,  # Updated for new header size (47 bytes)
-        turn_structure_offset=59,
-        win_conditions_offset=115,
-        scoring_offset=135,
+        setup_offset=53,  # Updated for new header size (53 bytes with team fields)
+        turn_structure_offset=65,
+        win_conditions_offset=121,
+        scoring_offset=141,
         tableau_mode=1,  # WAR
         sequence_direction=0,  # ASCENDING
-        card_scoring_offset=150,
-        hand_evaluation_offset=170,
+        card_scoring_offset=156,
+        hand_evaluation_offset=176,
+        team_mode=True,
+        team_count=2,
+        team_data_offset=190,
     )
 
     serialized = header.to_bytes()
-    assert len(serialized) == 47  # New header size with card_scoring and hand_evaluation offsets
+    assert len(serialized) == 53  # Header size with team fields
 
     # First byte should be bytecode version 2
     assert serialized[0] == 2
@@ -44,8 +47,11 @@ def test_header_serialization() -> None:
     assert deserialized.max_turns == 100
     assert deserialized.tableau_mode == 1
     assert deserialized.sequence_direction == 0
-    assert deserialized.card_scoring_offset == 150
-    assert deserialized.hand_evaluation_offset == 170
+    assert deserialized.card_scoring_offset == 156
+    assert deserialized.hand_evaluation_offset == 176
+    assert deserialized.team_mode is True
+    assert deserialized.team_count == 2
+    assert deserialized.team_data_offset == 190
 
 
 def test_compile_war_genome() -> None:
@@ -383,3 +389,81 @@ def test_compile_genome_with_hand_evaluation():
     # Verify hand_evaluation_offset is set and points to valid data
     assert header.hand_evaluation_offset > 0
     assert header.hand_evaluation_offset < len(bytecode)
+
+
+def test_bytecode_header_includes_team_mode():
+    """Bytecode header should include team_mode flag."""
+    genome = GameGenome(
+        schema_version="1.0",
+        genome_id="team-game",
+        generation=0,
+        player_count=4,
+        max_turns=100,
+        setup=SetupRules(cards_per_player=5),
+        turn_structure=TurnStructure(phases=[]),
+        special_effects=[],
+        win_conditions=[WinCondition(type="empty_hand")],
+        scoring_rules=[],
+        team_mode=True,
+        teams=((0, 2), (1, 3)),
+    )
+    compiler = BytecodeCompiler()
+    bytecode = compiler.compile_genome(genome)
+    header = BytecodeHeader.from_bytes(bytecode)
+    assert header.team_mode is True
+
+
+def test_bytecode_header_includes_team_count():
+    """Bytecode header should include team count."""
+    genome = GameGenome(
+        schema_version="1.0",
+        genome_id="team-game",
+        generation=0,
+        player_count=4,
+        max_turns=100,
+        setup=SetupRules(cards_per_player=5),
+        turn_structure=TurnStructure(phases=[]),
+        special_effects=[],
+        win_conditions=[WinCondition(type="empty_hand")],
+        scoring_rules=[],
+        team_mode=True,
+        teams=((0, 2), (1, 3)),
+    )
+    compiler = BytecodeCompiler()
+    bytecode = compiler.compile_genome(genome)
+    header = BytecodeHeader.from_bytes(bytecode)
+    assert header.team_count == 2
+
+
+def test_compile_teams_produces_valid_bytes():
+    """compile_teams should produce parseable team data."""
+    from darwindeck.genome.bytecode import compile_teams
+
+    teams = ((0, 2), (1, 3))  # 2v2
+    team_bytes = compile_teams(teams)
+    # Format: [num_teams(1)][team0_size(1)][team0_players...][team1_size(1)][team1_players...]
+    # Expected: [2][2][0][2][2][1][3] = 7 bytes
+    assert len(team_bytes) >= 3  # At minimum: num_teams + 2x team_size bytes
+    assert team_bytes[0] == 2  # 2 teams
+
+
+def test_bytecode_no_teams_has_zero_team_mode():
+    """Non-team genome should have team_mode=False in header."""
+    genome = GameGenome(
+        schema_version="1.0",
+        genome_id="no-teams",
+        generation=0,
+        player_count=2,
+        max_turns=100,
+        setup=SetupRules(cards_per_player=5),
+        turn_structure=TurnStructure(phases=[]),
+        special_effects=[],
+        win_conditions=[WinCondition(type="empty_hand")],
+        scoring_rules=[],
+        team_mode=False,
+    )
+    compiler = BytecodeCompiler()
+    bytecode = compiler.compile_genome(genome)
+    header = BytecodeHeader.from_bytes(bytecode)
+    assert header.team_mode is False
+    assert header.team_count == 0

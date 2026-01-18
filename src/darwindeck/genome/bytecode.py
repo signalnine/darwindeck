@@ -284,6 +284,28 @@ def compile_hand_evaluation(eval: HandEvaluation) -> bytes:
     return result
 
 
+def compile_teams(teams: tuple[tuple[int, ...], ...]) -> bytes:
+    """Compile team assignments to bytecode.
+
+    Format:
+    [num_teams: 1 byte]
+    For each team:
+        [team_size: 1 byte]
+        [player_indices: team_size bytes]
+
+    Example for 2v2 teams ((0, 2), (1, 3)):
+    [2][2][0][2][2][1][3] = 7 bytes
+    """
+    if not teams:
+        return bytes([0])  # No teams
+
+    result = [len(teams)]  # num_teams
+    for team in teams:
+        result.append(len(team))  # team_size
+        result.extend(team)  # player indices
+    return bytes(result)
+
+
 def compile_effects(effects: list) -> bytes:
     """Compile special effects to bytecode.
 
@@ -314,7 +336,7 @@ def compile_effects(effects: list) -> bytes:
 class BytecodeHeader:
     """Fixed-size header for bytecode blob.
 
-    Format (47 bytes total):
+    Format (53 bytes total):
     - Byte 0: bytecode version (single byte, currently 2)
     - Bytes 1-4: legacy version field (4 bytes, for compatibility)
     - Bytes 5-12: genome_id_hash (8 bytes)
@@ -328,6 +350,9 @@ class BytecodeHeader:
     - Byte 38: sequence_direction (1 byte)
     - Bytes 39-42: card_scoring_offset (4 bytes)
     - Bytes 43-46: hand_evaluation_offset (4 bytes)
+    - Byte 47: team_mode (1 byte, 0 or 1)
+    - Byte 48: team_count (1 byte)
+    - Bytes 49-52: team_data_offset (4 bytes)
     """
     version: int  # 4 bytes (legacy, kept for compatibility)
     genome_id_hash: int  # 8 bytes (hash of genome_id)
@@ -341,11 +366,14 @@ class BytecodeHeader:
     sequence_direction: int = 0  # 1 byte (SequenceDirection enum value)
     card_scoring_offset: int = 0  # 4 bytes (offset to card scoring section)
     hand_evaluation_offset: int = 0  # 4 bytes (offset to hand evaluation section)
+    team_mode: bool = False  # 1 byte (0 or 1)
+    team_count: int = 0  # 1 byte
+    team_data_offset: int = 0  # 4 bytes (offset to team data in bytecode)
 
     # Inner struct format (bytes 1-36): legacy version + core fields
     INNER_STRUCT_FORMAT = "!IQIIiiii"  # 36 bytes
 
-    HEADER_SIZE = 47  # Total header size including version byte, tableau fields, and new offsets
+    HEADER_SIZE = 53  # Total header size including version byte, tableau fields, and team fields
 
     def to_bytes(self) -> bytes:
         # Byte 0: bytecode version
@@ -366,6 +394,9 @@ class BytecodeHeader:
         result += bytes([self.tableau_mode, self.sequence_direction])
         # Bytes 39-46: card_scoring_offset and hand_evaluation_offset
         result += struct.pack("!ii", self.card_scoring_offset, self.hand_evaluation_offset)
+        # Bytes 47-52: team_mode, team_count, team_data_offset
+        result += bytes([1 if self.team_mode else 0, self.team_count])
+        result += struct.pack("!i", self.team_data_offset)
         return result
 
     @classmethod
@@ -378,12 +409,19 @@ class BytecodeHeader:
         # Parse bytes 39-46: card_scoring_offset and hand_evaluation_offset
         card_scoring_offset = struct.unpack("!i", data[39:43])[0] if len(data) > 42 else 0
         hand_evaluation_offset = struct.unpack("!i", data[43:47])[0] if len(data) > 46 else 0
+        # Parse bytes 47-52: team_mode, team_count, team_data_offset
+        team_mode = bool(data[47]) if len(data) > 47 else False
+        team_count = data[48] if len(data) > 48 else 0
+        team_data_offset = struct.unpack("!i", data[49:53])[0] if len(data) > 52 else 0
         return cls(
             *unpacked,
             tableau_mode=tableau_mode,
             sequence_direction=sequence_direction,
             card_scoring_offset=card_scoring_offset,
             hand_evaluation_offset=hand_evaluation_offset,
+            team_mode=team_mode,
+            team_count=team_count,
+            team_data_offset=team_data_offset,
         )
 
 
@@ -396,7 +434,7 @@ class BytecodeCompiler:
     def compile_genome(self, genome: GameGenome) -> bytes:
         """Convert genome to bytecode blob."""
         # Reset offset for each genome (instance is reused across compilations)
-        self.offset = BytecodeHeader.HEADER_SIZE  # After header (47 bytes)
+        self.offset = BytecodeHeader.HEADER_SIZE  # After header (53 bytes)
 
         # Compile sections
         setup_offset = self.offset
@@ -429,6 +467,11 @@ class BytecodeCompiler:
         hand_eval_bytes = compile_hand_evaluation(genome.hand_evaluation)
         self.offset += len(hand_eval_bytes)
 
+        # Compile team data section
+        team_data_offset = self.offset
+        team_bytes = compile_teams(genome.teams)
+        self.offset += len(team_bytes)
+
         # Encode tableau_mode and sequence_direction
         tableau_mode = TABLEAU_MODE_MAP.get(genome.setup.tableau_mode, 0)
         sequence_direction = SEQUENCE_DIRECTION_MAP.get(
@@ -449,11 +492,15 @@ class BytecodeCompiler:
             sequence_direction=sequence_direction,
             card_scoring_offset=card_scoring_offset,
             hand_evaluation_offset=hand_eval_offset,
+            team_mode=genome.team_mode,
+            team_count=len(genome.teams),
+            team_data_offset=team_data_offset,
         )
 
         # Combine all sections (effects come right after win conditions, before scoring)
         return (header.to_bytes() + setup_bytes + turn_bytes + win_bytes +
-                effects_bytes + score_bytes + card_scoring_bytes + hand_eval_bytes)
+                effects_bytes + score_bytes + card_scoring_bytes + hand_eval_bytes +
+                team_bytes)
 
     def _compile_setup(self, setup: SetupRules) -> bytes:
         """Encode setup rules.
