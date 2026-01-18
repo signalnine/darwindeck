@@ -405,9 +405,23 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 		// Note: actingPlayer and nextPlayerIdx captured BEFORE ApplyMove
 		if numPlayers > 1 && movesBefore != nil {
 			movesAfter := getLegalMovesForPlayer(state, genome, nextPlayerIdx)
+
+			// Move disruption: any change in available moves
 			if movesDisrupted(movesBefore, movesAfter) {
 				metrics.MoveDisruptionEvents++
 			}
+
+			// Forced response: moves dropped by >30%
+			// This indicates the opponent MUST react (fewer options available)
+			beforeCount := len(movesBefore)
+			afterCount := len(movesAfter)
+			if beforeCount > 0 && afterCount < beforeCount {
+				ratio := float64(afterCount) / float64(beforeCount)
+				if ratio < 0.7 {
+					metrics.ForcedResponseEvents++
+				}
+			}
+
 			metrics.OpponentTurnCount++
 		}
 
@@ -704,9 +718,23 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 		// Note: actingPlayer and nextPlayerIdx captured BEFORE ApplyMove
 		if numPlayers > 1 && movesBefore != nil {
 			movesAfter := getLegalMovesForPlayer(state, genome, nextPlayerIdx)
+
+			// Move disruption: any change in available moves
 			if movesDisrupted(movesBefore, movesAfter) {
 				metrics.MoveDisruptionEvents++
 			}
+
+			// Forced response: moves dropped by >30%
+			// This indicates the opponent MUST react (fewer options available)
+			beforeCount := len(movesBefore)
+			afterCount := len(movesAfter)
+			if beforeCount > 0 && afterCount < beforeCount {
+				ratio := float64(afterCount) / float64(beforeCount)
+				if ratio < 0.7 {
+					metrics.ForcedResponseEvents++
+				}
+			}
+
 			metrics.OpponentTurnCount++
 		}
 
