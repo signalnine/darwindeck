@@ -489,3 +489,119 @@ def test_compile_bidding_phase():
     assert bytecode[3] == 0x01
     # ContractScoring follows (12 bytes)
     assert len(bytecode) == 4 + 12  # 16 bytes total
+
+
+def test_compile_genome_with_custom_contract_scoring():
+    """Verify genome's contract_scoring is used during BiddingPhase compilation."""
+    from darwindeck.genome.bytecode import BytecodeCompiler, BytecodeHeader, OPCODE_BIDDING_PHASE
+    from darwindeck.genome.schema import (
+        GameGenome, SetupRules, TurnStructure, WinCondition,
+        BiddingPhase, TrickPhase, ContractScoring, Suit
+    )
+
+    # Create custom scoring with non-default values
+    custom_scoring = ContractScoring(
+        points_per_trick_bid=20,  # Non-default (default is 10)
+        nil_bonus=200,            # Non-default (default is 100)
+    )
+
+    genome = GameGenome(
+        schema_version="1.0",
+        genome_id="test_bidding",
+        generation=0,
+        setup=SetupRules(cards_per_player=13),
+        turn_structure=TurnStructure(
+            phases=(BiddingPhase(), TrickPhase(trump_suit=Suit.SPADES)),
+            is_trick_based=True,
+        ),
+        special_effects=[],
+        win_conditions=(WinCondition(type="score_threshold", threshold=500),),
+        scoring_rules=[],
+        contract_scoring=custom_scoring,
+    )
+
+    # Test using constructor-based compilation
+    compiler = BytecodeCompiler(genome)
+    bytecode = compiler.compile()
+
+    assert bytecode is not None
+
+    # Find the BiddingPhase in the bytecode
+    # The phase type byte (7) precedes the OPCODE_BIDDING_PHASE (70)
+    # Turn structure: phase_count:4 + [phase_type:1 + phase_data]...
+    header = BytecodeHeader.from_bytes(bytecode)
+    turn_offset = header.turn_structure_offset
+
+    # Read phase count (4 bytes)
+    phase_count = struct.unpack("!I", bytecode[turn_offset:turn_offset + 4])[0]
+    assert phase_count == 2  # BiddingPhase + TrickPhase
+
+    # First phase is BiddingPhase
+    # Format: phase_type:1 + bidding_data (17 bytes: opcode + min + max + flags + scoring)
+    phase_start = turn_offset + 4
+    phase_type = bytecode[phase_start]
+    assert phase_type == 7  # BiddingPhase type
+
+    # The bidding data follows immediately
+    bidding_data_start = phase_start + 1
+    assert bytecode[bidding_data_start] == OPCODE_BIDDING_PHASE  # opcode 70
+
+    # ContractScoring starts at offset 4 within bidding_data
+    # Format: [opcode:1][min_bid:1][max_bid:1][flags:1][scoring:12]
+    scoring_start = bidding_data_start + 4
+
+    # First byte of scoring is points_per_trick_bid (should be 20, not default 10)
+    points_per_trick_bid = bytecode[scoring_start]
+    assert points_per_trick_bid == 20, f"Expected 20, got {points_per_trick_bid} - custom contract_scoring not used"
+
+    # nil_bonus is a uint16 little-endian at offset +3 and +4 (after points, overtrick, failed_penalty)
+    nil_bonus_low = bytecode[scoring_start + 3]
+    nil_bonus_high = bytecode[scoring_start + 4]
+    nil_bonus = nil_bonus_low + (nil_bonus_high << 8)
+    assert nil_bonus == 200, f"Expected 200, got {nil_bonus} - custom contract_scoring not used"
+
+
+def test_compile_genome_with_default_contract_scoring():
+    """Verify default contract_scoring is used when genome has None."""
+    from darwindeck.genome.bytecode import BytecodeCompiler, BytecodeHeader, OPCODE_BIDDING_PHASE
+    from darwindeck.genome.schema import (
+        GameGenome, SetupRules, TurnStructure, WinCondition,
+        BiddingPhase, TrickPhase, Suit
+    )
+
+    # No contract_scoring specified - should use defaults
+    genome = GameGenome(
+        schema_version="1.0",
+        genome_id="test_bidding_defaults",
+        generation=0,
+        setup=SetupRules(cards_per_player=13),
+        turn_structure=TurnStructure(
+            phases=(BiddingPhase(), TrickPhase(trump_suit=Suit.SPADES)),
+            is_trick_based=True,
+        ),
+        special_effects=[],
+        win_conditions=(WinCondition(type="score_threshold", threshold=500),),
+        scoring_rules=[],
+        # contract_scoring is None by default
+    )
+
+    compiler = BytecodeCompiler(genome)
+    bytecode = compiler.compile()
+
+    header = BytecodeHeader.from_bytes(bytecode)
+    turn_offset = header.turn_structure_offset
+
+    # First phase is BiddingPhase
+    phase_start = turn_offset + 4
+    bidding_data_start = phase_start + 1
+    scoring_start = bidding_data_start + 4
+
+    # Should have default points_per_trick_bid = 10
+    points_per_trick_bid = bytecode[scoring_start]
+    assert points_per_trick_bid == 10, f"Expected default 10, got {points_per_trick_bid}"
+
+    # Should have default nil_bonus = 100
+    nil_bonus_low = bytecode[scoring_start + 3]
+    nil_bonus_high = bytecode[scoring_start + 4]
+    nil_bonus = nil_bonus_low + (nil_bonus_high << 8)
+    assert nil_bonus == 100, f"Expected default 100, got {nil_bonus}"
