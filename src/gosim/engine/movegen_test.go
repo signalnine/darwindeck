@@ -1024,3 +1024,269 @@ func TestCheckWinConditionsTeamPlayerOutOfBounds(t *testing.T) {
 		t.Errorf("Expected WinningTeam to be -1 (player not in team map), got %d", state.WinningTeam)
 	}
 }
+
+// =========================================================================
+// Dual Scoring Tests - Individual AND Team Scores
+// =========================================================================
+
+// TestDualScoringBasic verifies that when a player scores, their team also scores
+func TestDualScoringBasic(t *testing.T) {
+	state := &GameState{
+		NumPlayers: 4,
+		Players: []PlayerState{
+			{Score: 0}, {Score: 0}, {Score: 0}, {Score: 0},
+		},
+		TeamScores:   []int32{0, 0},
+		PlayerToTeam: []int8{0, 1, 0, 1}, // Players 0,2 on team 0; Players 1,3 on team 1
+		WinningTeam:  -1,
+	}
+
+	// Simulate player 0 scoring 10 points
+	state.Players[0].Score += 10
+	UpdateTeamScore(state, 0, 10)
+
+	if state.TeamScores[0] != 10 {
+		t.Errorf("Team 0 score should be 10, got %d", state.TeamScores[0])
+	}
+	if state.TeamScores[1] != 0 {
+		t.Errorf("Team 1 score should be 0, got %d", state.TeamScores[1])
+	}
+}
+
+// TestDualScoringMultiplePlayers verifies multiple players on same team accumulate scores
+func TestDualScoringMultiplePlayers(t *testing.T) {
+	state := &GameState{
+		NumPlayers: 4,
+		Players: []PlayerState{
+			{Score: 0}, {Score: 0}, {Score: 0}, {Score: 0},
+		},
+		TeamScores:   []int32{0, 0},
+		PlayerToTeam: []int8{0, 1, 0, 1},
+		WinningTeam:  -1,
+	}
+
+	// Player 0 (team 0) scores 10
+	state.Players[0].Score += 10
+	UpdateTeamScore(state, 0, 10)
+
+	// Player 2 (team 0) scores 5
+	state.Players[2].Score += 5
+	UpdateTeamScore(state, 2, 5)
+
+	// Player 1 (team 1) scores 7
+	state.Players[1].Score += 7
+	UpdateTeamScore(state, 1, 7)
+
+	if state.TeamScores[0] != 15 {
+		t.Errorf("Team 0 score should be 15, got %d", state.TeamScores[0])
+	}
+	if state.TeamScores[1] != 7 {
+		t.Errorf("Team 1 score should be 7, got %d", state.TeamScores[1])
+	}
+}
+
+// TestDualScoringNoTeams verifies no panic when teams not configured
+func TestDualScoringNoTeams(t *testing.T) {
+	state := &GameState{
+		NumPlayers: 2,
+		Players:    []PlayerState{{Score: 0}, {Score: 0}},
+		// No team fields - nil slices
+	}
+
+	// Should not panic when teams not configured
+	state.Players[0].Score += 10
+	UpdateTeamScore(state, 0, 10) // Should be no-op
+
+	// Just verify no panic occurred
+	if state.TeamScores != nil {
+		t.Error("TeamScores should remain nil")
+	}
+}
+
+// TestDualScoringNegative verifies negative points work correctly
+func TestDualScoringNegative(t *testing.T) {
+	state := &GameState{
+		NumPlayers: 4,
+		Players: []PlayerState{
+			{Score: 20}, {Score: 10}, {Score: 20}, {Score: 10},
+		},
+		TeamScores:   []int32{40, 20}, // Team 0: 40, Team 1: 20
+		PlayerToTeam: []int8{0, 1, 0, 1},
+		WinningTeam:  -1,
+	}
+
+	// Player 0 (team 0) loses 5 points
+	state.Players[0].Score -= 5
+	UpdateTeamScore(state, 0, -5)
+
+	if state.TeamScores[0] != 35 {
+		t.Errorf("Team 0 score should be 35, got %d", state.TeamScores[0])
+	}
+}
+
+// TestDualScoringPlayerOutOfBounds verifies bounds checking
+func TestDualScoringPlayerOutOfBounds(t *testing.T) {
+	state := &GameState{
+		NumPlayers: 2,
+		Players:    []PlayerState{{Score: 0}, {Score: 0}},
+		TeamScores:   []int32{0, 0},
+		PlayerToTeam: []int8{0, 1},
+		WinningTeam:  -1,
+	}
+
+	// Should not panic with invalid player index
+	UpdateTeamScore(state, -1, 10) // Negative index
+	UpdateTeamScore(state, 5, 10)  // Out of bounds
+
+	// Scores should remain unchanged
+	if state.TeamScores[0] != 0 || state.TeamScores[1] != 0 {
+		t.Error("Team scores should remain 0 after invalid player index")
+	}
+}
+
+// TestDualScoringIntegrationTrickWin verifies trick win updates team scores
+func TestDualScoringIntegrationTrickWin(t *testing.T) {
+	state := NewGameState(4)
+	state.NumPlayers = 4
+	state.PlayerToTeam = []int8{0, 1, 0, 1}
+	state.TeamScores = []int32{0, 0}
+	state.WinningTeam = -1
+
+	// Setup 4 players with cards
+	state.Players[0].Hand = []Card{{Rank: 10, Suit: 0}} // 10 of Hearts - wins
+	state.Players[1].Hand = []Card{{Rank: 5, Suit: 0}}  // 5 of Hearts
+	state.Players[2].Hand = []Card{{Rank: 3, Suit: 0}}  // 3 of Hearts
+	state.Players[3].Hand = []Card{{Rank: 2, Suit: 0}}  // 2 of Hearts
+
+	state.TricksWon = make([]uint8, 4)
+
+	// Create a trick with hearts (1 point each for breaking suit in fallback scoring)
+	state.CurrentTrick = []TrickCard{
+		{PlayerID: 0, Card: Card{Rank: 10, Suit: 0}}, // Player 0 wins
+		{PlayerID: 1, Card: Card{Rank: 5, Suit: 0}},
+		{PlayerID: 2, Card: Card{Rank: 3, Suit: 0}},
+		{PlayerID: 3, Card: Card{Rank: 2, Suit: 0}},
+	}
+
+	// Create genome with trick phase and fallback scoring
+	genome := &Genome{
+		TurnPhases: []PhaseDescriptor{
+			{
+				PhaseType: 4, // TrickPhase
+				Data:      []byte{1, 255, 1, 0}, // lead_suit_required, no trump, high wins, hearts breaking
+			},
+		},
+	}
+
+	// Resolve the trick - player 0 should win
+	resolveTrick(state, genome, genome.TurnPhases[0])
+
+	// Player 0 wins 4 hearts = 4 points
+	if state.Players[0].Score != 4 {
+		t.Errorf("Player 0 should have 4 points, got %d", state.Players[0].Score)
+	}
+
+	// Team 0 (players 0 and 2) should also have 4 points
+	if state.TeamScores[0] != 4 {
+		t.Errorf("Team 0 should have 4 points, got %d", state.TeamScores[0])
+	}
+
+	// Team 1 should have 0 points
+	if state.TeamScores[1] != 0 {
+		t.Errorf("Team 1 should have 0 points, got %d", state.TeamScores[1])
+	}
+}
+
+// TestDualScoringIntegrationMatchRankCapture verifies match rank capture updates team scores
+func TestDualScoringIntegrationMatchRankCapture(t *testing.T) {
+	state := NewGameState(4)
+	state.NumPlayers = 4
+	state.TableauMode = 2 // MATCH_RANK
+	state.PlayerToTeam = []int8{0, 1, 0, 1}
+	state.TeamScores = []int32{0, 0}
+	state.WinningTeam = -1
+
+	// Setup: card on tableau to match
+	state.Tableau = make([][]Card, 1)
+	state.Tableau[0] = []Card{{Rank: 7, Suit: 1}} // 7 of different suit
+
+	// Player 2 (team 0) has a 7 that can capture
+	state.Players[2].Hand = []Card{{Rank: 7, Suit: 0}}
+	state.CurrentPlayer = 2
+
+	genome := minimalPlayPhaseGenome()
+	genome.Header.TableauMode = 2
+
+	move := LegalMove{PhaseIndex: 0, CardIndex: 0, TargetLoc: LocationTableau}
+	ApplyMove(state, &move, genome)
+
+	// Player 2 should have scored 2 points for the capture
+	if state.Players[2].Score != 2 {
+		t.Errorf("Player 2 should have score 2, got %d", state.Players[2].Score)
+	}
+
+	// Team 0 should also have 2 points
+	if state.TeamScores[0] != 2 {
+		t.Errorf("Team 0 should have 2 points, got %d", state.TeamScores[0])
+	}
+
+	// Team 1 should have 0 points
+	if state.TeamScores[1] != 0 {
+		t.Errorf("Team 1 should have 0 points, got %d", state.TeamScores[1])
+	}
+}
+
+// TestDualScoringIntegrationGoFishSet verifies Go Fish set scoring updates team scores
+func TestDualScoringIntegrationGoFishSet(t *testing.T) {
+	state := NewGameState(4)
+	state.NumPlayers = 4
+	state.PlayerToTeam = []int8{0, 1, 0, 1}
+	state.TeamScores = []int32{0, 0}
+	state.WinningTeam = -1
+
+	// Player 1 (team 1) has 4 cards of same rank (a set)
+	state.Players[1].Hand = []Card{
+		{Rank: 7, Suit: 0},
+		{Rank: 7, Suit: 1},
+		{Rank: 7, Suit: 2},
+		{Rank: 7, Suit: 3},
+	}
+	state.CurrentPlayer = 1
+
+	// Create genome with multi-card play phase (Go Fish style)
+	genome := &Genome{
+		Header: &BytecodeHeader{PlayerCount: 4},
+		TurnPhases: []PhaseDescriptor{
+			{
+				PhaseType: 2, // PlayPhase
+				Data: []byte{
+					byte(LocationDiscard), // target = DISCARD
+					4,                      // min_cards = 4
+					4,                      // max_cards = 4
+					0,                      // mandatory = false
+					0,                      // pass_if_unable = false
+					0, 0, 0, 0,             // conditionLen = 0
+				},
+			},
+		},
+	}
+
+	// Play the set (encoded as negative rank - 100)
+	move := LegalMove{PhaseIndex: 0, CardIndex: -107, TargetLoc: LocationDiscard} // -107 = -(7 + 100)
+	ApplyMove(state, &move, genome)
+
+	// Player 1 should have 1 point for completing a set
+	if state.Players[1].Score != 1 {
+		t.Errorf("Player 1 should have 1 point for set, got %d", state.Players[1].Score)
+	}
+
+	// Team 1 should also have 1 point
+	if state.TeamScores[1] != 1 {
+		t.Errorf("Team 1 should have 1 point, got %d", state.TeamScores[1])
+	}
+
+	// Team 0 should have 0 points
+	if state.TeamScores[0] != 0 {
+		t.Errorf("Team 0 should have 0 points, got %d", state.TeamScores[0])
+	}
+}

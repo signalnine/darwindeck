@@ -2,6 +2,26 @@ package engine
 
 import "encoding/binary"
 
+// UpdateTeamScore updates the team score when a player scores.
+// This should be called whenever a player's score changes.
+// It's a no-op if teams are not configured.
+func UpdateTeamScore(state *GameState, playerIdx int, pointsDelta int32) {
+	// Skip if teams not configured
+	if state.PlayerToTeam == nil || state.TeamScores == nil {
+		return
+	}
+
+	// Bounds check
+	if playerIdx < 0 || playerIdx >= len(state.PlayerToTeam) {
+		return
+	}
+
+	teamIdx := state.PlayerToTeam[playerIdx]
+	if teamIdx >= 0 && int(teamIdx) < len(state.TeamScores) {
+		state.TeamScores[teamIdx] += pointsDelta
+	}
+}
+
 // Special CardIndex values for ClaimPhase
 const (
 	MoveChallenge = -1 // Challenge the current claim
@@ -543,6 +563,7 @@ func ApplyMove(state *GameState, move *LegalMove, genome *Genome) {
 				state.Discard = append(state.Discard, cardsToPlay...)
 				// Score point for completing a set (Go Fish scoring)
 				state.Players[currentPlayer].Score++
+				UpdateTeamScore(state, int(currentPlayer), 1)
 			case LocationTableau:
 				if len(state.Tableau) == 0 {
 					state.Tableau = make([][]Card, 1)
@@ -781,6 +802,7 @@ func resolveTrick(state *GameState, genome *Genome, phase PhaseDescriptor) {
 	// Calculate and award points for trick
 	points := calculateTrickPoints(state, genome, breakingSuit)
 	state.Players[winner].Score += points
+	UpdateTeamScore(state, int(winner), points)
 
 	// Track tricks won
 	if len(state.TricksWon) <= int(winner) {
@@ -869,6 +891,7 @@ func resolveMatchRankCapture(state *GameState, playerID uint8, playedCard Card) 
 
 		// Score captures (each captured card = 1 point)
 		state.Players[playerID].Score += 2 // Both captured card and played card
+		UpdateTeamScore(state, int(playerID), 2)
 
 		// For a more complete Scopa implementation, we'd track captured cards
 		// in a separate pile, but for scoring purposes, just increment Score
