@@ -1,8 +1,17 @@
 """Python wrapper for Go simulation engine via CGo."""
 
 import ctypes
+import sys
 from pathlib import Path
 import flatbuffers
+
+# Add bindings directory to sys.path so FlatBuffers-generated code can import 'cardsim'
+# The FlatBuffers compiler generates imports like 'from cardsim.X import X'
+# rather than 'from darwindeck.bindings.cardsim.X import X'
+_bindings_dir = str(Path(__file__).parent)
+if _bindings_dir not in sys.path:
+    sys.path.insert(0, _bindings_dir)
+
 from darwindeck.bindings.cardsim import BatchResponse
 
 # Load shared library
