@@ -42,10 +42,10 @@ This document tracks planned features, known limitations, and future work.
 - [x] Measure dramatic moments (lead changes)
 - [x] Penalize anticlimactic endings
 
-**Interaction Metrics**
-- [ ] Measure player-to-player effects
-- [ ] Track blocking, stealing, attacking moves
-- [ ] Reward interactive over solitaire-like games
+**Interaction Metrics** ✅ Complete
+- [x] Measure player-to-player effects
+- [x] Track blocking, stealing, attacking moves
+- [x] Reward interactive over solitaire-like games
 
 ### Human Playtesting
 
@@ -199,6 +199,16 @@ This document tracks planned features, known limitations, and future work.
 - [x] NONE: No tableau in game
 - [x] Go simulation support for all modes
 
+### Interaction Metrics / Solitaire Detection (Complete)
+- [x] Multi-signal approach replacing crude interaction_frequency
+- [x] Move disruption tracking (opponent turns that change your options)
+- [x] Resource contention tracking (competing for same cards/positions)
+- [x] Forced response tracking (moves significantly constrained by opponent)
+- [x] Go simulation with proper player indexing (capture BEFORE ApplyMove)
+- [x] FlatBuffers serialization through CGo bridge
+- [x] Python fitness calculation using average of three signals
+- [x] Comparison script for validating metrics across game types
+
 ---
 
 ## Contributing
@@ -223,3 +233,4 @@ To work on a roadmap item:
 | 2026-01-17 | 0.3.0 | Interactive playtest CLI and LLM rulebook generation |
 | 2026-01-17 | 0.3.1 | Self-describing genomes with CardScoringRule, HandEvaluationMethod |
 | 2026-01-17 | 0.3.2 | Semantic coherence checking and coherent mutation operators |
+| 2026-01-17 | 0.3.3 | Interaction metrics with multi-signal solitaire detection |
