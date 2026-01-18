@@ -163,6 +163,11 @@ class GoSimulator:
                 decisive_turn_pct=result.DecisiveTurnPct(),
                 closest_margin=result.ClosestMargin(),
                 trailing_winners=result.TrailingWinners(),
+                # Solitaire detection metrics
+                move_disruption_events=result.MoveDisruptionEvents(),
+                contention_events=result.ContentionEvents(),
+                forced_response_events=result.ForcedResponseEvents(),
+                opponent_turn_count=result.OpponentTurnCount(),
             )
         except Exception as e:
             # Return error results for simulation failures
@@ -320,6 +325,11 @@ class GoSimulator:
                 decisive_turn_pct=result.DecisiveTurnPct(),
                 closest_margin=result.ClosestMargin(),
                 trailing_winners=result.TrailingWinners(),
+                # Solitaire detection metrics
+                move_disruption_events=result.MoveDisruptionEvents(),
+                contention_events=result.ContentionEvents(),
+                forced_response_events=result.ForcedResponseEvents(),
+                opponent_turn_count=result.OpponentTurnCount(),
             )
         except Exception as e:
             return SimulationResults(
