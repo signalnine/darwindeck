@@ -877,8 +877,25 @@ func resolveMatchRankCapture(state *GameState, playerID uint8, playedCard Card) 
 	// If no match, played card stays on tableau (already added by PlayCard)
 }
 
+// setWinnerWithTeam sets the winner ID and also sets WinningTeam if teams are configured.
+// Returns the winner ID for convenience in return statements.
+func setWinnerWithTeam(state *GameState, winnerID int8) int8 {
+	if winnerID < 0 {
+		return winnerID
+	}
+
+	// Set WinningTeam if teams are configured
+	if state.PlayerToTeam != nil && int(winnerID) < len(state.PlayerToTeam) {
+		state.WinningTeam = state.PlayerToTeam[winnerID]
+	}
+	// If player is not in team map, WinningTeam stays at its current value (typically -1)
+
+	return winnerID
+}
+
 // CheckWinConditions evaluates win conditions, returns winner ID or -1
 // Exported so mcts package can use it
+// When a winner is found and teams are configured, also sets state.WinningTeam
 func CheckWinConditions(state *GameState, genome *Genome) int8 {
 	numPlayers := int(state.NumPlayers)
 	if numPlayers == 0 {
@@ -890,7 +907,7 @@ func CheckWinConditions(state *GameState, genome *Genome) int8 {
 		case 0: // empty_hand
 			for playerID := 0; playerID < numPlayers; playerID++ {
 				if len(state.Players[playerID].Hand) == 0 {
-					return int8(playerID)
+					return setWinnerWithTeam(state, int8(playerID))
 				}
 			}
 		case 1: // high_score (highest score wins, triggers when anyone reaches threshold)
@@ -908,18 +925,18 @@ func CheckWinConditions(state *GameState, genome *Genome) int8 {
 				}
 			}
 			if triggered && winner >= 0 {
-				return winner
+				return setWinnerWithTeam(state, winner)
 			}
 		case 2: // first_to_score
 			for playerID := 0; playerID < numPlayers; playerID++ {
 				if state.Players[playerID].Score >= wc.Threshold {
-					return int8(playerID)
+					return setWinnerWithTeam(state, int8(playerID))
 				}
 			}
 		case 3: // capture_all
 			for playerID := 0; playerID < numPlayers; playerID++ {
 				if len(state.Players[playerID].Hand) == 52 {
-					return int8(playerID)
+					return setWinnerWithTeam(state, int8(playerID))
 				}
 			}
 		case 4: // low_score (Hearts: lowest score wins when anyone reaches threshold)
@@ -937,7 +954,7 @@ func CheckWinConditions(state *GameState, genome *Genome) int8 {
 				}
 			}
 			if triggered && winner >= 0 {
-				return winner
+				return setWinnerWithTeam(state, winner)
 			}
 		case 5: // all_hands_empty (trick-taking: hand ends when all empty)
 			allEmpty := true
@@ -957,7 +974,7 @@ func CheckWinConditions(state *GameState, genome *Genome) int8 {
 						winner = int8(playerID)
 					}
 				}
-				return winner
+				return setWinnerWithTeam(state, winner)
 			}
 
 		case 6: // best_hand (poker: compare hands at end of game)
@@ -973,7 +990,8 @@ func CheckWinConditions(state *GameState, genome *Genome) int8 {
 			}
 			// Only trigger after some turns have passed (draw phase complete)
 			if allHaveFive && state.TurnNumber >= uint32(numPlayers*2) {
-				return FindBestPokerWinner(state, numPlayers)
+				winner := FindBestPokerWinner(state, numPlayers)
+				return setWinnerWithTeam(state, winner)
 			}
 
 		case 7: // most_captured (Scopa: player with most captured cards wins)
@@ -996,7 +1014,7 @@ func CheckWinConditions(state *GameState, genome *Genome) int8 {
 						winner = int8(playerID)
 					}
 				}
-				return winner
+				return setWinnerWithTeam(state, winner)
 			}
 		}
 	}
