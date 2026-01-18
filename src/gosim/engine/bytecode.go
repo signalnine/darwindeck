@@ -408,6 +408,8 @@ func (g *Genome) parseTurnStructure() error {
 			phaseLen = 8
 		case PhaseTypeClaim: // ClaimPhase
 			phaseLen = 10
+		case PhaseTypeBidding: // BiddingPhase: opcode:1 + min_bid:1 + max_bid:1 + flags:1 + scoring:12 = 16 bytes
+			phaseLen = 16
 		default:
 			return fmt.Errorf("unknown phase type: %d", phaseType)
 		}
