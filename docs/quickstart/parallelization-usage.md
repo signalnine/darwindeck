@@ -75,12 +75,17 @@ func main() {
 Use `ParallelFitnessEvaluator` to evaluate multiple genomes in parallel:
 
 ```python
-from darwindeck.evolution.parallel_fitness import ParallelFitnessEvaluator
-from darwindeck.evolution.fitness_full import FitnessEvaluator
+from functools import partial
+from darwindeck.evolution.parallel_fitness import (
+    ParallelFitnessEvaluator,
+    _create_evaluator,  # Named factory function
+)
 
 # Create parallel evaluator with auto-detected CPU count
+# NOTE: Must use named functions or functools.partial, NOT lambdas
+# (lambdas can't be pickled with 'spawn' multiprocessing context)
 evaluator = ParallelFitnessEvaluator(
-    evaluator_factory=lambda: FitnessEvaluator(),
+    evaluator_factory=_create_evaluator,  # Named function, not lambda
     num_workers=None  # None = auto-detect (recommended)
 )
 
@@ -104,8 +109,14 @@ If you need to override the default worker count:
 ```python
 # Use specific number of workers
 evaluator = ParallelFitnessEvaluator(
-    evaluator_factory=lambda: FitnessEvaluator(),
+    evaluator_factory=_create_evaluator,
     num_workers=2  # Explicit worker count
+)
+
+# For custom style configuration, use functools.partial:
+evaluator = ParallelFitnessEvaluator(
+    evaluator_factory=partial(_create_evaluator, style='strategic'),
+    num_workers=4
 )
 ```
 
@@ -119,14 +130,13 @@ evaluator = ParallelFitnessEvaluator(
 Example integration with evolutionary algorithm:
 
 ```python
-from darwindeck.evolution.parallel_fitness import ParallelFitnessEvaluator
-from darwindeck.evolution.fitness_full import FitnessEvaluator
+from darwindeck.evolution.parallel_fitness import ParallelFitnessEvaluator, _create_evaluator
 from darwindeck.evolution.selection import tournament_selection
 from darwindeck.evolution.mutation import mutate_genome
 
-# Initialize parallel evaluator
+# Initialize parallel evaluator (uses named factory function)
 parallel_eval = ParallelFitnessEvaluator(
-    evaluator_factory=lambda: FitnessEvaluator()
+    evaluator_factory=_create_evaluator
 )
 
 # Evolutionary loop
@@ -276,7 +286,7 @@ print(f"Memory used: {mem_after - mem_before:.1f} MB")
 ```python
 # Reduce worker count to leave resources for other tasks
 evaluator = ParallelFitnessEvaluator(
-    evaluator_factory=lambda: FitnessEvaluator(),
+    evaluator_factory=_create_evaluator,
     num_workers=2  # Instead of 4
 )
 
@@ -317,7 +327,7 @@ results = evaluate_in_chunks(genomes, chunk_size=25)
 ```python
 # For deterministic results, use serial evaluation
 evaluator = ParallelFitnessEvaluator(
-    evaluator_factory=lambda: FitnessEvaluator(),
+    evaluator_factory=_create_evaluator,
     num_workers=1  # Serial execution
 )
 
@@ -342,7 +352,7 @@ logging.basicConfig(level=logging.DEBUG)
 
 # Reduce worker count
 evaluator = ParallelFitnessEvaluator(
-    evaluator_factory=lambda: FitnessEvaluator(),
+    evaluator_factory=_create_evaluator,
     num_workers=2
 )
 
@@ -363,8 +373,8 @@ def create_custom_simulator():
     return CustomSimulator(config={...})
 
 evaluator = ParallelFitnessEvaluator(
-    evaluator_factory=lambda: FitnessEvaluator(),
-    simulator_factory=create_custom_simulator,
+    evaluator_factory=_create_evaluator,
+    simulator_factory=create_custom_simulator,  # Named function
     num_workers=4
 )
 ```
@@ -415,12 +425,12 @@ Let the system detect CPU count automatically:
 ```python
 # ✅ Good: Auto-detect
 evaluator = ParallelFitnessEvaluator(
-    evaluator_factory=lambda: FitnessEvaluator()
+    evaluator_factory=_create_evaluator
 )
 
 # ❌ Avoid: Hardcoded worker count
 evaluator = ParallelFitnessEvaluator(
-    evaluator_factory=lambda: FitnessEvaluator(),
+    evaluator_factory=_create_evaluator,
     num_workers=4  # What if running on 2-core or 16-core machine?
 )
 ```
@@ -439,19 +449,23 @@ results = evaluator.evaluate_population(genomes, num_simulations=10)
 results = evaluator.evaluate_population(genomes, num_simulations=50000)
 ```
 
-### 3. Process Isolation
+### 3. Use Named Factory Functions
 
-Don't share state across workers:
+Use named functions or functools.partial (not lambdas) for cross-platform compatibility:
 ```python
-# ✅ Good: Factory creates fresh instance per worker
+# ✅ Good: Named factory function (pickleable)
 evaluator = ParallelFitnessEvaluator(
-    evaluator_factory=lambda: FitnessEvaluator()
+    evaluator_factory=_create_evaluator
 )
 
-# ❌ Avoid: Shared instance across workers
-shared_eval = FitnessEvaluator()
+# ✅ Good: functools.partial for custom args (pickleable)
 evaluator = ParallelFitnessEvaluator(
-    evaluator_factory=lambda: shared_eval  # This won't work!
+    evaluator_factory=partial(_create_evaluator, style='strategic')
+)
+
+# ❌ Avoid: Lambda functions (not pickleable with 'spawn' context)
+evaluator = ParallelFitnessEvaluator(
+    evaluator_factory=lambda: FitnessEvaluator()  # Fails on macOS/Windows!
 )
 ```
 
@@ -483,7 +497,7 @@ available_memory_gb = psutil.virtual_memory().available / (1024**3)
 max_batch_size = int(available_memory_gb * 0.8 * 1000)  # ~1MB per game
 
 evaluator = ParallelFitnessEvaluator(
-    evaluator_factory=lambda: FitnessEvaluator(),
+    evaluator_factory=_create_evaluator,
     num_workers=available_cores
 )
 
