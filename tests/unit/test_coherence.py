@@ -5,7 +5,8 @@ from darwindeck.evolution.coherence import SemanticCoherenceChecker, CoherenceRe
 from darwindeck.genome.examples import create_war_genome
 from darwindeck.genome.schema import (
     GameGenome, SetupRules, TurnStructure, PlayPhase, DiscardPhase,
-    WinCondition, Location, BettingPhase
+    WinCondition, Location, BettingPhase, TrickPhase, BiddingPhase,
+    ContractScoring,
 )
 
 
@@ -15,6 +16,7 @@ def _make_genome(
     starting_chips: int = 0,
     scoring_rules: list = None,
     is_trick_based: bool = False,
+    contract_scoring: ContractScoring = None,
 ) -> GameGenome:
     """Helper to create test genomes."""
     return GameGenome(
@@ -27,6 +29,7 @@ def _make_genome(
         scoring_rules=tuple(scoring_rules or []),
         special_effects=[],
         player_count=2,
+        contract_scoring=contract_scoring,
     )
 
 
@@ -206,3 +209,86 @@ class TestRealWorldRegressions:
         violation_text = " ".join(result.violations)
         assert "high_score" in violation_text
         assert "starting_chips" in violation_text or "BettingPhase" in violation_text
+
+
+class TestBiddingCoherence:
+    """Tests for bidding phase coherence rules."""
+
+    def test_bidding_without_trick_is_incoherent(self):
+        """BiddingPhase without TrickPhase = invalid (bidding without tricks is meaningless)."""
+        genome = _make_genome(
+            phases=[
+                BiddingPhase(min_bid=1, max_bid=13),
+                DiscardPhase(target=Location.DISCARD, count=1),
+            ],
+            win_conditions=[WinCondition(type="empty_hand")],
+        )
+        checker = SemanticCoherenceChecker()
+        result = checker.check(genome)
+        assert result.coherent is False
+        assert "BiddingPhase" in result.violations[0]
+        assert "TrickPhase" in result.violations[0]
+
+    def test_bidding_with_trick_is_coherent(self):
+        """BiddingPhase + TrickPhase = valid (Spades-style game)."""
+        genome = _make_genome(
+            phases=[
+                BiddingPhase(min_bid=1, max_bid=13),
+                TrickPhase(),
+            ],
+            win_conditions=[WinCondition(type="high_score", threshold=500)],
+            is_trick_based=True,
+        )
+        checker = SemanticCoherenceChecker()
+        result = checker.check(genome)
+        assert result.coherent is True
+
+    def test_contract_scoring_without_bidding_is_incoherent(self):
+        """contract_scoring without BiddingPhase = invalid (no contracts to score)."""
+        genome = _make_genome(
+            phases=[
+                TrickPhase(),
+            ],
+            win_conditions=[WinCondition(type="high_score", threshold=500)],
+            is_trick_based=True,
+            contract_scoring=ContractScoring(
+                points_per_trick_bid=10,
+                overtrick_points=1,
+            ),
+        )
+        checker = SemanticCoherenceChecker()
+        result = checker.check(genome)
+        assert result.coherent is False
+        assert "contract_scoring" in result.violations[0]
+        assert "BiddingPhase" in result.violations[0]
+
+    def test_contract_scoring_with_bidding_is_coherent(self):
+        """contract_scoring + BiddingPhase + TrickPhase = valid (full Spades game)."""
+        genome = _make_genome(
+            phases=[
+                BiddingPhase(min_bid=1, max_bid=13),
+                TrickPhase(),
+            ],
+            win_conditions=[WinCondition(type="high_score", threshold=500)],
+            is_trick_based=True,
+            contract_scoring=ContractScoring(
+                points_per_trick_bid=10,
+                overtrick_points=1,
+            ),
+        )
+        checker = SemanticCoherenceChecker()
+        result = checker.check(genome)
+        assert result.coherent is True
+
+    def test_trick_without_bidding_is_coherent(self):
+        """TrickPhase without BiddingPhase = valid (Hearts-style game, no contracts)."""
+        genome = _make_genome(
+            phases=[
+                TrickPhase(),
+            ],
+            win_conditions=[WinCondition(type="low_score", threshold=100)],
+            is_trick_based=True,
+        )
+        checker = SemanticCoherenceChecker()
+        result = checker.check(genome)
+        assert result.coherent is True

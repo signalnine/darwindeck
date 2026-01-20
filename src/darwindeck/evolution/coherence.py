@@ -25,6 +25,7 @@ class SemanticCoherenceChecker:
         violations = []
         violations.extend(self._check_win_conditions(genome))
         violations.extend(self._check_resources(genome))
+        violations.extend(self._check_bidding(genome))
         return CoherenceResult(
             coherent=len(violations) == 0,
             violations=violations
@@ -73,6 +74,39 @@ class SemanticCoherenceChecker:
         if genome.setup.starting_chips > 0 and not has_betting_phase:
             violations.append(
                 f"starting_chips={genome.setup.starting_chips} but no BettingPhase"
+            )
+
+        return violations
+
+    def _check_bidding(self, genome: "GameGenome") -> list[str]:
+        """Check bidding mechanics have supporting phases.
+
+        Bidding (contract declaration) requires trick-taking mechanics to be meaningful.
+        Contract scoring requires a bidding phase to establish contracts.
+        """
+        from darwindeck.genome.schema import BiddingPhase, TrickPhase
+
+        violations = []
+
+        has_bidding_phase = any(
+            isinstance(p, BiddingPhase)
+            for p in genome.turn_structure.phases
+        )
+        has_trick_phase = any(
+            isinstance(p, TrickPhase)
+            for p in genome.turn_structure.phases
+        )
+
+        # BiddingPhase requires TrickPhase - bidding without tricks is meaningless
+        if has_bidding_phase and not has_trick_phase:
+            violations.append(
+                "BiddingPhase requires at least one TrickPhase"
+            )
+
+        # ContractScoring requires BiddingPhase to establish contracts
+        if genome.contract_scoring is not None and not has_bidding_phase:
+            violations.append(
+                "contract_scoring requires BiddingPhase"
             )
 
         return violations
