@@ -268,7 +268,9 @@ def evaluate_batch_skill(
     if not genomes:
         return []
 
-    num_workers = num_workers or int(os.environ.get('EVOLUTION_WORKERS', os.cpu_count() or 4))
+    # Cap default workers at 64 to avoid massive spawn overhead on high-core machines
+    default_workers = min(os.cpu_count() or 4, 64)
+    num_workers = num_workers or int(os.environ.get('EVOLUTION_WORKERS', default_workers))
 
     tasks = [
         _SkillEvalTask(genome, num_games, mcts_iterations, timeout_sec)
