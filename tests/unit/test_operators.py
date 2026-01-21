@@ -1526,3 +1526,58 @@ def test_bidding_mutations_in_default_pipeline():
 
     assert "AddBiddingPhaseMutation" in operator_types
     assert "RemoveBiddingPhaseMutation" in operator_types
+
+
+# =====================================================================
+# Tableau Visibility Mutation Tests
+# =====================================================================
+
+
+def test_mutate_tableau_visibility():
+    """MutateTableauVisibilityMutation changes tableau visibility."""
+    from darwindeck.evolution.operators import MutateTableauVisibilityMutation
+    from darwindeck.genome.examples import create_war_genome
+    from darwindeck.genome.schema import Visibility
+
+    genome = create_war_genome()
+    # Default is FACE_UP
+    assert genome.setup.tableau_visibility == Visibility.FACE_UP
+
+    mutation = MutateTableauVisibilityMutation(probability=1.0)
+    mutated = mutation.mutate(genome)
+
+    # Should have changed to FACE_DOWN
+    assert mutated.setup.tableau_visibility == Visibility.FACE_DOWN
+    assert mutated.generation == genome.generation + 1
+
+
+def test_mutate_tableau_visibility_from_face_down():
+    """MutateTableauVisibilityMutation changes FACE_DOWN to FACE_UP."""
+    from darwindeck.evolution.operators import MutateTableauVisibilityMutation
+    from darwindeck.genome.examples import create_war_genome
+    from darwindeck.genome.schema import Visibility
+    from dataclasses import replace
+
+    genome = create_war_genome()
+    # Set to FACE_DOWN
+    genome = replace(genome, setup=replace(genome.setup, tableau_visibility=Visibility.FACE_DOWN))
+    assert genome.setup.tableau_visibility == Visibility.FACE_DOWN
+
+    mutation = MutateTableauVisibilityMutation(probability=1.0)
+    mutated = mutation.mutate(genome)
+
+    # Should have changed to FACE_UP
+    assert mutated.setup.tableau_visibility == Visibility.FACE_UP
+
+
+def test_tableau_visibility_mutation_in_default_pipeline():
+    """Default pipeline includes tableau visibility mutation."""
+    from darwindeck.evolution.operators import (
+        create_default_pipeline,
+        MutateTableauVisibilityMutation,
+    )
+
+    pipeline = create_default_pipeline()
+    operator_types = [type(op).__name__ for op in pipeline.operators]
+
+    assert "MutateTableauVisibilityMutation" in operator_types

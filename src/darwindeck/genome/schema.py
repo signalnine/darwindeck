@@ -267,6 +267,7 @@ class SetupRules:
     hand_visibility: Visibility = Visibility.OWNER_ONLY
     deck_visibility: Visibility = Visibility.FACE_DOWN
     discard_visibility: Visibility = Visibility.FACE_UP
+    tableau_visibility: Visibility = Visibility.FACE_UP  # FACE_DOWN for memory games
     # NEW: Trick-taking support
     trump_suit: Optional[Suit] = None        # Fixed trump (e.g., Spades in some variants)
     rotate_trump: bool = False               # Trump changes each hand

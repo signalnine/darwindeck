@@ -22,12 +22,7 @@ This document tracks planned features, known limitations, and future work.
 
 ### Schema Extensions
 
-**Bidding/Contracts**
-- [ ] `BiddingPhase` - Contract declarations
-- [ ] Bid tracking and validation
-- [ ] Contract-based scoring
-
-**Use cases:** Bridge, Spades with bidding, Pinochle
+*No pending schema extensions - all planned features complete*
 
 ### Fitness Improvements
 
@@ -57,7 +52,7 @@ This document tracks planned features, known limitations, and future work.
 | Feature | Status | Workaround |
 |---------|--------|------------|
 | Real-time actions | Not supported | Turn-based approximation |
-| Hidden tableau (Concentration) | Not supported | None |
+| Hidden tableau (Concentration) | Schema ready | `tableau_visibility=FACE_DOWN` - simulation pending |
 | Simultaneous play | Not supported | Sequential turns |
 | Player choice prompts | Not supported | AI makes all decisions |
 | Complex scoring formulas | Limited | Basic threshold scoring only |
@@ -216,6 +211,17 @@ This document tracks planned features, known limitations, and future work.
 - [x] Partnership Spades seed game
 - [x] Full integration tests for team game simulation
 
+### Bidding/Contracts (Complete)
+- [x] `BiddingPhase` for contract declarations (min_bid, max_bid, allow_nil)
+- [x] `ContractScoring` with points_per_trick_bid, overtrick_points, penalties
+- [x] Nil bid support with bonus/penalty
+- [x] Bag accumulation and bag penalty system
+- [x] Go simulation with bidding round and contract evaluation
+- [x] Bytecode encoding for BiddingPhase (PhaseTypeBidding = 7)
+- [x] Semantic coherence checks (BiddingPhase requires TrickPhase, contract_scoring requires BiddingPhase)
+- [x] Cleanup mutation for orphaned contract_scoring
+- [x] Spades seed game with full bidding support
+
 ---
 
 ## Contributing
@@ -242,3 +248,4 @@ To work on a roadmap item:
 | 2026-01-17 | 0.3.2 | Semantic coherence checking and coherent mutation operators |
 | 2026-01-17 | 0.3.3 | Interaction metrics with multi-signal solitaire detection |
 | 2026-01-17 | 0.4.0 | Team play support - partnership games now evolvable |
+| 2026-01-21 | 0.5.0 | Bidding/contracts complete - Spades-style games now evolvable |

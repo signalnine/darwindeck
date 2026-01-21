@@ -11,7 +11,7 @@ from darwindeck.genome.schema import (
     PlayPhase, DrawPhase, DiscardPhase, TrickPhase, ClaimPhase,
     BettingPhase, BiddingPhase, ContractScoring,
     Location, Suit, SpecialEffect, EffectType, TargetSelector, Rank,
-    TableauMode, SequenceDirection, ShowdownMethod,
+    TableauMode, SequenceDirection, ShowdownMethod, Visibility,
     CardScoringRule, CardCondition, ScoringTrigger,
     HandEvaluation, HandPattern, CardValue,
 )
@@ -1242,6 +1242,53 @@ class MutateSequenceDirectionMutation(MutationOperator):
         return replace(genome, setup=new_setup, generation=genome.generation + 1)
 
 
+class MutateTableauVisibilityMutation(MutationOperator):
+    """Change the tableau visibility setting.
+
+    This mutation changes whether cards on the tableau are visible to all players.
+    Setting tableau_visibility to FACE_DOWN enables memory/matching games like
+    Concentration where players must remember card positions.
+
+    Note: Full simulation support for hidden tableau requires card state tracking.
+    This mutation prepares genomes for memory-style games.
+    """
+
+    def __init__(self, probability: float = 0.03):
+        """Initialize tableau visibility mutation.
+
+        Args:
+            probability: Mutation probability (default: 3% - low weight as significant change)
+        """
+        super().__init__(probability)
+
+    def mutate(self, genome: GameGenome) -> GameGenome:
+        """Change the tableau visibility setting.
+
+        Args:
+            genome: Genome to mutate
+
+        Returns:
+            New genome with different tableau visibility
+        """
+        # Valid visibility options for tableau
+        valid_options = [Visibility.FACE_UP, Visibility.FACE_DOWN]
+
+        # Remove current option to ensure change
+        valid_options = [v for v in valid_options if v != genome.setup.tableau_visibility]
+
+        if not valid_options:
+            return genome
+
+        new_visibility = random.choice(valid_options)
+
+        new_setup = replace(
+            genome.setup,
+            tableau_visibility=new_visibility,
+        )
+
+        return replace(genome, setup=new_setup, generation=genome.generation + 1)
+
+
 class AddCardScoringMutation(MutationOperator):
     """Add a random card scoring rule."""
 
@@ -1777,6 +1824,7 @@ def create_default_pipeline(
         # Tableau mode mutations (low weight - significant structural changes)
         MutateTableauModeMutation(probability=min(0.05 * mult, 0.10)),       # 5% (10% aggressive)
         MutateSequenceDirectionMutation(probability=min(0.03 * mult, 0.06)), # 3% (6% aggressive)
+        MutateTableauVisibilityMutation(probability=min(0.03 * mult, 0.06)), # 3% (6% aggressive)
 
         # Self-describing genome mutations (card scoring, hand patterns, card values)
         AddCardScoringMutation(probability=min(0.05 * mult, 0.10)),          # 5% (10% aggressive)
