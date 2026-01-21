@@ -95,7 +95,10 @@ class EvolutionEngine:
             num_workers: Number of parallel workers (default: os.cpu_count())
         """
         self.config = config
-        self.num_workers = num_workers or int(os.environ.get('EVOLUTION_WORKERS', os.cpu_count() or 4))
+        # Cap default workers at 64 to avoid massive spawn overhead on high-core machines
+        # 256 workers with 'spawn' context causes ~30s+ startup time and potential hangs
+        default_workers = min(os.cpu_count() or 4, 64)
+        self.num_workers = num_workers or int(os.environ.get('EVOLUTION_WORKERS', default_workers))
 
         # Initialize parallel fitness evaluator with style preset
         # Use partial to pass style to the factory function (picklable unlike lambdas)
