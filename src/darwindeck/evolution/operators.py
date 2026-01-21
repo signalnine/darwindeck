@@ -11,7 +11,7 @@ from darwindeck.genome.schema import (
     PlayPhase, DrawPhase, DiscardPhase, TrickPhase, ClaimPhase,
     BettingPhase, BiddingPhase, ContractScoring,
     Location, Suit, SpecialEffect, EffectType, TargetSelector, Rank,
-    TableauMode, SequenceDirection,
+    TableauMode, SequenceDirection, ShowdownMethod,
     CardScoringRule, CardCondition, ScoringTrigger,
     HandEvaluation, HandPattern, CardValue,
 )
@@ -1087,6 +1087,7 @@ class CleanupOrphanedResourcesMutation(MutationOperator):
     or other mutations. It detects and removes resources that have no use:
     - starting_chips without any BettingPhase
     - contract_scoring without any BiddingPhase
+    - hand_evaluation without best_hand win condition or HAND_EVALUATION showdown
 
     This mutation has high probability since it only makes changes when needed.
     """
@@ -1098,6 +1099,7 @@ class CleanupOrphanedResourcesMutation(MutationOperator):
         modified = False
         new_setup = genome.setup
         new_contract_scoring = genome.contract_scoring
+        new_hand_evaluation = genome.hand_evaluation
 
         # Check for orphaned chips
         has_betting_phase = any(
@@ -1121,11 +1123,28 @@ class CleanupOrphanedResourcesMutation(MutationOperator):
             new_contract_scoring = None
             modified = True
 
+        # Check for orphaned hand_evaluation
+        # hand_evaluation is used by: best_hand win condition OR BettingPhase with HAND_EVALUATION showdown
+        if genome.hand_evaluation is not None:
+            has_best_hand_win = any(
+                wc.type == "best_hand"
+                for wc in genome.win_conditions
+            )
+            has_hand_eval_showdown = any(
+                isinstance(p, BettingPhase) and p.showdown_method == ShowdownMethod.HAND_EVALUATION
+                for p in genome.turn_structure.phases
+            )
+            if not has_best_hand_win and not has_hand_eval_showdown:
+                # Remove orphaned hand_evaluation
+                new_hand_evaluation = None
+                modified = True
+
         if modified:
             return replace(
                 genome,
                 setup=new_setup,
                 contract_scoring=new_contract_scoring,
+                hand_evaluation=new_hand_evaluation,
                 generation=genome.generation + 1
             )
         return genome

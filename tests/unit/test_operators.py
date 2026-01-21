@@ -1368,6 +1368,97 @@ def test_cleanup_orphaned_contract_scoring():
     assert mutated.contract_scoring is None
 
 
+def test_cleanup_orphaned_hand_evaluation():
+    """CleanupOrphanedResourcesMutation removes orphaned hand_evaluation."""
+    from darwindeck.evolution.operators import CleanupOrphanedResourcesMutation
+    from darwindeck.genome.schema import (
+        GameGenome, SetupRules, TurnStructure, WinCondition,
+        PlayPhase, Location, HandEvaluation, HandEvaluationMethod
+    )
+
+    # Genome with hand_evaluation but no best_hand win condition or HAND_EVALUATION showdown
+    genome = GameGenome(
+        schema_version="1.0",
+        genome_id="test",
+        generation=0,
+        setup=SetupRules(cards_per_player=5),
+        turn_structure=TurnStructure(
+            phases=[PlayPhase(target=Location.DISCARD, min_cards=1, max_cards=1)],
+        ),
+        special_effects=[],
+        win_conditions=[WinCondition(type="empty_hand")],  # Not best_hand
+        scoring_rules=[],
+        hand_evaluation=HandEvaluation(method=HandEvaluationMethod.HIGH_CARD),  # Orphaned!
+    )
+
+    mutation = CleanupOrphanedResourcesMutation(probability=1.0)
+    mutated = mutation.mutate(genome)
+
+    # Should remove orphaned hand_evaluation
+    assert mutated.hand_evaluation is None
+
+
+def test_cleanup_preserves_hand_evaluation_with_best_hand_win():
+    """CleanupOrphanedResourcesMutation preserves hand_evaluation when best_hand win exists."""
+    from darwindeck.evolution.operators import CleanupOrphanedResourcesMutation
+    from darwindeck.genome.schema import (
+        GameGenome, SetupRules, TurnStructure, WinCondition,
+        PlayPhase, Location, HandEvaluation, HandEvaluationMethod
+    )
+
+    # Genome with hand_evaluation AND best_hand win condition (valid)
+    genome = GameGenome(
+        schema_version="1.0",
+        genome_id="test",
+        generation=0,
+        setup=SetupRules(cards_per_player=5),
+        turn_structure=TurnStructure(
+            phases=[PlayPhase(target=Location.DISCARD, min_cards=1, max_cards=1)],
+        ),
+        special_effects=[],
+        win_conditions=[WinCondition(type="best_hand")],  # Uses hand_evaluation
+        scoring_rules=[],
+        hand_evaluation=HandEvaluation(method=HandEvaluationMethod.HIGH_CARD),
+    )
+
+    mutation = CleanupOrphanedResourcesMutation(probability=1.0)
+    mutated = mutation.mutate(genome)
+
+    # Should preserve hand_evaluation
+    assert mutated.hand_evaluation is not None
+    assert mutated.hand_evaluation.method == HandEvaluationMethod.HIGH_CARD
+
+
+def test_cleanup_preserves_hand_evaluation_with_betting_showdown():
+    """CleanupOrphanedResourcesMutation preserves hand_evaluation when BettingPhase uses it."""
+    from darwindeck.evolution.operators import CleanupOrphanedResourcesMutation
+    from darwindeck.genome.schema import (
+        GameGenome, SetupRules, TurnStructure, WinCondition,
+        BettingPhase, ShowdownMethod, HandEvaluation, HandEvaluationMethod
+    )
+
+    # Genome with hand_evaluation AND BettingPhase with HAND_EVALUATION showdown (valid)
+    genome = GameGenome(
+        schema_version="1.0",
+        genome_id="test",
+        generation=0,
+        setup=SetupRules(cards_per_player=5, starting_chips=1000),
+        turn_structure=TurnStructure(
+            phases=[BettingPhase(showdown_method=ShowdownMethod.HAND_EVALUATION)],
+        ),
+        special_effects=[],
+        win_conditions=[WinCondition(type="last_standing")],
+        scoring_rules=[],
+        hand_evaluation=HandEvaluation(method=HandEvaluationMethod.HIGH_CARD),
+    )
+
+    mutation = CleanupOrphanedResourcesMutation(probability=1.0)
+    mutated = mutation.mutate(genome)
+
+    # Should preserve hand_evaluation
+    assert mutated.hand_evaluation is not None
+
+
 def test_add_bidding_phase_mutation_only_for_trick_games():
     """AddBiddingPhaseMutation only applies to games with TrickPhase."""
     from darwindeck.evolution.operators import AddBiddingPhaseMutation
