@@ -59,9 +59,9 @@ def create_app() -> FastAPI:
     async def health():
         return {"status": "ok"}
 
-    # TODO: Add route imports here
-    # from darwindeck.web.routes import games, sessions, ratings, admin
-    # app.include_router(games.router, prefix="/api/games", tags=["games"])
+    # API routes
+    from darwindeck.web.routes import games
+    app.include_router(games.router, prefix="/api/games", tags=["games"])
 
     return app
 
