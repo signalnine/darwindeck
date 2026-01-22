@@ -15,6 +15,8 @@ dependencies = [
     "matplotlib>=3.8",
     "rich>=13.0.0",
     "sqlalchemy>=2.0.46",
+    "fastapi>=0.109.0",
+    "uvicorn>=0.27.0",
 ]
 
 [project.optional-dependencies]
