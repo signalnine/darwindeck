@@ -1088,6 +1088,7 @@ class CleanupOrphanedResourcesMutation(MutationOperator):
     - starting_chips without any BettingPhase
     - contract_scoring without any BiddingPhase
     - hand_evaluation without best_hand win condition or HAND_EVALUATION showdown
+    - card_scoring without scoring win conditions or trick-based play
 
     This mutation has high probability since it only makes changes when needed.
     """
@@ -1139,12 +1140,29 @@ class CleanupOrphanedResourcesMutation(MutationOperator):
                 new_hand_evaluation = None
                 modified = True
 
+        # Check for orphaned card_scoring
+        # card_scoring is used by: scoring win conditions (high_score, low_score, first_to_score)
+        # OR trick-based games that track points from won tricks
+        new_card_scoring = genome.card_scoring
+        if genome.card_scoring:
+            scoring_win_conditions = {"high_score", "low_score", "first_to_score"}
+            has_scoring_win = any(
+                wc.type in scoring_win_conditions
+                for wc in genome.win_conditions
+            )
+            is_trick_based = genome.turn_structure.is_trick_based
+            if not has_scoring_win and not is_trick_based:
+                # Remove orphaned card_scoring
+                new_card_scoring = ()
+                modified = True
+
         if modified:
             return replace(
                 genome,
                 setup=new_setup,
                 contract_scoring=new_contract_scoring,
                 hand_evaluation=new_hand_evaluation,
+                card_scoring=new_card_scoring,
                 generation=genome.generation + 1
             )
         return genome

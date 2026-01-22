@@ -1459,6 +1459,118 @@ def test_cleanup_preserves_hand_evaluation_with_betting_showdown():
     assert mutated.hand_evaluation is not None
 
 
+def test_cleanup_orphaned_card_scoring():
+    """CleanupOrphanedResourcesMutation removes card_scoring without scoring win conditions."""
+    from darwindeck.evolution.operators import CleanupOrphanedResourcesMutation
+    from darwindeck.genome.schema import (
+        GameGenome, SetupRules, TurnStructure, WinCondition, PlayPhase, Location,
+        CardScoringRule, CardCondition, ScoringTrigger, Suit
+    )
+
+    # Genome with card_scoring but no scoring win condition (orphaned)
+    genome = GameGenome(
+        schema_version="1.0",
+        genome_id="test",
+        generation=0,
+        setup=SetupRules(cards_per_player=5),
+        turn_structure=TurnStructure(
+            phases=[PlayPhase(target=Location.DISCARD)],
+            is_trick_based=False,
+        ),
+        special_effects=[],
+        win_conditions=[WinCondition(type="empty_hand")],  # Not a scoring win condition
+        scoring_rules=[],
+        card_scoring=(
+            CardScoringRule(
+                condition=CardCondition(suit=Suit.HEARTS),
+                points=1,
+                trigger=ScoringTrigger.TRICK_WIN,
+            ),
+        ),
+    )
+
+    mutation = CleanupOrphanedResourcesMutation(probability=1.0)
+    mutated = mutation.mutate(genome)
+
+    # Should remove orphaned card_scoring
+    assert mutated.card_scoring == ()
+    assert mutated.generation == genome.generation + 1
+
+
+def test_cleanup_preserves_card_scoring_with_scoring_win():
+    """CleanupOrphanedResourcesMutation preserves card_scoring when scoring win condition exists."""
+    from darwindeck.evolution.operators import CleanupOrphanedResourcesMutation
+    from darwindeck.genome.schema import (
+        GameGenome, SetupRules, TurnStructure, WinCondition, PlayPhase, Location,
+        CardScoringRule, CardCondition, ScoringTrigger, Suit
+    )
+
+    # Genome with card_scoring AND high_score win condition (valid)
+    genome = GameGenome(
+        schema_version="1.0",
+        genome_id="test",
+        generation=0,
+        setup=SetupRules(cards_per_player=5),
+        turn_structure=TurnStructure(
+            phases=[PlayPhase(target=Location.DISCARD)],
+            is_trick_based=False,
+        ),
+        special_effects=[],
+        win_conditions=[WinCondition(type="high_score", threshold=100)],
+        scoring_rules=[],
+        card_scoring=(
+            CardScoringRule(
+                condition=CardCondition(suit=Suit.HEARTS),
+                points=1,
+                trigger=ScoringTrigger.TRICK_WIN,
+            ),
+        ),
+    )
+
+    mutation = CleanupOrphanedResourcesMutation(probability=1.0)
+    mutated = mutation.mutate(genome)
+
+    # Should preserve card_scoring
+    assert len(mutated.card_scoring) == 1
+
+
+def test_cleanup_preserves_card_scoring_with_trick_based():
+    """CleanupOrphanedResourcesMutation preserves card_scoring for trick-based games."""
+    from darwindeck.evolution.operators import CleanupOrphanedResourcesMutation
+    from darwindeck.genome.schema import (
+        GameGenome, SetupRules, TurnStructure, WinCondition, TrickPhase,
+        CardScoringRule, CardCondition, ScoringTrigger, Suit
+    )
+
+    # Genome with card_scoring AND is_trick_based=True (valid for trick scoring)
+    genome = GameGenome(
+        schema_version="1.0",
+        genome_id="test",
+        generation=0,
+        setup=SetupRules(cards_per_player=5),
+        turn_structure=TurnStructure(
+            phases=[TrickPhase()],
+            is_trick_based=True,
+        ),
+        special_effects=[],
+        win_conditions=[WinCondition(type="empty_hand")],  # Not scoring, but trick-based
+        scoring_rules=[],
+        card_scoring=(
+            CardScoringRule(
+                condition=CardCondition(suit=Suit.HEARTS),
+                points=1,
+                trigger=ScoringTrigger.TRICK_WIN,
+            ),
+        ),
+    )
+
+    mutation = CleanupOrphanedResourcesMutation(probability=1.0)
+    mutated = mutation.mutate(genome)
+
+    # Should preserve card_scoring for trick-based games
+    assert len(mutated.card_scoring) == 1
+
+
 def test_add_bidding_phase_mutation_only_for_trick_games():
     """AddBiddingPhaseMutation only applies to games with TrickPhase."""
     from darwindeck.evolution.operators import AddBiddingPhaseMutation
