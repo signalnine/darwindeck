@@ -1,8 +1,19 @@
 # tests/unit/test_web_worker.py
 """Tests for SimulationWorker that manages Go subprocess."""
 
+import os
+from pathlib import Path
+
 import pytest
 from darwindeck.web.worker import SimulationWorker, SimulationError
+
+
+# Skip all tests in this module if worker binary not built
+_worker_path = Path(__file__).parent.parent.parent / "bin" / "gosim-worker"
+pytestmark = pytest.mark.skipif(
+    not _worker_path.exists(),
+    reason=f"Worker binary not built at {_worker_path}. Run 'make build-worker' first.",
+)
 
 
 class TestSimulationWorker:
