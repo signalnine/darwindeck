@@ -55,6 +55,7 @@ build-backend = "poetry.core.masonry.api"
 testpaths = ["tests"]
 python_files = "test_*.py"
 python_functions = "test_*"
+pythonpath = ["src"]
 
 [tool.black]
 line-length = 100
