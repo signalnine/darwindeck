@@ -590,6 +590,30 @@ uv run python -m darwindeck.cli.playtest path/to/genome.json --difficulty greedy
 # Options:
 --difficulty random|greedy|mcts  # AI opponent strength
 --seed N                          # Reproducible games
+--debug                           # Show AI hand and full state
+```
+
+### Helper Script
+
+```bash
+# Quick launch with Rich TUI display
+./scripts/tui.sh                           # Interactive genome picker
+./scripts/tui.sh path/to/genome.json       # Specific genome
+./scripts/tui.sh --latest                  # Most recent rank01 from evolution
+./scripts/tui.sh --latest --difficulty mcts  # With options
+```
+
+### Rich TUI Display
+
+When running in an interactive terminal, playtest automatically uses a Rich-based display with:
+- **Colored card suits** - Red hearts/diamonds, adaptive clubs/spades
+- **Boxed panels** - Game state, hand, actions, opponent info
+- **Move history** - Last 5 moves shown
+- **Compact mode** - Automatic layout for narrow terminals (<60 cols)
+
+To force plain text mode (for piped input or scripting):
+```bash
+FORCE_PLAIN_DISPLAY=1 uv run python -m darwindeck.cli.playtest genome.json
 ```
 
 ### Rulebook Generation
@@ -715,5 +739,8 @@ uv run python -m darwindeck.cli.describe genome.json
 | `src/darwindeck/simulation/movegen.py` | Move generation and application |
 | `src/darwindeck/simulation/go_simulator.py` | Go engine interface |
 | `src/darwindeck/playtest/session.py` | Interactive playtest session |
+| `src/darwindeck/playtest/rich_display.py` | Rich TUI display rendering |
+| `src/darwindeck/playtest/display_state.py` | Display state dataclasses |
 | `src/gosim/engine/` | Go simulation core |
 | `src/gosim/mcts/` | MCTS AI implementation |
+| `scripts/tui.sh` | Helper script for playtest TUI |
