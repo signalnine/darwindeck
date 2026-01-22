@@ -17,6 +17,7 @@ dependencies = [
     "sqlalchemy>=2.0.46",
     "fastapi>=0.109.0",
     "uvicorn>=0.27.0",
+    "slowapi>=0.1.9",
 ]
 
 [project.optional-dependencies]
