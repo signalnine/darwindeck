@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import os
 import random
+import sys
+from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Callable
@@ -21,6 +24,8 @@ from darwindeck.playtest.display import StateRenderer, MovePresenter
 from darwindeck.playtest.rules import RuleExplainer
 from darwindeck.playtest.input import HumanPlayer, InputResult
 from darwindeck.playtest.feedback import FeedbackCollector, PlaytestResult
+from darwindeck.playtest.rich_display import RichDisplay, MOVE_LOG_SIZE
+from darwindeck.playtest.display_state import DisplayState, MoveOption
 
 
 @dataclass
@@ -127,6 +132,30 @@ class PlaytestSession:
         # Initialize state
         self.state = self._initialize_state()
 
+        # Detect display mode
+        use_rich = (
+            sys.stdout.isatty()
+            and not os.environ.get("FORCE_PLAIN_DISPLAY")
+        )
+
+        if use_rich:
+            try:
+                return self._run_rich()
+            except ImportError:
+                # Fall back if rich not available
+                pass
+
+        return self._run_plain(output_fn)
+
+    def _run_plain(self, output_fn: Callable[[str], None] = print) -> PlaytestResult:
+        """Run the playtest session in plain text mode.
+
+        Args:
+            output_fn: Function to output text (default: print)
+
+        Returns:
+            PlaytestResult with game outcome and feedback
+        """
         # Show rules if configured
         if self.config.show_rules:
             output_fn(self.explainer.explain_rules(self.genome))
@@ -533,3 +562,272 @@ class PlaytestSession:
         # Randomly pick among ties
         ties = [m for m in scored if score_move(m) == best_score]
         return self.rng.choice(ties)
+
+    def _run_rich(self) -> PlaytestResult:
+        """Run the playtest session using Rich display.
+
+        Returns:
+            PlaytestResult with game outcome and feedback
+        """
+        display = RichDisplay()
+        move_log: deque[tuple[str, str]] = deque(maxlen=MOVE_LOG_SIZE)
+
+        # Show rules if configured
+        if self.config.show_rules:
+            display.show_message(self.explainer.explain_rules(self.genome))
+            display.show_message("")
+            display.show_message(f"You are Player {self.human_player_idx}")
+            display.show_message(f"Seed: {self.seed} (use --seed {self.seed} to replay)")
+            display.show_message("")
+
+        # Main game loop
+        winner: Optional[str] = None
+        quit_early = False
+        felt_broken = False
+        stuck_reason: Optional[str] = None
+
+        while True:
+            # Check for stuck
+            stuck_reason = self.stuck_detector.check(self.state)
+            if stuck_reason:
+                display.show_error(f"Game stuck: {stuck_reason}")
+                winner = "stuck"
+                break
+
+            # Check win conditions
+            win_id = check_win_conditions(self.state, self.genome)
+            if win_id is not None:
+                if win_id == self.human_player_idx:
+                    winner = "human"
+                    display.show_message("=== You Win! ===", style="bold green")
+                else:
+                    winner = "ai"
+                    display.show_message("=== AI Wins ===", style="bold red")
+                break
+
+            # Generate legal moves
+            moves = generate_legal_moves(self.state, self.genome)
+
+            # Check if betting phase should auto-complete (no one can act)
+            if not moves and self._should_auto_complete_betting():
+                self._advance_phase()
+                self._reset_betting_state()
+                continue
+
+            # Get move based on current player
+            if self.state.active_player == self.human_player_idx:
+                # Human turn - build display state and prompt
+                terminal_width = display.get_terminal_width()
+                display_state = self._build_display_state(moves, move_log, terminal_width)
+
+                raw_input = display.show_and_prompt(display_state)
+                result = self._parse_input(raw_input, moves)
+
+                if result.quit:
+                    quit_early = True
+                    display.show_message("Did the game feel broken? [y/n]: ")
+                    fb = self.human_input.get_yes_no("")
+                    felt_broken = fb if fb is not None else False
+                    winner = "quit"
+                    break
+
+                if result.error:
+                    display.show_error(result.error)
+                    continue
+
+                if result.is_pass:
+                    self.stuck_detector.record_pass()
+                    move_log.append(("player", "passed"))
+                    self._advance_turn()
+                    continue
+
+                if result.move:
+                    if isinstance(result.move, BettingMove):
+                        self._record_move(self.state.turn, "human", {"action": result.move.action.value})
+                        move_log.append(("player", result.move.action.value.lower()))
+                        phase = self.genome.turn_structure.phases[result.move.phase_index]
+                        if isinstance(phase, BettingPhase):
+                            self.state = apply_betting_move(self.state, result.move, phase)
+                        self._handle_betting_completion(result.move, self.human_player_idx)
+                    else:
+                        self._record_move(self.state.turn, "human", {"card_index": result.move.card_index})
+                        # Log the card played
+                        player = self.state.players[self.human_player_idx]
+                        if 0 <= result.move.card_index < len(player.hand):
+                            card = player.hand[result.move.card_index]
+                            move_log.append(("player", f"played {card.rank.value}{card.suit.value}"))
+                        else:
+                            move_log.append(("player", "played card"))
+                        self.state = apply_move(self.state, result.move, self.genome)
+                    self.stuck_detector.record_action()
+            else:
+                # AI turn
+                move = self._ai_select_move(moves)
+
+                # Build display state for AI turn display
+                terminal_width = display.get_terminal_width()
+                display_state = self._build_display_state(moves, move_log, terminal_width)
+
+                if move:
+                    if isinstance(move, BettingMove):
+                        move_log.append(("opponent", move.action.value.lower()))
+                        self._record_move(self.state.turn, "ai", {"action": move.action.value})
+                        ai_player_idx = self.state.active_player  # Capture BEFORE state changes
+                        phase = self.genome.turn_structure.phases[move.phase_index]
+                        if isinstance(phase, BettingPhase):
+                            self.state = apply_betting_move(self.state, move, phase)
+                        self._handle_betting_completion(move, ai_player_idx)
+                    else:
+                        # Log the card played
+                        ai_player = self.state.players[self.state.active_player]
+                        if 0 <= move.card_index < len(ai_player.hand):
+                            card = ai_player.hand[move.card_index]
+                            move_log.append(("opponent", f"played {card.rank.value}{card.suit.value}"))
+                        else:
+                            move_log.append(("opponent", "played card"))
+                        self._record_move(self.state.turn, "ai", {"card_index": move.card_index})
+                        self.state = apply_move(self.state, move, self.genome)
+                    self.stuck_detector.record_action()
+                else:
+                    move_log.append(("opponent", "passed"))
+                    self.stuck_detector.record_pass()
+                    self._advance_turn()
+
+                # Show AI turn briefly
+                display_state = self._build_display_state([], move_log, terminal_width)
+                display.show_ai_turn(display_state, duration=0.3)
+
+        # Collect feedback
+        display.show_message("")
+        rating = self.human_input.get_rating()
+        comment = self.human_input.get_comment()
+
+        return PlaytestResult(
+            genome_id=self.genome.genome_id,
+            genome_path="",  # Set by caller
+            difficulty=self.config.difficulty,
+            seed=self.seed,
+            winner=winner or "unknown",
+            turns=self.state.turn if self.state else 0,
+            rating=rating,
+            comment=comment,
+            quit_early=quit_early,
+            felt_broken=felt_broken,
+            stuck_reason=stuck_reason,
+        )
+
+    def _build_display_state(
+        self, moves: list, move_log: deque, terminal_width: int
+    ) -> DisplayState:
+        """Convert GameState to DisplayState for rendering.
+
+        Args:
+            moves: List of legal moves
+            move_log: Recent move history
+            terminal_width: Terminal width in characters
+
+        Returns:
+            DisplayState for rendering
+        """
+        # Get phase name from genome
+        phase_idx = self.state.current_phase
+        phase = self.genome.turn_structure.phases[phase_idx]
+        phase_name = phase.__class__.__name__.replace("Phase", "")
+
+        # Build hand_cards as list of (rank, suit) tuples
+        player = self.state.players[self.human_player_idx]
+        hand_cards = [(c.rank.value, c.suit.value) for c in player.hand]
+
+        # Build opponent info
+        opponent_idx = 1 - self.human_player_idx
+        opponent = self.state.players[opponent_idx]
+
+        # Build discard_top
+        discard_top = None
+        if self.state.discard:
+            top = self.state.discard[-1]
+            discard_top = (top.rank.value, top.suit.value)
+
+        # Build move options
+        move_options = self._build_move_options(moves)
+
+        return DisplayState(
+            game_name=self.genome.genome_id,
+            turn=self.state.turn,
+            phase_name=phase_name,
+            player_id=self.human_player_idx,
+            hand_cards=hand_cards,
+            opponent_card_count=len(opponent.hand),
+            opponent_chips=opponent.chips,
+            opponent_bet=opponent.current_bet,
+            player_chips=player.chips,
+            player_bet=player.current_bet,
+            pot=self.state.pot,
+            current_bet=self.state.current_bet,
+            discard_top=discard_top,
+            moves=move_options,
+            move_log=list(move_log),
+            terminal_width=terminal_width,
+        )
+
+    def _build_move_options(self, moves: list) -> list[MoveOption]:
+        """Convert legal moves to MoveOption for display.
+
+        Args:
+            moves: List of legal moves (LegalMove or BettingMove)
+
+        Returns:
+            List of MoveOption for display
+        """
+        options = []
+        player = self.state.players[self.human_player_idx]
+
+        for i, move in enumerate(moves):
+            if isinstance(move, BettingMove):
+                label = move.action.value.title()  # "Check", "Fold", etc.
+                move_type = "betting"
+            elif move.card_index == -1:
+                label = "Pass"
+                move_type = "pass"
+            elif 0 <= move.card_index < len(player.hand):
+                card = player.hand[move.card_index]
+                # Format with unicode symbol
+                symbols = {"H": "\u2665", "D": "\u2666", "C": "\u2663", "S": "\u2660"}
+                symbol = symbols.get(card.suit.value, card.suit.value)
+                label = f"{card.rank.value}{symbol}"
+                move_type = "card"
+            else:
+                label = f"Move {i+1}"
+                move_type = "other"
+
+            options.append(MoveOption(index=i+1, label=label, move_type=move_type))
+
+        return options
+
+    def _parse_input(self, raw: str, moves: list) -> InputResult:
+        """Parse raw input string into InputResult.
+
+        Args:
+            raw: Raw input string from user
+            moves: List of legal moves
+
+        Returns:
+            InputResult with move, quit flag, pass flag, or error
+        """
+        raw = raw.strip().lower()
+
+        if raw in ("q", "quit", "exit"):
+            return InputResult(quit=True)
+
+        if not raw:
+            return InputResult(is_pass=True)
+
+        try:
+            choice = int(raw)
+        except ValueError:
+            return InputResult(error=f"Invalid input '{raw}'. Enter a number or 'q'.")
+
+        if choice < 1 or choice > len(moves):
+            return InputResult(error=f"Invalid choice {choice}. Enter 1-{len(moves)}.")
+
+        return InputResult(move=moves[choice - 1])
