@@ -49,3 +49,4 @@ experiments/
 *.out
 gosim/vendor/
 output/basin_analysis/basin_analysis.json
+.worktrees/
