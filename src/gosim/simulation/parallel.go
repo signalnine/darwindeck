@@ -14,6 +14,48 @@ type GameJob struct {
 	Seed  uint64
 }
 
+// RunBatchParallelN executes batch simulations using a specified number of workers.
+// Use this when running under Python multiprocessing to avoid thread over-subscription.
+func RunBatchParallelN(genome *engine.Genome, numGames int, aiType AIPlayerType, mctsIterations int, seed uint64, numWorkers int) AggregatedStats {
+	if numWorkers <= 0 {
+		numWorkers = runtime.NumCPU()
+	}
+	runtime.GOMAXPROCS(numWorkers)
+
+	jobs := make(chan GameJob, numGames)
+	results := make(chan GameResult, numGames)
+
+	var wg sync.WaitGroup
+
+	// Start workers
+	for w := 0; w < numWorkers; w++ {
+		wg.Add(1)
+		go worker(&wg, jobs, results, genome, aiType, mctsIterations)
+	}
+
+	// Use seed for deterministic game seeds
+	rng := rand.New(rand.NewSource(int64(seed)))
+
+	// Queue all simulation jobs with deterministic seeds
+	for i := 0; i < numGames; i++ {
+		gameSeed := rng.Uint64()
+		jobs <- GameJob{
+			SimID: i,
+			Seed:  gameSeed,
+		}
+	}
+	close(jobs)
+
+	// Wait for all workers to complete, then close results
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	// Collect and aggregate results
+	return aggregateParallelResults(results, numGames)
+}
+
 // RunBatchParallel executes batch simulations using worker pool
 // Achieves ~4x speedup on 4-core systems
 func RunBatchParallel(genome *engine.Genome, numGames int, aiType AIPlayerType, mctsIterations int, seed uint64) AggregatedStats {
@@ -75,6 +117,48 @@ func aggregateParallelResults(results <-chan GameResult, numGames int) Aggregate
 
 	// Reuse existing aggregation logic
 	return aggregateResults(allResults)
+}
+
+// RunBatchAsymmetricParallelN executes asymmetric batch simulations with specified workers.
+// Use this when running under Python multiprocessing to avoid thread over-subscription.
+func RunBatchAsymmetricParallelN(genome *engine.Genome, numGames int, p0AIType AIPlayerType, p1AIType AIPlayerType, mctsIterations int, seed uint64, numWorkers int) AggregatedStats {
+	if numWorkers <= 0 {
+		numWorkers = runtime.NumCPU()
+	}
+	runtime.GOMAXPROCS(numWorkers)
+
+	jobs := make(chan GameJob, numGames)
+	results := make(chan GameResult, numGames)
+
+	var wg sync.WaitGroup
+
+	// Start workers
+	for w := 0; w < numWorkers; w++ {
+		wg.Add(1)
+		go workerAsymmetric(&wg, jobs, results, genome, p0AIType, p1AIType, mctsIterations)
+	}
+
+	// Generate deterministic seeds
+	rng := rand.New(rand.NewSource(int64(seed)))
+
+	// Queue all simulation jobs
+	for i := 0; i < numGames; i++ {
+		gameSeed := rng.Uint64()
+		jobs <- GameJob{
+			SimID: i,
+			Seed:  gameSeed,
+		}
+	}
+	close(jobs)
+
+	// Wait for all workers to complete, then close results
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	// Collect and aggregate results
+	return aggregateParallelResults(results, numGames)
 }
 
 // RunBatchAsymmetricParallel executes asymmetric batch simulations using worker pool.
