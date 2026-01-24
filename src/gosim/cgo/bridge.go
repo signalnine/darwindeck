@@ -139,19 +139,19 @@ func SimulateBatch(requestPtr unsafe.Pointer, requestLen C.int, responseLen *C.i
 			}
 		}
 
-		// Run batch simulation with limited Go parallelism.
-		// Use 4 Go workers per Python process to balance:
-		// - Getting speedup from Go parallelism (4x within each genome)
-		// - Avoiding thread over-subscription (128 Python × 4 Go = 512 threads)
-		// This is much better than 128 × 128 = 16,384 threads which caused hangs.
-		const goWorkers = 4
+		// Run batch simulation sequentially.
+		// Go-level parallelism is disabled because it causes issues with
+		// Python multiprocessing + 'spawn' context + CGo:
+		// - Even limited parallelism (4 Go workers) causes hangs
+		// - The goroutines don't play well with Python process management
+		// Python handles parallelism at the genome level (many workers),
+		// so Go just needs to simulate quickly without spawning goroutines.
 		var simStats simulation.AggregatedStats
 		if symmetric {
-			simStats = simulation.RunBatchParallelN(genome, int(req.NumGames()), aiTypes[0], mctsIter, seed, goWorkers)
+			simStats = simulation.RunBatch(genome, int(req.NumGames()), aiTypes[0], mctsIter, seed)
 		} else {
 			// For now, asymmetric only supports 2 players
-			// TODO: Extend RunBatchAsymmetricParallelN for N players
-			simStats = simulation.RunBatchAsymmetricParallelN(genome, int(req.NumGames()), aiTypes[0], aiTypes[1], mctsIter, seed, goWorkers)
+			simStats = simulation.RunBatchAsymmetric(genome, int(req.NumGames()), aiTypes[0], aiTypes[1], mctsIter, seed)
 		}
 
 		// Convert to AggStats
