@@ -133,6 +133,19 @@ class EvolutionEngine:
 
         logger.info(f"Evolution engine initialized with {self.num_workers} parallel workers")
 
+    def close(self) -> None:
+        """Clean up resources (worker pools, etc).
+
+        Call this when done with evolution to prevent resource leaks.
+        """
+        if self.parallel_evaluator is not None:
+            self.parallel_evaluator.close()
+            logger.debug("Closed parallel fitness evaluator")
+
+    def __del__(self) -> None:
+        """Cleanup on garbage collection (fallback)."""
+        self.close()
+
     def _default_fitness_evaluator(self, individual: Individual) -> Individual:
         """Default fitness evaluator (placeholder).
 
