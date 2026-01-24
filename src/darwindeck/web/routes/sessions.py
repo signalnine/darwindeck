@@ -23,6 +23,25 @@ from darwindeck.web.security import get_real_ip, hash_ip
 _bytecode_compiler = BytecodeCompiler()
 
 
+def _check_win_from_state(raw_state: dict[str, Any]) -> int:
+    """Check if game is won based on raw state.
+
+    Returns winner player index (0+) or -1 if no winner.
+    Currently checks for empty_hand win condition (first player with 0 cards wins).
+    """
+    players = raw_state.get("players", [])
+    if not players:
+        return -1
+
+    # Check for empty_hand win condition: first player with 0 cards wins
+    for i, player in enumerate(players):
+        hand = player.get("hand", [])
+        if len(hand) == 0:
+            return i
+
+    return -1
+
+
 def _go_card_to_frontend_int(go_rank: int, go_suit: int) -> int:
     """Convert Go card encoding to frontend card integer.
 
@@ -418,9 +437,13 @@ async def apply_move(
                 }
             )
         except SimulationError as e:
-            break  # Stop AI loop on error
+            # Check if game is actually over (empty hand win condition)
+            winner = _check_win_from_state(raw_state)
+            break
 
         if not ai_result.get("success", True) or not ai_result.get("ai_move"):
+            # No moves available - check if game is actually over
+            winner = _check_win_from_state(raw_state)
             break
 
         ai_move = ai_result["ai_move"]
@@ -444,17 +467,28 @@ async def apply_move(
                 }
             )
         except SimulationError as e:
+            # Check if game is actually over
+            winner = _check_win_from_state(raw_state)
             break
 
         if not result.get("success", True):
+            # Check if game is actually over
+            winner = _check_win_from_state(raw_state)
             break
 
         raw_state = result.get("state", {})
         winner = result.get("winner", -1)
         ai_moves_made += 1
 
+    # Final check: if winner still not determined, check from state
+    if winner < 0:
+        winner = _check_win_from_state(raw_state)
+
     # Transform to frontend format for response
     frontend_state = _transform_worker_state(result)
+
+    # Include winner in frontend state
+    frontend_state["winner"] = winner if winner >= 0 else None
 
     # Check completion
     is_completed = result.get("completed", False) or winner >= 0
