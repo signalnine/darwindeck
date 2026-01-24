@@ -38,9 +38,10 @@ type Response struct {
 
 // MoveInfo describes a legal move for the human player.
 type MoveInfo struct {
-	Index int    `json:"index"`
-	Label string `json:"label"`
-	Type  string `json:"type"`
+	Index     int    `json:"index"`
+	Label     string `json:"label"`
+	Type      string `json:"type"`
+	CardIndex int    `json:"card_index"` // Index into player's hand, -1 if not card-specific
 }
 
 // SerializedState holds game state in a JSON-friendly format.
@@ -446,9 +447,10 @@ func convertMoves(moves []engine.LegalMove, state *engine.GameState, genome *eng
 	infos := make([]MoveInfo, len(moves))
 	for i, move := range moves {
 		infos[i] = MoveInfo{
-			Index: i,
-			Label: describeMoveLabel(move, state, genome),
-			Type:  describeMoveType(move, genome),
+			Index:     i,
+			Label:     describeMoveLabel(move, state, genome),
+			Type:      describeMoveType(move, genome),
+			CardIndex: move.CardIndex,
 		}
 	}
 	return infos

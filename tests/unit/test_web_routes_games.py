@@ -41,7 +41,7 @@ def client():
         # Create a session and add test data
         db = SessionLocal()
         db.add(Game(id="TestGame1", genome_json='{}', fitness=0.8, status="active"))
-        db.add(Game(id="TestGame2", genome_json='{}', fitness=0.6, status="active"))
+        db.add(Game(id="TestGame2", genome_json='{}', fitness=0.6, status="active", summary="A strategic card game"))
         db.add(Game(id="DemotedGame", genome_json='{}', fitness=0.3, status="demoted"))
         db.commit()
         db.close()
@@ -90,4 +90,23 @@ class TestGamesAPI:
 
     def test_get_nonexistent_game_returns_404(self, client):
         response = client.get("/api/games/NoSuchGame")
+        assert response.status_code == 404
+
+    def test_get_game_summary(self, client):
+        response = client.get("/api/games/TestGame1/summary")
+        assert response.status_code == 200
+        data = response.json()
+        assert "summary" in data
+        # Game has no summary set, so it should return the default message
+        assert data["summary"] == "No summary available"
+
+    def test_get_game_summary_with_content(self, client):
+        response = client.get("/api/games/TestGame2/summary")
+        assert response.status_code == 200
+        data = response.json()
+        assert "summary" in data
+        assert data["summary"] == "A strategic card game"
+
+    def test_get_game_summary_nonexistent_returns_404(self, client):
+        response = client.get("/api/games/NoSuchGame/summary")
         assert response.status_code == 404
