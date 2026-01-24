@@ -1,7 +1,12 @@
-"""Parallel fitness evaluation using multiprocessing.
+"""Parallel fitness evaluation using thread pool.
 
 This module provides parallel genome evaluation at the Python level,
 complementing the Go-level parallel simulation (from Task 1).
+
+Note: We use threads instead of processes because:
+1. The Go CGo library does the heavy lifting and releases the GIL
+2. Python 3.13 multiprocessing with spawn context + CGo causes hangs
+3. Threading avoids spawn context issues entirely
 
 The two-level parallelization strategy:
     1. Go level: Each genome's simulations run in parallel (1.43x speedup)
@@ -9,16 +14,12 @@ The two-level parallelization strategy:
     3. Combined effect: Up to 5.7x total speedup (1.43 × 4.0)
 """
 
+import os
 import multiprocessing as mp
-from multiprocessing.pool import Pool as PoolType
+from concurrent.futures import ThreadPoolExecutor
 from typing import List, Optional, Callable
 from dataclasses import dataclass
-
-# CRITICAL: Use 'spawn' context instead of default 'fork' on Linux.
-# Go's runtime is not fork-safe - forked processes inherit corrupted goroutine state.
-# This causes deadlocks when CGo library is loaded before forking.
-# 'spawn' starts fresh processes that load their own copy of the library.
-_mp_context = mp.get_context('spawn')
+import threading
 
 from darwindeck.genome.schema import GameGenome
 from darwindeck.genome.validator import GenomeValidator
@@ -82,33 +83,19 @@ class ParallelFitnessEvaluator:
         """
         self.evaluator_factory = evaluator_factory
         self.simulator_factory = simulator_factory or _create_simulator
-        self.num_workers = num_workers or mp.cpu_count()
-        self._pool: Optional[PoolType] = None
-
-    def _get_pool(self) -> PoolType:
-        """Get or create the persistent worker pool."""
-        if self._pool is None:
-            self._pool = _mp_context.Pool(
-                processes=self.num_workers,
-                initializer=_worker_init,
-                initargs=(self.evaluator_factory, self.simulator_factory)
-            )
-        return self._pool
+        # Cap default workers at 8 to avoid hangs with CGo/spawn context.
+        # Python 3.13 multiprocessing with spawn context + CGo has issues
+        # with higher worker counts causing process pool hangs.
+        default_workers = min(mp.cpu_count(), 8)
+        self.num_workers = num_workers or default_workers
 
     def close(self) -> None:
-        """Close the worker pool and release resources.
+        """Close the evaluator and release resources.
 
-        Call this when you're done with the evaluator to clean up
-        worker processes and prevent resource leaks.
+        Note: Since we now use fresh pools for each evaluation batch,
+        this is mostly a no-op but kept for API compatibility.
         """
-        if self._pool is not None:
-            self._pool.close()
-            self._pool.join()
-            self._pool = None
-
-    def __del__(self) -> None:
-        """Cleanup on garbage collection (fallback)."""
-        self.close()
+        pass
 
     def evaluate_population(
         self,
@@ -135,12 +122,75 @@ class ParallelFitnessEvaluator:
             for genome in genomes
         ]
 
-        pool = self._get_pool()
-        results = pool.map(_evaluate_task, tasks)
+        # Use ThreadPoolExecutor - works around Python 3.13 multiprocessing issues
+        # The Go CGo library does the heavy computation and releases the GIL,
+        # so threads can run in parallel for CGo calls.
+        with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
+            # Each thread gets its own evaluator/simulator (thread-local)
+            results = list(executor.map(
+                lambda task: _evaluate_task_threadsafe(
+                    task, self.evaluator_factory, self.simulator_factory
+                ),
+                tasks
+            ))
         return results
 
 
-# Global instances for each worker process
+# Thread-local storage for thread-safe evaluation
+_thread_local = threading.local()
+
+
+def _evaluate_task_threadsafe(
+    task: EvaluationTask,
+    evaluator_factory: Callable[[], FitnessEvaluator],
+    simulator_factory: Callable[[], GoSimulator]
+) -> FitnessMetrics:
+    """Evaluate a single task with thread-local instances.
+
+    Each thread gets its own evaluator and simulator to avoid sharing state.
+    """
+    # Lazy initialization of thread-local instances
+    if not hasattr(_thread_local, 'evaluator'):
+        _thread_local.evaluator = evaluator_factory()
+    if not hasattr(_thread_local, 'simulator'):
+        _thread_local.simulator = simulator_factory()
+
+    evaluator = _thread_local.evaluator
+    simulator = _thread_local.simulator
+
+    # STRUCTURAL VALIDATION: Check genome is valid before expensive simulation
+    validation_errors = GenomeValidator.validate(task.genome)
+    if validation_errors:
+        return FitnessMetrics(
+            decision_density=0.0,
+            comeback_potential=0.0,
+            tension_curve=0.0,
+            interaction_frequency=0.0,
+            rules_complexity=0.0,
+            session_length=0.0,
+            skill_vs_luck=0.0,
+            bluffing_depth=0.0,
+            betting_engagement=0.0,
+            total_fitness=0.0,
+            games_simulated=0,
+            valid=False,
+        )
+
+    # Run simulations using thread-local Go simulator
+    results = simulator.simulate(
+        task.genome,
+        num_games=task.num_simulations,
+        use_mcts=task.use_mcts
+    )
+
+    return evaluator.evaluate(
+        task.genome,
+        results,
+        use_mcts=task.use_mcts
+    )
+
+
+# Legacy global instances for multiprocessing.Pool (not used with threading)
 _worker_evaluator: Optional[FitnessEvaluator] = None
 _worker_simulator: Optional[GoSimulator] = None
 
