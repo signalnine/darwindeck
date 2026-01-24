@@ -139,14 +139,18 @@ func SimulateBatch(requestPtr unsafe.Pointer, requestLen C.int, responseLen *C.i
 			}
 		}
 
-		// Run batch simulation (symmetric or asymmetric) using parallel workers
+		// Run batch simulation (symmetric or asymmetric) sequentially.
+		// Go-level parallelism is disabled when called from Python multiprocessing
+		// because Python already parallelizes at the genome level (128 workers).
+		// Using parallel Go workers would cause 128 × 128 = 16,384 threads
+		// competing for 128 cores, causing resource contention and hangs.
 		var simStats simulation.AggregatedStats
 		if symmetric {
-			simStats = simulation.RunBatchParallel(genome, int(req.NumGames()), aiTypes[0], mctsIter, seed)
+			simStats = simulation.RunBatch(genome, int(req.NumGames()), aiTypes[0], mctsIter, seed)
 		} else {
 			// For now, asymmetric only supports 2 players
-			// TODO: Extend RunBatchAsymmetricParallel for N players
-			simStats = simulation.RunBatchAsymmetricParallel(genome, int(req.NumGames()), aiTypes[0], aiTypes[1], mctsIter, seed)
+			// TODO: Extend RunBatchAsymmetric for N players
+			simStats = simulation.RunBatchAsymmetric(genome, int(req.NumGames()), aiTypes[0], aiTypes[1], mctsIter, seed)
 		}
 
 		// Convert to AggStats

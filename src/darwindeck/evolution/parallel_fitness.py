@@ -10,6 +10,7 @@ The two-level parallelization strategy:
 """
 
 import multiprocessing as mp
+from multiprocessing.pool import Pool as PoolType
 from typing import List, Optional, Callable
 from dataclasses import dataclass
 
@@ -46,10 +47,14 @@ class EvaluationTask:
 
 
 class ParallelFitnessEvaluator:
-    """Evaluates game genomes in parallel using process pool.
+    """Evaluates game genomes in parallel using a persistent process pool.
 
     Each worker process gets its own copy of the simulator and evaluator,
     which is process-safe (separate memory spaces).
+
+    The pool is created lazily on first use and reused for subsequent
+    evaluations. This avoids semaphore leaks from repeatedly creating
+    and destroying pools with Python 3.13's 'spawn' context.
 
     Usage:
         evaluator = ParallelFitnessEvaluator(
@@ -57,6 +62,7 @@ class ParallelFitnessEvaluator:
             num_workers=4
         )
         metrics = evaluator.evaluate_population(genomes)
+        evaluator.close()  # Clean up when done
     """
 
     def __init__(
@@ -77,6 +83,32 @@ class ParallelFitnessEvaluator:
         self.evaluator_factory = evaluator_factory
         self.simulator_factory = simulator_factory or _create_simulator
         self.num_workers = num_workers or mp.cpu_count()
+        self._pool: Optional[PoolType] = None
+
+    def _get_pool(self) -> PoolType:
+        """Get or create the persistent worker pool."""
+        if self._pool is None:
+            self._pool = _mp_context.Pool(
+                processes=self.num_workers,
+                initializer=_worker_init,
+                initargs=(self.evaluator_factory, self.simulator_factory)
+            )
+        return self._pool
+
+    def close(self) -> None:
+        """Close the worker pool and release resources.
+
+        Call this when you're done with the evaluator to clean up
+        worker processes and prevent resource leaks.
+        """
+        if self._pool is not None:
+            self._pool.close()
+            self._pool.join()
+            self._pool = None
+
+    def __del__(self) -> None:
+        """Cleanup on garbage collection (fallback)."""
+        self.close()
 
     def evaluate_population(
         self,
@@ -103,12 +135,8 @@ class ParallelFitnessEvaluator:
             for genome in genomes
         ]
 
-        with _mp_context.Pool(
-            processes=self.num_workers,
-            initializer=_worker_init,
-            initargs=(self.evaluator_factory, self.simulator_factory)
-        ) as pool:
-            results = pool.map(_evaluate_task, tasks)
+        pool = self._get_pool()
+        results = pool.map(_evaluate_task, tasks)
         return results
 
 

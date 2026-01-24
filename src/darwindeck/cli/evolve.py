@@ -398,6 +398,7 @@ def main() -> int:
         engine.evolve()
     except KeyboardInterrupt:
         logging.info("\n\nEvolution interrupted by user")
+        engine.close()  # Clean up worker pool
         return 1
 
     # Get best genomes
@@ -634,6 +635,10 @@ def main() -> int:
         logging.info(f"  Saved rulebooks to {rulebook_dir}")
 
     logging.info(f"\n✅ Evolution complete! Best fitness: {engine.best_ever.fitness:.4f}")
+
+    # Clean up worker pool
+    engine.close()
+
     return 0
 
 
