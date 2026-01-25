@@ -5,7 +5,6 @@ from __future__ import annotations
 import random
 import logging
 import os
-from functools import partial
 from typing import List, Optional, Callable, Dict
 from dataclasses import dataclass, field
 from darwindeck.evolution.population import Population, Individual
@@ -17,7 +16,7 @@ from darwindeck.evolution.operators import (
     create_aggressive_pipeline
 )
 from darwindeck.evolution.seeding import create_seed_population, create_seed_population_from_genomes
-from darwindeck.evolution.parallel_fitness import ParallelFitnessEvaluator, _create_evaluator
+from darwindeck.evolution.parallel_fitness import ParallelFitnessEvaluator, get_evaluator_factory
 from darwindeck.evolution.fitness_full import FitnessEvaluator
 from darwindeck.genome.schema import GameGenome
 
@@ -95,14 +94,16 @@ class EvolutionEngine:
             num_workers: Number of parallel workers (default: os.cpu_count())
         """
         self.config = config
-        # Cap default workers at 64 to avoid massive spawn overhead on high-core machines
-        # 256 workers with 'spawn' context causes ~30s+ startup time and potential hangs
-        default_workers = min(os.cpu_count() or 4, 64)
+        # Cap default workers at cpu_count to balance performance and stability
+        # Python 3.13 spawn context + CGo is unstable with many workers
+        # Higher worker counts can be requested via EVOLUTION_WORKERS env var at user's risk
+        cpu_count = os.cpu_count() or 4
+        default_workers = cpu_count
         self.num_workers = num_workers or int(os.environ.get('EVOLUTION_WORKERS', default_workers))
 
         # Initialize parallel fitness evaluator with style preset
-        # Use partial to pass style to the factory function (picklable unlike lambdas)
-        evaluator_factory = partial(_create_evaluator, style=config.fitness_style)
+        # Use explicit factory function (partial() causes hangs with Python 3.13 spawn + CGo)
+        evaluator_factory = get_evaluator_factory(config.fitness_style)
         self.parallel_evaluator = ParallelFitnessEvaluator(
             evaluator_factory=evaluator_factory,
             num_workers=self.num_workers
@@ -131,7 +132,9 @@ class EvolutionEngine:
         self.use_aggressive_mutation = False  # Switch to True when diversity drops
         self._skill_eval_cache: Dict[str, SkillEvalResult] = {}  # Cache skill results by genome_id
 
-        logger.info(f"Evolution engine initialized with {self.num_workers} parallel workers")
+        # Note: Due to Python 3.13 + CGo compatibility issues, fitness evaluation
+        # runs serially. The Go engine provides internal parallelism.
+        logger.info("Evolution engine initialized (serial evaluation mode)")
 
     def close(self) -> None:
         """Clean up resources (worker pools, etc).
@@ -198,7 +201,7 @@ class EvolutionEngine:
             logger.info("All individuals already evaluated")
             return
 
-        logger.info(f"Evaluating {len(unevaluated)} individuals using {self.num_workers} workers...")
+        logger.info(f"Evaluating {len(unevaluated)} individuals...")
 
         # Extract genomes for batch evaluation
         genomes = [ind.genome for ind in unevaluated]

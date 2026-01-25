@@ -11,16 +11,11 @@ from dataclasses import dataclass
 from typing import List, Optional, Callable, Dict
 import logging
 import time
-import multiprocessing as mp
-import os
 
 from darwindeck.genome.schema import GameGenome
 from darwindeck.simulation.go_simulator import GoSimulator
 
 logger = logging.getLogger(__name__)
-
-# Use 'spawn' context for CGo compatibility
-_mp_context = mp.get_context('spawn')
 
 
 @dataclass
@@ -250,16 +245,19 @@ def evaluate_batch_skill(
     num_workers: Optional[int] = None,
     progress_callback: Optional[Callable[[int, int], None]] = None
 ) -> List[SkillEvalResult]:
-    """Evaluate skill gap for multiple genomes in parallel.
+    """Evaluate skill gap for multiple genomes serially.
 
     Uses two-tier evaluation: Greedy vs Random + MCTS vs Random.
+
+    Due to Python 3.13 multiprocessing + CGo compatibility issues,
+    evaluation runs serially. The Go engine provides internal parallelism.
 
     Args:
         genomes: List of genomes to evaluate
         num_games: Games per tier per genome (total = 2x this)
         mcts_iterations: MCTS search iterations (default: 100)
         timeout_sec: Timeout per genome
-        num_workers: Worker processes (default: CPU count)
+        num_workers: Ignored (serial evaluation)
         progress_callback: Called with (completed, total) for progress
 
     Returns:
@@ -268,21 +266,17 @@ def evaluate_batch_skill(
     if not genomes:
         return []
 
-    # Cap default workers at 64 to avoid massive spawn overhead on high-core machines
-    default_workers = min(os.cpu_count() or 4, 64)
-    num_workers = num_workers or int(os.environ.get('EVOLUTION_WORKERS', default_workers))
-
-    tasks = [
-        _SkillEvalTask(genome, num_games, mcts_iterations, timeout_sec)
-        for genome in genomes
-    ]
-
     results: List[SkillEvalResult] = []
 
-    with _mp_context.Pool(processes=num_workers) as pool:
-        for i, result in enumerate(pool.imap(_evaluate_skill_task, tasks)):
-            results.append(result)
-            if progress_callback:
-                progress_callback(i + 1, len(genomes))
+    for i, genome in enumerate(genomes):
+        result = evaluate_skill(
+            genome=genome,
+            num_games=num_games,
+            mcts_iterations=mcts_iterations,
+            timeout_sec=timeout_sec
+        )
+        results.append(result)
+        if progress_callback:
+            progress_callback(i + 1, len(genomes))
 
     return results
