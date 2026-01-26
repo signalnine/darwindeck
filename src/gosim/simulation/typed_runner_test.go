@@ -2,6 +2,7 @@ package simulation
 
 import (
 	"testing"
+	"time"
 
 	"github.com/signalnine/darwindeck/gosim/genome"
 )
@@ -236,5 +237,48 @@ func TestAllSeedGenomesRunnable(t *testing.T) {
 			t.Logf("%s: P0=%d P1=%d Draws=%d AvgTurns=%.1f Errors=%d",
 				g.Name, stats.Wins[0], stats.Wins[1], stats.Draws, stats.AvgTurns, stats.Errors)
 		})
+	}
+}
+
+func BenchmarkRunBatchTypedSerial(b *testing.B) {
+	g := genome.CreateWarGenome()
+	
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		RunBatchTyped(g, 100, RandomAI, 0, uint64(i))
+	}
+}
+
+func BenchmarkRunBatchTypedParallel(b *testing.B) {
+	g := genome.CreateWarGenome()
+	
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		RunBatchTypedParallel(g, 100, RandomAI, 0, uint64(i))
+	}
+}
+
+func TestRunBatchTypedParallelSpeedup(t *testing.T) {
+	g := genome.CreateWarGenome()
+	numGames := 500
+	
+	// Serial
+	start := time.Now()
+	serialResult := RunBatchTyped(g, numGames, RandomAI, 0, 12345)
+	serialTime := time.Since(start)
+	
+	// Parallel
+	start = time.Now()
+	parallelResult := RunBatchTypedParallel(g, numGames, RandomAI, 0, 12345)
+	parallelTime := time.Since(start)
+	
+	speedup := float64(serialTime) / float64(parallelTime)
+	
+	t.Logf("Serial:   %v (%d games)", serialTime, serialResult.TotalGames)
+	t.Logf("Parallel: %v (%d games)", parallelTime, parallelResult.TotalGames)
+	t.Logf("Speedup:  %.2fx", speedup)
+	
+	if speedup < 1.5 {
+		t.Logf("Warning: Parallel speedup is low (%.2fx), expected at least 1.5x on multi-core", speedup)
 	}
 }

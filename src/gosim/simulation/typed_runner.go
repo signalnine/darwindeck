@@ -2,6 +2,8 @@ package simulation
 
 import (
 	"math/rand"
+	"runtime"
+	"sync"
 	"time"
 
 	"github.com/signalnine/darwindeck/gosim/engine"
@@ -9,8 +11,15 @@ import (
 	"github.com/signalnine/darwindeck/gosim/mcts"
 )
 
+// TypedGameJob represents a simulation job for typed genomes.
+type TypedGameJob struct {
+	SimID int
+	Seed  uint64
+}
+
 // RunBatchTyped simulates multiple games with a typed genome and AI configuration.
 // This is the new entry point for the pure Go evolution system.
+// NOTE: This is the serial version. Use RunBatchTypedParallel for parallel execution.
 func RunBatchTyped(g *genome.GameGenome, numGames int, aiType AIPlayerType, mctsIterations int, seed uint64) AggregatedStats {
 	results := make([]GameResult, numGames)
 	rng := rand.New(rand.NewSource(int64(seed)))
@@ -22,6 +31,71 @@ func RunBatchTyped(g *genome.GameGenome, numGames int, aiType AIPlayerType, mcts
 
 	return aggregateResults(results)
 }
+
+// RunBatchTypedParallel simulates multiple games in parallel using typed genomes.
+// This achieves significant speedup on multi-core systems.
+func RunBatchTypedParallel(g *genome.GameGenome, numGames int, aiType AIPlayerType, mctsIterations int, seed uint64) AggregatedStats {
+	numWorkers := runtime.NumCPU()
+	return RunBatchTypedParallelN(g, numGames, aiType, mctsIterations, seed, numWorkers)
+}
+
+// RunBatchTypedParallelN simulates multiple games in parallel with a specified number of workers.
+func RunBatchTypedParallelN(g *genome.GameGenome, numGames int, aiType AIPlayerType, mctsIterations int, seed uint64, numWorkers int) AggregatedStats {
+	if numWorkers <= 0 {
+		numWorkers = runtime.NumCPU()
+	}
+
+	jobs := make(chan TypedGameJob, numGames)
+	results := make(chan GameResult, numGames)
+
+	var wg sync.WaitGroup
+
+	// Start workers
+	for w := 0; w < numWorkers; w++ {
+		wg.Add(1)
+		go typedWorker(&wg, jobs, results, g, aiType, mctsIterations)
+	}
+
+	// Generate deterministic seeds
+	rng := rand.New(rand.NewSource(int64(seed)))
+
+	// Queue all simulation jobs
+	for i := 0; i < numGames; i++ {
+		gameSeed := rng.Uint64()
+		jobs <- TypedGameJob{
+			SimID: i,
+			Seed:  gameSeed,
+		}
+	}
+	close(jobs)
+
+	// Wait for all workers to complete, then close results
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	// Collect and aggregate results
+	allResults := make([]GameResult, 0, numGames)
+	for result := range results {
+		allResults = append(allResults, result)
+	}
+
+	return aggregateResults(allResults)
+}
+
+// typedWorker processes typed simulation jobs from the jobs channel.
+func typedWorker(wg *sync.WaitGroup, jobs <-chan TypedGameJob, results chan<- GameResult, g *genome.GameGenome, aiType AIPlayerType, mctsIterations int) {
+	defer wg.Done()
+
+	for job := range jobs {
+		result := RunSingleGameTyped(g, aiType, mctsIterations, job.Seed)
+		results <- result
+	}
+}
+
+// GameTimeout is the maximum duration for a single game (prevents infinite loops)
+const GameTimeout = 100 * time.Millisecond
 
 // RunSingleGameTyped plays one complete game using a typed genome.
 func RunSingleGameTyped(g *genome.GameGenome, aiType AIPlayerType, mctsIterations int, seed uint64) GameResult {
@@ -111,6 +185,19 @@ func RunSingleGameTyped(g *genome.GameGenome, aiType AIPlayerType, mctsIteration
 	}
 
 	for state.TurnNumber < maxTurns {
+		// Check timeout to prevent infinite loops from bad genomes
+		if time.Since(start) > GameTimeout {
+			tensionMetrics.Finalize(-1)
+			return GameResult{
+				WinnerID:    -1,
+				WinningTeam: -1,
+				TurnCount:   state.TurnNumber,
+				DurationNs:  uint64(time.Since(start).Nanoseconds()),
+				Error:       "timeout",
+				Metrics:     metrics,
+			}
+		}
+
 		// Check win conditions
 		winner := checkWinConditionsTyped(state, g)
 		if winner >= 0 {

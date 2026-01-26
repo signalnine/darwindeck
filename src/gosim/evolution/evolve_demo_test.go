@@ -18,16 +18,16 @@ func TestEvolutionDemo(t *testing.T) {
 	fmt.Println(repeat("=", 60))
 
 	config := &EvolutionConfig{
-		PopulationSize: 10,
-		MaxGenerations: 5,
+		PopulationSize: 50,
+		MaxGenerations: 20,
 		ElitismRate:    0.2,
 		CrossoverRate:  0.7,
 		TournamentSize: 3,
-		SeedRatio:      0.8,
+		SeedRatio:      0.6,
 		RandomSeed:     time.Now().UnixNano(),
 		FitnessStyle:   "balanced",
-		GamesPerEval:   20,
-		NumWorkers:     2,
+		GamesPerEval:   50,
+		NumWorkers:     8,
 		Verbose:        false,
 	}
 
