@@ -77,6 +77,11 @@ class EffectType(Enum):
     DRAW_CARDS = "draw_cards"
     EXTRA_TURN = "extra_turn"
     FORCE_DISCARD = "force_discard"
+    WILD_CARD = "wild_card"
+    BLOCK_NEXT = "block_next"
+    SWAP_HANDS = "swap_hands"
+    STEAL_CARD = "steal_card"
+    PEEK_HAND = "peek_hand"
 
 
 class BettingAction(Enum):
