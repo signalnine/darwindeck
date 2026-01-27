@@ -1014,6 +1014,89 @@ func parseTarget(s string) uint8 {
 	}
 }
 
+// targetToString converts a target uint8 to lowercase string.
+func targetToString(t uint8) string {
+	switch t {
+	case 0:
+		return "next_player"
+	case 1:
+		return "previous_player"
+	case 2:
+		return "all_players"
+	case 3:
+		return "self"
+	case 4:
+		return "chosen_player"
+	default:
+		return "next_player"
+	}
+}
+
+// rankToString converts a rank uint8 (0-12) to lowercase string.
+func rankToString(r uint8) string {
+	switch r {
+	case 0:
+		return "two"
+	case 1:
+		return "three"
+	case 2:
+		return "four"
+	case 3:
+		return "five"
+	case 4:
+		return "six"
+	case 5:
+		return "seven"
+	case 6:
+		return "eight"
+	case 7:
+		return "nine"
+	case 8:
+		return "ten"
+	case 9:
+		return "jack"
+	case 10:
+		return "queen"
+	case 11:
+		return "king"
+	case 12:
+		return "ace"
+	default:
+		return "two"
+	}
+}
+
+// specialEffectJSON is the JSON representation of SpecialEffect with string fields.
+type specialEffectJSON struct {
+	TriggerRank string `json:"trigger_rank"`
+	EffectType  string `json:"effect_type"`
+	Target      string `json:"target"`
+	Value       uint8  `json:"value"`
+}
+
+// MarshalJSON implements custom JSON marshaling for SpecialEffect to output string effect_type.
+func (se SpecialEffect) MarshalJSON() ([]byte, error) {
+	return json.Marshal(specialEffectJSON{
+		TriggerRank: rankToString(se.TriggerRank),
+		EffectType:  se.Effect.String(),
+		Target:      targetToString(se.Target),
+		Value:       se.Value,
+	})
+}
+
+// UnmarshalJSON implements custom JSON unmarshaling for SpecialEffect to parse string effect_type.
+func (se *SpecialEffect) UnmarshalJSON(data []byte) error {
+	var sej specialEffectJSON
+	if err := json.Unmarshal(data, &sej); err != nil {
+		return err
+	}
+	se.TriggerRank = parseRank(sej.TriggerRank)
+	se.Effect = parseEffectType(sej.EffectType)
+	se.Target = parseTarget(sej.Target)
+	se.Value = sej.Value
+	return nil
+}
+
 // LoadGenomeFromJSON parses a GameGenome from JSON bytes.
 func LoadGenomeFromJSON(data []byte) (*GameGenome, error) {
 	var genome GameGenome

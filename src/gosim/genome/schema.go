@@ -179,6 +179,34 @@ const (
 	EffectDiscardPile EffectType = 9
 )
 
+// String returns the lowercase string representation of EffectType for JSON serialization.
+func (e EffectType) String() string {
+	switch e {
+	case EffectSkipNext:
+		return "skip_next"
+	case EffectReverse:
+		return "reverse"
+	case EffectDrawTwo:
+		return "draw_two"
+	case EffectDrawFour:
+		return "draw_four"
+	case EffectWild:
+		return "wild_card"
+	case EffectSwapHands:
+		return "swap_hands"
+	case EffectBlockNext:
+		return "block_next"
+	case EffectStealCard:
+		return "steal_card"
+	case EffectPeekHand:
+		return "peek_hand"
+	case EffectDiscardPile:
+		return "discard_pile"
+	default:
+		return "skip_next"
+	}
+}
+
 // SpecialEffect defines what happens when a specific card is played.
 type SpecialEffect struct {
 	TriggerRank uint8      // Card rank that triggers this effect (0-12 for 2-A)
