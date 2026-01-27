@@ -52,6 +52,7 @@ class Location(Enum):
 class TargetSelector(Enum):
     """Target selection for opponent-directed actions."""
 
+    SELF = "self"                        # Self-targeting (for wild cards, etc.)
     NEXT_PLAYER = "next_player"          # Clockwise
     PREV_PLAYER = "prev_player"          # Counter-clockwise
     PLAYER_CHOICE = "player_choice"      # Active player chooses target
