@@ -1,47 +1,53 @@
 {
-  "schema_version": "1.0",
-  "genome_id": "betting-war",
-  "generation": 0,
-  "setup": {
-    "cards_per_player": 26,
-    "initial_deck": "standard_52",
-    "initial_discard_count": 0,
-    "starting_chips": 500
-  },
-  "turn_structure": {
-    "phases": [
-      {
-        "type": "BettingPhase",
-        "min_bet": 10,
-        "max_raises": 2
-      },
-      {
-        "type": "PlayPhase",
-        "target": "TABLEAU",
-        "valid_play_condition": {
-          "type": "simple",
-          "condition_type": "LOCATION_SIZE",
-          "operator": "GT",
-          "value": 0,
-          "reference": "hand"
+  "schema_version": "2.0",
+  "genome": {
+    "name": "betting-war",
+    "metadata": {
+      "genome_id": "betting-war",
+      "generation": 0,
+      "parent_ids": []
+    },
+    "setup": {
+      "cards_per_player": 26,
+      "starting_chips": 500
+    },
+    "turn_structure": {
+      "phases": [
+        {
+          "type": "betting",
+          "data": {
+            "min_bet": 10,
+            "max_raises": 2
+          }
         },
-        "min_cards": 1,
-        "max_cards": 1,
-        "mandatory": true
+        {
+          "type": "play",
+          "data": {
+            "target": "tableau",
+            "min_cards": 1,
+            "max_cards": 1,
+            "mandatory": true,
+            "pass_if_unable": true,
+            "valid_play_condition": {
+              "op_code": "check_location_size",
+              "operator": "gt",
+              "value": 0,
+              "ref_loc": "hand"
+            }
+          }
+        }
+      ],
+      "max_turns": 1000
+    },
+    "win_conditions": [
+      {
+        "type": "capture_all",
+        "threshold": null
       }
     ],
-    "is_trick_based": false,
-    "tricks_per_hand": null
+    "effects": [],
+    "player_count": 2
   },
-  "special_effects": [],
-  "win_conditions": [
-    {
-      "type": "capture_all",
-      "threshold": null
-    }
-  ],
-  "scoring_rules": [],
-  "max_turns": 1000,
-  "min_turns": 10,
-  "player_count": 2
+  "fitness": 0.0,
+  "fitness_metrics": {}
 }

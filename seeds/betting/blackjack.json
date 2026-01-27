@@ -1,46 +1,50 @@
 {
-  "schema_version": "1.0",
-  "genome_id": "blackjack",
-  "generation": 0,
-  "setup": {
-    "cards_per_player": 2,
-    "initial_deck": "standard_52",
-    "initial_discard_count": 0,
-    "starting_chips": 500
-  },
-  "turn_structure": {
-    "phases": [
-      {
-        "type": "BettingPhase",
-        "min_bet": 25,
-        "max_raises": 1
-      },
-      {
-        "type": "DrawPhase",
-        "source": "DECK",
-        "count": 1,
-        "mandatory": false,
-        "condition": {
-          "type": "simple",
-          "condition_type": "HAND_SIZE",
-          "operator": "LT",
-          "value": 5,
-          "reference": null
+  "schema_version": "2.0",
+  "genome": {
+    "name": "blackjack",
+    "metadata": {
+      "genome_id": "blackjack",
+      "generation": 0,
+      "parent_ids": []
+    },
+    "setup": {
+      "cards_per_player": 2,
+      "starting_chips": 500
+    },
+    "turn_structure": {
+      "phases": [
+        {
+          "type": "betting",
+          "data": {
+            "min_bet": 25,
+            "max_raises": 1
+          }
+        },
+        {
+          "type": "draw",
+          "data": {
+            "source": "deck",
+            "count": 1,
+            "mandatory": false,
+            "condition": {
+              "op_code": "check_hand_size",
+              "operator": "lt",
+              "value": 5
+            }
+          }
         }
+      ],
+      "max_turns": 20
+    },
+    "win_conditions": [
+      {
+        "type": "high_score",
+        "threshold": 21
       }
     ],
-    "is_trick_based": false,
-    "tricks_per_hand": null
+    "effects": [],
+    "player_count": 2
   },
-  "special_effects": [],
-  "win_conditions": [
-    {
-      "type": "high_score",
-      "threshold": 21
-    }
-  ],
-  "scoring_rules": [],
-  "max_turns": 20,
-  "min_turns": 10,
-  "player_count": 2
+  "fitness": 0.0,
+  "fitness_metrics": {}
 }

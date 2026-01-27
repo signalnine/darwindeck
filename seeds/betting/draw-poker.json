@@ -1,52 +1,58 @@
 {
-  "schema_version": "1.0",
-  "genome_id": "draw-poker",
-  "generation": 0,
-  "setup": {
-    "cards_per_player": 5,
-    "initial_deck": "standard_52",
-    "initial_discard_count": 0,
-    "starting_chips": 1000
-  },
-  "turn_structure": {
-    "phases": [
-      {
-        "type": "BettingPhase",
-        "min_bet": 20,
-        "max_raises": 3
-      },
-      {
-        "type": "DiscardPhase",
-        "target": "DISCARD",
-        "count": 3,
-        "mandatory": false
-      },
-      {
-        "type": "DrawPhase",
-        "source": "DECK",
-        "count": 3,
-        "mandatory": false,
-        "condition": {
-          "type": "simple",
-          "condition_type": "HAND_SIZE",
-          "operator": "LT",
-          "value": 5,
-          "reference": null
+  "schema_version": "2.0",
+  "genome": {
+    "name": "draw-poker",
+    "metadata": {
+      "genome_id": "draw-poker",
+      "generation": 0,
+      "parent_ids": []
+    },
+    "setup": {
+      "cards_per_player": 5,
+      "starting_chips": 1000
+    },
+    "turn_structure": {
+      "phases": [
+        {
+          "type": "betting",
+          "data": {
+            "min_bet": 20,
+            "max_raises": 3
+          }
+        },
+        {
+          "type": "discard",
+          "data": {
+            "target": "discard",
+            "count": 3,
+            "mandatory": false
+          }
+        },
+        {
+          "type": "draw",
+          "data": {
+            "source": "deck",
+            "count": 3,
+            "mandatory": false,
+            "condition": {
+              "op_code": "check_hand_size",
+              "operator": "lt",
+              "value": 5
+            }
+          }
         }
+      ],
+      "max_turns": 20
+    },
+    "win_conditions": [
+      {
+        "type": "best_hand",
+        "threshold": null
       }
     ],
-    "is_trick_based": false,
-    "tricks_per_hand": null
+    "effects": [],
+    "player_count": 2
   },
-  "special_effects": [],
-  "win_conditions": [
-    {
-      "type": "best_hand",
-      "threshold": null
-    }
-  ],
-  "scoring_rules": [],
-  "max_turns": 20,
-  "min_turns": 10,
-  "player_count": 2
+  "fitness": 0.0,
+  "fitness_metrics": {}
 }
