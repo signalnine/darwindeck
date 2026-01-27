@@ -1,7 +1,7 @@
-"""Tests for EffectType enum completeness and format."""
+"""Tests for EffectType and TargetSelector enum completeness and format."""
 
 import pytest
-from darwindeck.genome.schema import EffectType
+from darwindeck.genome.schema import EffectType, TargetSelector
 
 
 class TestEffectTypeCompleteness:
@@ -51,3 +51,19 @@ class TestEffectTypeCompleteness:
             assert (
                 effect_type.name.isupper()
             ), f"Effect type name {effect_type.name} is not uppercase"
+
+
+class TestTargetSelectorCompleteness:
+    """Test that TargetSelector enum includes SELF for Go compatibility."""
+
+    def test_target_selector_has_self(self) -> None:
+        """TargetSelector must include SELF for self-targeting effects."""
+        assert hasattr(TargetSelector, "SELF"), "Missing SELF target"
+        assert TargetSelector.SELF.value == "self"
+
+    def test_target_selector_has_string_values(self) -> None:
+        """All TargetSelector enum members must have string values."""
+        for target in TargetSelector:
+            assert isinstance(
+                target.value, str
+            ), f"{target.name} has non-string value: {type(target.value)}"
