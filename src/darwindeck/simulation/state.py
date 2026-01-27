@@ -94,6 +94,10 @@ class GameState:
     # Claim/bluffing fields (for Cheat/BS games)
     current_claim: Optional["Claim"] = None
 
+    # Effect tracking fields (for Uno-style games)
+    skip_count: int = 0  # Number of players to skip (for SKIP_NEXT, BLOCK_NEXT)
+    play_direction: int = 1  # 1 = clockwise, -1 = counter-clockwise
+
     def copy_with(self, **changes) -> "GameState":  # type: ignore
         """Create a new state with specified changes."""
         # Helper for making state transitions
@@ -112,6 +116,8 @@ class GameState:
             "current_trick": self.current_trick,
             "hearts_broken": self.hearts_broken,
             "current_claim": self.current_claim,
+            "skip_count": self.skip_count,
+            "play_direction": self.play_direction,
         }
         current.update(changes)
         return GameState(**current)

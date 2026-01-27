@@ -3,7 +3,10 @@
 from dataclasses import dataclass
 from enum import Enum
 from typing import List, Optional, Union
-from darwindeck.genome.schema import GameGenome, PlayPhase, Location, BettingPhase, DiscardPhase, TrickPhase, ClaimPhase, DrawPhase
+from darwindeck.genome.schema import (
+    GameGenome, PlayPhase, Location, BettingPhase, DiscardPhase,
+    TrickPhase, ClaimPhase, DrawPhase, SpecialEffect, EffectType, TargetSelector
+)
 from darwindeck.simulation.state import GameState, Card, PlayerState, TrickCard, Claim
 
 # Special CardIndex values for ClaimPhase
@@ -1105,3 +1108,246 @@ def generate_betting_moves(state: GameState, phase: BettingPhase, player_id: int
         moves.append(BettingMove(action=BettingAction.FOLD, phase_index=phase_index))
 
     return moves
+
+
+# =============================================================================
+# Special Effect Handling
+# =============================================================================
+
+
+def resolve_target(state: GameState, target: TargetSelector) -> int:
+    """Resolve which player ID an effect targets.
+
+    Args:
+        state: Current game state
+        target: Target selector from the effect
+
+    Returns:
+        Player ID of the target, or -1 for ALL_OPPONENTS
+    """
+    current = state.active_player
+    num_players = len(state.players)
+    direction = state.play_direction
+
+    if target == TargetSelector.SELF:
+        return current
+    elif target == TargetSelector.NEXT_PLAYER:
+        return (current + direction + num_players) % num_players
+    elif target == TargetSelector.PREV_PLAYER:
+        return (current - direction + num_players) % num_players
+    elif target == TargetSelector.ALL_OPPONENTS:
+        return -1  # Signals caller must loop over all opponents
+    elif target == TargetSelector.LEFT_OPPONENT:
+        return (current + 1 + num_players) % num_players
+    elif target == TargetSelector.RIGHT_OPPONENT:
+        return (current - 1 + num_players) % num_players
+    else:
+        # Default to next player for unknown targets
+        return (current + 1) % num_players
+
+
+def apply_effect(state: GameState, effect: SpecialEffect) -> GameState:
+    """Apply a special effect to the game state.
+
+    Handles all effect types including:
+    - SKIP_NEXT: Skip next player(s)
+    - REVERSE_DIRECTION: Reverse play direction
+    - DRAW_CARDS: Target draws cards
+    - EXTRA_TURN: Current player gets extra turn
+    - FORCE_DISCARD: Target discards cards
+    - WILD_CARD: No-op (handled by condition evaluation)
+    - BLOCK_NEXT: Block next player (similar to skip)
+    - SWAP_HANDS: Exchange hands with target
+    - STEAL_CARD: Take card(s) from target
+    - PEEK_HAND: No-op (UI-only effect)
+
+    Args:
+        state: Current game state
+        effect: The special effect to apply
+
+    Returns:
+        New game state with effect applied
+    """
+    effect_type = effect.effect_type
+    value = effect.value
+    target = effect.target
+
+    if effect_type == EffectType.SKIP_NEXT:
+        return _apply_skip_next(state, value)
+
+    elif effect_type == EffectType.BLOCK_NEXT:
+        # BLOCK_NEXT is similar to SKIP_NEXT
+        return _apply_skip_next(state, value)
+
+    elif effect_type == EffectType.REVERSE_DIRECTION:
+        return state.copy_with(play_direction=state.play_direction * -1)
+
+    elif effect_type == EffectType.DRAW_CARDS:
+        return _apply_draw_cards(state, target, value)
+
+    elif effect_type == EffectType.EXTRA_TURN:
+        # Skip everyone else = current player goes again
+        num_players = len(state.players)
+        return state.copy_with(skip_count=num_players - 1)
+
+    elif effect_type == EffectType.FORCE_DISCARD:
+        return _apply_force_discard(state, target, value)
+
+    elif effect_type == EffectType.WILD_CARD:
+        # WILD_CARD is handled by condition evaluation, not as state mutation
+        return state
+
+    elif effect_type == EffectType.SWAP_HANDS:
+        return _apply_swap_hands(state, target)
+
+    elif effect_type == EffectType.STEAL_CARD:
+        return _apply_steal_card(state, target, value)
+
+    elif effect_type == EffectType.PEEK_HAND:
+        # PEEK_HAND is UI-only, no mechanical effect
+        return state
+
+    else:
+        # Unknown effect type - ignore for forward compatibility
+        return state
+
+
+def _apply_skip_next(state: GameState, value: int) -> GameState:
+    """Apply skip effect, capping at num_players - 1."""
+    new_skip = state.skip_count + value
+    max_skip = len(state.players) - 1
+    if new_skip > max_skip:
+        new_skip = max_skip
+    return state.copy_with(skip_count=new_skip)
+
+
+def _apply_draw_cards(state: GameState, target: TargetSelector, count: int) -> GameState:
+    """Make target player(s) draw cards from deck."""
+    target_id = resolve_target(state, target)
+
+    if target_id == -1:
+        # ALL_OPPONENTS: apply to everyone except current player
+        for i in range(len(state.players)):
+            if i != state.active_player:
+                state = _draw_cards_for_player(state, i, count)
+    else:
+        state = _draw_cards_for_player(state, target_id, count)
+
+    return state
+
+
+def _draw_cards_for_player(state: GameState, player_id: int, count: int) -> GameState:
+    """Draw cards from deck into player's hand."""
+    player = state.players[player_id]
+    deck = state.deck
+    hand = player.hand
+
+    drawn = 0
+    new_deck = list(deck)
+    new_hand = list(hand)
+
+    for _ in range(count):
+        if len(new_deck) == 0:
+            break
+        card = new_deck.pop(0)
+        new_hand.append(card)
+        drawn += 1
+
+    new_player = player.copy_with(hand=tuple(new_hand))
+    new_players = _update_player_tuple(state.players, player_id, new_player)
+    return state.copy_with(players=new_players, deck=tuple(new_deck))
+
+
+def _apply_force_discard(state: GameState, target: TargetSelector, count: int) -> GameState:
+    """Force target player(s) to discard cards."""
+    target_id = resolve_target(state, target)
+
+    if target_id == -1:
+        # ALL_OPPONENTS: apply to everyone except current player
+        for i in range(len(state.players)):
+            if i != state.active_player:
+                state = _force_discard_for_player(state, i, count)
+    else:
+        state = _force_discard_for_player(state, target_id, count)
+
+    return state
+
+
+def _force_discard_for_player(state: GameState, player_id: int, count: int) -> GameState:
+    """Force a specific player to discard cards (from end of hand)."""
+    player = state.players[player_id]
+    hand = list(player.hand)
+    discard = list(state.discard)
+
+    to_discard = min(count, len(hand))
+    for _ in range(to_discard):
+        if hand:
+            card = hand.pop()  # Remove from end (deterministic)
+            discard.append(card)
+
+    new_player = player.copy_with(hand=tuple(hand))
+    new_players = _update_player_tuple(state.players, player_id, new_player)
+    return state.copy_with(players=new_players, discard=tuple(discard))
+
+
+def _apply_swap_hands(state: GameState, target: TargetSelector) -> GameState:
+    """Swap hands between active player and target."""
+    target_id = resolve_target(state, target)
+
+    # Can't swap with ALL_OPPONENTS or with self
+    if target_id == -1:
+        return state  # ALL_OPPONENTS not supported for swap
+    if target_id == state.active_player:
+        return state  # Swapping with self is a no-op
+
+    active_player = state.players[state.active_player]
+    target_player = state.players[target_id]
+
+    # Swap hands
+    new_active = active_player.copy_with(hand=target_player.hand)
+    new_target = target_player.copy_with(hand=active_player.hand)
+
+    # Update players tuple
+    new_players = tuple(
+        new_active if i == state.active_player
+        else (new_target if i == target_id else p)
+        for i, p in enumerate(state.players)
+    )
+
+    return state.copy_with(players=new_players)
+
+
+def _apply_steal_card(state: GameState, target: TargetSelector, count: int) -> GameState:
+    """Steal card(s) from target's hand (deterministically from end)."""
+    target_id = resolve_target(state, target)
+
+    # Can't steal from ALL_OPPONENTS or from self
+    if target_id == -1:
+        return state
+    if target_id == state.active_player:
+        return state
+
+    active_player = state.players[state.active_player]
+    target_player = state.players[target_id]
+
+    target_hand = list(target_player.hand)
+    active_hand = list(active_player.hand)
+
+    # Steal cards from the end of target's hand (deterministic)
+    to_steal = min(count, len(target_hand))
+    for _ in range(to_steal):
+        if target_hand:
+            card = target_hand.pop()  # Remove from end
+            active_hand.append(card)
+
+    new_active = active_player.copy_with(hand=tuple(active_hand))
+    new_target = target_player.copy_with(hand=tuple(target_hand))
+
+    # Update players tuple
+    new_players = tuple(
+        new_active if i == state.active_player
+        else (new_target if i == target_id else p)
+        for i, p in enumerate(state.players)
+    )
+
+    return state.copy_with(players=new_players)
