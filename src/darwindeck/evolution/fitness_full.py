@@ -444,14 +444,15 @@ class FitnessEvaluator:
 
         # No need to renormalize - weights already sum to 1.0
 
-        # Diversity bonus: slight bonus for non-trick phase types
-        # This prevents evolution from converging on trick-taking monoculture
+        # Diversity bonus: strong bonus for non-trick phase types
+        # Trick-taking dominates all metrics due to engine calibration;
+        # this compensates so non-trick games can compete
         has_play_phase = any(hasattr(p, 'target') and not hasattr(p, 'lead_suit_required')
                            for p in genome.turn_structure.phases)
         has_claim_phase = any(hasattr(p, 'min_cards') and not hasattr(p, 'target')
                              for p in genome.turn_structure.phases)
         if not genome.turn_structure.is_trick_based and (has_play_phase or has_claim_phase):
-            total_fitness *= 1.05  # 5% bonus for non-trick game types
+            total_fitness *= 1.25  # 25% bonus for non-trick game types
 
         # Positional balance penalty: harsh - unbalanced games are unplayable
         if results.total_games > 0 and results.player_count >= 2:
