@@ -39,11 +39,13 @@ STYLE_PRESETS = {
     'party': {
         # Favor quick, balanced, accessible games anyone can win
         # Note: skill_vs_luck is INVERTED for party - higher = more luck-friendly
+        # interaction_frequency is 0: the Go sim's interaction metric is biased
+        # toward trick-taking; party fun comes from balance and tension instead
         'decision_density': 0.15,
-        'comeback_potential': 0.25,  # Everyone can win -- most important
+        'comeback_potential': 0.30,  # Everyone can win -- most important for party
         'tension_curve': 0.15,
-        'interaction_frequency': 0.10,  # Reduced: was 0.25, biased toward trick-taking
-        'rules_complexity': 0.20,  # Simple rules
+        'interaction_frequency': 0.00,  # Disabled: biased toward trick-taking in Go sim
+        'rules_complexity': 0.25,  # Simple rules matter for party
         'skill_vs_luck': 0.15,  # Luck-friendly
         'bluffing_depth': 0.00,
     },
