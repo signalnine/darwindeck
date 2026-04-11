@@ -13,6 +13,9 @@ _lib = ctypes.CDLL(str(LIB_PATH))
 _lib.SimulateBatch.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.POINTER(ctypes.c_int)]
 _lib.SimulateBatch.restype = ctypes.c_void_p
 
+_lib.FreeResponse.argtypes = [ctypes.c_void_p]
+_lib.FreeResponse.restype = None
+
 
 def simulate_batch(batch_request_bytes: bytes) -> BatchResponse.BatchResponse:
     """Call Go simulation engine via CGo.
@@ -36,8 +39,9 @@ def simulate_batch(batch_request_bytes: bytes) -> BatchResponse.BatchResponse:
         ctypes.byref(response_len)
     )
 
-    # Copy result bytes
+    # Copy result bytes and free the Go-allocated buffer
     result_bytes = bytes(ctypes.string_at(result_ptr, response_len.value))
+    _lib.FreeResponse(result_ptr)
 
     # Parse Flatbuffers response
     return BatchResponse.BatchResponse.GetRootAsBatchResponse(result_bytes, 0)
