@@ -444,6 +444,19 @@ class FitnessEvaluator:
 
         # No need to renormalize - weights already sum to 1.0
 
+        # Positional balance penalty: penalize games where seat position determines outcome
+        if results.total_games > 0 and results.player_count >= 2:
+            expected_rate = 1.0 / results.player_count
+            max_pos_deviation = 0.0
+            for wins in results.wins:
+                actual_rate = wins / results.total_games
+                deviation = abs(actual_rate - expected_rate)
+                max_pos_deviation = max(max_pos_deviation, deviation)
+
+            if max_pos_deviation > 0.10:
+                position_penalty = max(0.5, 1.0 - (max_pos_deviation - 0.10) * 2.0)
+                total_fitness *= position_penalty
+
         return FitnessMetrics(
             decision_density=decision_density,
             comeback_potential=comeback_potential,

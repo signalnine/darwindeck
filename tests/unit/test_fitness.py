@@ -143,3 +143,44 @@ def test_rules_complexity_not_inflated_by_trick_phase_effects():
 
     diff = with_effects_m.rules_complexity - no_effects_m.rules_complexity
     assert diff < 0.1, f"Inert effects inflated rules_complexity by {diff:.3f}"
+def test_fitness_penalizes_positional_imbalance():
+    """4-player games with first-player advantage get penalized."""
+    evaluator = FitnessEvaluator(style='party')
+    from darwindeck.genome.examples import create_hearts_genome
+    genome = create_hearts_genome()
+    balanced = SimulationResults(
+        total_games=100, wins=(25, 25, 25, 25), player_count=4,
+        draws=0, avg_turns=20, errors=0,
+        total_decisions=200, total_valid_moves=400, forced_decisions=20,
+        total_hand_size=800, total_interactions=50, total_actions=200,
+    )
+    imbalanced = SimulationResults(
+        total_games=100, wins=(55, 25, 10, 10), player_count=4,
+        draws=0, avg_turns=20, errors=0,
+        total_decisions=200, total_valid_moves=400, forced_decisions=20,
+        total_hand_size=800, total_interactions=50, total_actions=200,
+    )
+    b = evaluator.evaluate(genome, balanced)
+    i = evaluator.evaluate(genome, imbalanced)
+    assert i.total_fitness < b.total_fitness
+
+
+def test_fitness_penalizes_2player_imbalance():
+    """2-player games with positional imbalance get penalized."""
+    evaluator = FitnessEvaluator(style='balanced')
+    genome = create_war_genome()
+    balanced = SimulationResults(
+        total_games=100, wins=(50, 50), player_count=2,
+        draws=0, avg_turns=40, errors=0,
+        total_decisions=200, total_valid_moves=400, forced_decisions=20,
+        total_hand_size=800, total_interactions=50, total_actions=200,
+    )
+    imbalanced = SimulationResults(
+        total_games=100, wins=(70, 30), player_count=2,
+        draws=0, avg_turns=40, errors=0,
+        total_decisions=200, total_valid_moves=400, forced_decisions=20,
+        total_hand_size=800, total_interactions=50, total_actions=200,
+    )
+    b = evaluator.evaluate(genome, balanced)
+    i = evaluator.evaluate(genome, imbalanced)
+    assert i.total_fitness < b.total_fitness
