@@ -1,12 +1,12 @@
 {
   "schema_version": "1.0",
-  "genome_id": "EasternDeck",
-  "generation": 34,
+  "genome_id": "RacingScroll",
+  "generation": 47,
   "setup": {
     "cards_per_player": 13,
     "initial_deck": "standard_52",
-    "initial_discard_count": 0,
-    "starting_chips": 67
+    "initial_discard_count": 1,
+    "starting_chips": 55
   },
   "turn_structure": {
     "phases": [
@@ -23,20 +23,20 @@
   },
   "special_effects": [
     {
-      "trigger_rank": "EIGHT",
-      "effect_type": "REVERSE_DIRECTION",
-      "target": "ALL_OPPONENTS",
-      "value": 1
-    },
-    {
-      "trigger_rank": "QUEEN",
-      "effect_type": "DRAW_CARDS",
+      "trigger_rank": "THREE",
+      "effect_type": "EXTRA_TURN",
       "target": "NEXT_PLAYER",
       "value": 1
     },
     {
-      "trigger_rank": "SIX",
-      "effect_type": "REVERSE_DIRECTION",
+      "trigger_rank": "NINE",
+      "effect_type": "FORCE_DISCARD",
+      "target": "NEXT_PLAYER",
+      "value": 2
+    },
+    {
+      "trigger_rank": "FIVE",
+      "effect_type": "EXTRA_TURN",
       "target": "ALL_OPPONENTS",
       "value": 3
     }
@@ -44,46 +44,46 @@
   "win_conditions": [
     {
       "type": "low_score",
-      "threshold": 12
+      "threshold": 13
     },
     {
-      "type": "all_hands_empty",
-      "threshold": 0
+      "type": "low_score",
+      "threshold": 500
     },
     {
-      "type": "best_hand",
-      "threshold": null
+      "type": "first_to_score",
+      "threshold": 200
     }
   ],
   "scoring_rules": [],
-  "max_turns": 236,
+  "max_turns": 221,
   "min_turns": 52,
   "player_count": 4,
-  "fitness": 0.765731781223232,
-  "fitness_rank": 2,
+  "fitness": 0.751043031111033,
+  "fitness_rank": 9,
   "fitness_metrics": {
-    "decision_density": 0.5625570536975615,
-    "comeback_potential": 0.89,
-    "tension_curve": 0.8226249933242797,
+    "decision_density": 0.5396073104610294,
+    "comeback_potential": 0.86,
+    "tension_curve": 0.7691017508506774,
     "interaction_frequency": 1.0,
     "rules_complexity": 0.8049999999999999,
-    "session_length": 0.050311109754774305,
-    "skill_vs_luck": 0.2547571768069856,
+    "session_length": 0.056711112128363717,
+    "skill_vs_luck": 0.24781416653241484,
     "bluffing_depth": 0.0,
     "games_simulated": 100,
     "valid": true
   },
   "skill_evaluation": {
-    "greedy_win_rate": 0.36,
-    "greedy_wins_as_p0": 22,
-    "greedy_wins_as_p1": 14,
-    "mcts_win_rate": 0.64,
+    "greedy_win_rate": 0.43,
+    "greedy_wins_as_p0": 25,
+    "greedy_wins_as_p1": 18,
+    "mcts_win_rate": 0.7,
     "mcts_wins_as_p0": 41,
-    "mcts_wins_as_p1": 23,
-    "skill_score": 0.5,
-    "first_player_advantage": 0.26,
+    "mcts_wins_as_p1": 29,
+    "skill_score": 0.565,
+    "first_player_advantage": 0.19000000000000006,
     "total_games": 200,
     "timed_out": false
   },
-  "skill_rank": 2
+  "skill_rank": 9
 }

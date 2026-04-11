@@ -1,19 +1,19 @@
 {
   "schema_version": "1.0",
-  "genome_id": "SacredChalice",
-  "generation": 24,
+  "genome_id": "StarkSeal",
+  "generation": 36,
   "setup": {
     "cards_per_player": 13,
     "initial_deck": "standard_52",
     "initial_discard_count": 0,
-    "starting_chips": 0
+    "starting_chips": 80
   },
   "turn_structure": {
     "phases": [
       {
         "type": "TrickPhase",
         "lead_suit_required": true,
-        "trump_suit": null,
+        "trump_suit": "SPADES",
         "high_card_wins": true,
         "breaking_suit": "HEARTS"
       }
@@ -21,14 +21,7 @@
     "is_trick_based": true,
     "tricks_per_hand": 13
   },
-  "special_effects": [
-    {
-      "trigger_rank": "FIVE",
-      "effect_type": "EXTRA_TURN",
-      "target": "ALL_OPPONENTS",
-      "value": 2
-    }
-  ],
+  "special_effects": [],
   "win_conditions": [
     {
       "type": "low_score",
@@ -39,39 +32,39 @@
       "threshold": 0
     },
     {
-      "type": "high_score",
-      "threshold": 504
+      "type": "most_captured",
+      "threshold": null
     }
   ],
   "scoring_rules": [],
-  "max_turns": 140,
+  "max_turns": 229,
   "min_turns": 52,
   "player_count": 4,
-  "fitness": 0.760954167387178,
-  "fitness_rank": 5,
+  "fitness": 0.7651047045073548,
+  "fitness_rank": 1,
   "fitness_metrics": {
-    "decision_density": 0.5499083901222569,
-    "comeback_potential": 0.89,
-    "tension_curve": 0.7968577146530151,
+    "decision_density": 0.5464303776370303,
+    "comeback_potential": 0.9299999999999999,
+    "tension_curve": 0.7714210152626038,
     "interaction_frequency": 1.0,
     "rules_complexity": 0.8049999999999999,
-    "session_length": 0.05297777811686198,
-    "skill_vs_luck": 0.24851704606433844,
+    "session_length": 0.051111111111111114,
+    "skill_vs_luck": 0.24213043478260876,
     "bluffing_depth": 0.0,
     "games_simulated": 100,
     "valid": true
   },
   "skill_evaluation": {
-    "greedy_win_rate": 0.41,
-    "greedy_wins_as_p0": 22,
-    "greedy_wins_as_p1": 19,
-    "mcts_win_rate": 0.71,
-    "mcts_wins_as_p0": 43,
-    "mcts_wins_as_p1": 28,
-    "skill_score": 0.5599999999999999,
-    "first_player_advantage": 0.18000000000000005,
+    "greedy_win_rate": 0.31,
+    "greedy_wins_as_p0": 19,
+    "greedy_wins_as_p1": 12,
+    "mcts_win_rate": 0.7,
+    "mcts_wins_as_p0": 45,
+    "mcts_wins_as_p1": 25,
+    "skill_score": 0.505,
+    "first_player_advantage": 0.27,
     "total_games": 200,
     "timed_out": false
   },
-  "skill_rank": 5
+  "skill_rank": 1
 }
