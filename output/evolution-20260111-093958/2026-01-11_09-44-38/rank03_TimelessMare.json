@@ -1,0 +1,92 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "TimelessMare",
+  "generation": 244,
+  "setup": {
+    "cards_per_player": 16,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 0
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "HAND_SIZE",
+          "operator": "GE",
+          "value": 2,
+          "reference": null
+        },
+        "min_cards": 0,
+        "max_cards": 5,
+        "mandatory": false
+      },
+      {
+        "type": "TrickPhase",
+        "lead_suit_required": true,
+        "trump_suit": "CLUBS",
+        "high_card_wins": false,
+        "breaking_suit": "SPADES"
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "LOCATION_SIZE",
+          "operator": "GT",
+          "value": 8,
+          "reference": "hand"
+        },
+        "min_cards": 1,
+        "max_cards": 1,
+        "mandatory": true
+      },
+      {
+        "type": "Unknown"
+      }
+    ],
+    "is_trick_based": true,
+    "tricks_per_hand": 13
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "low_score",
+      "threshold": 39
+    },
+    {
+      "type": "empty_hand",
+      "threshold": null
+    },
+    {
+      "type": "all_hands_empty",
+      "threshold": null
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 909,
+  "min_turns": 52,
+  "player_count": 2,
+  "fitness": 0.860631708238851,
+  "fitness_rank": 3,
+  "fitness_metrics": {
+    "decision_density": 0.65,
+    "comeback_potential": 1.0,
+    "tension_curve": 1.0,
+    "interaction_frequency": 1.0,
+    "rules_complexity": 0.58,
+    "session_length": 0.23453333536783855,
+    "skill_vs_luck": 0.8875,
+    "bluffing_depth": 0.8179390274628369,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "mcts_win_rate": 1.0,
+  "skill_rank": 3,
+  "mcts_wins_as_p1": 50,
+  "mcts_wins_as_p2": 50,
+  "skill_eval_timed_out": false
+}

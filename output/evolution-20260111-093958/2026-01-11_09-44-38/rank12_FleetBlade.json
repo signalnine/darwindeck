@@ -1,0 +1,118 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "FleetBlade",
+  "generation": 257,
+  "setup": {
+    "cards_per_player": 19,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 0
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "compound",
+          "logic": "OR",
+          "conditions": [
+            {
+              "type": "simple",
+              "condition_type": "HAND_SIZE",
+              "operator": "GE",
+              "value": 3,
+              "reference": null
+            }
+          ]
+        },
+        "min_cards": 0,
+        "max_cards": 10,
+        "mandatory": false
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "compound",
+          "logic": "OR",
+          "conditions": [
+            {
+              "type": "simple",
+              "condition_type": "HAND_SIZE",
+              "operator": "GE",
+              "value": 3,
+              "reference": null
+            }
+          ]
+        },
+        "min_cards": 0,
+        "max_cards": 10,
+        "mandatory": false
+      },
+      {
+        "type": "TrickPhase",
+        "lead_suit_required": true,
+        "trump_suit": "SPADES",
+        "high_card_wins": false,
+        "breaking_suit": null
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "LOCATION_SIZE",
+          "operator": "LE",
+          "value": 8,
+          "reference": null
+        },
+        "min_cards": 0,
+        "max_cards": 5,
+        "mandatory": false
+      },
+      {
+        "type": "Unknown"
+      }
+    ],
+    "is_trick_based": true,
+    "tricks_per_hand": 13
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "empty_hand",
+      "threshold": null
+    },
+    {
+      "type": "capture_all",
+      "threshold": null
+    },
+    {
+      "type": "capture_all",
+      "threshold": null
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 726,
+  "min_turns": 52,
+  "player_count": 2,
+  "fitness": 0.8579820846905538,
+  "fitness_rank": 12,
+  "fitness_metrics": {
+    "decision_density": 0.65,
+    "comeback_potential": 1.0,
+    "tension_curve": 1.0,
+    "interaction_frequency": 1.0,
+    "rules_complexity": 0.5049999999999999,
+    "session_length": 0.34502221001519096,
+    "skill_vs_luck": 0.9249999999999999,
+    "bluffing_depth": 0.8091069489685124,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "mcts_win_rate": 1.0,
+  "skill_rank": 12,
+  "mcts_wins_as_p1": 50,
+  "mcts_wins_as_p2": 0,
+  "skill_eval_timed_out": true
+}

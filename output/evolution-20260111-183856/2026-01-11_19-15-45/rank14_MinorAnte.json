@@ -1,0 +1,148 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "MinorAnte",
+  "generation": 67,
+  "setup": {
+    "cards_per_player": 20,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 0
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "TrickPhase",
+        "lead_suit_required": true,
+        "trump_suit": "SPADES",
+        "high_card_wins": false,
+        "breaking_suit": null
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "LOCATION_SIZE",
+          "operator": "LE",
+          "value": 4,
+          "reference": null
+        },
+        "min_cards": 1,
+        "max_cards": 5,
+        "mandatory": false
+      },
+      {
+        "type": "ClaimPhase",
+        "min_cards": 1,
+        "max_cards": 4,
+        "sequential_rank": true,
+        "allow_challenge": true,
+        "pile_penalty": true
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "LOCATION_SIZE",
+          "operator": "LE",
+          "value": 4,
+          "reference": null
+        },
+        "min_cards": 1,
+        "max_cards": 1,
+        "mandatory": false
+      }
+    ],
+    "is_trick_based": true,
+    "tricks_per_hand": 13
+  },
+  "special_effects": [
+    {
+      "trigger_rank": "THREE",
+      "effect_type": "FORCE_DISCARD",
+      "target": "NEXT_PLAYER",
+      "value": 3
+    },
+    {
+      "trigger_rank": "SEVEN",
+      "effect_type": "SKIP_NEXT",
+      "target": "ALL_OPPONENTS",
+      "value": 4
+    },
+    {
+      "trigger_rank": "FIVE",
+      "effect_type": "SKIP_NEXT",
+      "target": "NEXT_PLAYER",
+      "value": 3
+    },
+    {
+      "trigger_rank": "THREE",
+      "effect_type": "SKIP_NEXT",
+      "target": "NEXT_PLAYER",
+      "value": 2
+    },
+    {
+      "trigger_rank": "ACE",
+      "effect_type": "DRAW_CARDS",
+      "target": "ALL_OPPONENTS",
+      "value": 1
+    },
+    {
+      "trigger_rank": "NINE",
+      "effect_type": "REVERSE_DIRECTION",
+      "target": "ALL_OPPONENTS",
+      "value": 2
+    },
+    {
+      "trigger_rank": "JACK",
+      "effect_type": "DRAW_CARDS",
+      "target": "ALL_OPPONENTS",
+      "value": 2
+    }
+  ],
+  "win_conditions": [
+    {
+      "type": "low_score",
+      "threshold": 38
+    },
+    {
+      "type": "empty_hand",
+      "threshold": null
+    },
+    {
+      "type": "capture_all",
+      "threshold": null
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 651,
+  "min_turns": 52,
+  "player_count": 2,
+  "fitness": 0.877733265720081,
+  "fitness_rank": 14,
+  "fitness_metrics": {
+    "decision_density": 0.65,
+    "comeback_potential": 1.0,
+    "tension_curve": 1.0,
+    "interaction_frequency": 1.0,
+    "rules_complexity": 0.7,
+    "session_length": 0.3024666680230035,
+    "skill_vs_luck": 1.0,
+    "bluffing_depth": 0.8174442190669371,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "skill_evaluation": {
+    "greedy_win_rate": 0.77,
+    "greedy_wins_as_p0": 28,
+    "greedy_wins_as_p1": 49,
+    "mcts_win_rate": 1.0,
+    "mcts_wins_as_p0": 50,
+    "mcts_wins_as_p1": 50,
+    "skill_score": 0.885,
+    "first_player_advantage": -0.20999999999999996,
+    "total_games": 200,
+    "timed_out": false
+  },
+  "skill_rank": 14
+}

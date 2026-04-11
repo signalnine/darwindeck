@@ -1,0 +1,56 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "StoneBow",
+  "generation": 99,
+  "setup": {
+    "cards_per_player": 8,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 0
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "DrawPhase",
+        "source": "DECK",
+        "count": 5,
+        "mandatory": false,
+        "condition": null
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "LOCATION_SIZE",
+          "operator": "GT",
+          "value": 8,
+          "reference": "hand"
+        },
+        "min_cards": 1,
+        "max_cards": 1,
+        "mandatory": true
+      }
+    ],
+    "is_trick_based": true,
+    "tricks_per_hand": 13
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "first_to_score",
+      "threshold": 50
+    },
+    {
+      "type": "all_hands_empty",
+      "threshold": null
+    },
+    {
+      "type": "low_score",
+      "threshold": 200
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 379,
+  "min_turns": 52,
+  "player_count": 4
+}

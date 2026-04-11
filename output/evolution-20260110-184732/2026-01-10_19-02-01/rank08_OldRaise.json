@@ -1,0 +1,56 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "OldRaise",
+  "generation": 144,
+  "setup": {
+    "cards_per_player": 7,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 0
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "LOCATION_SIZE",
+          "operator": "LE",
+          "value": 0,
+          "reference": null
+        },
+        "min_cards": 1,
+        "max_cards": 6,
+        "mandatory": true
+      },
+      {
+        "type": "DrawPhase",
+        "source": "DECK",
+        "count": 6,
+        "mandatory": false,
+        "condition": null
+      }
+    ],
+    "is_trick_based": true,
+    "tricks_per_hand": 13
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "all_hands_empty",
+      "threshold": null
+    },
+    {
+      "type": "high_score",
+      "threshold": 200
+    },
+    {
+      "type": "all_hands_empty",
+      "threshold": null
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 310,
+  "min_turns": 52,
+  "player_count": 4
+}

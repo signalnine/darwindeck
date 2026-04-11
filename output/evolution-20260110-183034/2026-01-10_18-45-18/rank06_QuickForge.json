@@ -1,0 +1,70 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "QuickForge",
+  "generation": 93,
+  "setup": {
+    "cards_per_player": 11,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 0
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "LOCATION_SIZE",
+          "operator": "EQ",
+          "value": 5,
+          "reference": null
+        },
+        "min_cards": 1,
+        "max_cards": 7,
+        "mandatory": false
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "LOCATION_SIZE",
+          "operator": "GT",
+          "value": 6,
+          "reference": "hand"
+        },
+        "min_cards": 1,
+        "max_cards": 1,
+        "mandatory": true
+      },
+      {
+        "type": "DrawPhase",
+        "source": "DECK",
+        "count": 2,
+        "mandatory": false,
+        "condition": null
+      }
+    ],
+    "is_trick_based": true,
+    "tricks_per_hand": 13
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "all_hands_empty",
+      "threshold": null
+    },
+    {
+      "type": "all_hands_empty",
+      "threshold": null
+    },
+    {
+      "type": "low_score",
+      "threshold": 89
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 297,
+  "min_turns": 52,
+  "player_count": 4
+}

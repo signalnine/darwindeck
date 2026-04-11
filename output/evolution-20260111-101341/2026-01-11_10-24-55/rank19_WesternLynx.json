@@ -1,0 +1,57 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "WesternLynx",
+  "generation": 2,
+  "setup": {
+    "cards_per_player": 24,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 0
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "Unknown"
+      }
+    ],
+    "is_trick_based": false,
+    "tricks_per_hand": null
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "empty_hand",
+      "threshold": null
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 2000,
+  "min_turns": 10,
+  "player_count": 2,
+  "fitness": 0.9097932632428009,
+  "fitness_rank": 19,
+  "fitness_metrics": {
+    "decision_density": 0.6191826324280079,
+    "comeback_potential": 1.0,
+    "tension_curve": 1.0,
+    "interaction_frequency": 1.0,
+    "rules_complexity": 0.8049999999999999,
+    "session_length": 0.7232259114583333,
+    "skill_vs_luck": 0.7374999999999999,
+    "bluffing_depth": 0.7462254715066108,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "skill_evaluation": {
+    "greedy_win_rate": 1.0,
+    "greedy_wins_as_p0": 50,
+    "greedy_wins_as_p1": 50,
+    "mcts_win_rate": 1.0,
+    "mcts_wins_as_p0": 50,
+    "mcts_wins_as_p1": 0,
+    "skill_score": 1.0,
+    "first_player_advantage": 0.0,
+    "total_games": 150,
+    "timed_out": true
+  },
+  "skill_rank": 19
+}

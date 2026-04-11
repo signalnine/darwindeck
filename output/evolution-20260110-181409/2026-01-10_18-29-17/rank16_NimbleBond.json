@@ -1,0 +1,97 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "NimbleBond",
+  "generation": 60,
+  "setup": {
+    "cards_per_player": 11,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 0
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "DrawPhase",
+        "source": "DECK",
+        "count": 2,
+        "mandatory": false,
+        "condition": null
+      },
+      {
+        "type": "DrawPhase",
+        "source": "DISCARD",
+        "count": 4,
+        "mandatory": false,
+        "condition": null
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "compound",
+          "logic": "OR",
+          "conditions": [
+            {
+              "type": "simple",
+              "condition_type": "HAND_SIZE",
+              "operator": "GE",
+              "value": 3,
+              "reference": null
+            }
+          ]
+        },
+        "min_cards": 0,
+        "max_cards": 10,
+        "mandatory": false
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "LOCATION_SIZE",
+          "operator": "GT",
+          "value": 4,
+          "reference": "hand"
+        },
+        "min_cards": 1,
+        "max_cards": 1,
+        "mandatory": true
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "LOCATION_SIZE",
+          "operator": "LE",
+          "value": 3,
+          "reference": null
+        },
+        "min_cards": 2,
+        "max_cards": 10,
+        "mandatory": false
+      }
+    ],
+    "is_trick_based": true,
+    "tricks_per_hand": 13
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "capture_all",
+      "threshold": null
+    },
+    {
+      "type": "all_hands_empty",
+      "threshold": null
+    },
+    {
+      "type": "low_score",
+      "threshold": 106
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 326,
+  "min_turns": 52,
+  "player_count": 4
+}

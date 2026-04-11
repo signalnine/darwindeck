@@ -1,0 +1,69 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "AgileBet",
+  "generation": 210,
+  "setup": {
+    "cards_per_player": 12,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 1
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "DrawPhase",
+        "source": "DECK",
+        "count": 6,
+        "mandatory": false,
+        "condition": {
+          "type": "simple",
+          "condition_type": "LOCATION_SIZE",
+          "operator": "EQ",
+          "value": 0,
+          "reference": null
+        }
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "HAND_SIZE",
+          "operator": "GE",
+          "value": 4,
+          "reference": null
+        },
+        "min_cards": 0,
+        "max_cards": 5,
+        "mandatory": false
+      }
+    ],
+    "is_trick_based": true,
+    "tricks_per_hand": 13
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "all_hands_empty",
+      "threshold": null
+    },
+    {
+      "type": "high_score",
+      "threshold": 200
+    },
+    {
+      "type": "capture_all",
+      "threshold": null
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 882,
+  "min_turns": 52,
+  "player_count": 2,
+  "fitness": 0.9347314363743726,
+  "fitness_rank": 17,
+  "mcts_win_rate": 0.0,
+  "skill_rank": 17,
+  "mcts_wins_as_p1": 0,
+  "mcts_wins_as_p2": 0,
+  "skill_eval_timed_out": true
+}

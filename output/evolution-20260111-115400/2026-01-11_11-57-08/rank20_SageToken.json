@@ -1,0 +1,61 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "SageToken",
+  "generation": 23,
+  "setup": {
+    "cards_per_player": 7,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 1
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "Unknown"
+      }
+    ],
+    "is_trick_based": true,
+    "tricks_per_hand": 13
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "empty_hand",
+      "threshold": null
+    },
+    {
+      "type": "all_hands_empty",
+      "threshold": 0
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 500,
+  "min_turns": 52,
+  "player_count": 2,
+  "fitness": 0.8967579716548004,
+  "fitness_rank": 20,
+  "fitness_metrics": {
+    "decision_density": 0.4765597275343324,
+    "comeback_potential": 1.0,
+    "tension_curve": 0.9956799926757812,
+    "interaction_frequency": 1.0,
+    "rules_complexity": 0.8049999999999999,
+    "session_length": 0.2206222195095486,
+    "skill_vs_luck": 0.7749999999999999,
+    "bluffing_depth": 0.7382895598583643,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "skill_evaluation": {
+    "greedy_win_rate": 1.0,
+    "greedy_wins_as_p0": 50,
+    "greedy_wins_as_p1": 50,
+    "mcts_win_rate": 1.0,
+    "mcts_wins_as_p0": 50,
+    "mcts_wins_as_p1": 50,
+    "skill_score": 1.0,
+    "first_player_advantage": 0.0,
+    "total_games": 200,
+    "timed_out": false
+  },
+  "skill_rank": 20
+}

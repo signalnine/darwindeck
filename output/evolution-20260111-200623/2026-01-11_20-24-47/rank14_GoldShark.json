@@ -1,0 +1,78 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "GoldShark",
+  "generation": 19,
+  "setup": {
+    "cards_per_player": 13,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 0
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "TrickPhase",
+        "lead_suit_required": true,
+        "trump_suit": "SPADES",
+        "high_card_wins": true,
+        "breaking_suit": "HEARTS"
+      }
+    ],
+    "is_trick_based": true,
+    "tricks_per_hand": 13
+  },
+  "special_effects": [
+    {
+      "trigger_rank": "ACE",
+      "effect_type": "SKIP_NEXT",
+      "target": "NEXT_PLAYER",
+      "value": 3
+    },
+    {
+      "trigger_rank": "NINE",
+      "effect_type": "EXTRA_TURN",
+      "target": "NEXT_PLAYER",
+      "value": 1
+    }
+  ],
+  "win_conditions": [
+    {
+      "type": "low_score",
+      "threshold": 12
+    },
+    {
+      "type": "low_score",
+      "threshold": 500
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 207,
+  "min_turns": 52,
+  "player_count": 4,
+  "fitness": 0.7654860882180117,
+  "fitness_rank": 14,
+  "fitness_metrics": {
+    "decision_density": 0.5440408777169208,
+    "comeback_potential": 0.96,
+    "tension_curve": 0.1799200096130371,
+    "interaction_frequency": 1.0,
+    "rules_complexity": 0.925,
+    "session_length": 0.053955557081434465,
+    "skill_vs_luck": 0.4405999965667725,
+    "bluffing_depth": 0.0,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "skill_evaluation": {
+    "greedy_win_rate": 0.4,
+    "greedy_wins_as_p0": 26,
+    "greedy_wins_as_p1": 14,
+    "mcts_win_rate": 0.68,
+    "mcts_wins_as_p0": 41,
+    "mcts_wins_as_p1": 27,
+    "skill_score": 0.54,
+    "first_player_advantage": 0.26000000000000006,
+    "total_games": 200,
+    "timed_out": false
+  },
+  "skill_rank": 14
+}

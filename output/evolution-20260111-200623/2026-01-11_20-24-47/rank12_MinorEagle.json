@@ -1,0 +1,82 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "MinorEagle",
+  "generation": 36,
+  "setup": {
+    "cards_per_player": 17,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 1
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "TrickPhase",
+        "lead_suit_required": true,
+        "trump_suit": "SPADES",
+        "high_card_wins": true,
+        "breaking_suit": "HEARTS"
+      }
+    ],
+    "is_trick_based": true,
+    "tricks_per_hand": 13
+  },
+  "special_effects": [
+    {
+      "trigger_rank": "THREE",
+      "effect_type": "FORCE_DISCARD",
+      "target": "NEXT_PLAYER",
+      "value": 1
+    },
+    {
+      "trigger_rank": "NINE",
+      "effect_type": "REVERSE_DIRECTION",
+      "target": "ALL_OPPONENTS",
+      "value": 3
+    }
+  ],
+  "win_conditions": [
+    {
+      "type": "low_score",
+      "threshold": 11
+    },
+    {
+      "type": "high_score",
+      "threshold": 200
+    },
+    {
+      "type": "all_hands_empty",
+      "threshold": null
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 203,
+  "min_turns": 52,
+  "player_count": 4,
+  "fitness": 0.7640288693340322,
+  "fitness_rank": 12,
+  "fitness_metrics": {
+    "decision_density": 0.5499086903648579,
+    "comeback_potential": 0.95,
+    "tension_curve": 0.1692800064086914,
+    "interaction_frequency": 1.0,
+    "rules_complexity": 0.925,
+    "session_length": 0.05226666768391927,
+    "skill_vs_luck": 0.44739999771118166,
+    "bluffing_depth": 0.0,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "skill_evaluation": {
+    "greedy_win_rate": 0.4,
+    "greedy_wins_as_p0": 25,
+    "greedy_wins_as_p1": 15,
+    "mcts_win_rate": 0.67,
+    "mcts_wins_as_p0": 41,
+    "mcts_wins_as_p1": 26,
+    "skill_score": 0.535,
+    "first_player_advantage": 0.25000000000000006,
+    "total_games": 200,
+    "timed_out": false
+  },
+  "skill_rank": 12
+}

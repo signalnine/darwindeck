@@ -1,0 +1,79 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "VioletTrump",
+  "generation": 19,
+  "setup": {
+    "cards_per_player": 11,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 0
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "Unknown"
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "LOCATION_SIZE",
+          "operator": "LE",
+          "value": 3,
+          "reference": null
+        },
+        "min_cards": 0,
+        "max_cards": 9,
+        "mandatory": false
+      }
+    ],
+    "is_trick_based": true,
+    "tricks_per_hand": 13
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "first_to_score",
+      "threshold": 200
+    },
+    {
+      "type": "all_hands_empty",
+      "threshold": 0
+    },
+    {
+      "type": "empty_hand",
+      "threshold": null
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 524,
+  "min_turns": 52,
+  "player_count": 2,
+  "fitness": 0.8391338712072689,
+  "fitness_rank": 11,
+  "fitness_metrics": {
+    "decision_density": 0.6481912291678517,
+    "comeback_potential": 0.98,
+    "tension_curve": 1.0,
+    "interaction_frequency": 1.0,
+    "rules_complexity": 0.73,
+    "session_length": 0.3906888834635417,
+    "skill_vs_luck": 0.8065,
+    "bluffing_depth": 0.7558506227736368,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "skill_evaluation": {
+    "greedy_win_rate": 0.59,
+    "greedy_wins_as_p0": 33,
+    "greedy_wins_as_p1": 26,
+    "mcts_win_rate": 1.0,
+    "mcts_wins_as_p0": 50,
+    "mcts_wins_as_p1": 50,
+    "skill_score": 0.7949999999999999,
+    "first_player_advantage": 0.06999999999999995,
+    "total_games": 200,
+    "timed_out": false
+  },
+  "skill_rank": 11
+}

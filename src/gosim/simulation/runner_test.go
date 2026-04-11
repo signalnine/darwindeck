@@ -23,7 +23,7 @@ func TestRunSingleGameWithGoldenGenome(t *testing.T) {
 	}
 
 	// Run single game
-	result := RunSingleGame(genome, RandomAI, 0, 42)
+	result := RunSingleGame(genome, RandomAI, 0, 42, 0)
 
 	if result.Error != "" {
 		t.Errorf("Game failed: %s", result.Error)
@@ -90,6 +90,6 @@ func BenchmarkRunSingleGame(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		RunSingleGame(genome, RandomAI, 0, uint64(i))
+		RunSingleGame(genome, RandomAI, 0, uint64(i), i)
 	}
 }

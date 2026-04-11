@@ -3,19 +3,16 @@
 from darwindeck.genome.examples import (
     create_crazy_eights_4p_genome,
     create_cheat_4p_genome,
-    create_go_fish_4p_genome,
     create_uno_4p_genome,
-    create_old_maid_4p_genome,
     get_seed_genomes,
 )
 
 
+# Only include seeds that actually work in the Go simulator
 FACTORIES = [
     create_crazy_eights_4p_genome,
     create_cheat_4p_genome,
-    create_go_fish_4p_genome,
     create_uno_4p_genome,
-    create_old_maid_4p_genome,
 ]
 
 

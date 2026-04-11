@@ -1,0 +1,45 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "FadedBanner",
+  "generation": 14,
+  "setup": {
+    "cards_per_player": 15,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 1
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "Unknown"
+      }
+    ],
+    "is_trick_based": true,
+    "tricks_per_hand": 13
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "empty_hand",
+      "threshold": null
+    },
+    {
+      "type": "all_hands_empty",
+      "threshold": null
+    },
+    {
+      "type": "capture_all",
+      "threshold": null
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 1000,
+  "min_turns": 52,
+  "player_count": 2,
+  "fitness": 0.9097304388376053,
+  "fitness_rank": 13,
+  "mcts_win_rate": 1.0,
+  "skill_rank": 13,
+  "mcts_wins_as_p1": 50,
+  "mcts_wins_as_p2": 0,
+  "skill_eval_timed_out": true
+}

@@ -1,0 +1,115 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "SlowStone",
+  "generation": 6,
+  "setup": {
+    "cards_per_player": 23,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 0,
+    "starting_chips": 500
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "TrickPhase",
+        "lead_suit_required": true,
+        "trump_suit": null,
+        "high_card_wins": false,
+        "breaking_suit": null
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "HAND_SIZE",
+          "operator": "LT",
+          "value": 0,
+          "reference": null
+        },
+        "min_cards": 0,
+        "max_cards": 2,
+        "mandatory": true
+      }
+    ],
+    "is_trick_based": true,
+    "tricks_per_hand": 13
+  },
+  "special_effects": [
+    {
+      "trigger_rank": "JACK",
+      "effect_type": "EXTRA_TURN",
+      "target": "NEXT_PLAYER",
+      "value": 2
+    },
+    {
+      "trigger_rank": "JACK",
+      "effect_type": "SKIP_NEXT",
+      "target": "ALL_OPPONENTS",
+      "value": 3
+    },
+    {
+      "trigger_rank": "TWO",
+      "effect_type": "FORCE_DISCARD",
+      "target": "NEXT_PLAYER",
+      "value": 2
+    },
+    {
+      "trigger_rank": "ACE",
+      "effect_type": "DRAW_CARDS",
+      "target": "NEXT_PLAYER",
+      "value": 3
+    },
+    {
+      "trigger_rank": "QUEEN",
+      "effect_type": "FORCE_DISCARD",
+      "target": "NEXT_PLAYER",
+      "value": 1
+    }
+  ],
+  "win_conditions": [
+    {
+      "type": "low_score",
+      "threshold": 74
+    },
+    {
+      "type": "best_hand",
+      "threshold": null
+    },
+    {
+      "type": "empty_hand",
+      "threshold": null
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 508,
+  "min_turns": 52,
+  "player_count": 2,
+  "fitness": 0.905,
+  "fitness_rank": 1,
+  "fitness_metrics": {
+    "decision_density": 0.65,
+    "comeback_potential": 1.0,
+    "tension_curve": 1.0,
+    "interaction_frequency": 1.0,
+    "rules_complexity": 0.85,
+    "session_length": 0.24860000610351562,
+    "skill_vs_luck": 1.0,
+    "bluffing_depth": 0.0,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "skill_evaluation": {
+    "greedy_win_rate": 0.84,
+    "greedy_wins_as_p0": 37,
+    "greedy_wins_as_p1": 47,
+    "mcts_win_rate": 0.97,
+    "mcts_wins_as_p0": 48,
+    "mcts_wins_as_p1": 49,
+    "skill_score": 0.905,
+    "first_player_advantage": -0.10999999999999999,
+    "total_games": 200,
+    "timed_out": false
+  },
+  "skill_rank": 1
+}
