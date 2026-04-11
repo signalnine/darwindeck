@@ -1,11 +1,11 @@
 {
   "schema_version": "1.0",
-  "genome_id": "StarkWood",
-  "generation": 46,
+  "genome_id": "GleamingFox",
+  "generation": 61,
   "setup": {
     "cards_per_player": 13,
     "initial_deck": "standard_52",
-    "initial_discard_count": 1,
+    "initial_discard_count": 0,
     "starting_chips": 1000
   },
   "turn_structure": {
@@ -23,53 +23,53 @@
   },
   "special_effects": [
     {
-      "trigger_rank": "SIX",
-      "effect_type": "FORCE_DISCARD",
+      "trigger_rank": "SEVEN",
+      "effect_type": "REVERSE_DIRECTION",
       "target": "NEXT_PLAYER",
-      "value": 2
+      "value": 1
     }
   ],
   "win_conditions": [
     {
       "type": "low_score",
-      "threshold": 13
+      "threshold": 10
     },
     {
       "type": "low_score",
       "threshold": 500
     },
     {
-      "type": "first_to_score",
-      "threshold": 200
+      "type": "most_captured",
+      "threshold": null
     }
   ],
   "scoring_rules": [],
-  "max_turns": 223,
+  "max_turns": 234,
   "min_turns": 52,
   "player_count": 4,
-  "fitness": 0.7636827453360318,
+  "fitness": 0.4268075538134557,
   "fitness_rank": 5,
   "fitness_metrics": {
-    "decision_density": 0.5421901897364941,
-    "comeback_potential": 0.8999999999999999,
-    "tension_curve": 0.8329679489135742,
+    "decision_density": 0.544840852257012,
+    "comeback_potential": 0.9299999999999999,
+    "tension_curve": 0.7616413593292237,
     "interaction_frequency": 1.0,
     "rules_complexity": 0.8049999999999999,
-    "session_length": 0.057244444953070746,
-    "skill_vs_luck": 0.23444620980683317,
+    "session_length": 0.05360000186496311,
+    "skill_vs_luck": 0.23415727522993957,
     "bluffing_depth": 0.0,
     "games_simulated": 100,
     "valid": true
   },
   "skill_evaluation": {
-    "greedy_win_rate": 0.4,
-    "greedy_wins_as_p0": 24,
-    "greedy_wins_as_p1": 16,
-    "mcts_win_rate": 0.66,
-    "mcts_wins_as_p0": 36,
-    "mcts_wins_as_p1": 30,
-    "skill_score": 0.53,
-    "first_player_advantage": 0.13999999999999996,
+    "greedy_win_rate": 0.38,
+    "greedy_wins_as_p0": 23,
+    "greedy_wins_as_p1": 15,
+    "mcts_win_rate": 0.71,
+    "mcts_wins_as_p0": 44,
+    "mcts_wins_as_p1": 27,
+    "skill_score": 0.5449999999999999,
+    "first_player_advantage": 0.25000000000000006,
     "total_games": 200,
     "timed_out": false
   },

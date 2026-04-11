@@ -1,12 +1,12 @@
 {
   "schema_version": "1.0",
-  "genome_id": "StarkSeal",
-  "generation": 36,
+  "genome_id": "GrandRune",
+  "generation": 79,
   "setup": {
     "cards_per_player": 13,
     "initial_deck": "standard_52",
     "initial_discard_count": 0,
-    "starting_chips": 80
+    "starting_chips": 1248
   },
   "turn_structure": {
     "phases": [
@@ -21,7 +21,14 @@
     "is_trick_based": true,
     "tricks_per_hand": 13
   },
-  "special_effects": [],
+  "special_effects": [
+    {
+      "trigger_rank": "FIVE",
+      "effect_type": "FORCE_DISCARD",
+      "target": "ALL_OPPONENTS",
+      "value": 3
+    }
+  ],
   "win_conditions": [
     {
       "type": "low_score",
@@ -37,34 +44,34 @@
     }
   ],
   "scoring_rules": [],
-  "max_turns": 229,
+  "max_turns": 205,
   "min_turns": 52,
   "player_count": 4,
-  "fitness": 0.7651047045073548,
-  "fitness_rank": 1,
+  "fitness": 0.3373911285228456,
+  "fitness_rank": 5,
   "fitness_metrics": {
-    "decision_density": 0.5464303776370303,
-    "comeback_potential": 0.9299999999999999,
-    "tension_curve": 0.7714210152626038,
+    "decision_density": 0.5351418340890302,
+    "comeback_potential": 0.8200000000000001,
+    "tension_curve": 0.8002823114395141,
     "interaction_frequency": 1.0,
     "rules_complexity": 0.8049999999999999,
-    "session_length": 0.051111111111111114,
-    "skill_vs_luck": 0.24213043478260876,
+    "session_length": 0.055733333163791234,
+    "skill_vs_luck": 0.26476401959651963,
     "bluffing_depth": 0.0,
     "games_simulated": 100,
     "valid": true
   },
   "skill_evaluation": {
-    "greedy_win_rate": 0.31,
-    "greedy_wins_as_p0": 19,
-    "greedy_wins_as_p1": 12,
-    "mcts_win_rate": 0.7,
-    "mcts_wins_as_p0": 45,
-    "mcts_wins_as_p1": 25,
+    "greedy_win_rate": 0.35,
+    "greedy_wins_as_p0": 20,
+    "greedy_wins_as_p1": 15,
+    "mcts_win_rate": 0.66,
+    "mcts_wins_as_p0": 39,
+    "mcts_wins_as_p1": 27,
     "skill_score": 0.505,
-    "first_player_advantage": 0.27,
+    "first_player_advantage": 0.16999999999999998,
     "total_games": 200,
     "timed_out": false
   },
-  "skill_rank": 1
+  "skill_rank": 5
 }
