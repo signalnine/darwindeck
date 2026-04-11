@@ -242,7 +242,7 @@ def _serial_evaluate_task(
     evaluator: FitnessEvaluator,
     simulator: GoSimulator,
     coherence_checker: SemanticCoherenceChecker,
-    timeout_sec: float = 10.0
+    timeout_sec: float = 3.0
 ) -> FitnessMetrics:
     """Evaluate a single genome (serial, in main process) with timeout."""
     import signal
