@@ -10,6 +10,7 @@ The two-level parallelization strategy:
 """
 
 import multiprocessing as mp
+import multiprocessing.pool
 from typing import List, Optional, Callable
 from dataclasses import dataclass
 
@@ -76,6 +77,29 @@ class ParallelFitnessEvaluator:
         self.evaluator_factory = evaluator_factory
         self.simulator_factory = simulator_factory or _create_simulator
         self.num_workers = num_workers or mp.cpu_count()
+        self._pool: Optional[mp.pool.Pool] = None
+
+    def _get_pool(self) -> mp.pool.Pool:
+        """Lazily create and return the process pool.
+
+        The pool is created on first use and reused for subsequent calls,
+        avoiding the overhead of spawning fresh Python interpreters and
+        reloading the CGo library every generation.
+        """
+        if self._pool is None:
+            self._pool = _mp_context.Pool(
+                processes=self.num_workers,
+                initializer=_worker_init,
+                initargs=(self.evaluator_factory, self.simulator_factory)
+            )
+        return self._pool
+
+    def shutdown(self) -> None:
+        """Terminate and clean up the process pool."""
+        if self._pool is not None:
+            self._pool.terminate()
+            self._pool.join()
+            self._pool = None
 
     def evaluate_population(
         self,
@@ -102,12 +126,8 @@ class ParallelFitnessEvaluator:
             for genome in genomes
         ]
 
-        with _mp_context.Pool(
-            processes=self.num_workers,
-            initializer=_worker_init,
-            initargs=(self.evaluator_factory, self.simulator_factory)
-        ) as pool:
-            results = pool.map(_evaluate_task, tasks)
+        pool = self._get_pool()
+        results = pool.map(_evaluate_task, tasks)
         return results
 
 

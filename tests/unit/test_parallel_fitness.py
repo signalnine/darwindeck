@@ -262,3 +262,36 @@ def test_custom_worker_count():
 
     evaluator = ParallelFitnessEvaluator(create_test_evaluator, num_workers=8)
     assert evaluator.num_workers == 8
+
+
+def test_pool_reused_across_calls():
+    """Test that the process pool is created once and reused across evaluate_population calls."""
+    evaluator = ParallelFitnessEvaluator(create_test_evaluator, num_workers=2)
+    genomes = [create_war_genome()] * 4
+
+    # First call should lazily create the pool
+    assert evaluator._pool is None
+    results1 = evaluator.evaluate_population(genomes, num_simulations=10)
+    assert evaluator._pool is not None
+    pool_after_first = evaluator._pool
+
+    # Second call should reuse the same pool object
+    results2 = evaluator.evaluate_population(genomes, num_simulations=10)
+    assert evaluator._pool is pool_after_first
+
+    # Results should still be valid
+    assert len(results1) == len(results2) == 4
+    for r in results1 + results2:
+        assert isinstance(r, FitnessMetrics)
+        assert r.valid
+
+    # Shutdown should clean up the pool
+    evaluator.shutdown()
+    assert evaluator._pool is None
+
+
+def test_shutdown_without_pool():
+    """Test that shutdown is safe to call even if pool was never created."""
+    evaluator = ParallelFitnessEvaluator(create_test_evaluator, num_workers=2)
+    evaluator.shutdown()  # Should not raise
+    assert evaluator._pool is None
