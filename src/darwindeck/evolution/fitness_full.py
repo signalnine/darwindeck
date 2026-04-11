@@ -45,15 +45,17 @@ STYLE_PRESETS = {
         'betting_engagement': 0.00,
     },
     'party': {
-        # Party games MUST be dead simple - complexity is the killer
-        'rules_complexity': 0.50,  # Half of fitness! Must explain in 1-2 minutes
-        'decision_density': 0.04,
-        'comeback_potential': 0.12,  # Everyone can win
-        'tension_curve': 0.06,
-        'interaction_frequency': 0.14,  # High interaction
-        'skill_vs_luck': 0.04,  # Luck-friendly
+        # Party games: quick, interactive, accessible
+        # Note: skill_vs_luck is INVERTED for party -- higher = more luck-friendly
+        # interaction_frequency is 0: the Go sim's metric is biased toward trick-taking
+        'decision_density': 0.15,
+        'comeback_potential': 0.30,  # Everyone can win -- most important for party
+        'tension_curve': 0.15,
+        'interaction_frequency': 0.00,  # Disabled: biased toward trick-taking in Go sim
+        'rules_complexity': 0.25,  # Simple rules matter for party
+        'skill_vs_luck': 0.15,  # Luck-friendly
         'bluffing_depth': 0.00,
-        'betting_engagement': 0.10,
+        'betting_engagement': 0.00,
     },
     'trick-taking': {
         # Trick-taking is familiar, so complexity is less of a barrier
@@ -470,13 +472,18 @@ class FitnessEvaluator:
         else:
             # Final fallback to heuristic
             special_effects_score = min(1.0, len(genome.special_effects) / 3.0)
-            trick_based_score = 0.3 if genome.turn_structure.is_trick_based else 0.0
+            trick_based_score = 0.15 if genome.turn_structure.is_trick_based else 0.0
             multi_phase_score = min(0.4, len(genome.turn_structure.phases) / 10.0)
             interaction_frequency = min(1.0,
                 special_effects_score * 0.4 +
                 trick_based_score +
                 multi_phase_score
             )
+
+        # Interaction floor for multiplayer non-trick games
+        if (hasattr(results, 'total_actions') and results.total_actions > 0
+                and results.player_count >= 3 and decision_density > 0.2):
+            interaction_frequency = max(interaction_frequency, 0.3)
 
         # 5. Rules complexity - cognitive load estimation
         # Uses the complexity module which accounts for:
@@ -528,23 +535,27 @@ class FitnessEvaluator:
             skill_vs_luck = 0.7  # Assume MCTS testing means we're measuring skill
         else:
             # Without MCTS, estimate skill potential from game structure
-            # Factors: game length (more turns = more decisions = more skill)
-            #          balance (too imbalanced = luck or broken)
-            #          complexity (more complex = more skill ceiling)
+            # length_factor: games reaching 50 turns have full opportunity for skill
+            # decision_factor: use real instrumentation when available, else structural proxy
+            # balance_factor: balanced games reward skill over luck
 
-            length_factor = min(1.0, results.avg_turns / 80.0)  # Cap at 80 turns
-            balance_factor = comeback_potential  # Already measures balance (0-1)
-            complexity_factor = min(1.0, (
-                len(genome.turn_structure.phases) +
-                len(genome.special_effects) +
-                (1 if genome.turn_structure.is_trick_based else 0)
-            ) / 8.0)
+            length_factor = min(1.0, results.avg_turns / 50.0)
+            if hasattr(results, 'total_decisions') and results.total_decisions > 0:
+                forced_ratio = results.forced_decisions / results.total_decisions
+                decision_factor = 1.0 - forced_ratio
+            else:
+                complexity_factor = min(1.0, (
+                    len(genome.turn_structure.phases) +
+                    len(genome.special_effects) +
+                    (1 if genome.turn_structure.is_trick_based else 0)
+                ) / 6.0)
+                decision_factor = complexity_factor
+            balance_factor = comeback_potential
 
-            # Weighted combination: longer balanced complex games = more skill
             skill_vs_luck = min(1.0,
-                length_factor * 0.4 +
-                balance_factor * 0.3 +
-                complexity_factor * 0.3
+                length_factor * 0.3 +
+                decision_factor * 0.4 +
+                balance_factor * 0.3
             )
 
         # For party style, invert skill metric: we want luck-friendly games
@@ -740,6 +751,34 @@ class FitnessEvaluator:
         quality_multiplier *= (1.0 - coherence_penalty)
 
         total_fitness *= quality_multiplier
+
+        # Detect actual trick-taking by checking phase types, not the flag
+        # (evolution can mutate is_trick_based without removing TrickPhase)
+        from darwindeck.genome.schema import TrickPhase
+        has_trick_phase = any(isinstance(p, TrickPhase) for p in genome.turn_structure.phases)
+        has_play_phase = any(hasattr(p, 'target') and not isinstance(p, TrickPhase)
+                           for p in genome.turn_structure.phases)
+        has_claim_phase = any(hasattr(p, 'min_cards') and not hasattr(p, 'target')
+                             for p in genome.turn_structure.phases)
+
+        if not has_trick_phase and (has_play_phase or has_claim_phase):
+            total_fitness *= 1.10  # 10% bonus for genuinely non-trick game types
+        elif has_trick_phase and self.style == 'party':
+            total_fitness *= 0.60  # 40% penalty: trick-taking has structural FPA in 4p
+
+        # Positional balance penalty: harsh -- unbalanced games are unplayable
+        if results.total_games > 0 and results.player_count >= 2:
+            expected_rate = 1.0 / results.player_count
+            max_pos_deviation = 0.0
+            for wins in results.wins:
+                actual_rate = wins / results.total_games
+                deviation = abs(actual_rate - expected_rate)
+                max_pos_deviation = max(max_pos_deviation, deviation)
+
+            if max_pos_deviation > 0.08:
+                # Harsh: linear from 1.0 at 8% to 0.0 at 30%
+                position_penalty = max(0.0, 1.0 - (max_pos_deviation - 0.08) / 0.22)
+                total_fitness *= position_penalty
 
         return FitnessMetrics(
             decision_density=decision_density,

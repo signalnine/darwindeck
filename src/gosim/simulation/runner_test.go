@@ -23,7 +23,7 @@ func TestRunSingleGameWithGoldenGenome(t *testing.T) {
 	}
 
 	// Run single game
-	result := RunSingleGame(genome, RandomAI, 0, 42)
+	result := RunSingleGame(genome, RandomAI, 0, 42, 0)
 
 	if result.Error != "" {
 		t.Errorf("Game failed: %s", result.Error)
@@ -90,7 +90,7 @@ func BenchmarkRunSingleGame(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		RunSingleGame(genome, RandomAI, 0, uint64(i))
+		RunSingleGame(genome, RandomAI, 0, uint64(i), 0)
 	}
 }
 
@@ -118,7 +118,7 @@ func BenchmarkSolitaireMetricsOverhead(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		RunSingleGame(genome, RandomAI, 0, uint64(i))
+		RunSingleGame(genome, RandomAI, 0, uint64(i), 0)
 	}
 }
 
@@ -140,7 +140,7 @@ func TestRunnerSetsTableauMode(t *testing.T) {
 	}
 
 	// Run a single game and check it completes
-	result := RunSingleGame(genome, RandomAI, 0, 12345)
+	result := RunSingleGame(genome, RandomAI, 0, 12345, 0)
 
 	// Just verify no error - the important thing is the state was initialized
 	if result.Error != "" {
@@ -166,7 +166,7 @@ func TestRunnerSetsTableauModeSequence(t *testing.T) {
 	}
 
 	// Run a single game - for this test we mainly care about parsing
-	result := RunSingleGame(genome, RandomAI, 0, 12345)
+	result := RunSingleGame(genome, RandomAI, 0, 12345, 0)
 
 	// Allow errors since this minimal bytecode may not be fully playable
 	// The key verification is that the genome header was parsed correctly
@@ -257,7 +257,7 @@ func TestRunSingleGameWithTeams(t *testing.T) {
 		t.Fatalf("ParseGenome failed: %v", err)
 	}
 
-	result := RunSingleGame(genome, RandomAI, 0, 12345)
+	result := RunSingleGame(genome, RandomAI, 0, 12345, 0)
 
 	// If there was a winner, WinningTeam should be set
 	if result.WinnerID >= 0 && result.WinningTeam < 0 {

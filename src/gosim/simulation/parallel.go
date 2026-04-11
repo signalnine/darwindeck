@@ -102,7 +102,7 @@ func worker(wg *sync.WaitGroup, jobs <-chan GameJob, results chan<- GameResult, 
 	defer wg.Done()
 
 	for job := range jobs {
-		result := RunSingleGame(genome, aiType, mctsIterations, job.Seed)
+		result := RunSingleGame(genome, aiType, mctsIterations, job.Seed, job.SimID)
 		results <- result
 	}
 }
@@ -206,7 +206,7 @@ func workerAsymmetric(wg *sync.WaitGroup, jobs <-chan GameJob, results chan<- Ga
 	defer wg.Done()
 
 	for job := range jobs {
-		result := RunSingleGameAsymmetric(genome, p0AIType, p1AIType, mctsIterations, job.Seed)
+		result := RunSingleGameAsymmetric(genome, p0AIType, p1AIType, mctsIterations, job.Seed, job.SimID)
 		results <- result
 	}
 }
