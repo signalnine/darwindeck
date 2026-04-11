@@ -71,6 +71,17 @@ type GameState struct {
 	// Shedding-specific
 	TopCard *Card // Current top of discard pile for matching
 
+	// Trick-taking-specific
+	TrickCards   []Card // Cards played in current trick
+	TrickPlayers []int  // Player IDs corresponding to TrickCards
+	TrickLeader  int    // Player who led the current trick
+	TrumpSuit    int    // Trump suit (0-3), -1 = none, -2 = pending
+	TrickBroken  bool   // Has trump been played off-suit?
+
+	// Rummy-specific
+	Melds     [][]Card // All melds on the table
+	MeldOwner []int    // Owner of each meld
+
 	// Events log for fitness analysis
 	Events []Event
 }
