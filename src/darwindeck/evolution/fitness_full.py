@@ -449,16 +449,18 @@ class FitnessEvaluator:
 
         # No need to renormalize - weights already sum to 1.0
 
-        # Diversity bonus: strong bonus for non-trick phase types
-        # Trick-taking dominates all metrics due to engine calibration;
-        # this compensates so non-trick games can compete
-        has_play_phase = any(hasattr(p, 'target') and not hasattr(p, 'lead_suit_required')
+        # Detect actual trick-taking by checking phase types, not the flag
+        # (evolution can mutate is_trick_based without removing TrickPhase)
+        from darwindeck.genome.schema import TrickPhase
+        has_trick_phase = any(isinstance(p, TrickPhase) for p in genome.turn_structure.phases)
+        has_play_phase = any(hasattr(p, 'target') and not isinstance(p, TrickPhase)
                            for p in genome.turn_structure.phases)
         has_claim_phase = any(hasattr(p, 'min_cards') and not hasattr(p, 'target')
                              for p in genome.turn_structure.phases)
-        if not genome.turn_structure.is_trick_based and (has_play_phase or has_claim_phase):
-            total_fitness *= 1.10  # 10% bonus for non-trick game types
-        elif genome.turn_structure.is_trick_based and self.style == 'party':
+
+        if not has_trick_phase and (has_play_phase or has_claim_phase):
+            total_fitness *= 1.10  # 10% bonus for genuinely non-trick game types
+        elif has_trick_phase and self.style == 'party':
             total_fitness *= 0.60  # 40% penalty: trick-taking has structural FPA in 4p
 
         # Positional balance penalty: harsh - unbalanced games are unplayable
