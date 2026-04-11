@@ -242,11 +242,8 @@ def _serial_evaluate_task(
     evaluator: FitnessEvaluator,
     simulator: GoSimulator,
     coherence_checker: SemanticCoherenceChecker,
-    timeout_sec: float = 3.0
 ) -> FitnessMetrics:
-    """Evaluate a single genome (serial, in main process) with timeout."""
-    import signal
-
+    """Evaluate a single genome (serial, in main process)."""
     validation_errors = GenomeValidator.validate(task.genome)
     if validation_errors:
         return _ZERO_FITNESS
@@ -255,21 +252,9 @@ def _serial_evaluate_task(
     if not coherence_result.coherent:
         return _ZERO_FITNESS
 
-    # Timeout protection: some genomes cause Go simulator to hang
-    def _timeout_handler(signum, frame):
-        raise TimeoutError("Genome evaluation timed out")
-
-    old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
-    signal.alarm(int(timeout_sec))
-    try:
-        results = simulator.simulate(task.genome, num_games=task.num_simulations, use_mcts=task.use_mcts)
-        signal.alarm(0)
-        return evaluator.evaluate(task.genome, results, use_mcts=task.use_mcts)
-    except TimeoutError:
-        return _ZERO_FITNESS
-    finally:
-        signal.signal(signal.SIGALRM, old_handler)
-        signal.alarm(0)
+    # Go simulator has 2s wall-clock timeout per game, so this won't hang
+    results = simulator.simulate(task.genome, num_games=task.num_simulations, use_mcts=task.use_mcts)
+    return evaluator.evaluate(task.genome, results, use_mcts=task.use_mcts)
 
 
 class ParallelFitnessEvaluator:
