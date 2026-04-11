@@ -37,15 +37,15 @@ STYLE_PRESETS = {
         'bluffing_depth': 0.00,  # Not required for strategic games
     },
     'party': {
-        # Favor quick, interactive, accessible games
+        # Favor quick, balanced, accessible games anyone can win
         # Note: skill_vs_luck is INVERTED for party - higher = more luck-friendly
-        'decision_density': 0.10,
-        'comeback_potential': 0.20,  # Everyone can win
-        'tension_curve': 0.10,
-        'interaction_frequency': 0.25,  # High interaction
+        'decision_density': 0.15,
+        'comeback_potential': 0.25,  # Everyone can win -- most important
+        'tension_curve': 0.15,
+        'interaction_frequency': 0.10,  # Reduced: was 0.25, biased toward trick-taking
         'rules_complexity': 0.20,  # Simple rules
-        'skill_vs_luck': 0.15,  # Luck-friendly (inverted: rewards low skill dominance)
-        'bluffing_depth': 0.00,  # Not required for party games
+        'skill_vs_luck': 0.15,  # Luck-friendly
+        'bluffing_depth': 0.00,
     },
     'trick-taking': {
         # Favor trick-based mechanics

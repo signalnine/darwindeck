@@ -1,12 +1,12 @@
 {
   "schema_version": "1.0",
-  "genome_id": "FrostSpear",
-  "generation": 11,
+  "genome_id": "RedBid",
+  "generation": 32,
   "setup": {
     "cards_per_player": 13,
     "initial_deck": "standard_52",
-    "initial_discard_count": 0,
-    "starting_chips": 67
+    "initial_discard_count": 1,
+    "starting_chips": 500
   },
   "turn_structure": {
     "phases": [
@@ -23,10 +23,10 @@
   },
   "special_effects": [
     {
-      "trigger_rank": "TEN",
-      "effect_type": "REVERSE_DIRECTION",
-      "target": "ALL_OPPONENTS",
-      "value": 2
+      "trigger_rank": "THREE",
+      "effect_type": "EXTRA_TURN",
+      "target": "NEXT_PLAYER",
+      "value": 1
     }
   ],
   "win_conditions": [
@@ -35,43 +35,43 @@
       "threshold": 12
     },
     {
-      "type": "all_hands_empty",
-      "threshold": 0
+      "type": "low_score",
+      "threshold": 500
     },
     {
-      "type": "best_hand",
-      "threshold": null
+      "type": "first_to_score",
+      "threshold": 200
     }
   ],
   "scoring_rules": [],
-  "max_turns": 198,
+  "max_turns": 197,
   "min_turns": 52,
   "player_count": 4,
-  "fitness": 0.752056240416788,
-  "fitness_rank": 4,
+  "fitness": 0.76771082571125,
+  "fitness_rank": 6,
   "fitness_metrics": {
-    "decision_density": 0.5642805864630198,
-    "comeback_potential": 0.79,
-    "tension_curve": 0.8433392763137817,
+    "decision_density": 0.5414869243081372,
+    "comeback_potential": 0.9199999999999999,
+    "tension_curve": 0.8176584243774414,
     "interaction_frequency": 1.0,
     "rules_complexity": 0.8049999999999999,
-    "session_length": 0.05048888736300998,
-    "skill_vs_luck": 0.28196169426071815,
+    "session_length": 0.051200002034505206,
+    "skill_vs_luck": 0.24530860561794698,
     "bluffing_depth": 0.0,
     "games_simulated": 100,
     "valid": true
   },
   "skill_evaluation": {
-    "greedy_win_rate": 0.39,
-    "greedy_wins_as_p0": 27,
+    "greedy_win_rate": 0.36,
+    "greedy_wins_as_p0": 24,
     "greedy_wins_as_p1": 12,
-    "mcts_win_rate": 0.62,
-    "mcts_wins_as_p0": 36,
-    "mcts_wins_as_p1": 26,
-    "skill_score": 0.505,
-    "first_player_advantage": 0.25,
+    "mcts_win_rate": 0.71,
+    "mcts_wins_as_p0": 42,
+    "mcts_wins_as_p1": 29,
+    "skill_score": 0.5349999999999999,
+    "first_player_advantage": 0.25000000000000006,
     "total_games": 200,
     "timed_out": false
   },
-  "skill_rank": 4
+  "skill_rank": 6
 }
