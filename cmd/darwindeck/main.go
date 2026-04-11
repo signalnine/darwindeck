@@ -9,9 +9,12 @@ import (
 	"time"
 
 	"github.com/darwindeck/darwindeck/pkg/evolution"
+	"github.com/darwindeck/darwindeck/pkg/fitness"
 	"github.com/darwindeck/darwindeck/pkg/genome"
 	"github.com/darwindeck/darwindeck/pkg/output"
+	"github.com/darwindeck/darwindeck/pkg/playtest"
 	"github.com/darwindeck/darwindeck/pkg/seeds"
+	"github.com/darwindeck/darwindeck/pkg/sim"
 )
 
 var (
@@ -28,6 +31,8 @@ func main() {
 	switch os.Args[1] {
 	case "evolve":
 		cmdEvolve(os.Args[2:])
+	case "playtest":
+		cmdPlaytest(os.Args[2:])
 	case "describe":
 		cmdDescribe(os.Args[2:])
 	case "version":
@@ -46,6 +51,7 @@ func printUsage() {
 
 Commands:
   evolve     Run evolutionary search for novel card games
+  playtest   Play a game interactively against AI
   describe   Show details of a genome JSON file
   version    Print version info
   help       Show this message`)
@@ -124,6 +130,64 @@ func cmdEvolve(args []string) {
 	}
 
 	fmt.Printf("\nResults saved to %s\n", config.OutputDir)
+}
+
+func cmdPlaytest(args []string) {
+	fs := flag.NewFlagSet("playtest", flag.ExitOnError)
+	difficulty := fs.String("difficulty", "greedy", "AI difficulty: random or greedy")
+	seed := fs.Uint64("seed", 0, "random seed (0=random)")
+	fs.Parse(args)
+
+	remaining := fs.Args()
+	if len(remaining) == 0 {
+		fmt.Fprintln(os.Stderr, "usage: darwindeck playtest <genome.json> [--difficulty random|greedy]")
+		os.Exit(1)
+	}
+
+	data, err := os.ReadFile(remaining[0])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading file: %v\n", err)
+		os.Exit(1)
+	}
+
+	var g genome.Genome
+	if err := json.Unmarshal(data, &g); err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing genome: %v\n", err)
+		os.Exit(1)
+	}
+
+	errs := genome.Validate(&g)
+	if len(errs) > 0 {
+		fmt.Fprintf(os.Stderr, "Genome validation failed:\n")
+		for _, e := range errs {
+			fmt.Fprintf(os.Stderr, "  - %s\n", e)
+		}
+		os.Exit(1)
+	}
+
+	runner := fitness.GetRunner(&g)
+	if runner == nil {
+		fmt.Fprintf(os.Stderr, "No runner for skeleton: %s\n", g.Skeleton)
+		os.Exit(1)
+	}
+
+	var ai sim.AIPlayer
+	switch *difficulty {
+	case "random":
+		ai = &sim.RandomAI{}
+	case "greedy":
+		ai = fitness.GetGreedyAI(&g)
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown difficulty: %s (use random or greedy)\n", *difficulty)
+		os.Exit(1)
+	}
+
+	if *seed == 0 {
+		*seed = uint64(time.Now().UnixNano())
+	}
+
+	session := playtest.NewSession(&g, runner, ai, *seed)
+	session.Run()
 }
 
 func cmdDescribe(args []string) {

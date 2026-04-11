@@ -30,9 +30,12 @@ type GenericRunner interface {
 	CheckEnd(state *GameState, g *genome.Genome) int
 }
 
+// HookFunc is called after each move with the resulting events.
+type HookFunc func(state *GameState, g *genome.Genome, event Event)
+
 // RunBatch plays n games with the given genome, runner, and AI.
 // Returns aggregated statistics.
-func RunBatch(g *genome.Genome, runner GenericRunner, ai AIPlayer, n int, baseSeed uint64) BatchResult {
+func RunBatch(g *genome.Genome, runner GenericRunner, ai AIPlayer, n int, baseSeed uint64, hooks ...HookFunc) BatchResult {
 	result := BatchResult{
 		GamesPlayed: n,
 		WinCounts:   make([]int, g.Players),
@@ -44,7 +47,7 @@ func RunBatch(g *genome.Genome, runner GenericRunner, ai AIPlayer, n int, baseSe
 
 	for i := 0; i < n; i++ {
 		rng := rand.New(rand.NewPCG(baseSeed+uint64(i), 0))
-		gr := runSingleGame(g, runner, ai, rng, maxTurns)
+		gr := runSingleGame(g, runner, ai, rng, maxTurns, hooks...)
 
 		result.TurnsList = append(result.TurnsList, gr.Turns)
 		result.TotalTurns += gr.Turns
@@ -77,7 +80,7 @@ func RunBatch(g *genome.Genome, runner GenericRunner, ai AIPlayer, n int, baseSe
 	return result
 }
 
-func runSingleGame(g *genome.Genome, runner GenericRunner, ai AIPlayer, rng *rand.Rand, maxTurns int) GameResult {
+func runSingleGame(g *genome.Genome, runner GenericRunner, ai AIPlayer, rng *rand.Rand, maxTurns int, hooks ...HookFunc) GameResult {
 	state := runner.Setup(g, rng)
 
 	for {
@@ -112,5 +115,12 @@ func runSingleGame(g *genome.Genome, runner GenericRunner, ai AIPlayer, rng *ran
 		move := ai.SelectMove(moves, state, rng)
 		events := runner.ApplyMove(state, move, g)
 		state.Events = append(state.Events, events...)
+
+		// Run hooks after each move
+		for _, event := range events {
+			for _, hook := range hooks {
+				hook(state, g, event)
+			}
+		}
 	}
 }

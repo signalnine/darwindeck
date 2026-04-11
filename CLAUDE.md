@@ -4,9 +4,110 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**DarwinDeck** is an evolutionary computation system that uses genetic algorithms and Monte Carlo simulations to evolve novel card games playable with a standard 52-card deck. The system optimizes for configurable parameters like complexity, session length, skill/luck ratio, and player count.
+**DarwinDeck** is an evolutionary computation system that uses genetic algorithms and Monte Carlo simulations to evolve novel card games playable with a standard 52-card deck.
 
-## Core Architecture Concepts
+## v2: Pure Go Rewrite (Active Development)
+
+The v2 system is a pure Go rewrite that replaces the Python/Go hybrid architecture. It lives in `cmd/` and `pkg/` at the repo root.
+
+### Quick Start
+
+```bash
+# Build
+make build-v2
+
+# Run evolution
+./bin/darwindeck evolve -population 500 -generations 100
+
+# Play a game interactively
+./bin/darwindeck playtest output/.../genome.json --difficulty greedy
+
+# Inspect a genome
+./bin/darwindeck describe output/.../genome.json
+
+# Run tests
+make test-v2
+```
+
+### Architecture
+
+Single Go binary, three layers: CLI → Evolution Engine → Simulation Core.
+
+**Key design change from v1:** Games are built from 3 constrained skeleton templates (shedding, trick-taking, rummy) instead of an unconstrained genome. Skeletons guarantee playability by construction — the game loop itself ensures every state has legal moves. Parameters control *what* happens, not *whether* the game works.
+
+**Cross-skeleton novelty:** Genomes can borrow mechanics from other skeletons (e.g., a shedding game with rummy-style meld bonuses). Borrows are whitelisted and validated.
+
+### Package Layout
+
+```
+cmd/darwindeck/     # CLI entry point (evolve, playtest, describe)
+pkg/
+├── genome/         # Genome struct, skeleton params, static validation (Tier 0)
+├── skeleton/
+│   ├── shedding/   # Shedding runner (Crazy Eights, Mau-Mau style)
+│   ├── tricktaking/# Trick-taking runner (Whist, Hearts, Spades style)
+│   └── rummy/      # Rummy runner (Gin Rummy, Knock Rummy style)
+├── sim/            # Card types, GameState, Move, AI players (Random, Greedy), batch runner
+├── mechanic/       # Borrowed mechanics hook system
+├── evolution/      # Mutation, crossover, selection, population, engine
+├── fitness/        # 5 metrics, Tier 1-2 validation, evaluation pipeline
+├── output/         # Rulebook gen, report gen, JSON output
+├── playtest/       # Interactive playtest session
+└── seeds/          # 8 seed game definitions
+```
+
+### Seed Games (8 total)
+
+| Skeleton | Seeds |
+|----------|-------|
+| Shedding | Crazy Eights, Mau-Mau |
+| Trick-taking | Whist, Hearts, Spades, Oh Hell |
+| Rummy | Gin Rummy, Knock Rummy |
+
+### Fitness Function (5 metrics)
+
+| Metric | Weight | What it measures |
+|--------|--------|-----------------|
+| Meaningful Decisions | 0.25 | Fraction of turns with >1 legal move that were plays (not forced draws) |
+| Game Arc | 0.25 | Win distribution entropy + turn variance (uncertainty → resolution) |
+| Interaction | 0.20 | How much players' actions affect each other |
+| Skill Gradient | 0.20 | Greedy AI win rate vs random baseline |
+| Session Length | 0.10 | Target 15-40 turns, linear falloff outside |
+
+### Validation Pipeline
+
+- **Tier 0 (free):** Static analysis on genome struct — deck overflow, param ranges, borrow whitelist
+- **Tier 1 (5 games):** Quick sim with random AI — kill if any game hangs, errors, or is degenerate
+- **Tier 2 (250 games):** Full evaluation — 200 random + 50 greedy games → fitness metrics
+
+### v2 Development Commands
+
+```bash
+# Build
+make build-v2                        # Build bin/darwindeck
+go build -o bin/darwindeck ./cmd/darwindeck/  # Direct
+
+# Test
+go test ./pkg/... -v                 # All tests
+go test ./pkg/genome/ -v             # Single package
+go test ./pkg/evolution/ -run TestSmallEvolution -v  # Single test
+
+# Evolution
+./bin/darwindeck evolve -population 30 -generations 5 -verbose  # Quick test
+./bin/darwindeck evolve -population 500 -generations 100 -workers 256  # Full run on EPYC
+```
+
+### Design Doc
+
+Full v2 design: `docs/plans/2026-04-11-v2-rewrite-design.md`
+
+---
+
+## v1: Python/Go Hybrid (Legacy)
+
+The v1 system lives in `src/`. It is no longer under active development.
+
+## v1 Core Architecture Concepts
 
 ### Game Representation
 Games are encoded as genomes containing:
@@ -295,6 +396,79 @@ BettingPhase(
 - **Design:** `docs/plans/2026-01-11-betting-system-design.md`
 - **Implementation:** `docs/plans/2026-01-11-betting-system-implementation.md`
 
+## Team Play & Bidding Systems
+
+### Team Play
+
+Genomes can define partnership games (e.g., 2v2 Spades):
+
+```python
+# In GameGenome
+team_mode: bool = False        # When True, win conditions evaluate team aggregates
+teams: tuple[tuple[int, ...], ...] = ()  # e.g., ((0, 2), (1, 3)) for 2v2
+```
+
+- Shared team scoring
+- Team mutation operators in `operators.py`
+- **Design:** `docs/plans/2026-01-17-team-play-design.md`
+
+### Bidding
+
+`BiddingPhase` supports contract/bidding games (Spades, Bridge-style):
+
+```python
+BiddingPhase(
+    min_bid: int = 1,
+    max_bid: int = 13,
+    allow_nil: bool = True     # Allow bidding exactly 0 (Nil)
+)
+```
+
+- `ContractScoring` for bid-based scoring with bag tracking
+- Bidding move generation in `movegen.py`
+- **Design:** `docs/plans/2026-01-18-bidding-system-design.md`
+
+## Pure Go Evolution System
+
+A complete evolution engine implemented in Go (`src/gosim/evolution/`), enabling standalone evolution without Python:
+
+- Fitness evaluation, mutation operators, crossover, selection — all in Go
+- Checkpoint/resume support
+- CLI binary: `bin/darwindeck-evolve` (built with `make build-evolve`)
+- Eliminates Python→Go serialization overhead for evolution runs
+
+## Web UI
+
+### Architecture
+
+```
+SvelteKit Frontend (web/) → FastAPI Backend (src/darwindeck/web/) → Go Worker Subprocess (bin/gosim-worker)
+```
+
+- **Frontend:** SvelteKit + TypeScript (`web/`)
+- **Backend:** FastAPI with SQLAlchemy/SQLite (`src/darwindeck/web/`)
+- **Worker:** Isolated Go subprocess for simulation (`src/gosim/cmd/worker/`)
+  - Crash isolation: Go crashes don't kill the Python server
+  - IPC via JSON over stdin/stdout
+- **Features:** Game browsing, interactive play, player ratings
+- **Security:** CSRF tokens, IP tracking, rate limiting
+
+### Web Dev Commands
+
+```bash
+# Backend
+uv run uvicorn darwindeck.web.app:app --reload
+
+# Frontend
+cd web && npm run dev
+```
+
+### Build Worker
+
+```bash
+make build-worker  # Builds bin/gosim-worker
+```
+
 ## Development Commands
 
 ### Run Tests
@@ -311,16 +485,19 @@ cd src/gosim
 go test ./engine -v
 go test ./mcts -v
 go test ./simulation -v
+go test ./evolution/... -v
 
 # Benchmarks
 go test ./mcts -bench=. -benchtime=3s
 go test ./simulation -bench=. -benchtime=10s
 ```
 
-### Build CGo Library
+### Build
 
 ```bash
-make build-cgo  # Builds libcardsim.so
+make build-cgo     # Builds libcardsim.so (CGo shared library)
+make build-worker  # Builds bin/gosim-worker (subprocess simulation worker)
+make build-evolve  # Builds bin/darwindeck-evolve (standalone Go evolution CLI)
 ```
 
 ### Benchmarks
@@ -346,12 +523,19 @@ uv run mypy src/
 darwindeck/
 ├── src/
 │   ├── darwindeck/          # Python package
-│   │   ├── genome/            # Game genome representation
-│   │   ├── simulation/        # Game simulation engines
-│   │   ├── evolution/         # Genetic algorithm
-│   │   └── cli/               # Command-line interface
-│   └── gosim/                 # Golang simulation core
-│       └── game/              # Card game primitives
+│   │   ├── genome/            # Game genome representation & bytecode compiler
+│   │   ├── simulation/        # Game simulation engines (movegen, go_simulator)
+│   │   ├── evolution/         # Genetic algorithm, fitness, mutation operators
+│   │   ├── cli/               # CLI commands (evolve, playtest, rulebook, describe)
+│   │   ├── playtest/          # Interactive playtest session & Rich TUI
+│   │   └── web/               # FastAPI web backend (game browsing, play, ratings)
+│   └── gosim/                 # Golang simulation & evolution core
+│       ├── engine/            # Bytecode interpreter, move generation, game state
+│       ├── mcts/              # MCTS AI implementation
+│       ├── simulation/        # Batch simulation runner (serial & parallel)
+│       ├── evolution/         # Pure Go evolution engine (fitness, mutation, selection)
+│       └── cmd/               # Go CLI binaries (worker, evolve)
+├── web/                       # SvelteKit + TypeScript frontend
 ├── tests/
 │   ├── unit/                  # Unit tests
 │   ├── integration/           # Integration tests
@@ -741,6 +925,13 @@ uv run python -m darwindeck.cli.describe genome.json
 | `src/darwindeck/playtest/session.py` | Interactive playtest session |
 | `src/darwindeck/playtest/rich_display.py` | Rich TUI display rendering |
 | `src/darwindeck/playtest/display_state.py` | Display state dataclasses |
+| `src/darwindeck/web/app.py` | FastAPI web application |
+| `src/darwindeck/web/worker.py` | Go worker subprocess manager |
 | `src/gosim/engine/` | Go simulation core |
 | `src/gosim/mcts/` | MCTS AI implementation |
+| `src/gosim/evolution/engine.go` | Pure Go evolution engine |
+| `src/gosim/cmd/worker/` | Go worker subprocess binary |
+| `src/gosim/cmd/evolve/` | Standalone Go evolution CLI |
+| `web/` | SvelteKit frontend |
 | `scripts/tui.sh` | Helper script for playtest TUI |
+| `scripts/run-evolution.sh` | Server evolution runner (auto-detects CPU count) |
