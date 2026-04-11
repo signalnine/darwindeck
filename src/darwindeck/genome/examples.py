@@ -1010,6 +1010,286 @@ def create_uno_genome() -> GameGenome:
     )
 
 
+def create_crazy_eights_4p_genome() -> GameGenome:
+    """Create 4-player Crazy Eights genome.
+
+    Shedding game for 4 players:
+    - 7 cards each (4 x 7 = 28, leaves 24 in deck)
+    - Match suit or rank of top discard
+    - 8s are wild (play on anything)
+    - Draw if unable to play
+    - First to empty hand wins
+    """
+    return GameGenome(
+        schema_version="1.0",
+        genome_id="crazy-eights-4p",
+        generation=0,
+        setup=SetupRules(
+            cards_per_player=7,
+            initial_deck="standard_52",
+            initial_discard_count=1
+        ),
+        turn_structure=TurnStructure(
+            phases=[
+                DrawPhase(
+                    source=Location.DECK,
+                    count=1,
+                    mandatory=True,
+                    condition=Condition(
+                        type=ConditionType.HAND_SIZE,
+                        operator=Operator.EQ,
+                        value=0,
+                        reference="valid_plays"
+                    )
+                ),
+                PlayPhase(
+                    target=Location.DISCARD,
+                    valid_play_condition=CompoundCondition(
+                        logic="OR",
+                        conditions=[
+                            Condition(
+                                type=ConditionType.CARD_MATCHES_SUIT,
+                                reference="top_discard"
+                            ),
+                            Condition(
+                                type=ConditionType.CARD_MATCHES_RANK,
+                                reference="top_discard"
+                            ),
+                            Condition(
+                                type=ConditionType.CARD_IS_RANK,
+                                value=Rank.EIGHT
+                            )
+                        ]
+                    ),
+                    min_cards=1,
+                    max_cards=1,
+                    mandatory=True,
+                    pass_if_unable=True
+                )
+            ]
+        ),
+        special_effects=[],
+        win_conditions=[
+            WinCondition(type="empty_hand")
+        ],
+        scoring_rules=[],
+        max_turns=300,
+        player_count=4
+    )
+
+
+def create_cheat_4p_genome() -> GameGenome:
+    """Create 4-player Cheat / I Doubt It genome.
+
+    Bluffing game for 4 players:
+    - 13 cards each (4 x 13 = 52, full deck)
+    - Play cards face-down claiming a rank
+    - Opponents can challenge the claim
+    - Loser of challenge takes the discard pile
+    - First to empty hand wins
+    """
+    from darwindeck.genome.schema import ClaimPhase
+
+    return GameGenome(
+        schema_version="1.0",
+        genome_id="cheat-4p",
+        generation=0,
+        setup=SetupRules(
+            cards_per_player=13,
+            initial_deck="standard_52",
+            initial_discard_count=0
+        ),
+        turn_structure=TurnStructure(
+            phases=[
+                ClaimPhase(
+                    min_cards=1,
+                    max_cards=4,
+                    sequential_rank=True,
+                    allow_challenge=True,
+                    pile_penalty=True
+                )
+            ]
+        ),
+        special_effects=[],
+        win_conditions=[
+            WinCondition(type="empty_hand")
+        ],
+        scoring_rules=[],
+        max_turns=2000,
+        player_count=4
+    )
+
+
+def create_go_fish_4p_genome() -> GameGenome:
+    """Create 4-player Go Fish genome.
+
+    Set collection game for 4 players:
+    - 7 cards each (4 x 7 = 28, leaves 24 in deck)
+    - Draw from deck each turn
+    - Play pairs/sets to tableau
+    - Collect books of 4 for scoring
+    - Highest score wins
+    """
+    return GameGenome(
+        schema_version="1.0",
+        genome_id="go-fish-4p",
+        generation=0,
+        setup=SetupRules(
+            cards_per_player=7,
+            initial_deck="standard_52",
+            initial_discard_count=0
+        ),
+        turn_structure=TurnStructure(
+            phases=[
+                DrawPhase(
+                    source=Location.DECK,
+                    count=1,
+                    mandatory=True
+                ),
+                PlayPhase(
+                    target=Location.TABLEAU,
+                    valid_play_condition=Condition(
+                        type=ConditionType.HAS_MATCHING_PAIR,
+                        value=2
+                    ),
+                    min_cards=2,
+                    max_cards=4,
+                    mandatory=False
+                ),
+                DiscardPhase(
+                    target=Location.DISCARD,
+                    count=1,
+                    mandatory=False
+                )
+            ]
+        ),
+        special_effects=[],
+        win_conditions=[
+            WinCondition(
+                type="high_score",
+                threshold=1
+            )
+        ],
+        scoring_rules=[],
+        max_turns=200,
+        player_count=4
+    )
+
+
+def create_uno_4p_genome() -> GameGenome:
+    """Create 4-player UNO-style genome with special effects.
+
+    Shedding game for 4 players:
+    - 7 cards each (4 x 7 = 28, leaves 24 in deck)
+    - Match rank or suit of top discard
+    - 2s force next player to draw 2
+    - Jacks skip next player
+    - Queens reverse direction
+    - Kings force next player to discard
+    - First to empty hand wins
+    """
+    return GameGenome(
+        schema_version="1.0",
+        genome_id="uno-4p",
+        generation=0,
+        setup=SetupRules(
+            cards_per_player=7,
+            initial_deck="standard_52",
+            initial_discard_count=1
+        ),
+        turn_structure=TurnStructure(
+            phases=[
+                PlayPhase(
+                    target=Location.DISCARD,
+                    valid_play_condition=CompoundCondition(
+                        logic="OR",
+                        conditions=[
+                            Condition(
+                                type=ConditionType.CARD_MATCHES_RANK,
+                                reference="top_discard"
+                            ),
+                            Condition(
+                                type=ConditionType.CARD_MATCHES_SUIT,
+                                reference="top_discard"
+                            )
+                        ]
+                    ),
+                    min_cards=1,
+                    max_cards=1,
+                    mandatory=False,
+                    pass_if_unable=True
+                ),
+                DrawPhase(
+                    source=Location.DECK,
+                    count=1,
+                    mandatory=False,
+                    condition=Condition(
+                        type=ConditionType.HAND_SIZE,
+                        operator=Operator.EQ,
+                        value=0,
+                        reference="valid_plays"
+                    )
+                )
+            ]
+        ),
+        special_effects=[
+            SpecialEffect(Rank.TWO, EffectType.DRAW_CARDS, TargetSelector.NEXT_PLAYER, 2),
+            SpecialEffect(Rank.JACK, EffectType.SKIP_NEXT, TargetSelector.NEXT_PLAYER, 1),
+            SpecialEffect(Rank.QUEEN, EffectType.REVERSE_DIRECTION, TargetSelector.ALL_OPPONENTS, 1),
+            SpecialEffect(Rank.KING, EffectType.FORCE_DISCARD, TargetSelector.NEXT_PLAYER, 1),
+        ],
+        win_conditions=[
+            WinCondition(type="empty_hand")
+        ],
+        scoring_rules=[],
+        max_turns=300,
+        player_count=4
+    )
+
+
+def create_old_maid_4p_genome() -> GameGenome:
+    """Create 4-player Old Maid genome.
+
+    Pairing/avoidance game for 4 players:
+    - 13 cards each (4 x 13 = 52, full deck)
+    - Draw from opponent's hand (simplified to deck)
+    - Discard matching pairs
+    - Avoid being stuck with the odd card
+    - Game ends when all hands empty (one card left unpaired)
+    """
+    return GameGenome(
+        schema_version="1.0",
+        genome_id="old-maid-4p",
+        generation=0,
+        setup=SetupRules(
+            cards_per_player=13,
+            initial_deck="standard_52",
+            initial_discard_count=0
+        ),
+        turn_structure=TurnStructure(
+            phases=[
+                DrawPhase(
+                    source=Location.OPPONENT_HAND,
+                    count=1,
+                    mandatory=True
+                ),
+                DiscardPhase(
+                    target=Location.DISCARD,
+                    count=2,
+                    mandatory=False
+                )
+            ]
+        ),
+        special_effects=[],
+        win_conditions=[
+            WinCondition(type="all_hands_empty")
+        ],
+        scoring_rules=[],
+        max_turns=300,
+        player_count=4
+    )
+
+
 def create_simple_poker_genome() -> GameGenome:
     """Create Simple Poker card game genome with betting.
 
@@ -1052,7 +1332,7 @@ def create_simple_poker_genome() -> GameGenome:
 def get_seed_genomes() -> List[GameGenome]:
     """Get all seed genomes for initial population in Phase 4.
 
-    Returns a diverse set of 18 games to seed the genetic algorithm:
+    Returns a diverse set of 23 games to seed the genetic algorithm:
 
     Luck-based:
     - War: Pure luck baseline
@@ -1067,9 +1347,16 @@ def get_seed_genomes() -> List[GameGenome]:
     Shedding/Matching:
     - Crazy 8s: Matching with wildcards
     - Old Maid: Pairing and avoidance
-    - President/Daifugō: Climbing game (2 is high)
+    - President/Daifugo: Climbing game (2 is high)
     - Fan Tan/Sevens: Sequential building
     - Uno-style: Matching with special effects
+
+    4-Player Non-Trick-Taking:
+    - Crazy 8s 4P: Shedding with wildcards
+    - Cheat 4P: Bluffing with challenges
+    - Go Fish 4P: Set collection
+    - UNO 4P: Shedding with special effects
+    - Old Maid 4P: Pairing and avoidance
 
     Set Collection:
     - Gin Rummy: Set collection and melds
@@ -1099,6 +1386,12 @@ def get_seed_genomes() -> List[GameGenome]:
         create_president_genome(),
         create_fan_tan_genome(),
         create_uno_genome(),
+        # 4-Player Non-Trick-Taking
+        create_crazy_eights_4p_genome(),
+        create_cheat_4p_genome(),
+        create_go_fish_4p_genome(),
+        create_uno_4p_genome(),
+        create_old_maid_4p_genome(),
         # Set Collection
         create_gin_rummy_genome(),
         create_go_fish_genome(),
