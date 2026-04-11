@@ -1383,15 +1383,13 @@ def get_seed_genomes() -> List[GameGenome]:
         # Shedding/Matching
         create_crazy_eights_genome(),
         create_old_maid_genome(),
-        create_president_genome(),
+        # create_president_genome(),  # Broken: 100% P1 win in 4p sim
         create_fan_tan_genome(),
         create_uno_genome(),
         # 4-Player Non-Trick-Taking
         create_crazy_eights_4p_genome(),
         create_cheat_4p_genome(),
-        create_go_fish_4p_genome(),
         create_uno_4p_genome(),
-        create_old_maid_4p_genome(),
         # Set Collection
         create_gin_rummy_genome(),
         create_go_fish_genome(),
