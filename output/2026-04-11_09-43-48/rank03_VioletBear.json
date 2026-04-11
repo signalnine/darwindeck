@@ -1,12 +1,12 @@
 {
   "schema_version": "1.0",
-  "genome_id": "TrueStag",
-  "generation": 33,
+  "genome_id": "VioletBear",
+  "generation": 45,
   "setup": {
-    "cards_per_player": 13,
+    "cards_per_player": 18,
     "initial_deck": "standard_52",
     "initial_discard_count": 1,
-    "starting_chips": 55
+    "starting_chips": 1170
   },
   "turn_structure": {
     "phases": [
@@ -50,34 +50,34 @@
     }
   ],
   "scoring_rules": [],
-  "max_turns": 197,
+  "max_turns": 253,
   "min_turns": 52,
   "player_count": 4,
-  "fitness": 0.7616101658629318,
-  "fitness_rank": 4,
+  "fitness": 0.4303321253007778,
+  "fitness_rank": 3,
   "fitness_metrics": {
-    "decision_density": 0.5298569775406793,
-    "comeback_potential": 0.9099999999999999,
-    "tension_curve": 0.8195559978485107,
+    "decision_density": 0.5523343023364026,
+    "comeback_potential": 0.9199999999999999,
+    "tension_curve": 0.7976308703422548,
     "interaction_frequency": 1.0,
     "rules_complexity": 0.8049999999999999,
-    "session_length": 0.06097777896457248,
-    "skill_vs_luck": 0.2244591221600858,
+    "session_length": 0.04897777981228298,
+    "skill_vs_luck": 0.24983621955220792,
     "bluffing_depth": 0.0,
     "games_simulated": 100,
     "valid": true
   },
   "skill_evaluation": {
-    "greedy_win_rate": 0.39,
-    "greedy_wins_as_p0": 27,
-    "greedy_wins_as_p1": 12,
-    "mcts_win_rate": 0.66,
-    "mcts_wins_as_p0": 37,
-    "mcts_wins_as_p1": 29,
-    "skill_score": 0.525,
-    "first_player_advantage": 0.23000000000000004,
+    "greedy_win_rate": 0.37,
+    "greedy_wins_as_p0": 23,
+    "greedy_wins_as_p1": 14,
+    "mcts_win_rate": 0.67,
+    "mcts_wins_as_p0": 40,
+    "mcts_wins_as_p1": 27,
+    "skill_score": 0.52,
+    "first_player_advantage": 0.22000000000000003,
     "total_games": 200,
     "timed_out": false
   },
-  "skill_rank": 4
+  "skill_rank": 3
 }

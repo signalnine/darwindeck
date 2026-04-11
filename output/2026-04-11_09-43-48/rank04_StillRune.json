@@ -1,12 +1,12 @@
 {
   "schema_version": "1.0",
-  "genome_id": "RacingScroll",
-  "generation": 47,
+  "genome_id": "StillRune",
+  "generation": 62,
   "setup": {
     "cards_per_player": 13,
     "initial_deck": "standard_52",
-    "initial_discard_count": 1,
-    "starting_chips": 55
+    "initial_discard_count": 0,
+    "starting_chips": 0
   },
   "turn_structure": {
     "phases": [
@@ -23,67 +23,61 @@
   },
   "special_effects": [
     {
-      "trigger_rank": "THREE",
-      "effect_type": "EXTRA_TURN",
+      "trigger_rank": "SEVEN",
+      "effect_type": "REVERSE_DIRECTION",
       "target": "NEXT_PLAYER",
       "value": 1
     },
     {
-      "trigger_rank": "NINE",
+      "trigger_rank": "ACE",
       "effect_type": "FORCE_DISCARD",
-      "target": "NEXT_PLAYER",
-      "value": 2
-    },
-    {
-      "trigger_rank": "FIVE",
-      "effect_type": "EXTRA_TURN",
       "target": "ALL_OPPONENTS",
-      "value": 3
+      "value": 1
     }
   ],
   "win_conditions": [
     {
       "type": "low_score",
-      "threshold": 13
+      "threshold": 10
     },
     {
-      "type": "low_score",
-      "threshold": 500
+      "type": "most_captured",
+      "threshold": null
     },
     {
-      "type": "first_to_score",
-      "threshold": 200
+      "type": "most_captured",
+      "threshold": null
     }
   ],
   "scoring_rules": [],
-  "max_turns": 221,
+  "max_turns": 234,
   "min_turns": 52,
   "player_count": 4,
-  "fitness": 0.751043031111033,
-  "fitness_rank": 9,
+  "fitness": 0.42605864670520366,
+  "fitness_rank": 4,
   "fitness_metrics": {
-    "decision_density": 0.5396073104610294,
-    "comeback_potential": 0.86,
-    "tension_curve": 0.7691017508506774,
+    "decision_density": 0.5397188050172197,
+    "comeback_potential": 0.9099999999999999,
+    "tension_curve": 0.8043753862380982,
     "interaction_frequency": 1.0,
     "rules_complexity": 0.8049999999999999,
-    "session_length": 0.056711112128363717,
-    "skill_vs_luck": 0.24781416653241484,
+    "session_length": 0.0584000015258789,
+    "skill_vs_luck": 0.22822410546916805,
     "bluffing_depth": 0.0,
     "games_simulated": 100,
     "valid": true
   },
   "skill_evaluation": {
-    "greedy_win_rate": 0.43,
-    "greedy_wins_as_p0": 25,
-    "greedy_wins_as_p1": 18,
-    "mcts_win_rate": 0.7,
-    "mcts_wins_as_p0": 41,
+    "greedy_win_rate": 0.36,
+    "greedy_wins_as_p0": 20,
+    "greedy_wins_as_p1": 16,
+    "mcts_win_rate": 0.69,
+    "mcts_wins_as_p0": 40,
     "mcts_wins_as_p1": 29,
-    "skill_score": 0.565,
-    "first_player_advantage": 0.19000000000000006,
+    "skill_score": 0.5249999999999999,
+    "first_player_advantage": 0.14999999999999997,
     "total_games": 200,
     "timed_out": false
   },
-  "skill_rank": 9
+  "skill_rank": 4
 }

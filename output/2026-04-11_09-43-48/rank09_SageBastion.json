@@ -1,11 +1,11 @@
 {
   "schema_version": "1.0",
-  "genome_id": "LeapingStake",
-  "generation": 45,
+  "genome_id": "SageBastion",
+  "generation": 51,
   "setup": {
     "cards_per_player": 13,
     "initial_deck": "standard_52",
-    "initial_discard_count": 1,
+    "initial_discard_count": 0,
     "starting_chips": 0
   },
   "turn_structure": {
@@ -21,15 +21,22 @@
     "is_trick_based": true,
     "tricks_per_hand": 13
   },
-  "special_effects": [],
+  "special_effects": [
+    {
+      "trigger_rank": "SEVEN",
+      "effect_type": "REVERSE_DIRECTION",
+      "target": "NEXT_PLAYER",
+      "value": 1
+    }
+  ],
   "win_conditions": [
     {
       "type": "low_score",
       "threshold": 13
     },
     {
-      "type": "all_hands_empty",
-      "threshold": 0
+      "type": "most_captured",
+      "threshold": null
     },
     {
       "type": "most_captured",
@@ -37,34 +44,34 @@
     }
   ],
   "scoring_rules": [],
-  "max_turns": 253,
+  "max_turns": 243,
   "min_turns": 52,
   "player_count": 4,
-  "fitness": 0.7682838690337235,
-  "fitness_rank": 7,
+  "fitness": 0.42590463720718796,
+  "fitness_rank": 9,
   "fitness_metrics": {
-    "decision_density": 0.548039634644202,
-    "comeback_potential": 0.9299999999999999,
-    "tension_curve": 0.8029428243637085,
+    "decision_density": 0.5422117098182535,
+    "comeback_potential": 0.9199999999999999,
+    "tension_curve": 0.7684102535247803,
     "interaction_frequency": 1.0,
     "rules_complexity": 0.8049999999999999,
-    "session_length": 0.050844442579481335,
-    "skill_vs_luck": 0.24123748755288288,
+    "session_length": 0.05351111094156901,
+    "skill_vs_luck": 0.23998511673683343,
     "bluffing_depth": 0.0,
     "games_simulated": 100,
     "valid": true
   },
   "skill_evaluation": {
-    "greedy_win_rate": 0.46,
-    "greedy_wins_as_p0": 26,
-    "greedy_wins_as_p1": 20,
-    "mcts_win_rate": 0.62,
+    "greedy_win_rate": 0.42,
+    "greedy_wins_as_p0": 27,
+    "greedy_wins_as_p1": 15,
+    "mcts_win_rate": 0.7,
     "mcts_wins_as_p0": 40,
-    "mcts_wins_as_p1": 22,
-    "skill_score": 0.54,
-    "first_player_advantage": 0.24000000000000005,
+    "mcts_wins_as_p1": 30,
+    "skill_score": 0.5599999999999999,
+    "first_player_advantage": 0.22000000000000003,
     "total_games": 200,
     "timed_out": false
   },
-  "skill_rank": 7
+  "skill_rank": 9
 }

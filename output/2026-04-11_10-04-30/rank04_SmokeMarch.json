@@ -1,0 +1,77 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "SmokeMarch",
+  "generation": 52,
+  "setup": {
+    "cards_per_player": 13,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 1,
+    "starting_chips": 865
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "PlayPhase",
+        "target": "DISCARD",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "HAND_SIZE",
+          "operator": "EQ",
+          "value": 2,
+          "reference": null
+        },
+        "min_cards": 2,
+        "max_cards": 3,
+        "mandatory": false
+      }
+    ],
+    "is_trick_based": true,
+    "tricks_per_hand": 13
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "low_score",
+      "threshold": 13
+    },
+    {
+      "type": "low_score",
+      "threshold": 500
+    },
+    {
+      "type": "best_hand",
+      "threshold": null
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 270,
+  "min_turns": 52,
+  "player_count": 4,
+  "fitness": 0.6870999521138653,
+  "fitness_rank": 4,
+  "fitness_metrics": {
+    "decision_density": 0.5336631526377469,
+    "comeback_potential": 0.8300000000000001,
+    "tension_curve": 0.7940277814865113,
+    "interaction_frequency": 1.0,
+    "rules_complexity": 0.8049999999999999,
+    "session_length": 0.05937777625189887,
+    "skill_vs_luck": 0.25130874663484304,
+    "bluffing_depth": 0.0,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "skill_evaluation": {
+    "greedy_win_rate": 0.5,
+    "greedy_wins_as_p0": 0,
+    "greedy_wins_as_p1": 0,
+    "mcts_win_rate": 0.5,
+    "mcts_wins_as_p0": 0,
+    "mcts_wins_as_p1": 0,
+    "skill_score": 0.5,
+    "first_player_advantage": 0.0,
+    "total_games": 200,
+    "timed_out": false
+  },
+  "skill_rank": 4
+}
