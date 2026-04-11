@@ -1,0 +1,330 @@
+package output
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/darwindeck/darwindeck/pkg/genome"
+	"github.com/darwindeck/darwindeck/pkg/sim"
+)
+
+// GenerateRulebook produces a human-readable markdown rulebook from a genome.
+func GenerateRulebook(g *genome.Genome) string {
+	var b strings.Builder
+
+	b.WriteString(fmt.Sprintf("# %s\n\n", gameName(g)))
+	b.WriteString(fmt.Sprintf("**Players:** %d  \n", g.Players))
+	b.WriteString(fmt.Sprintf("**Cards:** Standard 52-card deck  \n"))
+	b.WriteString(fmt.Sprintf("**Hand Size:** %d cards per player  \n\n", g.HandSize))
+
+	switch g.Skeleton {
+	case genome.Shedding:
+		writeSheddingRules(&b, g)
+	case genome.TrickTaking:
+		writeTrickTakingRules(&b, g)
+	case genome.Rummy:
+		writeRummyRules(&b, g)
+	}
+
+	if len(g.SpecialCards) > 0 {
+		writeSpecialCards(&b, g)
+	}
+
+	if len(g.Borrowed) > 0 {
+		writeBorrowedRules(&b, g)
+	}
+
+	if len(g.Scoring.CardPoints) > 0 {
+		writeScoringTable(&b, g)
+	}
+
+	return b.String()
+}
+
+func gameName(g *genome.Genome) string {
+	if g.ID != "" {
+		return g.ID
+	}
+	return fmt.Sprintf("Evolved %s Game", g.Skeleton)
+}
+
+func writeSheddingRules(b *strings.Builder, g *genome.Genome) {
+	b.WriteString("## How to Play\n\n")
+	b.WriteString("This is a **shedding game** — the goal is to be the first player to empty your hand.\n\n")
+
+	b.WriteString("### Setup\n\n")
+	b.WriteString(fmt.Sprintf("Deal %d cards to each player. Flip the top card of the deck to start the discard pile.\n\n", g.HandSize))
+
+	b.WriteString("### On Your Turn\n\n")
+
+	if g.Shedding != nil {
+		matchDesc := matchRuleDescription(g.Shedding.MatchRule)
+		b.WriteString(fmt.Sprintf("Play a card from your hand that **%s** the top card of the discard pile.\n\n", matchDesc))
+		b.WriteString(fmt.Sprintf("If you cannot play, **draw %d card(s)** from the deck.\n\n", g.Shedding.DrawPenalty))
+
+		if g.Shedding.PlayMultiple {
+			b.WriteString("You may play multiple matching cards at once.\n\n")
+		}
+	}
+
+	b.WriteString("### Winning\n\n")
+	b.WriteString("The first player to play all their cards wins. If the deck runs out, the player with the fewest cards wins.\n\n")
+}
+
+func writeTrickTakingRules(b *strings.Builder, g *genome.Genome) {
+	b.WriteString("## How to Play\n\n")
+	b.WriteString("This is a **trick-taking game** — players play one card each per trick.\n\n")
+
+	b.WriteString("### Setup\n\n")
+	b.WriteString(fmt.Sprintf("Deal %d cards to each player.\n\n", g.HandSize))
+
+	if g.TrumpRule != genome.TrumpNone {
+		b.WriteString(fmt.Sprintf("**Trump:** %s\n\n", trumpDescription(g)))
+	}
+
+	b.WriteString("### Playing Tricks\n\n")
+	b.WriteString("The lead player plays any card. Other players follow in order.\n\n")
+
+	if g.TrickTaking != nil {
+		if g.TrickTaking.MustFollowSuit {
+			b.WriteString("You **must follow the led suit** if you can. If you cannot, play any card.\n\n")
+		} else {
+			b.WriteString("You may play any card from your hand.\n\n")
+		}
+
+		leadDesc := leadRestrictionDescription(g.TrickTaking.LeadRestriction)
+		if leadDesc != "" {
+			b.WriteString(fmt.Sprintf("**Lead restriction:** %s\n\n", leadDesc))
+		}
+	}
+
+	b.WriteString("The highest card of the led suit wins the trick, unless trumped. The trick winner leads the next trick.\n\n")
+
+	b.WriteString("### Scoring\n\n")
+	if g.TrickTaking != nil {
+		b.WriteString(scoringDescription(g.TrickTaking.TrickScoring))
+	}
+}
+
+func writeRummyRules(b *strings.Builder, g *genome.Genome) {
+	b.WriteString("## How to Play\n\n")
+	b.WriteString("This is a **rummy game** — form melds to reduce your deadwood.\n\n")
+
+	b.WriteString("### Setup\n\n")
+	b.WriteString(fmt.Sprintf("Deal %d cards to each player. Place one card face-up to start the discard pile.\n\n", g.HandSize))
+
+	b.WriteString("### On Your Turn\n\n")
+
+	if g.Rummy != nil {
+		drawDesc := drawDescription(g.Rummy.DrawFrom)
+		b.WriteString(fmt.Sprintf("1. **Draw** %s\n", drawDesc))
+
+		meldDesc := meldDescription(g.Rummy)
+		b.WriteString(fmt.Sprintf("2. **Meld** (optional): %s\n", meldDesc))
+
+		b.WriteString("3. **Discard** one card to the discard pile\n\n")
+
+		b.WriteString("### Knocking & Gin\n\n")
+		if g.Rummy.KnockThreshold == 0 {
+			b.WriteString("You can only go out with **Gin** (no deadwood at all).\n\n")
+		} else {
+			b.WriteString(fmt.Sprintf("You may **knock** when your deadwood is %d points or less.\n\n", g.Rummy.KnockThreshold))
+		}
+	}
+
+	b.WriteString("### Deadwood Values\n\n")
+	b.WriteString("- Face cards (J, Q, K): 10 points\n")
+	b.WriteString("- Ace: 1 point\n")
+	b.WriteString("- Number cards: face value\n\n")
+
+	b.WriteString("### Winning\n\n")
+	b.WriteString("The player with the lowest deadwood when someone knocks or goes gin wins the round.\n\n")
+}
+
+func writeSpecialCards(b *strings.Builder, g *genome.Genome) {
+	b.WriteString("## Special Cards\n\n")
+	for _, sc := range g.SpecialCards {
+		card := specialCardName(sc)
+		effect := specialCardEffect(sc)
+		b.WriteString(fmt.Sprintf("- **%s:** %s\n", card, effect))
+	}
+	b.WriteString("\n")
+}
+
+func writeBorrowedRules(b *strings.Builder, g *genome.Genome) {
+	b.WriteString("## Additional Rules\n\n")
+	for _, bm := range g.Borrowed {
+		b.WriteString(fmt.Sprintf("- %s\n", borrowedDescription(bm)))
+	}
+	b.WriteString("\n")
+}
+
+func writeScoringTable(b *strings.Builder, g *genome.Genome) {
+	b.WriteString("## Card Point Values\n\n")
+	b.WriteString("| Card | Points |\n|------|--------|\n")
+	for _, cp := range g.Scoring.CardPoints {
+		card := scoringCardName(cp)
+		b.WriteString(fmt.Sprintf("| %s | %d |\n", card, cp.Points))
+	}
+	b.WriteString("\n")
+}
+
+// --- Helper description functions ---
+
+func matchRuleDescription(r genome.MatchRule) string {
+	switch r {
+	case genome.MatchSuit:
+		return "matches the suit of"
+	case genome.MatchRank:
+		return "matches the rank of"
+	case genome.MatchEither:
+		return "matches the suit or rank of"
+	case genome.MatchBoth:
+		return "matches both the suit and rank of"
+	default:
+		return "matches"
+	}
+}
+
+func trumpDescription(g *genome.Genome) string {
+	switch g.TrumpRule {
+	case genome.TrumpFixed:
+		suits := [5]string{"", "Clubs", "Diamonds", "Hearts", "Spades"}
+		s := int(g.Scoring.TrumpSuit)
+		if s >= 1 && s <= 4 {
+			return suits[s] + " are always trump"
+		}
+		return "Fixed trump suit"
+	case genome.TrumpCut:
+		return "Cut a card from the deck to determine trump suit"
+	case genome.TrumpLed:
+		return "The first suit led becomes trump"
+	default:
+		return "No trump"
+	}
+}
+
+func leadRestrictionDescription(r genome.LeadRule) string {
+	switch r {
+	case genome.LeadNoTrumpUntilBroken:
+		return "Cannot lead trump until trump has been played off-suit"
+	case genome.LeadWinnerLeads:
+		return "The winner of the previous trick leads"
+	default:
+		return ""
+	}
+}
+
+func scoringDescription(s genome.TrickScoring) string {
+	switch s {
+	case genome.ScorePerTrick:
+		return "Each trick won is worth **1 point**. Highest score wins.\n\n"
+	case genome.ScoreCardPoints:
+		return "Tricks are scored by the **point values** of the cards they contain (see scoring table). Highest score wins.\n\n"
+	case genome.ScoreAvoidance:
+		return "Tricks are scored by the **point values** of the cards they contain (see scoring table). **Lowest score wins** — avoid taking point cards!\n\n"
+	default:
+		return "Score by tricks won.\n\n"
+	}
+}
+
+func drawDescription(d genome.DrawSource) string {
+	switch d {
+	case genome.DrawDeck:
+		return "one card from the deck"
+	case genome.DrawDiscard:
+		return "the top card from the discard pile"
+	case genome.DrawEither:
+		return "one card from the deck OR the top card from the discard pile"
+	default:
+		return "one card"
+	}
+}
+
+func meldDescription(p *genome.RummyParams) string {
+	var parts []string
+	switch p.MeldTypes {
+	case genome.MeldSets:
+		parts = append(parts, fmt.Sprintf("groups of %d+ cards of the same rank", p.MinMeldSize))
+	case genome.MeldRuns:
+		parts = append(parts, fmt.Sprintf("sequences of %d+ consecutive cards in the same suit", p.MinMeldSize))
+	case genome.MeldBoth:
+		parts = append(parts, fmt.Sprintf("groups of %d+ same-rank cards OR sequences of %d+ consecutive same-suit cards", p.MinMeldSize, p.MinMeldSize))
+	}
+	if p.CanLayOff {
+		parts = append(parts, "You may also extend existing melds on the table")
+	}
+	return strings.Join(parts, ". ")
+}
+
+func specialCardName(sc genome.SpecialCard) string {
+	rank := ""
+	if sc.ByRank != 0 {
+		r := sim.Rank(sc.ByRank)
+		rank = r.String() + "s"
+	} else {
+		rank = "All cards"
+	}
+	return rank
+}
+
+func specialCardEffect(sc genome.SpecialCard) string {
+	switch sc.Type {
+	case genome.SpecialSkip:
+		return "Skip the next player's turn"
+	case genome.SpecialReverse:
+		return "Reverse play direction"
+	case genome.SpecialDrawTwo:
+		return "Next player draws 2 cards"
+	case genome.SpecialDrawFour:
+		return "Next player draws 4 cards"
+	case genome.SpecialWild:
+		return "Can be played on any card"
+	default:
+		return "Special effect"
+	}
+}
+
+func borrowedDescription(bm genome.BorrowedMechanic) string {
+	switch bm.Mechanic {
+	case genome.MechTrickScoring:
+		return "Score bonus points based on trick-like card combinations"
+	case genome.MechMeldBonus:
+		return "Earn bonus points for forming sets or runs"
+	case genome.MechDrawPenalty:
+		return "Draw extra cards as a penalty in certain situations"
+	case genome.MechKnock:
+		return "Knock to end the round early"
+	case genome.MechTrump:
+		return "One suit is designated as trump and beats other suits"
+	case genome.MechAvoidance:
+		return "Certain cards carry penalty points — avoid collecting them"
+	case genome.MechPlayMultiple:
+		return "Play multiple matching cards at once"
+	case genome.MechFollowSuit:
+		return "Must play a card of the led suit if possible"
+	default:
+		return "Additional mechanic"
+	}
+}
+
+func scoringCardName(cp genome.CardScoring) string {
+	rank := "Any"
+	if cp.Rank != 0 {
+		rank = sim.Rank(cp.Rank).String()
+	}
+	suit := "any suit"
+	if cp.Suit != 0 {
+		suits := [5]string{"", "Clubs", "Diamonds", "Hearts", "Spades"}
+		if int(cp.Suit) < len(suits) {
+			suit = suits[cp.Suit]
+		}
+	}
+	if cp.Rank == 0 && cp.Suit != 0 {
+		return fmt.Sprintf("All %s", suit)
+	}
+	if cp.Rank != 0 && cp.Suit == 0 {
+		return fmt.Sprintf("All %ss", rank)
+	}
+	return fmt.Sprintf("%s of %s", rank, suit)
+}
