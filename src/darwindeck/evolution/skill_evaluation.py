@@ -11,11 +11,25 @@ from dataclasses import dataclass
 from typing import List, Optional, Callable, Dict
 import logging
 import time
+import multiprocessing as mp
+import os
 
 from darwindeck.genome.schema import GameGenome
 from darwindeck.simulation.go_simulator import GoSimulator
 
 logger = logging.getLogger(__name__)
+
+# Use 'spawn' context for CGo compatibility
+_mp_context = mp.get_context('spawn')
+
+# Module-level worker simulator for reuse across calls in spawned workers
+_worker_simulator: Optional[GoSimulator] = None
+
+
+def _skill_worker_init() -> None:
+    """Initialize a GoSimulator for this worker process."""
+    global _worker_simulator
+    _worker_simulator = GoSimulator()
 
 
 @dataclass
@@ -51,7 +65,8 @@ def evaluate_skill(
     num_games: int = 100,
     mcts_iterations: int = 100,
     timeout_sec: float = 60.0,
-    progress_callback: Optional[Callable[[str], None]] = None
+    progress_callback: Optional[Callable[[str], None]] = None,
+    simulator: Optional[GoSimulator] = None
 ) -> SkillEvalResult:
     """Run two-tier skill evaluation: Greedy vs Random, then MCTS vs Random.
 
@@ -69,7 +84,7 @@ def evaluate_skill(
         SkillEvalResult with greedy and mcts win rates
     """
     start_time = time.time()
-    simulator = GoSimulator()
+    sim = simulator or _worker_simulator or GoSimulator()
 
     games_per_direction = num_games // 2
 
@@ -78,7 +93,7 @@ def evaluate_skill(
         progress_callback("Running Greedy vs Random...")
 
     # Greedy as P0
-    greedy_p0 = simulator.simulate_asymmetric(
+    greedy_p0 = sim.simulate_asymmetric(
         genome=genome,
         num_games=games_per_direction,
         p0_ai_type="greedy",
@@ -90,7 +105,7 @@ def evaluate_skill(
         return _make_timeout_result(genome.genome_id, greedy_p0, None, None, None, games_per_direction)
 
     # Greedy as P1
-    greedy_p1 = simulator.simulate_asymmetric(
+    greedy_p1 = sim.simulate_asymmetric(
         genome=genome,
         num_games=games_per_direction,
         p0_ai_type="random",
@@ -115,7 +130,7 @@ def evaluate_skill(
         mcts_type = "mcts"  # mcts100
 
     # MCTS as P0
-    mcts_p0 = simulator.simulate_asymmetric(
+    mcts_p0 = sim.simulate_asymmetric(
         genome=genome,
         num_games=games_per_direction,
         p0_ai_type=mcts_type,
@@ -127,7 +142,7 @@ def evaluate_skill(
         return _make_timeout_result(genome.genome_id, greedy_p0, greedy_p1, mcts_p0, None, games_per_direction)
 
     # MCTS as P1
-    mcts_p1 = simulator.simulate_asymmetric(
+    mcts_p1 = sim.simulate_asymmetric(
         genome=genome,
         num_games=games_per_direction,
         p0_ai_type="random",
@@ -233,7 +248,8 @@ def _evaluate_skill_task(task: _SkillEvalTask) -> SkillEvalResult:
         genome=task.genome,
         num_games=task.num_games,
         mcts_iterations=task.mcts_iterations,
-        timeout_sec=task.timeout_sec
+        timeout_sec=task.timeout_sec,
+        simulator=_worker_simulator
     )
 
 

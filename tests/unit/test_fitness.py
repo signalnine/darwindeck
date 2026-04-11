@@ -258,3 +258,93 @@ class TestTableauCoherencePenalty:
         # Verify penalties
         assert calculate_coherence_penalty(coherent_genome) == 0.0
         assert calculate_coherence_penalty(incoherent_genome) >= 0.30
+
+
+def test_trick_based_interaction_frequency_without_instrumentation() -> None:
+    """Trick-based games should not get a free high interaction score from heuristic alone."""
+    from darwindeck.genome.examples import create_hearts_genome
+
+    genome = create_hearts_genome()
+
+    # Simulate results with no instrumentation data (total_actions=0)
+    results = SimulationResults(
+        total_games=100,
+        wins=(25, 25, 25, 25),
+        player_count=4,
+        draws=0,
+        avg_turns=52,
+        errors=0,
+    )
+
+    evaluator = FitnessEvaluator()
+    metrics = evaluator.evaluate(genome, results)
+
+    # With the reduced trick bonus (0.15 instead of 0.3), the heuristic
+    # interaction_frequency should be below 0.5
+    assert metrics.interaction_frequency < 0.5
+
+
+def test_skill_vs_luck_heuristic_can_reach_high_values() -> None:
+    """A well-designed game with real decision data should reach skill_vs_luck >= 0.75."""
+    evaluator = FitnessEvaluator(style='balanced')
+    results = SimulationResults(
+        total_games=100,
+        wins=(50, 50),
+        player_count=2,
+        draws=0,
+        avg_turns=60,
+        errors=0,
+        total_decisions=300,
+        total_valid_moves=900,
+        forced_decisions=30,
+        total_hand_size=1200,
+        total_interactions=150,
+        total_actions=600,
+    )
+    genome = create_war_genome()
+    metrics = evaluator.evaluate(genome, results)
+    assert metrics.skill_vs_luck >= 0.75
+
+
+def test_fitness_penalizes_positional_imbalance() -> None:
+    """4-player games with first-player advantage get penalized."""
+    from darwindeck.genome.examples import create_hearts_genome
+
+    evaluator = FitnessEvaluator(style='party')
+    genome = create_hearts_genome()
+    balanced = SimulationResults(
+        total_games=100, wins=(25, 25, 25, 25), player_count=4,
+        draws=0, avg_turns=20, errors=0,
+        total_decisions=200, total_valid_moves=400, forced_decisions=20,
+        total_hand_size=800, total_interactions=50, total_actions=200,
+    )
+    imbalanced = SimulationResults(
+        total_games=100, wins=(55, 25, 10, 10), player_count=4,
+        draws=0, avg_turns=20, errors=0,
+        total_decisions=200, total_valid_moves=400, forced_decisions=20,
+        total_hand_size=800, total_interactions=50, total_actions=200,
+    )
+    b = evaluator.evaluate(genome, balanced)
+    i = evaluator.evaluate(genome, imbalanced)
+    assert i.total_fitness < b.total_fitness
+
+
+def test_fitness_penalizes_2player_imbalance() -> None:
+    """2-player games with positional imbalance get penalized."""
+    evaluator = FitnessEvaluator(style='balanced')
+    genome = create_war_genome()
+    balanced = SimulationResults(
+        total_games=100, wins=(50, 50), player_count=2,
+        draws=0, avg_turns=40, errors=0,
+        total_decisions=200, total_valid_moves=400, forced_decisions=20,
+        total_hand_size=800, total_interactions=50, total_actions=200,
+    )
+    imbalanced = SimulationResults(
+        total_games=100, wins=(70, 30), player_count=2,
+        draws=0, avg_turns=40, errors=0,
+        total_decisions=200, total_valid_moves=400, forced_decisions=20,
+        total_hand_size=800, total_interactions=50, total_actions=200,
+    )
+    b = evaluator.evaluate(genome, balanced)
+    i = evaluator.evaluate(genome, imbalanced)
+    assert i.total_fitness < b.total_fitness
