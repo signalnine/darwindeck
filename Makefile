@@ -1,4 +1,4 @@
-.PHONY: build-cgo test-cgo build-worker build-evolve clean
+.PHONY: build-cgo test-cgo build-worker build-evolve build-v2 test-v2 clean
 
 # Build version info
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -17,8 +17,17 @@ build-evolve:
 	mkdir -p bin
 	cd src/gosim && go build -ldflags "$(LDFLAGS)" -o ../../bin/darwindeck-evolve ./cmd/evolve
 
+## v2 (pure Go rewrite)
+build-v2:
+	mkdir -p bin
+	go build -ldflags "$(LDFLAGS)" -o bin/darwindeck ./cmd/darwindeck
+
+test-v2:
+	go test ./pkg/... -v
+
+## v1 (legacy Python+Go)
 test-cgo: build-cgo
 	uv run pytest tests/integration/test_cgo_bridge.py -v
 
 clean:
-	rm -f libcardsim.so libcardsim.h bin/gosim-worker bin/darwindeck-evolve
+	rm -f libcardsim.so libcardsim.h bin/gosim-worker bin/darwindeck-evolve bin/darwindeck
