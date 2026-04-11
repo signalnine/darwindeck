@@ -284,7 +284,7 @@ class FitnessEvaluator:
         else:
             # Fallback to heuristic (current implementation)
             special_effects_score = min(1.0, len(genome.special_effects) / 3.0)
-            trick_based_score = 0.3 if genome.turn_structure.is_trick_based else 0.0
+            trick_based_score = 0.15 if genome.turn_structure.is_trick_based else 0.0
             multi_phase_score = min(0.4, len(genome.turn_structure.phases) / 10.0)
 
             interaction_frequency = min(1.0,
