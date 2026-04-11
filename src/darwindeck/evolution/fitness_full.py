@@ -354,23 +354,27 @@ class FitnessEvaluator:
             skill_vs_luck = 0.7  # Assume MCTS testing means we're measuring skill
         else:
             # Without MCTS, estimate skill potential from game structure
-            # Factors: game length (more turns = more decisions = more skill)
-            #          balance (too imbalanced = luck or broken)
-            #          complexity (more complex = more skill ceiling)
+            # length_factor: games reaching 50 turns have full opportunity for skill
+            # decision_factor: use real instrumentation when available, else structural proxy
+            # balance_factor: balanced games reward skill over luck
 
-            length_factor = min(1.0, results.avg_turns / 80.0)  # Cap at 80 turns
-            balance_factor = comeback_potential  # Already measures balance (0-1)
-            complexity_factor = min(1.0, (
-                len(genome.turn_structure.phases) +
-                len(genome.special_effects) +
-                (1 if genome.turn_structure.is_trick_based else 0)
-            ) / 8.0)
+            length_factor = min(1.0, results.avg_turns / 50.0)
+            if hasattr(results, 'total_decisions') and results.total_decisions > 0:
+                forced_ratio = results.forced_decisions / results.total_decisions
+                decision_factor = 1.0 - forced_ratio
+            else:
+                complexity_factor = min(1.0, (
+                    len(genome.turn_structure.phases) +
+                    len(genome.special_effects) +
+                    (1 if genome.turn_structure.is_trick_based else 0)
+                ) / 6.0)
+                decision_factor = complexity_factor
+            balance_factor = comeback_potential
 
-            # Weighted combination: longer balanced complex games = more skill
             skill_vs_luck = min(1.0,
-                length_factor * 0.4 +
-                balance_factor * 0.3 +
-                complexity_factor * 0.3
+                length_factor * 0.3 +
+                decision_factor * 0.4 +
+                balance_factor * 0.3
             )
 
         # For party style, invert skill metric: we want luck-friendly games
