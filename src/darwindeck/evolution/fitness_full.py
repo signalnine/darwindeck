@@ -274,15 +274,18 @@ class FitnessEvaluator:
 
         # 4. Interaction frequency - use real data if available, else heuristic
         if hasattr(results, 'total_actions') and results.total_actions > 0:
-            # Real instrumentation available (Phase 1)
+            # Real instrumentation available
             interaction_ratio = results.total_interactions / results.total_actions
 
-            # Score: Direct ratio of interactions to actions
-            # 0.0 = no interaction (solitaire), 0.5 = half actions interactive,
-            # 1.0 = all actions affect opponents (very interactive)
+            # Floor: multiplayer games with real decisions are inherently interactive
+            # (playing a card in Crazy 8s constrains what the next player can do,
+            # even though the Go sim doesn't count it as a tracked "interaction")
+            if results.player_count >= 3 and decision_density > 0.2:
+                interaction_ratio = max(interaction_ratio, 0.3)
+
             interaction_frequency = min(1.0, interaction_ratio)
         else:
-            # Fallback to heuristic (current implementation)
+            # Fallback to heuristic
             special_effects_score = min(1.0, len(genome.special_effects) / 3.0)
             trick_based_score = 0.15 if genome.turn_structure.is_trick_based else 0.0
             multi_phase_score = min(0.4, len(genome.turn_structure.phases) / 10.0)
@@ -452,7 +455,7 @@ class FitnessEvaluator:
         has_claim_phase = any(hasattr(p, 'min_cards') and not hasattr(p, 'target')
                              for p in genome.turn_structure.phases)
         if not genome.turn_structure.is_trick_based and (has_play_phase or has_claim_phase):
-            total_fitness *= 1.25  # 25% bonus for non-trick game types
+            total_fitness *= 1.10  # 10% bonus for non-trick game types
 
         # Positional balance penalty: harsh - unbalanced games are unplayable
         if results.total_games > 0 and results.player_count >= 2:
