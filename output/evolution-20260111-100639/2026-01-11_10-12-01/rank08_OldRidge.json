@@ -1,0 +1,99 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "OldRidge",
+  "generation": 10,
+  "setup": {
+    "cards_per_player": 26,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 0
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "LOCATION_SIZE",
+          "operator": "GT",
+          "value": 0,
+          "reference": "hand"
+        },
+        "min_cards": 1,
+        "max_cards": 1,
+        "mandatory": true
+      },
+      {
+        "type": "Unknown"
+      },
+      {
+        "type": "TrickPhase",
+        "lead_suit_required": true,
+        "trump_suit": "DIAMONDS",
+        "high_card_wins": false,
+        "breaking_suit": null
+      },
+      {
+        "type": "TrickPhase",
+        "lead_suit_required": true,
+        "trump_suit": "DIAMONDS",
+        "high_card_wins": true,
+        "breaking_suit": null
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "LOCATION_SIZE",
+          "operator": "GT",
+          "value": 0,
+          "reference": "hand"
+        },
+        "min_cards": 1,
+        "max_cards": 1,
+        "mandatory": true
+      }
+    ],
+    "is_trick_based": false,
+    "tricks_per_hand": null
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "empty_hand",
+      "threshold": null
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 2000,
+  "min_turns": 10,
+  "player_count": 2,
+  "fitness": 0.8540695650133734,
+  "fitness_rank": 8,
+  "fitness_metrics": {
+    "decision_density": 0.65,
+    "comeback_potential": 1.0,
+    "tension_curve": 1.0,
+    "interaction_frequency": 1.0,
+    "rules_complexity": 0.5049999999999999,
+    "session_length": 0.3011555650499132,
+    "skill_vs_luck": 0.8875,
+    "bluffing_depth": 0.8085652167112446,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "skill_evaluation": {
+    "greedy_win_rate": 0.61,
+    "greedy_wins_as_p0": 16,
+    "greedy_wins_as_p1": 45,
+    "mcts_win_rate": 0.94,
+    "mcts_wins_as_p0": 48,
+    "mcts_wins_as_p1": 46,
+    "skill_score": 0.7749999999999999,
+    "first_player_advantage": -0.27,
+    "total_games": 200,
+    "timed_out": false
+  },
+  "skill_rank": 8
+}

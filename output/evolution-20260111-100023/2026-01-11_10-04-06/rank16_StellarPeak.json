@@ -1,0 +1,121 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "StellarPeak",
+  "generation": 247,
+  "setup": {
+    "cards_per_player": 10,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 1
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "LOCATION_SIZE",
+          "operator": "LE",
+          "value": 5,
+          "reference": null
+        },
+        "min_cards": 1,
+        "max_cards": 6,
+        "mandatory": true
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "LOCATION_SIZE",
+          "operator": "EQ",
+          "value": 6,
+          "reference": null
+        },
+        "min_cards": 0,
+        "max_cards": 5,
+        "mandatory": true
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "HAND_SIZE",
+          "operator": "GE",
+          "value": 0,
+          "reference": null
+        },
+        "min_cards": 0,
+        "max_cards": 5,
+        "mandatory": false
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "LOCATION_SIZE",
+          "operator": "LE",
+          "value": 2,
+          "reference": null
+        },
+        "min_cards": 1,
+        "max_cards": 6,
+        "mandatory": true
+      },
+      {
+        "type": "Unknown"
+      }
+    ],
+    "is_trick_based": true,
+    "tricks_per_hand": 13
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "empty_hand",
+      "threshold": null
+    },
+    {
+      "type": "low_score",
+      "threshold": 50
+    },
+    {
+      "type": "empty_hand",
+      "threshold": null
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 903,
+  "min_turns": 52,
+  "player_count": 2,
+  "fitness": 0.855571335917698,
+  "fitness_rank": 16,
+  "fitness_metrics": {
+    "decision_density": 0.65,
+    "comeback_potential": 1.0,
+    "tension_curve": 1.0,
+    "interaction_frequency": 1.0,
+    "rules_complexity": 0.5049999999999999,
+    "session_length": 0.35117777506510417,
+    "skill_vs_luck": 0.9249999999999999,
+    "bluffing_depth": 0.8010711197256598,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "skill_evaluation": {
+    "greedy_win_rate": 0.25,
+    "greedy_wins_as_p0": 10,
+    "greedy_wins_as_p1": 15,
+    "mcts_win_rate": 0.96,
+    "mcts_wins_as_p0": 49,
+    "mcts_wins_as_p1": 47,
+    "skill_score": 0.605,
+    "first_player_advantage": -0.030000000000000027,
+    "total_games": 200,
+    "timed_out": false
+  },
+  "skill_rank": 16
+}

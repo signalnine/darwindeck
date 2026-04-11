@@ -1,0 +1,69 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "LowBadger",
+  "generation": 96,
+  "setup": {
+    "cards_per_player": 24,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 1
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "TrickPhase",
+        "lead_suit_required": true,
+        "trump_suit": "SPADES",
+        "high_card_wins": true,
+        "breaking_suit": "HEARTS"
+      }
+    ],
+    "is_trick_based": true,
+    "tricks_per_hand": 13
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "low_score",
+      "threshold": 10
+    },
+    {
+      "type": "empty_hand",
+      "threshold": null
+    },
+    {
+      "type": "capture_all",
+      "threshold": null
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 413,
+  "min_turns": 52,
+  "player_count": 4,
+  "fitness": 0.7508932170231167,
+  "fitness_rank": 9,
+  "fitness_metrics": {
+    "decision_density": 0.5475471642802395,
+    "comeback_potential": 0.95,
+    "tension_curve": 0.1660600128173828,
+    "interaction_frequency": 1.0,
+    "rules_complexity": 0.8049999999999999,
+    "session_length": 0.051755557590060765,
+    "skill_vs_luck": 0.5235499954223632,
+    "bluffing_depth": 0.0,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "skill_evaluation": {
+    "greedy_win_rate": 0.34,
+    "greedy_wins_as_p0": 21,
+    "greedy_wins_as_p1": 13,
+    "mcts_win_rate": 0.71,
+    "mcts_wins_as_p0": 45,
+    "mcts_wins_as_p1": 26,
+    "skill_score": 0.525,
+    "first_player_advantage": 0.27,
+    "total_games": 200,
+    "timed_out": false
+  },
+  "skill_rank": 9
+}

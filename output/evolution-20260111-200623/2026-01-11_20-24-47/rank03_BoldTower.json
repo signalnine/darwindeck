@@ -1,0 +1,82 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "BoldTower",
+  "generation": 77,
+  "setup": {
+    "cards_per_player": 15,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 1
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "TrickPhase",
+        "lead_suit_required": true,
+        "trump_suit": "SPADES",
+        "high_card_wins": true,
+        "breaking_suit": "HEARTS"
+      }
+    ],
+    "is_trick_based": true,
+    "tricks_per_hand": 13
+  },
+  "special_effects": [
+    {
+      "trigger_rank": "TWO",
+      "effect_type": "SKIP_NEXT",
+      "target": "ALL_OPPONENTS",
+      "value": 1
+    },
+    {
+      "trigger_rank": "FIVE",
+      "effect_type": "FORCE_DISCARD",
+      "target": "NEXT_PLAYER",
+      "value": 1
+    }
+  ],
+  "win_conditions": [
+    {
+      "type": "low_score",
+      "threshold": 11
+    },
+    {
+      "type": "low_score",
+      "threshold": 200
+    },
+    {
+      "type": "high_score",
+      "threshold": 95
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 267,
+  "min_turns": 52,
+  "player_count": 4,
+  "fitness": 0.7639162536948472,
+  "fitness_rank": 3,
+  "fitness_metrics": {
+    "decision_density": 0.5446225379402929,
+    "comeback_potential": 0.95,
+    "tension_curve": 0.17823999786376954,
+    "interaction_frequency": 1.0,
+    "rules_complexity": 0.925,
+    "session_length": 0.053688888549804685,
+    "skill_vs_luck": 0.4442000007629394,
+    "bluffing_depth": 0.0,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "skill_evaluation": {
+    "greedy_win_rate": 0.36,
+    "greedy_wins_as_p0": 22,
+    "greedy_wins_as_p1": 14,
+    "mcts_win_rate": 0.67,
+    "mcts_wins_as_p0": 39,
+    "mcts_wins_as_p1": 28,
+    "skill_score": 0.515,
+    "first_player_advantage": 0.19,
+    "total_games": 200,
+    "timed_out": false
+  },
+  "skill_rank": 3
+}

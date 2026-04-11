@@ -1,0 +1,119 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "JadeBadger",
+  "generation": 61,
+  "setup": {
+    "cards_per_player": 15,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 1
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "LOCATION_SIZE",
+          "operator": "LE",
+          "value": 7,
+          "reference": null
+        },
+        "min_cards": 1,
+        "max_cards": 1,
+        "mandatory": false
+      },
+      {
+        "type": "ClaimPhase",
+        "min_cards": 1,
+        "max_cards": 4,
+        "sequential_rank": true,
+        "allow_challenge": true,
+        "pile_penalty": true
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "LOCATION_SIZE",
+          "operator": "LE",
+          "value": 9,
+          "reference": null
+        },
+        "min_cards": 1,
+        "max_cards": 5,
+        "mandatory": false
+      },
+      {
+        "type": "TrickPhase",
+        "lead_suit_required": true,
+        "trump_suit": null,
+        "high_card_wins": false,
+        "breaking_suit": null
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "LOCATION_SIZE",
+          "operator": "LE",
+          "value": 4,
+          "reference": null
+        },
+        "min_cards": 1,
+        "max_cards": 5,
+        "mandatory": false
+      }
+    ],
+    "is_trick_based": true,
+    "tricks_per_hand": 13
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "low_score",
+      "threshold": 96
+    },
+    {
+      "type": "empty_hand",
+      "threshold": null
+    },
+    {
+      "type": "high_score",
+      "threshold": 50
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 685,
+  "min_turns": 52,
+  "player_count": 2,
+  "fitness": 0.8617672413793104,
+  "fitness_rank": 6,
+  "fitness_metrics": {
+    "decision_density": 0.65,
+    "comeback_potential": 1.0,
+    "tension_curve": 1.0,
+    "interaction_frequency": 1.0,
+    "rules_complexity": 0.5049999999999999,
+    "session_length": 0.23617777506510418,
+    "skill_vs_luck": 0.9249999999999999,
+    "bluffing_depth": 0.8217241379310345,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "skill_evaluation": {
+    "greedy_win_rate": 0.81,
+    "greedy_wins_as_p0": 34,
+    "greedy_wins_as_p1": 47,
+    "mcts_win_rate": 0.98,
+    "mcts_wins_as_p0": 50,
+    "mcts_wins_as_p1": 48,
+    "skill_score": 0.895,
+    "first_player_advantage": -0.10999999999999999,
+    "total_games": 200,
+    "timed_out": false
+  },
+  "skill_rank": 6
+}

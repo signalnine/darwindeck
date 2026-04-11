@@ -1,0 +1,116 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "FleetingSanctum",
+  "generation": 23,
+  "setup": {
+    "cards_per_player": 13,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 0
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "compound",
+          "logic": "OR",
+          "conditions": [
+            {
+              "type": "simple",
+              "condition_type": "HAND_SIZE",
+              "operator": "GE",
+              "value": 3,
+              "reference": null
+            }
+          ]
+        },
+        "min_cards": 0,
+        "max_cards": 10,
+        "mandatory": false
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "compound",
+          "logic": "OR",
+          "conditions": [
+            {
+              "type": "simple",
+              "condition_type": "HAND_SIZE",
+              "operator": "GE",
+              "value": 3,
+              "reference": null
+            }
+          ]
+        },
+        "min_cards": 0,
+        "max_cards": 10,
+        "mandatory": false
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "compound",
+          "logic": "OR",
+          "conditions": [
+            {
+              "type": "simple",
+              "condition_type": "HAND_SIZE",
+              "operator": "GE",
+              "value": 3,
+              "reference": null
+            }
+          ]
+        },
+        "min_cards": 0,
+        "max_cards": 10,
+        "mandatory": false
+      },
+      {
+        "type": "DrawPhase",
+        "source": "DECK",
+        "count": 1,
+        "mandatory": true,
+        "condition": null
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "LOCATION_SIZE",
+          "operator": "GT",
+          "value": 0,
+          "reference": "hand"
+        },
+        "min_cards": 1,
+        "max_cards": 1,
+        "mandatory": true
+      }
+    ],
+    "is_trick_based": true,
+    "tricks_per_hand": 13
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "low_score",
+      "threshold": 100
+    },
+    {
+      "type": "empty_hand",
+      "threshold": null
+    },
+    {
+      "type": "low_score",
+      "threshold": 100
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 390,
+  "min_turns": 52,
+  "player_count": 4
+}

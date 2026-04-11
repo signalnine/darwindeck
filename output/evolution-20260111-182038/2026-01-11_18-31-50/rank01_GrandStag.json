@@ -1,0 +1,65 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "GrandStag",
+  "generation": 45,
+  "setup": {
+    "cards_per_player": 18,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 0
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "TrickPhase",
+        "lead_suit_required": true,
+        "trump_suit": "SPADES",
+        "high_card_wins": true,
+        "breaking_suit": "HEARTS"
+      }
+    ],
+    "is_trick_based": true,
+    "tricks_per_hand": 13
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "low_score",
+      "threshold": 13
+    },
+    {
+      "type": "first_to_score",
+      "threshold": 50
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 71,
+  "min_turns": 52,
+  "player_count": 4,
+  "fitness": 0.7521892804941553,
+  "fitness_rank": 1,
+  "fitness_metrics": {
+    "decision_density": 0.5388328064292844,
+    "comeback_potential": 0.96,
+    "tension_curve": 0.1793599967956543,
+    "interaction_frequency": 1.0,
+    "rules_complexity": 0.8049999999999999,
+    "session_length": 0.053866666158040366,
+    "skill_vs_luck": 0.5158000011444092,
+    "bluffing_depth": 0.0,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "skill_evaluation": {
+    "greedy_win_rate": 0.29,
+    "greedy_wins_as_p0": 15,
+    "greedy_wins_as_p1": 14,
+    "mcts_win_rate": 0.62,
+    "mcts_wins_as_p0": 36,
+    "mcts_wins_as_p1": 26,
+    "skill_score": 0.45499999999999996,
+    "first_player_advantage": 0.10999999999999999,
+    "total_games": 200,
+    "timed_out": false
+  },
+  "skill_rank": 1
+}

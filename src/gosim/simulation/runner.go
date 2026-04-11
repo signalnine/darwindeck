@@ -92,14 +92,15 @@ func RunBatch(genome *engine.Genome, numGames int, aiType AIPlayerType, mctsIter
 
 	for i := 0; i < numGames; i++ {
 		gameSeed := rng.Uint64()
-		results[i] = RunSingleGame(genome, aiType, mctsIterations, gameSeed)
+		results[i] = RunSingleGame(genome, aiType, mctsIterations, gameSeed, i)
 	}
 
 	return aggregateResults(results)
 }
 
-// RunSingleGame plays one complete game to termination
-func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations int, seed uint64) GameResult {
+// RunSingleGame plays one complete game to termination.
+// gameIndex is used to rotate the starting player for positional balance.
+func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations int, seed uint64, gameIndex int) GameResult {
 	start := time.Now()
 	var metrics GameMetrics
 
@@ -153,6 +154,11 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 	if startingChips > 0 {
 		state.InitializeChips(startingChips)
 	}
+
+	// Rotate starting player for positional balance
+	startPlayer := uint8(gameIndex % numPlayers)
+	state.CurrentPlayer = startPlayer
+	state.TrickLeader = startPlayer
 
 	// Initialize tension tracking
 	detector := engine.SelectLeaderDetector(genome)
@@ -315,14 +321,14 @@ func RunBatchAsymmetric(genome *engine.Genome, numGames int, p0AIType AIPlayerTy
 
 	for i := 0; i < numGames; i++ {
 		gameSeed := rng.Uint64()
-		results[i] = RunSingleGameAsymmetric(genome, p0AIType, p1AIType, mctsIterations, gameSeed)
+		results[i] = RunSingleGameAsymmetric(genome, p0AIType, p1AIType, mctsIterations, gameSeed, i)
 	}
 
 	return aggregateResults(results)
 }
 
 // RunSingleGameAsymmetric plays one game with different AI for each player.
-func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIType AIPlayerType, mctsIterations int, seed uint64) GameResult {
+func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIType AIPlayerType, mctsIterations int, seed uint64, gameIndex int) GameResult {
 	start := time.Now()
 	var metrics GameMetrics
 
@@ -370,6 +376,11 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 	if startingChips > 0 {
 		state.InitializeChips(startingChips)
 	}
+
+	// Rotate starting player for positional balance
+	startPlayer := uint8(gameIndex % numPlayers)
+	state.CurrentPlayer = startPlayer
+	state.TrickLeader = startPlayer
 
 	// Initialize tension tracking
 	detector := engine.SelectLeaderDetector(genome)

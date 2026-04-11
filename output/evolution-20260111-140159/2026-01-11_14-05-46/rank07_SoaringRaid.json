@@ -1,0 +1,65 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "SoaringRaid",
+  "generation": 4,
+  "setup": {
+    "cards_per_player": 13,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 1
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "TrickPhase",
+        "lead_suit_required": true,
+        "trump_suit": null,
+        "high_card_wins": true,
+        "breaking_suit": "HEARTS"
+      }
+    ],
+    "is_trick_based": true,
+    "tricks_per_hand": 13
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "low_score",
+      "threshold": 13
+    },
+    {
+      "type": "all_hands_empty",
+      "threshold": 0
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 189,
+  "min_turns": 52,
+  "player_count": 4,
+  "fitness": 0.7476827693167482,
+  "fitness_rank": 7,
+  "fitness_metrics": {
+    "decision_density": 0.5384476901920179,
+    "comeback_potential": 0.9299999999999999,
+    "tension_curve": 0.1832800064086914,
+    "interaction_frequency": 1.0,
+    "rules_complexity": 0.8049999999999999,
+    "session_length": 0.054488889906141494,
+    "skill_vs_luck": 0.5233999977111816,
+    "bluffing_depth": 0.0,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "skill_evaluation": {
+    "greedy_win_rate": 0.36,
+    "greedy_wins_as_p0": 23,
+    "greedy_wins_as_p1": 13,
+    "mcts_win_rate": 0.7,
+    "mcts_wins_as_p0": 42,
+    "mcts_wins_as_p1": 28,
+    "skill_score": 0.53,
+    "first_player_advantage": 0.24000000000000005,
+    "total_games": 200,
+    "timed_out": false
+  },
+  "skill_rank": 7
+}

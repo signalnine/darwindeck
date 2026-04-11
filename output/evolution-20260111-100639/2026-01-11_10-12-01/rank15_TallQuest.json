@@ -1,0 +1,99 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "TallQuest",
+  "generation": 15,
+  "setup": {
+    "cards_per_player": 25,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 0
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "Unknown"
+      },
+      {
+        "type": "TrickPhase",
+        "lead_suit_required": true,
+        "trump_suit": "HEARTS",
+        "high_card_wins": true,
+        "breaking_suit": null
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "LOCATION_SIZE",
+          "operator": "GT",
+          "value": 2,
+          "reference": "hand"
+        },
+        "min_cards": 1,
+        "max_cards": 1,
+        "mandatory": true
+      },
+      {
+        "type": "TrickPhase",
+        "lead_suit_required": true,
+        "trump_suit": "HEARTS",
+        "high_card_wins": true,
+        "breaking_suit": null
+      },
+      {
+        "type": "PlayPhase",
+        "target": "TABLEAU",
+        "valid_play_condition": {
+          "type": "simple",
+          "condition_type": "LOCATION_SIZE",
+          "operator": "LE",
+          "value": 5,
+          "reference": null
+        },
+        "min_cards": 0,
+        "max_cards": 6,
+        "mandatory": true
+      }
+    ],
+    "is_trick_based": false,
+    "tricks_per_hand": null
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "empty_hand",
+      "threshold": null
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 2000,
+  "min_turns": 10,
+  "player_count": 2,
+  "fitness": 0.8531616733649983,
+  "fitness_rank": 15,
+  "fitness_metrics": {
+    "decision_density": 0.65,
+    "comeback_potential": 1.0,
+    "tension_curve": 1.0,
+    "interaction_frequency": 1.0,
+    "rules_complexity": 0.5049999999999999,
+    "session_length": 0.2770888943142361,
+    "skill_vs_luck": 0.8875,
+    "bluffing_depth": 0.8055389112166607,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "skill_evaluation": {
+    "greedy_win_rate": 0.55,
+    "greedy_wins_as_p0": 20,
+    "greedy_wins_as_p1": 35,
+    "mcts_win_rate": 0.94,
+    "mcts_wins_as_p0": 46,
+    "mcts_wins_as_p1": 48,
+    "skill_score": 0.745,
+    "first_player_advantage": -0.16999999999999993,
+    "total_games": 200,
+    "timed_out": false
+  },
+  "skill_rank": 15
+}

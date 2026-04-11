@@ -444,7 +444,16 @@ class FitnessEvaluator:
 
         # No need to renormalize - weights already sum to 1.0
 
-        # Positional balance penalty: penalize games where seat position determines outcome
+        # Diversity bonus: slight bonus for non-trick phase types
+        # This prevents evolution from converging on trick-taking monoculture
+        has_play_phase = any(hasattr(p, 'target') and not hasattr(p, 'lead_suit_required')
+                           for p in genome.turn_structure.phases)
+        has_claim_phase = any(hasattr(p, 'min_cards') and not hasattr(p, 'target')
+                             for p in genome.turn_structure.phases)
+        if not genome.turn_structure.is_trick_based and (has_play_phase or has_claim_phase):
+            total_fitness *= 1.05  # 5% bonus for non-trick game types
+
+        # Positional balance penalty: harsh - unbalanced games are unplayable
         if results.total_games > 0 and results.player_count >= 2:
             expected_rate = 1.0 / results.player_count
             max_pos_deviation = 0.0
@@ -453,8 +462,9 @@ class FitnessEvaluator:
                 deviation = abs(actual_rate - expected_rate)
                 max_pos_deviation = max(max_pos_deviation, deviation)
 
-            if max_pos_deviation > 0.10:
-                position_penalty = max(0.5, 1.0 - (max_pos_deviation - 0.10) * 2.0)
+            if max_pos_deviation > 0.08:
+                # Harsh: linear from 1.0 at 8% to 0.0 at 30%
+                position_penalty = max(0.0, 1.0 - (max_pos_deviation - 0.08) / 0.22)
                 total_fitness *= position_penalty
 
         return FitnessMetrics(

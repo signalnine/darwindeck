@@ -1,0 +1,69 @@
+{
+  "schema_version": "1.0",
+  "genome_id": "BronzePact",
+  "generation": 19,
+  "setup": {
+    "cards_per_player": 15,
+    "initial_deck": "standard_52",
+    "initial_discard_count": 0
+  },
+  "turn_structure": {
+    "phases": [
+      {
+        "type": "TrickPhase",
+        "lead_suit_required": true,
+        "trump_suit": "SPADES",
+        "high_card_wins": true,
+        "breaking_suit": "HEARTS"
+      }
+    ],
+    "is_trick_based": true,
+    "tricks_per_hand": 13
+  },
+  "special_effects": [],
+  "win_conditions": [
+    {
+      "type": "low_score",
+      "threshold": 11
+    },
+    {
+      "type": "all_hands_empty",
+      "threshold": 0
+    },
+    {
+      "type": "low_score",
+      "threshold": 500
+    }
+  ],
+  "scoring_rules": [],
+  "max_turns": 211,
+  "min_turns": 52,
+  "player_count": 4,
+  "fitness": 0.7482167000001487,
+  "fitness_rank": 14,
+  "fitness_metrics": {
+    "decision_density": 0.5422269985137542,
+    "comeback_potential": 0.9299999999999999,
+    "tension_curve": 0.1866400032043457,
+    "interaction_frequency": 1.0,
+    "rules_complexity": 0.8049999999999999,
+    "session_length": 0.05502222273084852,
+    "skill_vs_luck": 0.5221999988555908,
+    "bluffing_depth": 0.0,
+    "games_simulated": 100,
+    "valid": true
+  },
+  "skill_evaluation": {
+    "greedy_win_rate": 0.49,
+    "greedy_wins_as_p0": 26,
+    "greedy_wins_as_p1": 23,
+    "mcts_win_rate": 0.64,
+    "mcts_wins_as_p0": 39,
+    "mcts_wins_as_p1": 25,
+    "skill_score": 0.565,
+    "first_player_advantage": 0.17000000000000004,
+    "total_games": 200,
+    "timed_out": false
+  },
+  "skill_rank": 14
+}
