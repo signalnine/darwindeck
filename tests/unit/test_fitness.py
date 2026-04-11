@@ -92,3 +92,25 @@ def test_trick_based_interaction_frequency_without_instrumentation() -> None:
     # With the reduced trick bonus (0.15 instead of 0.3), the heuristic
     # interaction_frequency should be below 0.5
     assert metrics.interaction_frequency < 0.5
+
+
+def test_skill_vs_luck_heuristic_can_reach_high_values() -> None:
+    """A well-designed game with real decision data should reach skill_vs_luck >= 0.75."""
+    evaluator = FitnessEvaluator(style='balanced')
+    results = SimulationResults(
+        total_games=100,
+        wins=(50, 50),
+        player_count=2,
+        draws=0,
+        avg_turns=60,
+        errors=0,
+        total_decisions=300,
+        total_valid_moves=900,
+        forced_decisions=30,
+        total_hand_size=1200,
+        total_interactions=150,
+        total_actions=600,
+    )
+    genome = create_war_genome()
+    metrics = evaluator.evaluate(genome, results)
+    assert metrics.skill_vs_luck >= 0.75
