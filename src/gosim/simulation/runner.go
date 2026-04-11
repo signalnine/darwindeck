@@ -229,10 +229,10 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 	if maxTurns == 0 || maxTurns > 10000 {
 		maxTurns = 10000 // Clamp degenerate MaxTurns values
 	}
-	deadline := start.Add(2 * time.Second) // Hard 2s wall-clock timeout per game
+	deadline := start.Add(500 * time.Millisecond) // Hard 500ms wall-clock timeout per game
 	for state.TurnNumber < maxTurns {
 		// Wall-clock timeout: catch all infinite loop paths
-		if state.TurnNumber%50 == 0 && time.Now().After(deadline) {
+		if state.TurnNumber%10 == 0 && time.Now().After(deadline) {
 			return GameResult{
 				WinnerID:    -1,
 				WinningTeam: -1,
@@ -612,9 +612,9 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 	if maxTurns == 0 || maxTurns > 10000 {
 		maxTurns = 10000
 	}
-	deadlineAsym := start.Add(2 * time.Second)
+	deadlineAsym := start.Add(500 * time.Millisecond)
 	for state.TurnNumber < maxTurns {
-		if state.TurnNumber%50 == 0 && time.Now().After(deadlineAsym) {
+		if state.TurnNumber%10 == 0 && time.Now().After(deadlineAsym) {
 			return GameResult{
 				WinnerID:    -1,
 				WinningTeam: -1,
