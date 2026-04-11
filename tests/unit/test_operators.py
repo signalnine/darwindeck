@@ -396,3 +396,16 @@ def test_add_betting_phase_min_bet_valid():
     )
     # starting_chips is 5, so min_bet should be at most 5
     assert betting_phase.min_bet <= genome.setup.starting_chips or betting_phase.min_bet == 1
+
+
+def test_tweak_parameter_enforces_deck_size_constraint():
+    from darwindeck.evolution.operators import validate_card_count
+    from darwindeck.genome.examples import create_hearts_genome
+    from dataclasses import replace
+    genome = create_hearts_genome()
+    invalid_setup = replace(genome.setup, cards_per_player=15)
+    invalid_genome = replace(genome, setup=invalid_setup)
+    assert not validate_card_count(invalid_genome)
+    valid_setup = replace(genome.setup, cards_per_player=10)
+    valid_genome = replace(genome, setup=valid_setup)
+    assert validate_card_count(valid_genome)

@@ -15,6 +15,13 @@ from darwindeck.genome.schema import (
 from darwindeck.genome.conditions import Condition, ConditionType, Operator
 from darwindeck.evolution.naming import generate_name
 
+STANDARD_DECK_SIZE = 52
+
+
+def validate_card_count(genome: GameGenome, max_players: int = 4) -> bool:
+    """Check cards_per_player * max_players fits in the deck."""
+    return genome.setup.cards_per_player * max_players <= STANDARD_DECK_SIZE
+
 
 class MutationOperator(ABC):
     """Base class for mutation operators."""
@@ -80,8 +87,11 @@ class TweakParameterMutation(MutationOperator):
         if choice == 'cards_per_player':
             # Adjust ±3 cards, keep in range [3, 26]
             delta = random.randint(-3, 3)
+            max_cards = STANDARD_DECK_SIZE // 4  # Conservative: 4 players max
             new_value = max(3, min(26, genome.setup.cards_per_player + delta))
             new_setup = replace(genome.setup, cards_per_player=new_value)
+            if new_setup.cards_per_player > max_cards:
+                new_setup = replace(new_setup, cards_per_player=max_cards)
             return replace(genome, setup=new_setup, generation=genome.generation + 1)
 
         elif choice == 'max_turns':
