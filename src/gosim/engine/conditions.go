@@ -305,6 +305,9 @@ func calculateCompoundConditionSize(conditionBytes []byte) int {
 	}
 
 	count := binary.BigEndian.Uint32(conditionBytes[1:5])
+	if count > 100 {
+		count = 100 // Clamp degenerate nested condition count
+	}
 	size := 5 // header
 
 	offset := 5
