@@ -229,33 +229,47 @@ def evaluate_genome_standalone(
     return evaluator.evaluate(genome, results, use_mcts=use_mcts)
 
 
+_ZERO_FITNESS = FitnessMetrics(
+    decision_density=0.0, comeback_potential=0.0, tension_curve=0.0,
+    interaction_frequency=0.0, rules_complexity=0.0, session_length=0.0,
+    skill_vs_luck=0.0, bluffing_depth=0.0, betting_engagement=0.0,
+    total_fitness=0.0, games_simulated=0, valid=False,
+)
+
+
 def _serial_evaluate_task(
     task: EvaluationTask,
     evaluator: FitnessEvaluator,
     simulator: GoSimulator,
-    coherence_checker: SemanticCoherenceChecker
+    coherence_checker: SemanticCoherenceChecker,
+    timeout_sec: float = 10.0
 ) -> FitnessMetrics:
-    """Evaluate a single genome (serial, in main process)."""
+    """Evaluate a single genome (serial, in main process) with timeout."""
+    import signal
+
     validation_errors = GenomeValidator.validate(task.genome)
     if validation_errors:
-        return FitnessMetrics(
-            decision_density=0.0, comeback_potential=0.0, tension_curve=0.0,
-            interaction_frequency=0.0, rules_complexity=0.0, session_length=0.0,
-            skill_vs_luck=0.0, bluffing_depth=0.0, betting_engagement=0.0,
-            total_fitness=0.0, games_simulated=0, valid=False,
-        )
+        return _ZERO_FITNESS
 
     coherence_result = coherence_checker.check(task.genome)
     if not coherence_result.coherent:
-        return FitnessMetrics(
-            decision_density=0.0, comeback_potential=0.0, tension_curve=0.0,
-            interaction_frequency=0.0, rules_complexity=0.0, session_length=0.0,
-            skill_vs_luck=0.0, bluffing_depth=0.0, betting_engagement=0.0,
-            total_fitness=0.0, games_simulated=0, valid=False,
-        )
+        return _ZERO_FITNESS
 
-    results = simulator.simulate(task.genome, num_games=task.num_simulations, use_mcts=task.use_mcts)
-    return evaluator.evaluate(task.genome, results, use_mcts=task.use_mcts)
+    # Timeout protection: some genomes cause Go simulator to hang
+    def _timeout_handler(signum, frame):
+        raise TimeoutError("Genome evaluation timed out")
+
+    old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
+    signal.alarm(int(timeout_sec))
+    try:
+        results = simulator.simulate(task.genome, num_games=task.num_simulations, use_mcts=task.use_mcts)
+        signal.alarm(0)
+        return evaluator.evaluate(task.genome, results, use_mcts=task.use_mcts)
+    except TimeoutError:
+        return _ZERO_FITNESS
+    finally:
+        signal.signal(signal.SIGALRM, old_handler)
+        signal.alarm(0)
 
 
 class ParallelFitnessEvaluator:
