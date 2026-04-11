@@ -229,12 +229,40 @@ def evaluate_genome_standalone(
     return evaluator.evaluate(genome, results, use_mcts=use_mcts)
 
 
-class ParallelFitnessEvaluator:
-    """Evaluates game genomes.
+def _serial_evaluate_task(
+    task: EvaluationTask,
+    evaluator: FitnessEvaluator,
+    simulator: GoSimulator,
+    coherence_checker: SemanticCoherenceChecker
+) -> FitnessMetrics:
+    """Evaluate a single genome (serial, in main process)."""
+    validation_errors = GenomeValidator.validate(task.genome)
+    if validation_errors:
+        return FitnessMetrics(
+            decision_density=0.0, comeback_potential=0.0, tension_curve=0.0,
+            interaction_frequency=0.0, rules_complexity=0.0, session_length=0.0,
+            skill_vs_luck=0.0, bluffing_depth=0.0, betting_engagement=0.0,
+            total_fitness=0.0, games_simulated=0, valid=False,
+        )
 
-    Due to Python 3.13 + CGo compatibility issues, this evaluator runs
-    serially in the main process. The Go engine itself runs simulations
-    in parallel internally, providing good throughput.
+    coherence_result = coherence_checker.check(task.genome)
+    if not coherence_result.coherent:
+        return FitnessMetrics(
+            decision_density=0.0, comeback_potential=0.0, tension_curve=0.0,
+            interaction_frequency=0.0, rules_complexity=0.0, session_length=0.0,
+            skill_vs_luck=0.0, bluffing_depth=0.0, betting_engagement=0.0,
+            total_fitness=0.0, games_simulated=0, valid=False,
+        )
+
+    results = simulator.simulate(task.genome, num_games=task.num_simulations, use_mcts=task.use_mcts)
+    return evaluator.evaluate(task.genome, results, use_mcts=task.use_mcts)
+
+
+class ParallelFitnessEvaluator:
+    """Evaluates game genomes in parallel using process pool.
+
+    Each worker process gets its own GoSimulator and FitnessEvaluator.
+    Uses spawn context with maxtasksperchild for CGo stability.
     """
 
     def __init__(
@@ -268,10 +296,10 @@ class ParallelFitnessEvaluator:
         num_simulations: int = 100,
         use_mcts: bool = False
     ) -> List[FitnessMetrics]:
-        """Evaluate multiple genomes serially.
+        """Evaluate multiple genomes in parallel using process pool.
 
-        Due to Python 3.13 multiprocessing + CGo compatibility issues,
-        evaluation runs serially. The Go engine provides internal parallelism.
+        Each worker gets its own GoSimulator and FitnessEvaluator.
+        Uses spawn context for CGo compatibility.
 
         Args:
             genomes: List of game genomes to evaluate
@@ -284,35 +312,15 @@ class ParallelFitnessEvaluator:
         if not genomes:
             return []
 
+        tasks = [
+            EvaluationTask(genome, num_simulations, use_mcts)
+            for genome in genomes
+        ]
+
+        # Serial evaluation: Python 3.13 multiprocessing hangs with CGo (both
+        # spawn and fork contexts). Go engine parallelizes internally via goroutines.
         results: List[FitnessMetrics] = []
-        for genome in genomes:
-            # STRUCTURAL VALIDATION
-            validation_errors = GenomeValidator.validate(genome)
-            if validation_errors:
-                results.append(FitnessMetrics(
-                    decision_density=0.0, comeback_potential=0.0, tension_curve=0.0,
-                    interaction_frequency=0.0, rules_complexity=0.0, session_length=0.0,
-                    skill_vs_luck=0.0, bluffing_depth=0.0, betting_engagement=0.0,
-                    total_fitness=0.0, games_simulated=0, valid=False,
-                ))
-                continue
-
-            # SEMANTIC COHERENCE
-            coherence_result = self._coherence_checker.check(genome)
-            if not coherence_result.coherent:
-                results.append(FitnessMetrics(
-                    decision_density=0.0, comeback_potential=0.0, tension_curve=0.0,
-                    interaction_frequency=0.0, rules_complexity=0.0, session_length=0.0,
-                    skill_vs_luck=0.0, bluffing_depth=0.0, betting_engagement=0.0,
-                    total_fitness=0.0, games_simulated=0, valid=False,
-                ))
-                continue
-
-            # Run simulations
-            sim_results = self._simulator.simulate(
-                genome, num_games=num_simulations, use_mcts=use_mcts
-            )
-            metrics = self._evaluator.evaluate(genome, sim_results, use_mcts=use_mcts)
-            results.append(metrics)
-
+        for task in tasks:
+            result = _serial_evaluate_task(task, self._evaluator, self._simulator, self._coherence_checker)
+            results.append(result)
         return results
