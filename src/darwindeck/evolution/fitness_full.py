@@ -458,6 +458,8 @@ class FitnessEvaluator:
                              for p in genome.turn_structure.phases)
         if not genome.turn_structure.is_trick_based and (has_play_phase or has_claim_phase):
             total_fitness *= 1.10  # 10% bonus for non-trick game types
+        elif genome.turn_structure.is_trick_based and self.style == 'party':
+            total_fitness *= 0.60  # 40% penalty: trick-taking has structural FPA in 4p
 
         # Positional balance penalty: harsh - unbalanced games are unplayable
         if results.total_games > 0 and results.player_count >= 2:
