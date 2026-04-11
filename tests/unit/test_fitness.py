@@ -114,3 +114,32 @@ def test_skill_vs_luck_heuristic_can_reach_high_values() -> None:
     genome = create_war_genome()
     metrics = evaluator.evaluate(genome, results)
     assert metrics.skill_vs_luck >= 0.75
+
+
+def test_rules_complexity_not_inflated_by_trick_phase_effects():
+    """Trick-based games should not get inflated rules_complexity from special effects."""
+    evaluator = FitnessEvaluator(style='balanced')
+    results = SimulationResults(
+        total_games=100, wins=(50, 50), player_count=2, draws=0,
+        avg_turns=40, errors=0,
+        total_decisions=200, total_valid_moves=400, forced_decisions=50,
+        total_hand_size=800, total_interactions=100, total_actions=400,
+    )
+    from darwindeck.genome.examples import create_hearts_genome
+    from dataclasses import replace as dc_replace
+    from darwindeck.genome.schema import SpecialEffect, EffectType, TargetSelector, Rank
+
+    base_genome = create_hearts_genome()
+    no_effects = dc_replace(base_genome, special_effects=())
+    no_effects_m = evaluator.evaluate(no_effects, results)
+
+    effects = (
+        SpecialEffect(Rank.ACE, EffectType.SKIP_NEXT, TargetSelector.NEXT_PLAYER),
+        SpecialEffect(Rank.KING, EffectType.DRAW_CARDS, TargetSelector.NEXT_PLAYER, 2),
+        SpecialEffect(Rank.QUEEN, EffectType.REVERSE_DIRECTION, TargetSelector.ALL_OPPONENTS),
+    )
+    with_effects = dc_replace(base_genome, special_effects=effects)
+    with_effects_m = evaluator.evaluate(with_effects, results)
+
+    diff = with_effects_m.rules_complexity - no_effects_m.rules_complexity
+    assert diff < 0.1, f"Inert effects inflated rules_complexity by {diff:.3f}"

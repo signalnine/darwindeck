@@ -304,11 +304,16 @@ class FitnessEvaluator:
         special_effects_count = len(genome.special_effects)
         scoring_rules_count = len(genome.scoring_rules)
 
+        # Discount effects for trick-based games where they are functionally inert
+        effective_effects_count = special_effects_count
+        if genome.turn_structure.is_trick_based:
+            effective_effects_count = 0  # Effects don't interact with TrickPhase
+
         # Reward 1-3 special effects, neutral at 0, penalty beyond 5
         effects_score = min(1.0, max(0.0, (
             0.7 +  # Baseline for no effects
-            (special_effects_count / 3.0) * 0.5 -  # Reward up to 3 effects
-            max(0.0, (special_effects_count - 3) * 0.1)  # Penalty beyond 3
+            (effective_effects_count / 3.0) * 0.5 -  # Reward up to 3 effects
+            max(0.0, (effective_effects_count - 3) * 0.1)  # Penalty beyond 3
         )))
 
         # Combine: 60% mechanical simplicity, 40% gameplay richness
