@@ -409,3 +409,80 @@ def test_tweak_parameter_enforces_deck_size_constraint():
     valid_setup = replace(genome.setup, cards_per_player=10)
     valid_genome = replace(genome, setup=valid_setup)
     assert validate_card_count(valid_genome)
+
+
+# --- Crossover tests ---
+
+
+def test_crossover_can_swap_win_conditions():
+    """Crossover should sometimes produce offspring with mixed win conditions."""
+    from darwindeck.evolution.operators import CrossoverOperator
+    from darwindeck.genome.examples import create_war_genome, create_hearts_genome
+
+    crossover = CrossoverOperator(probability=1.0)
+    parent1 = create_war_genome()
+    parent2 = create_hearts_genome()
+
+    swapped = False
+    for _ in range(50):
+        child1, child2 = crossover.crossover(parent1, parent2)
+        if child1.win_conditions != parent1.win_conditions:
+            swapped = True
+            break
+    assert swapped, "Crossover never swapped win conditions in 50 attempts"
+
+
+def test_crossover_can_swap_special_effects():
+    """Crossover should sometimes produce offspring with swapped special effects."""
+    from darwindeck.evolution.operators import CrossoverOperator
+    from darwindeck.genome.examples import create_war_genome, create_uno_genome
+
+    crossover = CrossoverOperator(probability=1.0)
+    parent1 = create_war_genome()   # no effects
+    parent2 = create_uno_genome()   # has effects
+
+    swapped = False
+    for _ in range(50):
+        child1, child2 = crossover.crossover(parent1, parent2)
+        if child1.special_effects != parent1.special_effects:
+            swapped = True
+            break
+    assert swapped, "Crossover never swapped special effects in 50 attempts"
+
+
+def test_crossover_can_swap_setup():
+    """Crossover should sometimes produce offspring with swapped setup rules."""
+    from darwindeck.evolution.operators import CrossoverOperator
+    from darwindeck.genome.examples import create_war_genome, create_crazy_eights_genome
+
+    crossover = CrossoverOperator(probability=1.0)
+    parent1 = create_war_genome()          # 26 cards_per_player
+    parent2 = create_crazy_eights_genome() # 10 cards_per_player
+
+    swapped = False
+    for _ in range(50):
+        child1, child2 = crossover.crossover(parent1, parent2)
+        if child1.setup != parent1.setup:
+            swapped = True
+            break
+    assert swapped, "Crossover never swapped setup rules in 50 attempts"
+
+
+def test_crossover_preserves_components_when_not_swapped():
+    """When crossover does not swap a component, it stays with its original parent."""
+    from darwindeck.evolution.operators import CrossoverOperator
+    from darwindeck.genome.examples import create_war_genome, create_hearts_genome
+
+    crossover = CrossoverOperator(probability=1.0)
+    parent1 = create_war_genome()
+    parent2 = create_hearts_genome()
+
+    # Run many times and check that each child's win_conditions comes from one parent
+    for _ in range(20):
+        child1, child2 = crossover.crossover(parent1, parent2)
+        assert child1.win_conditions in (parent1.win_conditions, parent2.win_conditions)
+        assert child2.win_conditions in (parent1.win_conditions, parent2.win_conditions)
+        assert child1.special_effects in (parent1.special_effects, parent2.special_effects)
+        assert child2.special_effects in (parent1.special_effects, parent2.special_effects)
+        assert child1.setup in (parent1.setup, parent2.setup)
+        assert child2.setup in (parent1.setup, parent2.setup)

@@ -1024,11 +1024,30 @@ class CrossoverOperator:
         offspring1_phases = offspring1_phases[:5]
         offspring2_phases = offspring2_phases[:5]
 
+        # Component-level crossover
+        child1_win = parent1.win_conditions
+        child2_win = parent2.win_conditions
+        if random.random() < 0.5:
+            child1_win, child2_win = child2_win, child1_win
+
+        child1_effects = parent1.special_effects
+        child2_effects = parent2.special_effects
+        if random.random() < 0.5:
+            child1_effects, child2_effects = child2_effects, child1_effects
+
+        child1_setup = parent1.setup
+        child2_setup = parent2.setup
+        if random.random() < 0.5:
+            child1_setup, child2_setup = child2_setup, child1_setup
+
         # Create offspring genomes with new random names
         # Inherit from parent1
         offspring1 = replace(
             parent1,
             turn_structure=replace(parent1.turn_structure, phases=tuple(offspring1_phases)),
+            win_conditions=child1_win,
+            special_effects=child1_effects,
+            setup=child1_setup,
             generation=parent1.generation + 1,
             genome_id=generate_name()
         )
@@ -1037,6 +1056,9 @@ class CrossoverOperator:
         offspring2 = replace(
             parent2,
             turn_structure=replace(parent2.turn_structure, phases=tuple(offspring2_phases)),
+            win_conditions=child2_win,
+            special_effects=child2_effects,
+            setup=child2_setup,
             generation=parent2.generation + 1,
             genome_id=generate_name()
         )
