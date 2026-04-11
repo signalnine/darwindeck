@@ -5,7 +5,7 @@ from darwindeck.evolution.fitness import CheapFitnessMetrics, calculate_cheap_me
 from darwindeck.evolution.fitness_full import FitnessEvaluator, SimulationResults
 from darwindeck.simulation.engine import GameEngine, GameResult
 from darwindeck.simulation.players import RandomPlayer
-from darwindeck.genome.examples import create_war_genome
+from darwindeck.genome.examples import create_war_genome, create_hearts_genome
 
 
 def test_calculate_game_length() -> None:
@@ -70,3 +70,25 @@ def test_tension_curve_with_real_data() -> None:
     # margin_score = 1.0 - 0.1 = 0.9
     # tension = 1.0*0.4 + 0.8*0.4 + 0.9*0.2 = 0.4 + 0.32 + 0.18 = 0.9
     assert metrics.tension_curve > 0.85
+
+
+def test_trick_based_interaction_frequency_without_instrumentation() -> None:
+    """Trick-based games should not get a free high interaction score from heuristic alone."""
+    genome = create_hearts_genome()
+
+    # Simulate results with no instrumentation data (total_actions=0)
+    results = SimulationResults(
+        total_games=100,
+        wins=(25, 25, 25, 25),
+        player_count=4,
+        draws=0,
+        avg_turns=52,
+        errors=0,
+    )
+
+    evaluator = FitnessEvaluator()
+    metrics = evaluator.evaluate(genome, results)
+
+    # With the reduced trick bonus (0.15 instead of 0.3), the heuristic
+    # interaction_frequency should be below 0.5
+    assert metrics.interaction_frequency < 0.5
