@@ -224,9 +224,23 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 	detector := engine.SelectLeaderDetector(genome)
 	tensionMetrics := engine.NewTensionMetrics(int(state.NumPlayers))
 
-	// Game loop with turn limit protection
+	// Game loop with turn limit AND wall-clock timeout protection
 	maxTurns := genome.Header.MaxTurns
+	if maxTurns == 0 || maxTurns > 10000 {
+		maxTurns = 10000 // Clamp degenerate MaxTurns values
+	}
+	deadline := start.Add(2 * time.Second) // Hard 2s wall-clock timeout per game
 	for state.TurnNumber < maxTurns {
+		// Wall-clock timeout: catch all infinite loop paths
+		if state.TurnNumber%50 == 0 && time.Now().After(deadline) {
+			return GameResult{
+				WinnerID:    -1,
+				WinningTeam: -1,
+				TurnCount:   state.TurnNumber,
+				DurationNs:  uint64(time.Since(start).Nanoseconds()),
+				Error:       "timeout",
+			}
+		}
 		// Check win conditions
 		winner := engine.CheckWinConditions(state, genome)
 		if winner >= 0 {
@@ -595,7 +609,20 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 	tensionMetrics := engine.NewTensionMetrics(int(state.NumPlayers))
 
 	maxTurns := genome.Header.MaxTurns
+	if maxTurns == 0 || maxTurns > 10000 {
+		maxTurns = 10000
+	}
+	deadlineAsym := start.Add(2 * time.Second)
 	for state.TurnNumber < maxTurns {
+		if state.TurnNumber%50 == 0 && time.Now().After(deadlineAsym) {
+			return GameResult{
+				WinnerID:    -1,
+				WinningTeam: -1,
+				TurnCount:   state.TurnNumber,
+				DurationNs:  uint64(time.Since(start).Nanoseconds()),
+				Error:       "timeout",
+			}
+		}
 		winner := engine.CheckWinConditions(state, genome)
 		if winner >= 0 {
 			tensionMetrics.Finalize(int(winner))
