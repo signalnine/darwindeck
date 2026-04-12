@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"github.com/darwindeck/darwindeck/pkg/evolution"
@@ -70,6 +71,7 @@ func cmdEvolve(args []string) {
 	topN := fs.Int("top", 20, "save top N genomes")
 	outDir := fs.String("output", "", "output directory (default: auto-generated)")
 	verbose := fs.Bool("verbose", false, "verbose output")
+	algorithm := fs.String("algorithm", "hybrid", "algorithm: baseline, hybrid (novelty+sharing), mapelites")
 
 	fs.Parse(args)
 
@@ -91,29 +93,53 @@ func cmdEvolve(args []string) {
 	allSeeds := getAllSeeds()
 
 	fmt.Printf("DarwinDeck v2 Evolution\n")
+	fmt.Printf("  Algorithm: %s\n", *algorithm)
 	fmt.Printf("  Population: %d\n", config.PopulationSize)
 	fmt.Printf("  Generations: %d\n", config.Generations)
 	fmt.Printf("  Workers: %d\n", config.Workers)
 	fmt.Printf("  Seeds: %d games across 3 skeletons\n", len(allSeeds))
 	fmt.Printf("  Output: %s\n\n", config.OutputDir)
 
-	engine := evolution.NewEngine(config, allSeeds)
 	startTime := time.Now()
 
-	engine.Run(func(gen int, best, avg float64) {
+	progress := func(gen int, best, avg float64) {
 		elapsed := time.Since(startTime)
 		if *verbose || gen%10 == 0 || gen == config.Generations-1 {
 			fmt.Printf("Gen %3d | best=%.3f avg=%.3f | %s\n",
 				gen, best, avg, elapsed.Round(time.Millisecond))
 		}
-	})
+	}
+
+	var top []*evolution.Individual
+	var bestFitness float64
+
+	switch *algorithm {
+	case "baseline":
+		engine := evolution.NewEngine(config, allSeeds)
+		engine.Run(progress)
+		top = engine.TopN(config.SaveTopN)
+		bestFitness = engine.BestFitness
+	case "hybrid", "novelty":
+		engine := evolution.NewNoveltyEngine(config, allSeeds)
+		engine.Run(progress)
+		inds, _ := engine.AllQualified()
+		// Sort by raw fitness and take top N
+		top = sortAndTrim(inds, config.SaveTopN)
+		bestFitness = engine.BestFitness
+	case "mapelites":
+		engine := evolution.NewMAPElitesEngine(config, allSeeds)
+		engine.Run(progress)
+		top = sortAndTrim(engine.AllQualified(), config.SaveTopN)
+		bestFitness = engine.BestFitness
+	default:
+		fmt.Fprintf(os.Stderr, "unknown algorithm: %s (must be baseline, hybrid, or mapelites)\n", *algorithm)
+		os.Exit(1)
+	}
 
 	elapsed := time.Since(startTime)
 	fmt.Printf("\nEvolution complete in %s\n", elapsed.Round(time.Millisecond))
-	fmt.Printf("Best fitness: %.3f\n\n", engine.BestFitness)
-
+	fmt.Printf("Best fitness: %.3f\n\n", bestFitness)
 	// Save results
-	top := engine.TopN(config.SaveTopN)
 	err := output.SaveResults(config.OutputDir, top, config, elapsed)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error saving results: %v\n", err)
@@ -238,6 +264,55 @@ func cmdDescribe(args []string) {
 	} else {
 		fmt.Printf("\nValidation: OK\n")
 	}
+}
+
+func sortAndTrim(inds []*evolution.Individual, n int) []*evolution.Individual {
+	// Deduplicate by genome ID first
+	seen := make(map[string]bool)
+	var unique []*evolution.Individual
+	for _, ind := range inds {
+		if ind == nil || ind.Genome == nil || seen[ind.Genome.ID] {
+			continue
+		}
+		seen[ind.Genome.ID] = true
+		unique = append(unique, ind)
+	}
+
+	sort.Slice(unique, func(i, j int) bool {
+		return unique[i].Fitness.TotalFitness > unique[j].Fitness.TotalFitness
+	})
+
+	// Reserve slots per skeleton for diversity in output
+	perSkeleton := n / 3
+	if perSkeleton < 2 {
+		perSkeleton = 2
+	}
+
+	used := make(map[int]bool)
+	var result []*evolution.Individual
+	skelCounts := make(map[genome.SkeletonType]int)
+
+	for i, ind := range unique {
+		if skelCounts[ind.Genome.Skeleton] < perSkeleton {
+			result = append(result, ind)
+			used[i] = true
+			skelCounts[ind.Genome.Skeleton]++
+		}
+		if len(result) >= n {
+			break
+		}
+	}
+
+	for i, ind := range unique {
+		if len(result) >= n {
+			break
+		}
+		if !used[i] {
+			result = append(result, ind)
+		}
+	}
+
+	return result
 }
 
 func getAllSeeds() []*genome.Genome {
