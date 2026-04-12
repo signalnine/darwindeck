@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "darwindeck",
+  "project_id": "2f8496de-80a9-4aa5-a14e-0cc8554f1327"
+}
