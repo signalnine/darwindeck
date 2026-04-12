@@ -48,7 +48,10 @@ func cmdExperiment(args []string) {
 	workers := fs.Int("workers", 0, "parallel workers (0=auto)")
 	outputDir := fs.String("output", "output/experiments", "output directory")
 	parallel := fs.Int("parallel", 3, "number of experiments to run in parallel")
+	configsFlag := fs.String("configs", "baseline,map-elites,novelty", "comma-separated list of configs to run")
 	fs.Parse(args)
+
+	configs := splitCSV(*configsFlag)
 
 	if *workers == 0 {
 		*workers = runtime.NumCPU()
@@ -61,7 +64,7 @@ func cmdExperiment(args []string) {
 	}
 
 	fmt.Printf("DarwinDeck Diversity Experiment\n")
-	fmt.Printf("  Configs: baseline, map-elites, novelty\n")
+	fmt.Printf("  Configs: %s\n", *configsFlag)
 	fmt.Printf("  Seeds per config: %d\n", *numSeeds)
 	fmt.Printf("  Population: %d, Generations: %d\n", *population, *generations)
 	fmt.Printf("  Workers per run: %d, Parallel runs: %d\n", *workers, *parallel)
@@ -76,9 +79,9 @@ func cmdExperiment(args []string) {
 
 	var runs []runSpec
 	for i := 0; i < *numSeeds; i++ {
-		runs = append(runs, runSpec{"baseline", uint64(i + 1)})
-		runs = append(runs, runSpec{"map-elites", uint64(i + 16)})
-		runs = append(runs, runSpec{"novelty", uint64(i + 31)})
+		for ci, cfg := range configs {
+			runs = append(runs, runSpec{cfg, uint64(i + 1 + ci*1000)})
+		}
 	}
 
 	var results []ExperimentResult
@@ -126,7 +129,7 @@ func cmdExperiment(args []string) {
 	fmt.Printf("\nAll experiments complete in %s\n\n", elapsed.Round(time.Second))
 
 	// Aggregate and report
-	reportResults(results, *outputDir)
+	reportResults(results, *outputDir, configs)
 }
 
 func runExperiment(configName string, config evolution.Config, allSeeds []*genome.Genome) ExperimentResult {
@@ -170,7 +173,7 @@ func runExperiment(configName string, config evolution.Config, allSeeds []*genom
 			behaviors = append(behaviors, behavior)
 		}
 
-	case "novelty":
+	case "novelty", "hybrid":
 		engine := evolution.NewNoveltyEngine(config, allSeeds)
 		engine.Run(nil)
 		inds, behavs := engine.AllQualified()
@@ -281,7 +284,21 @@ func computeMetrics(individuals []*evolution.Individual, behaviors []evolution.B
 	return result
 }
 
-func reportResults(results []ExperimentResult, outputDir string) {
+func splitCSV(s string) []string {
+	var out []string
+	start := 0
+	for i := 0; i <= len(s); i++ {
+		if i == len(s) || s[i] == ',' {
+			if i > start {
+				out = append(out, s[start:i])
+			}
+			start = i + 1
+		}
+	}
+	return out
+}
+
+func reportResults(results []ExperimentResult, outputDir string, configs []string) {
 	// Group by config
 	grouped := make(map[string][]ExperimentResult)
 	for _, r := range results {
@@ -292,7 +309,7 @@ func reportResults(results []ExperimentResult, outputDir string) {
 		"Config", "Coverage", "QD-Score", "PairDist", "MedFit", "Games")
 	fmt.Println("-------------|----------|----------|----------|----------|-------")
 
-	for _, configName := range []string{"baseline", "map-elites", "novelty"} {
+	for _, configName := range configs {
 		runs := grouped[configName]
 		if len(runs) == 0 {
 			continue
@@ -319,7 +336,7 @@ func reportResults(results []ExperimentResult, outputDir string) {
 
 	// Per-skeleton breakdown
 	fmt.Println("\nPer-skeleton coverage (median):")
-	for _, configName := range []string{"baseline", "map-elites", "novelty"} {
+	for _, configName := range configs {
 		runs := grouped[configName]
 		var shedCov, trickCov, rummyCov []float64
 		for _, r := range runs {
