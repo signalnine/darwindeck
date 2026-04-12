@@ -140,36 +140,51 @@ func (e *NoveltyEngine) evaluatePopulation() {
 }
 
 // computeNovelty calculates novelty score for each individual based on
-// k-nearest neighbor distance in behavior space.
+// k-nearest neighbor distance in behavior space, computed WITHIN-SKELETON only.
+// Also applies fitness sharing by skeleton niche to prevent monopoly.
 func (e *NoveltyEngine) computeNovelty() {
-	// Collect all behavior points (population + archive)
-	var allBehaviors []BehaviorDescriptor
+	// Collect behavior points per skeleton (population + archive)
+	perSkeleton := make(map[genome.SkeletonType][]BehaviorDescriptor)
 	for _, ind := range e.Population {
 		if ind.Valid && ind.Fitness.TotalFitness >= FitnessFloor {
-			allBehaviors = append(allBehaviors, ind.Behavior)
+			skel := ind.Genome.Skeleton
+			perSkeleton[skel] = append(perSkeleton[skel], ind.Behavior)
 		}
 	}
 	for _, arch := range e.Archive {
-		allBehaviors = append(allBehaviors, arch.Behavior)
+		skel := arch.Genome.Skeleton
+		perSkeleton[skel] = append(perSkeleton[skel], arch.Behavior)
 	}
 
-	if len(allBehaviors) == 0 {
+	if len(perSkeleton) == 0 {
 		return
 	}
 
-	// Compute novelty for each qualified individual
-	maxNovelty := 0.0
+	// Count valid individuals per skeleton for fitness sharing
+	nicheCounts := make(map[genome.SkeletonType]int)
+	totalValid := 0
+	for _, ind := range e.Population {
+		if ind.Valid && ind.Fitness.TotalFitness >= FitnessFloor {
+			nicheCounts[ind.Genome.Skeleton]++
+			totalValid++
+		}
+	}
+
+	// Compute novelty per skeleton (k-NN within-skeleton only)
+	maxNoveltyPerSkel := make(map[genome.SkeletonType]float64)
 	for _, ind := range e.Population {
 		if !ind.Valid || ind.Fitness.TotalFitness < FitnessFloor {
 			ind.Novelty = 0
 			continue
 		}
 
-		// Compute distances to all other points
+		skel := ind.Genome.Skeleton
+		behaviors := perSkeleton[skel]
+
 		var distances []float64
-		for _, b := range allBehaviors {
+		for _, b := range behaviors {
 			d := ind.Behavior.Distance(b)
-			if d > 0 { // exclude self
+			if d > 0 {
 				distances = append(distances, d)
 			}
 		}
@@ -179,7 +194,6 @@ func (e *NoveltyEngine) computeNovelty() {
 			continue
 		}
 
-		// k-nearest neighbor average distance
 		sort.Float64s(distances)
 		k := NoveltyK
 		if k > len(distances) {
@@ -192,28 +206,54 @@ func (e *NoveltyEngine) computeNovelty() {
 		}
 		ind.Novelty = sum / float64(k)
 
-		if ind.Novelty > maxNovelty {
-			maxNovelty = ind.Novelty
+		if ind.Novelty > maxNoveltyPerSkel[skel] {
+			maxNoveltyPerSkel[skel] = ind.Novelty
 		}
 	}
 
-	// Normalize novelty to [0, 1] and compute combined fitness
+	// Expected share per skeleton for fitness sharing
+	numNiches := len(nicheCounts)
+	expectedPerNiche := 0.0
+	if numNiches > 0 {
+		expectedPerNiche = float64(totalValid) / float64(numNiches)
+	}
+
+	// Normalize novelty within each skeleton (so rummy variations compete
+	// against rummy, not against all games) and apply fitness sharing.
 	for _, ind := range e.Population {
 		if !ind.Valid || ind.Fitness.TotalFitness < FitnessFloor {
 			ind.Fitness.SharedFitness = 0
 			continue
 		}
 
+		skel := ind.Genome.Skeleton
+		maxNov := maxNoveltyPerSkel[skel]
 		normalizedNovelty := 0.0
-		if maxNovelty > 0 {
-			normalizedNovelty = ind.Novelty / maxNovelty
+		if maxNov > 0 {
+			normalizedNovelty = ind.Novelty / maxNov
 		}
 
-		// Combined: 50% fitness + 50% novelty
-		ind.Fitness.SharedFitness = (1-NoveltyWeight)*ind.Fitness.TotalFitness + NoveltyWeight*normalizedNovelty
+		// Combined: 50% fitness + 50% within-skeleton novelty
+		combined := (1-NoveltyWeight)*ind.Fitness.TotalFitness + NoveltyWeight*normalizedNovelty
+
+		// Apply fitness sharing by skeleton niche
+		count := float64(nicheCounts[skel])
+		ratio := count / expectedPerNiche
+		if ratio < 1 {
+			// Boost underrepresented niches (same as main engine)
+			boost := 1.0 / ratio
+			if boost > 3.0 {
+				boost = 3.0
+			}
+			combined *= boost
+		} else {
+			combined /= ratio
+		}
+
+		ind.Fitness.SharedFitness = combined
 		ind.Genome.Fitness = ind.Fitness.SharedFitness
 
-		// Add to archive if sufficiently novel
+		// Add to archive if sufficiently novel (within-skeleton normalized)
 		if normalizedNovelty >= NoveltyThreshold {
 			e.Archive = append(e.Archive, &NoveltyIndividual{
 				Individual: ind.Individual,
