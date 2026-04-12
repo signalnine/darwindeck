@@ -45,6 +45,8 @@ func (ai *GreedyAI) SelectMove(moves []Move, state *GameState, rng *rand.Rand) M
 // --- Shedding Greedy Scorer ---
 
 // SheddingScorer scores shedding moves.
+// Strategy: play cards that minimize future draws by keeping flexible cards
+// (those that share suit/rank with many others). Time specials strategically.
 type SheddingScorer struct{}
 
 func (s *SheddingScorer) ScoreMove(move Move, state *GameState) float64 {
@@ -53,12 +55,11 @@ func (s *SheddingScorer) ScoreMove(move Move, state *GameState) float64 {
 		card := move.Cards[0]
 		score := 10.0 // Base: playing is better than drawing
 
-		// Prefer playing high-rank cards (harder to match later)
-		score += float64(card.Rank) * 0.5
-
-		// Prefer cards that aren't "connectors" (share suit/rank with other hand cards)
-		// This keeps more flexible cards for later
 		hand := state.Hands[move.PlayerID]
+
+		// Count how many OTHER cards in hand this card connects to.
+		// High connections = flexible card = keep it for later.
+		// Low connections = isolated card = play it now.
 		connections := 0
 		for _, h := range hand {
 			if h == card {
@@ -68,7 +69,39 @@ func (s *SheddingScorer) ScoreMove(move Move, state *GameState) float64 {
 				connections++
 			}
 		}
-		score -= float64(connections) * 0.3
+		// Play isolated cards first (saves flexible ones for later)
+		score -= float64(connections) * 2.0
+
+		// Prefer cards that MATCH THE TOP CARD well (keeps options open for next turn)
+		// After playing, the new top IS this card. Count how many remaining hand cards
+		// will match it (giving us plays next turn too).
+		futureMatches := 0
+		for _, h := range hand {
+			if h == card {
+				continue
+			}
+			if h.Suit == card.Suit || h.Rank == card.Rank {
+				futureMatches++
+			}
+		}
+		score += float64(futureMatches) * 1.5
+
+		// If opponent is close to winning (few cards), prefer specials
+		// that disrupt them (draw-two, skip).
+		// Check if this is a special card that hurts opponent.
+		if s.isOffensiveSpecial(card) {
+			for i := 0; i < state.NumPlayers; i++ {
+				if i == move.PlayerID {
+					continue
+				}
+				opponentCards := len(state.Hands[i])
+				if opponentCards <= 2 {
+					score += 15.0 // High priority: block their win
+				} else if opponentCards <= 4 {
+					score += 5.0
+				}
+			}
+		}
 
 		return score
 
@@ -80,6 +113,18 @@ func (s *SheddingScorer) ScoreMove(move Move, state *GameState) float64 {
 
 	default:
 		return 0
+	}
+}
+
+// isOffensiveSpecial checks if a card has a rank commonly used for
+// draw-two (2s), skip (7s/10s), or draw-four effects.
+// This is a heuristic since we don't have access to the genome here.
+func (s *SheddingScorer) isOffensiveSpecial(card Card) bool {
+	switch card.Rank {
+	case Two, Seven, Ten:
+		return true
+	default:
+		return false
 	}
 }
 

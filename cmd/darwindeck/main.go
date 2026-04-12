@@ -117,16 +117,23 @@ func cmdEvolve(args []string) {
 		os.Exit(1)
 	}
 
-	// Print top 5
-	fmt.Printf("Top %d games:\n", min(5, len(top)))
-	for i, ind := range top {
-		if i >= 5 {
-			break
+	// Print top games per skeleton
+	skeletonNames := []string{"shedding", "trick_taking", "rummy"}
+	for _, skelName := range skeletonNames {
+		fmt.Printf("\nBest %s:\n", skelName)
+		count := 0
+		for _, ind := range top {
+			if ind.Genome.Skeleton.String() == skelName && count < 3 {
+				m := ind.Fitness
+				fmt.Printf("  %s (%.3f) decisions=%.2f arc=%.2f interact=%.2f skill=%.2f length=%.2f\n",
+					ind.Genome.ID, m.TotalFitness,
+					m.MeaningfulDecisions, m.GameArc, m.Interaction, m.SkillGradient, m.SessionLength)
+				count++
+			}
 		}
-		m := ind.Fitness
-		fmt.Printf("  %d. %s (%.3f) [%s] decisions=%.2f arc=%.2f interact=%.2f skill=%.2f length=%.2f\n",
-			i+1, ind.Genome.ID, m.TotalFitness, ind.Genome.Skeleton,
-			m.MeaningfulDecisions, m.GameArc, m.Interaction, m.SkillGradient, m.SessionLength)
+		if count == 0 {
+			fmt.Printf("  (none in top %d)\n", config.SaveTopN)
+		}
 	}
 
 	fmt.Printf("\nResults saved to %s\n", config.OutputDir)

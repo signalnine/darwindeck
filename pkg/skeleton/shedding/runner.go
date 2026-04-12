@@ -110,6 +110,7 @@ func (r *Runner) ApplyMove(state *sim.GameState, move sim.Move, g *genome.Genome
 			Type:     sim.EventCardPlayed,
 			PlayerID: state.Active,
 			Cards:    []sim.Card{card},
+			Detail:   "discard", // Shedding plays go to shared discard pile
 		})
 
 		// Apply special card effects

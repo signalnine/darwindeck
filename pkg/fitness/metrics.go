@@ -14,6 +14,7 @@ type Metrics struct {
 	SkillGradient       float64 // Weight 0.20
 	SessionLength       float64 // Weight 0.10
 	TotalFitness        float64
+	SharedFitness       float64 // After niche sharing adjustment
 }
 
 const (
@@ -66,8 +67,16 @@ func computeDecisionDensity(result sim.BatchResult) float64 {
 			switch e.Type {
 			case sim.EventCardPlayed:
 				plays++
+			case sim.EventMeldLaid:
+				// Choosing to meld is a meaningful decision
+				plays++
 			case sim.EventCardDrawn:
-				draws++
+				// Drawing from discard is a choice; from deck is forced
+				if e.Detail == "discard" {
+					plays++
+				} else {
+					draws++
+				}
 			}
 		}
 
@@ -172,7 +181,8 @@ func computeInteraction(result sim.BatchResult) float64 {
 				// Tricks are inherently interactive (every player plays)
 				interactionEvents++
 			case sim.EventMeldLaid:
-				// Melds don't directly interact unless lay-off
+				// Melds signal hand strength and enable lay-offs
+				interactionEvents++
 			case sim.EventCardPlayed:
 				// Cards played to shared areas (discard, trick) are interactive
 				if e.Detail == "discard" {

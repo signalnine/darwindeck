@@ -86,7 +86,8 @@ func (e *Engine) Initialize() {
 	}
 }
 
-// EvaluatePopulation runs fitness evaluation on all individuals in parallel.
+// EvaluatePopulation runs fitness evaluation on all individuals in parallel,
+// then applies fitness sharing to reward niche diversity.
 func (e *Engine) EvaluatePopulation() {
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, e.Config.Workers)
@@ -115,16 +116,80 @@ func (e *Engine) EvaluatePopulation() {
 	}
 
 	wg.Wait()
+
+	// Apply fitness sharing: divide fitness by niche count.
+	// Niches are defined by skeleton type. This prevents a single skeleton
+	// from monopolizing the population.
+	e.applyFitnessSharing()
+}
+
+// applyFitnessSharing divides each genome's fitness by the count of valid
+// genomes sharing the same skeleton type (niche). Uses square root of niche
+// count for softer pressure than strict division.
+func (e *Engine) applyFitnessSharing() {
+	// Count valid individuals per skeleton
+	nicheCounts := make(map[genome.SkeletonType]int)
+	for _, ind := range e.Population {
+		if ind.Valid {
+			nicheCounts[ind.Genome.Skeleton]++
+		}
+	}
+
+	totalValid := 0
+	for _, c := range nicheCounts {
+		totalValid += c
+	}
+	if totalValid == 0 {
+		return
+	}
+
+	// Expected share per niche if evenly distributed
+	numNiches := len(nicheCounts)
+	if numNiches <= 1 {
+		// Only one skeleton type present, no sharing needed
+		for _, ind := range e.Population {
+			if ind.Valid {
+				ind.Fitness.SharedFitness = ind.Fitness.TotalFitness
+			}
+		}
+		return
+	}
+
+	expectedPerNiche := float64(totalValid) / float64(numNiches)
+
+	// Apply sharing: fitness / (nicheCount / expectedCount)
+	// Linear division forces strong balance across skeleton types.
+	// Overrepresented niches get proportionally penalized.
+	// Underrepresented niches get a boost to prevent extinction.
+	for _, ind := range e.Population {
+		if !ind.Valid {
+			continue
+		}
+		count := float64(nicheCounts[ind.Genome.Skeleton])
+		ratio := count / expectedPerNiche
+		if ratio < 1 {
+			// Boost underrepresented niches: inverse ratio as multiplier
+			// A niche at 50% expected gets 1.5x boost, at 25% gets 2x, etc.
+			boost := 1.0 / ratio
+			if boost > 3.0 {
+				boost = 3.0 // Cap boost to avoid runaway
+			}
+			ind.Fitness.SharedFitness = ind.Fitness.TotalFitness * boost
+		} else {
+			ind.Fitness.SharedFitness = ind.Fitness.TotalFitness / ratio
+		}
+		ind.Genome.Fitness = ind.Fitness.SharedFitness
+	}
 }
 
 // Select performs tournament selection to create the next generation.
 func (e *Engine) Select() []*Individual {
-	// Sort by fitness (descending)
+	// Sort by shared fitness (descending) -- niche-adjusted
 	sort.Slice(e.Population, func(i, j int) bool {
-		return e.Population[i].Fitness.TotalFitness > e.Population[j].Fitness.TotalFitness
+		return e.Population[i].Fitness.SharedFitness > e.Population[j].Fitness.SharedFitness
 	})
 
-	// Track best
+	// Track best (use raw TotalFitness for reporting)
 	if len(e.Population) > 0 && e.Population[0].Fitness.TotalFitness > e.BestFitness {
 		e.BestFitness = e.Population[0].Fitness.TotalFitness
 		e.BestGenome = e.Population[0].Genome
@@ -172,7 +237,7 @@ func (e *Engine) tournament() *Individual {
 	best := e.Population[e.rng.IntN(len(e.Population))]
 	for i := 1; i < e.Config.TournamentSize; i++ {
 		candidate := e.Population[e.rng.IntN(len(e.Population))]
-		if candidate.Fitness.TotalFitness > best.Fitness.TotalFitness {
+		if candidate.Fitness.SharedFitness > best.Fitness.SharedFitness {
 			best = candidate
 		}
 	}
@@ -242,15 +307,49 @@ func (e *Engine) Run(progress func(gen int, best float64, avg float64)) {
 	e.EvaluatePopulation()
 }
 
-// TopN returns the top N genomes sorted by fitness.
+// TopN returns the top N genomes ensuring skeleton diversity.
+// Reserves slots per skeleton proportionally, then fills remaining with best overall.
 func (e *Engine) TopN(n int) []*Individual {
 	sort.Slice(e.Population, func(i, j int) bool {
 		return e.Population[i].Fitness.TotalFitness > e.Population[j].Fitness.TotalFitness
 	})
 
-	top := min(n, len(e.Population))
-	result := make([]*Individual, top)
-	copy(result, e.Population[:top])
+	// Reserve at least n/numSkeletons slots per skeleton type
+	perSkeleton := n / 3
+	if perSkeleton < 2 {
+		perSkeleton = 2
+	}
+
+	used := make(map[int]bool)
+	var result []*Individual
+
+	// First pass: take top perSkeleton from each skeleton
+	skeletonCounts := make(map[genome.SkeletonType]int)
+	for i, ind := range e.Population {
+		if !ind.Valid || ind.Genome == nil {
+			continue
+		}
+		skel := ind.Genome.Skeleton
+		if skeletonCounts[skel] < perSkeleton {
+			result = append(result, ind)
+			used[i] = true
+			skeletonCounts[skel]++
+		}
+		if len(result) >= n {
+			break
+		}
+	}
+
+	// Second pass: fill remaining slots with best overall
+	for i, ind := range e.Population {
+		if len(result) >= n {
+			break
+		}
+		if !used[i] && ind.Valid && ind.Genome != nil {
+			result = append(result, ind)
+		}
+	}
+
 	return result
 }
 
