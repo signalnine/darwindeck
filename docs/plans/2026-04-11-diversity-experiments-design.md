@@ -10,23 +10,28 @@ Three configurations tested:
 | Config | Algorithm | Key Parameters |
 |--------|-----------|---------------|
 | A (Baseline) | Current fitness sharing | Skeleton niche, linear division, boost for underrepresented |
-| B (MAP-Elites) | Quality-diversity archive | 10x10 grid, AvgTurns x Play/Draw Ratio, per skeleton |
+| B (MAP-Elites) | Quality-diversity archive | 10x10 grid, AvgTurns x WinEntropy, per skeleton |
 | C (Novelty Search) | k-NN behavioral distance bonus | k=15, novelty as 6th fitness metric, 0.70 floor |
 
 **Runs:** 15 seeds per config = 45 total. Each run: 500 pop, 100 gens.
 
 **Pre-flight checks:**
-- Validate that AvgTurns and Play/Draw Ratio actually vary within trick-taking
-- Confirm 0.70 floor is enforced inside each algorithm, not just at output
-- Document all 45 seeds upfront
+- [x] Validate behavioral axes vary within each skeleton (Play/Draw Ratio failed; switched to WinEntropy)
+- [ ] Confirm 0.70 floor is enforced inside each algorithm, not just at output
+- [ ] Document all 45 seeds upfront
 
 ## MAP-Elites Implementation
 
 Replace the population-based selection loop with an archive-based one. The archive is a 10x10 grid where each cell holds the single best genome for that behavioral niche.
 
 **Behavioral descriptors (computed from BatchResult):**
-- X-axis: AvgTurns -- normalized to [0, 1] by mapping observed range (e.g., 5-100 turns)
-- Y-axis: Play/Draw Ratio -- EventCardPlayed / (EventCardPlayed + EventCardDrawn), naturally [0, 1]
+- X-axis: AvgTurns -- normalized to [0, 1] by mapping range [5, 100]
+- Y-axis: WinEntropy -- Shannon entropy of win distribution, normalized by max entropy (log2(numPlayers)), naturally [0, 1]
+
+**Pre-flight validation (2026-04-11):** Play/Draw Ratio was degenerate (constant 1.0 for trick-taking, constant ~0.47 for rummy). WinEntropy has meaningful variance across all skeletons:
+- Shedding: 0.90-1.00 (narrow but nonzero)
+- Trick-taking: 0.50-0.96 (good spread -- some games are balanced, others favor one player)
+- Rummy: 0.58-1.00 (excellent spread)
 
 **Per-skeleton archives:** 3 independent 10x10 grids. A shedding genome only competes with other shedding genomes for cell placement.
 
@@ -45,7 +50,7 @@ Replace the population-based selection loop with an archive-based one. The archi
 
 Keep the existing population-based engine but add a 6th metric -- behavioral novelty -- that rewards genomes for being distant from their neighbors.
 
-**Behavioral descriptor:** Same 2D vector as MAP-Elites: (AvgTurns_normalized, Play/Draw Ratio). Ensures fair comparison.
+**Behavioral descriptor:** Same 2D vector as MAP-Elites: (AvgTurns_normalized, WinEntropy). Ensures fair comparison.
 
 **Novelty score computation:**
 1. After evaluating a genome, compute its 2D behavior vector

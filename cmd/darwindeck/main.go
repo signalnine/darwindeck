@@ -31,6 +31,8 @@ func main() {
 	switch os.Args[1] {
 	case "evolve":
 		cmdEvolve(os.Args[2:])
+	case "experiment":
+		cmdExperiment(os.Args[2:])
 	case "playtest":
 		cmdPlaytest(os.Args[2:])
 	case "describe":
@@ -50,11 +52,12 @@ func printUsage() {
 	fmt.Println(`Usage: darwindeck <command> [flags]
 
 Commands:
-  evolve     Run evolutionary search for novel card games
-  playtest   Play a game interactively against AI
-  describe   Show details of a genome JSON file
-  version    Print version info
-  help       Show this message`)
+  evolve      Run evolutionary search for novel card games
+  experiment  Run diversity comparison experiments
+  playtest    Play a game interactively against AI
+  describe    Show details of a genome JSON file
+  version     Print version info
+  help        Show this message`)
 }
 
 func cmdEvolve(args []string) {
