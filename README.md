@@ -1,279 +1,161 @@
-# DarwinDeck 🧬🃏
+# DarwinDeck
 
-**Evolutionary card game system using genetic algorithms to create novel, playable card games**
+**Evolutionary card game discovery using genetic algorithms and quality-diversity search**
 
-DarwinDeck uses evolutionary computation to automatically design card games playable with a standard 52-card deck. The system optimizes for configurable parameters like complexity, session length, skill/luck ratio, and player count.
-
-## Overview
-
-DarwinDeck combines:
-- **Genetic algorithms** for game rule evolution
-- **Monte Carlo simulation** for fitness evaluation
-- **Multi-core parallelization** for massive performance (256+ cores supported)
-- **16 seed games** from Hoyle's Encyclopedia as starting population
-
-## Features
-
-- 🧬 **Evolutionary Design**: Genetic operators (mutation, crossover, selection) evolve game rules
-- 🎯 **Fitness Evaluation**: Measures fun proxies (decision density, comeback potential, tension curve)
-- 🎲 **Two-Tier Skill Evaluation**: Greedy vs Random + MCTS vs Random measures skill ceiling
-- ⚖️ **First-Player Advantage Detection**: Filters out unbalanced games (>30% FPA)
-- 🔄 **In-Evolution Skill Penalties**: Penalizes unfit games during breeding, not just at the end
-- ⚡ **Parallel Execution**: 360x speedup on 256-core systems
-- 🎮 **18 Seed Games**: Including 4 betting/poker variants for evolution
-- 🚀 **High Throughput**: 800,000+ games/second on large servers
-- 📝 **LLM Descriptions**: Auto-generated game summaries using Claude
-- 📊 **Comprehensive Testing**: 100+ unit/integration tests
-
-## Performance
-
-### Single Machine (4 cores)
-- **Throughput:** 3,000-4,000 games/second
-- **Population (100 genomes):** ~25-30 seconds per generation
-- **Full evolution (100 gen):** ~42-50 minutes
-
-### Server (256 cores)
-- **Throughput:** 800,000+ games/second
-- **Population (500 genomes):** ~1-2 seconds per generation
-- **Full evolution (100 gen):** ~2-3 minutes ⚡
+DarwinDeck evolves novel, playable card games for a standard 52-card deck. Games are built from three constrained skeleton templates (shedding, trick-taking, rummy) and scored on five fitness metrics measuring "fun." The system uses fitness sharing and within-skeleton novelty search to discover diverse, distinct game designs rather than converging on a single optimum.
 
 ## Quick Start
 
 ```bash
-# Install dependencies (using uv - recommended)
-uv sync
+# Build
+make build-v2
 
-# Run evolution locally
-uv run python -m darwindeck.cli.evolve \
-    --population-size 100 \
-    --generations 50 \
-    --output-dir output/run1
+# Evolve a population of card games (default: hybrid algorithm)
+./bin/darwindeck evolve -population 500 -generations 100 -workers 256
 
-# Run with fitness style preset
-uv run python -m darwindeck.cli.evolve --style strategic
+# Try a different algorithm
+./bin/darwindeck evolve -algorithm baseline   # fitness sharing only
+./bin/darwindeck evolve -algorithm hybrid     # novelty + fitness sharing (default)
+./bin/darwindeck evolve -algorithm mapelites  # quality-diversity archive
 
-# Adjust skill evaluation during evolution
-uv run python -m darwindeck.cli.evolve \
-    --skill-eval-frequency 10 \
-    --fpa-penalty-threshold 0.3
+# Play an evolved game against AI
+./bin/darwindeck playtest output/<run>/games/rank01_*/genome.json --difficulty greedy
 
-# Deploy to 256-core server
-./scripts/deploy-to-server.sh
-ssh your-server "cd darwindeck && ./scripts/run-evolution.sh"
+# Show genome details
+./bin/darwindeck describe output/<run>/games/rank01_*/genome.json
+
+# Run comparison experiments across algorithms
+./bin/darwindeck experiment -configs baseline,hybrid -seeds 10
 ```
 
-## Generating Game Descriptions
+## How It Works
 
-After evolution, generate human-readable game rules from saved genomes:
+### Skeletons
 
-```bash
-# Generate description from saved genome JSON
-uv run python -m darwindeck.cli.describe output/run1/rank01_GameName.json
+Games are built from three skeleton templates that guarantee mechanical playability:
 
-# With verbose output showing fitness and skill metrics
-uv run python -m darwindeck.cli.describe output/run1/rank01_GameName.json -v
+- **Shedding** (Crazy Eights, Mau-Mau): Match suit/rank to discard pile, first to empty hand wins
+- **Trick-taking** (Whist, Hearts, Spades): One card per player per trick, highest card wins
+- **Rummy** (Gin Rummy, Knock Rummy): Draw-meld-discard, lowest deadwood wins
 
-# Override fitness score (if not in file)
-uv run python -m darwindeck.cli.describe output/run1/genome.json --fitness 0.85
-```
+The skeleton handles core game flow. Genomes encode parameters: hand size, player count, trump rules, special cards, scoring, win conditions. Cross-skeleton mechanic borrowing lets a shedding game include rummy-style meld bonuses, etc.
 
-The describe command uses Claude to generate natural language game rules suitable for human playtesting. It extracts:
-- Game setup and deal rules
-- Turn structure and valid moves
-- Win conditions and scoring
-- Skill evaluation summary (if available)
+### Fitness Function
 
-**Note:** Requires `ANTHROPIC_API_KEY` environment variable to be set.
+Five metrics, each normalized to [0, 1], weighted into a total fitness score:
 
-## Generating Rulebooks
+| Metric | Weight | Measures |
+|--------|--------|----------|
+| Meaningful Decisions | 0.25 | Plays vs forced draws |
+| Game Arc | 0.25 | Win distribution entropy + turn variance |
+| Interaction | 0.20 | How much player actions affect each other |
+| Skill Gradient | 0.20 | Greedy AI win rate vs random baseline |
+| Session Length | 0.10 | Target 15-40 turns |
 
-Generate comprehensive rulebooks in markdown format:
+### Validation Pipeline
 
-```bash
-# Generate rulebook for a single genome
-uv run python -m darwindeck.cli.rulebook output/run1/rank01_GameName.json
+- **Tier 0** (free): Static analysis on genome struct
+- **Tier 1** (5 games): Random AI smoke test, kill if hangs/degenerate
+- **Tier 2** (250 games): Full evaluation with 200 random + 50 greedy games
 
-# Save to specific output directory
-uv run python -m darwindeck.cli.rulebook output/run1/rank01_GameName.json -o output/rulebooks/
+### Algorithms
 
-# Generate rulebooks for all genomes in an evolution output
-uv run python -m darwindeck.cli.rulebook output/evolution-run/ -o output/rulebooks/
-```
+Three evolution strategies are available:
 
-Rulebooks include:
-- Complete setup instructions
-- Turn structure with all phases
-- Special rules and card effects
-- Edge case handling (empty deck, no valid plays, ties)
-- Win conditions
+- **Baseline**: Fitness sharing by skeleton type. Linear division by niche population, with boost for underrepresented niches.
+- **Hybrid (default)**: Within-skeleton novelty search (k-NN behavioral distance) combined with fitness sharing. Best diversity-to-quality ratio.
+- **MAP-Elites**: 10x10 behavioral grid per skeleton, axes are AvgTurns x WinEntropy. Maintains best genome per cell.
 
-**Note:** Requires `ANTHROPIC_API_KEY` environment variable to be set.
+The hybrid is the default because experimental comparison showed it produces ~2x the behavioral coverage of baseline at minimal fitness cost.
 
-## Interactive Playtesting
+## Performance
 
-Play evolved games against AI opponents:
+Benchmark numbers on a 256-core EPYC:
 
-```bash
-# Play against greedy AI
-uv run python -m darwindeck.cli.playtest output/run1/rank01_GameName.json --difficulty greedy
+| Configuration | Wall Time |
+|---------------|-----------|
+| 500 pop, 100 gens (default) | ~2 minutes |
+| 2000 pop, 200 gens | ~15 minutes |
+| 45-run experiment (3 algos x 15 seeds) | ~80 minutes |
 
-# Play against MCTS AI (stronger)
-uv run python -m darwindeck.cli.playtest output/run1/rank01_GameName.json --difficulty mcts
+Each Tier 2 evaluation runs 250 game simulations. With sub-millisecond per-game cost, throughput exceeds 100k games/second per worker pool.
 
-# Use a specific seed for reproducibility
-uv run python -m darwindeck.cli.playtest output/run1/rank01_GameName.json --seed 12345
+## Diversity Experiments
 
-# Choose which player slot you play
-uv run python -m darwindeck.cli.playtest output/run1/rank01_GameName.json --human-player 1
-```
+Experimental comparison of evolution algorithms (10 seeds each, 2000 pop, 200 gens):
 
-During playtest:
-- See your hand and game state
-- Select moves from legal options
-- Rate the game after completion (1-5 stars)
-- Results saved to `playtest_results.jsonl`
+| Metric | Baseline | Hybrid |
+|--------|----------|--------|
+| Coverage (qualified cells filled) | 0.117 | **0.247** |
+| QD-Score (sum of fitness in cells) | 29.6 | **60.6** |
+| Pairwise Behavioral Distance | 0.275 | **0.524** |
+| Median Fitness | 0.832 | 0.771 |
+| Games Produced | 1747 | 2107 |
 
-AI difficulty levels:
-- `random`: Random legal moves (easiest)
-- `greedy`: Heuristic-based play (medium)
-- `mcts`: Monte Carlo tree search (hardest)
+Hybrid doubles coverage and pairwise distance with a small (-7%) median fitness tradeoff.
+
+Per-skeleton coverage shows hybrid lifts all skeleton types:
+- Shedding: 0.090 -> 0.220 (+144%)
+- Trick-taking: 0.110 -> 0.300 (+173%)
+- Rummy: 0.150 -> 0.230 (+53%)
+
+See `docs/plans/2026-04-11-diversity-experiments-design.md` for the full experimental design.
 
 ## Architecture
 
 ```
-darwindeck/
-├── genome/          # Game rule representation (DSL)
-├── simulation/      # Python simulation engine
-├── evolution/       # Genetic algorithm engine
-├── cli/             # Command-line interface
-└── bindings/        # Python/Go bridge (FlatBuffers)
-
-gosim/               # High-performance Go simulator
-├── simulation/      # Monte Carlo runner (parallel)
-├── mcts/            # MCTS AI player
-└── cgo/             # C bridge to Python
+cmd/darwindeck/         CLI entry point (evolve, experiment, playtest, describe)
+pkg/
+├── genome/             Genome struct, skeleton params, static validation
+├── skeleton/
+│   ├── shedding/       Shedding runner (match suit/rank, special cards)
+│   ├── tricktaking/    Trick-taking runner (suit following, trump, tricks)
+│   └── rummy/          Rummy runner (draw-meld-discard, knock/gin)
+├── sim/                Card types, GameState, AI players, batch runner
+├── mechanic/           Borrowed mechanics hook system
+├── evolution/          Mutation, crossover, selection, fitness sharing
+│   ├── engine.go       Baseline engine with fitness sharing
+│   ├── novelty.go      Hybrid: within-skeleton novelty + fitness sharing
+│   ├── mapelites.go    Quality-diversity archive engine
+│   └── behavior.go     Behavior descriptor (AvgTurns x WinEntropy)
+├── fitness/            5 fitness metrics, tiered evaluation pipeline
+├── output/             Rulebook generation, JSON output
+├── playtest/           Interactive playtest session
+└── seeds/              8 seed game definitions across 3 skeletons
 ```
 
-## Parallelization
+## Seed Games
 
-DarwinDeck implements two-level parallelization:
+| Skeleton | Seeds |
+|----------|-------|
+| Shedding | Crazy Eights, Mau-Mau |
+| Trick-taking | Whist, Hearts, Spades, Oh Hell |
+| Rummy | Gin Rummy, Knock Rummy |
 
-1. **Python-level:** Evaluates multiple genomes in parallel (256x on large servers)
-2. **Go-level:** Each genome's simulations run in parallel goroutines (1.43x)
-3. **Combined:** ~360x speedup vs serial execution
-
-See `docs/parallelization-strategy.md` for details.
-
-## Fitness Metrics
-
-Games are evaluated on multiple dimensions:
-
-| Metric | Description |
-|--------|-------------|
-| **Decision Density** | Ratio of meaningful choices to total actions |
-| **Comeback Potential** | Can trailing players recover? |
-| **Tension Curve** | Uncertainty over game progression |
-| **Interaction Frequency** | How much do players affect each other? |
-| **Rules Complexity** | Reasonable rule count for learning |
-| **Session Length** | Target game duration in turns |
-| **Bluffing Depth** | Deception and hidden information |
-
-### Skill Evaluation
-
-Two-tier evaluation measures skill vs luck:
-
-1. **Greedy vs Random**: Does basic strategy help?
-2. **MCTS vs Random**: What's the skill ceiling?
-
-Games are penalized for:
-- **High First-Player Advantage** (>30%): Unbalanced turn order
-- **Low Skill Score** (<0.6): Too luck-dependent
-
-### Fitness Styles
-
-Presets optimize for different game types:
-
-- `balanced`: General-purpose (default)
-- `strategic`: Deep decision-making
-- `bluffing`: Hidden information and deception
-- `party`: Quick, accessible games
-- `trick-taking`: Traditional card game mechanics
-
-## Example Games
-
-DarwinDeck includes 18 seed games from Hoyle's Encyclopedia and classic card game collections:
-
-| Game | Category | Players | Key Mechanic |
-|------|----------|---------|--------------|
-| **War** | Luck | 2 | Pure luck baseline - card comparison |
-| **Hearts** | Trick-taking | 4 | Avoid penalty cards (hearts, Queen of Spades) |
-| **Spades** | Trick-taking | 4 | Fixed trump suit (spades always trump) |
-| **Scotch Whist** | Trick-taking | 2-4 | Trump-based trick capture |
-| **Knock-Out Whist** | Trick-taking | 2-4 | Elimination - lose a life each round |
-| **Crazy 8s** | Shedding | 2-4 | Match suit/rank, 8s are wild |
-| **Old Maid** | Shedding | 2-4 | Pair matching, avoid the odd card |
-| **President** | Climbing | 4 | Beat previous play, 2 is highest |
-| **Fan Tan** | Sequencing | 2-4 | Build sequences from 7s outward |
-| **Gin Rummy** | Set Collection | 2 | Form melds (sets and runs) |
-| **Go Fish** | Set Collection | 2-4 | Ask for cards, collect books |
-| **Cheat** | Bluffing | 2-4 | Claim cards, challenge lies |
-| **Scopa** | Capturing | 2 | Capture cards summing to target |
-| **Uno** | Shedding | 2-4 | Special effects on cards (skip, reverse, draw) |
-
-### Betting Games
-
-These games use the betting/wagering system with chip management:
-
-| Game | Starting Chips | Min Bet | Description |
-|------|---------------|---------|-------------|
-| **Simple Poker** | 1000 | 10 | 5-card showdown with one betting round |
-| **Draw Poker** | 1000 | 20 | 5-card draw with betting |
-| **Betting War** | 500 | 10 | War variant with wagering |
-| **Blackjack** | 500 | 25 | Beat the dealer to 21 |
-
-Betting games support: CHECK, BET, CALL, RAISE, ALL-IN, and FOLD actions with pot management and showdown resolution.
-
-## Documentation
-
-- **`CLAUDE.md`**: Project overview and architecture
-- **`docs/plans/`**: Phase-by-phase implementation plans
-- **`docs/parallelization-strategy.md`**: Multi-core optimization strategy
-- **`docs/deployment/server-evolution-guide.md`**: Running on large servers
-- **`docs/benchmarks/`**: Performance analysis and results
-
-## Testing
-
-```bash
-# Run all tests
-uv run pytest
-
-# Run specific test suites
-uv run pytest tests/unit/              # Unit tests
-uv run pytest tests/integration/       # Integration tests
-uv run pytest tests/property/          # Property-based tests
-
-# Run Go tests
-cd src/gosim && go test ./...
-
-# Run Go benchmarks
-cd src/gosim/simulation && go test -bench=. -benchmem
-```
+Seeds initialize the population. Mutation, crossover, and cross-skeleton mechanic borrowing produce the search space.
 
 ## Development
 
 ```bash
-# Format code
-uv run black src/ tests/
+# Build
+make build-v2
 
-# Type checking
-uv run mypy src/
+# Run tests
+go test ./pkg/... -v
 
-# Build Go simulator (CGo shared library)
-make build-cgo
+# Single test
+go test ./pkg/evolution/ -run TestSmallEvolution -v
 
-# Run evolution locally
-uv run python -m darwindeck.cli.evolve --verbose
+# Quick evolution (for iteration)
+./bin/darwindeck evolve -population 30 -generations 5 -verbose
 ```
+
+## Project Layout
+
+- `cmd/darwindeck/` — CLI entry point
+- `pkg/` — Pure Go library code (no external dependencies beyond stdlib + math/rand/v2)
+- `docs/plans/` — Design documents for major features
+- `output/` — Evolution run outputs (gitignored)
 
 ## License
 
@@ -281,20 +163,11 @@ MIT
 
 ## Citation
 
-If you use DarwinDeck in research, please cite:
-
 ```bibtex
 @software{darwindeck2026,
-  title = {DarwinDeck: Evolutionary Card Game System},
+  title = {DarwinDeck: Evolutionary Card Game Discovery via Quality-Diversity Search},
   author = {Gabriel Ortiz},
   year = {2026},
   url = {https://github.com/signalnine/darwindeck}
 }
 ```
-
-## Acknowledgments
-
-- Game examples adapted from **Hoyle's Encyclopedia of Card Games**
-- Evolutionary algorithms inspired by genetic programming research
-- Parallelization strategy optimized for modern multi-core systems
-- Built with Claude Code assistance
