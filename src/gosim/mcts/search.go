@@ -96,12 +96,24 @@ func expand(node *MCTSNode, genome *engine.Genome) *MCTSNode {
 	return child
 }
 
+// RolloutTurnCap bounds the number of random-play turns inside a single MCTS
+// rollout. Full playout is too expensive on long games (e.g. War can run up to
+// 1000 turns), which causes per-game wall-clock timeouts when MCTS does 100
+// iterations with 2000-turn rollouts. 20 turns preserves useful value signal
+// for UCB selection while keeping MCTS feasible within the runner's timeout:
+// a truncated rollout that hits the cap returns a draw (-1), which makes UCB
+// rely on the subset of rollouts that reach a decisive outcome.
+const RolloutTurnCap = 20
+
 // simulate plays out the game randomly from the current state
 func simulate(state *engine.GameState, genome *engine.Genome) int8 {
 	simState := state.Clone()
 	defer engine.PutState(simState)
 
 	maxSimulationTurns := int(genome.Header.MaxTurns) * 2 // Safety limit
+	if maxSimulationTurns > RolloutTurnCap {
+		maxSimulationTurns = RolloutTurnCap
+	}
 
 	for i := 0; i < maxSimulationTurns; i++ {
 		// Check win conditions

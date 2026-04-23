@@ -21,6 +21,18 @@ const (
 	MCTS2000AI  AIPlayerType = 5
 )
 
+// gameTimeout returns the per-game wall-clock budget. MCTS is inherently
+// slower than random/greedy (tree search + rollouts at every decision), so
+// long games like War need more than the 500ms we allow for fast AIs.
+func gameTimeout(aiType AIPlayerType) time.Duration {
+	switch aiType {
+	case MCTS100AI, MCTS500AI, MCTS1000AI, MCTS2000AI:
+		return 5 * time.Second
+	default:
+		return 500 * time.Millisecond
+	}
+}
+
 // GameMetrics holds Phase 1 instrumentation counters
 type GameMetrics struct {
 	TotalDecisions    uint64 // Decision points (when player chooses move)
@@ -229,7 +241,7 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 	if maxTurns == 0 || maxTurns > 10000 {
 		maxTurns = 10000 // Clamp degenerate MaxTurns values
 	}
-	deadline := start.Add(500 * time.Millisecond) // Hard 500ms wall-clock timeout per game
+	deadline := start.Add(gameTimeout(aiType)) // AI-aware wall-clock timeout per game
 	for state.TurnNumber < maxTurns {
 		// Wall-clock timeout: catch all infinite loop paths
 		if state.TurnNumber%10 == 0 && time.Now().After(deadline) {
@@ -612,7 +624,13 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 	if maxTurns == 0 || maxTurns > 10000 {
 		maxTurns = 10000
 	}
-	deadlineAsym := start.Add(500 * time.Millisecond)
+	// Asymmetric games (e.g., MCTS-vs-Random skill evaluation) inherit the
+	// slower side's budget so the MCTS player can reliably complete games.
+	asymTimeout := gameTimeout(p0AIType)
+	if t := gameTimeout(p1AIType); t > asymTimeout {
+		asymTimeout = t
+	}
+	deadlineAsym := start.Add(asymTimeout)
 	for state.TurnNumber < maxTurns {
 		if state.TurnNumber%10 == 0 && time.Now().After(deadlineAsym) {
 			return GameResult{
