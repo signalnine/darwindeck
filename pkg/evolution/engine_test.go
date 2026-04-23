@@ -156,6 +156,37 @@ func TestMutateScoringGeneratesValidRanks(t *testing.T) {
 	}
 }
 
+func TestAddSpecialCardCoversAllImplementedEffects(t *testing.T) {
+	rng := rand.New(rand.NewPCG(11, 0))
+
+	// Every SpecialCardType with a runtime implementation in the shedding
+	// runner (pkg/skeleton/shedding/runner.go:applySpecialEffects) must be
+	// reachable via mutation. Any effect the runner handles but addSpecialCard
+	// never emits is dead weight -- same pattern as the Rank=1 bug.
+	want := map[genome.SpecialCardType]bool{
+		genome.SpecialSkip:     false,
+		genome.SpecialReverse:  false,
+		genome.SpecialDrawTwo:  false,
+		genome.SpecialDrawFour: false,
+		genome.SpecialWild:     false,
+	}
+
+	for i := 0; i < 2000; i++ {
+		g := &genome.Genome{}
+		addSpecialCard(g, rng)
+		if len(g.SpecialCards) != 1 {
+			t.Fatalf("iteration %d: expected 1 SpecialCard, got %d", i, len(g.SpecialCards))
+		}
+		want[g.SpecialCards[0].Type] = true
+	}
+
+	for typ, seen := range want {
+		if !seen {
+			t.Errorf("addSpecialCard never emitted SpecialCardType=%d after 2000 iterations", typ)
+		}
+	}
+}
+
 func TestDedupPreservesDiversity(t *testing.T) {
 	// Create population with duplicates
 	pop := make([]*Individual, 10)

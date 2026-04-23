@@ -167,6 +167,7 @@ func addSpecialCard(g *genome.Genome, rng *rand.Rand) {
 		genome.SpecialSkip,
 		genome.SpecialReverse,
 		genome.SpecialDrawTwo,
+		genome.SpecialDrawFour,
 		genome.SpecialWild,
 	}
 
