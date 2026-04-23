@@ -185,6 +185,50 @@ func TestDeadwoodEmpty(t *testing.T) {
 	}
 }
 
+func TestCardValueAce(t *testing.T) {
+	// Rummy convention: Ace is worth 1 point as deadwood (low),
+	// even though it's ranked high (14) for run ordering.
+	ace := sim.Card{Suit: sim.Hearts, Rank: sim.Ace}
+	if got := cardValue(ace); got != 1 {
+		t.Fatalf("expected Ace value 1, got %d", got)
+	}
+}
+
+func TestCardValueFaceCards(t *testing.T) {
+	// Face cards (10, J, Q, K) are worth 10 each.
+	cases := []sim.Rank{sim.Ten, sim.Jack, sim.Queen, sim.King}
+	for _, r := range cases {
+		c := sim.Card{Suit: sim.Clubs, Rank: r}
+		if got := cardValue(c); got != 10 {
+			t.Fatalf("expected %s value 10, got %d", r, got)
+		}
+	}
+}
+
+func TestCardValueNumberCards(t *testing.T) {
+	// Number cards (2-9) are worth their face value.
+	for r := sim.Two; r <= sim.Nine; r++ {
+		c := sim.Card{Suit: sim.Diamonds, Rank: r}
+		if got := cardValue(c); got != int(r) {
+			t.Fatalf("expected %s value %d, got %d", r, int(r), got)
+		}
+	}
+}
+
+func TestDeadwoodWithAces(t *testing.T) {
+	// Hand with unmelded aces should score them at 1 each, not 10.
+	params := &genome.RummyParams{MeldTypes: genome.MeldBoth, MinMeldSize: 3}
+	hand := []sim.Card{
+		{Suit: sim.Hearts, Rank: sim.Ace},
+		{Suit: sim.Spades, Rank: sim.Ace},
+		{Suit: sim.Hearts, Rank: sim.Five},
+	}
+	// 1 + 1 + 5 = 7 (not 10 + 10 + 5 = 25)
+	if dw := calcDeadwood(hand, params); dw != 7 {
+		t.Fatalf("expected deadwood 7 (Ace=1, Ace=1, Five=5), got %d", dw)
+	}
+}
+
 func TestAllRummySeedsValid(t *testing.T) {
 	seedGames := []*genome.Genome{
 		seeds.GinRummy(),
