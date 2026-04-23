@@ -152,6 +152,31 @@ func TestDeadwood(t *testing.T) {
 	}
 }
 
+func TestDeadwoodOverlappingSetAndRun(t *testing.T) {
+	params := &genome.RummyParams{
+		MeldTypes:   genome.MeldBoth,
+		MinMeldSize: 3,
+	}
+
+	// Hand where 5H can belong to either a set of three 5s or a run 5H-6H-7H.
+	// A card can only be used in one meld, so at most one of these can form.
+	// Optimal partition: use the run (saves 5+6+7=18), leaves 5D+5C as deadwood (5+5=10).
+	// Set-only partition leaves 6H+7H as deadwood (6+7=13).
+	// Buggy behavior (over-marking): deadwood = 0.
+	hand := []sim.Card{
+		{Suit: sim.Hearts, Rank: sim.Five},
+		{Suit: sim.Diamonds, Rank: sim.Five},
+		{Suit: sim.Clubs, Rank: sim.Five},
+		{Suit: sim.Hearts, Rank: sim.Six},
+		{Suit: sim.Hearts, Rank: sim.Seven},
+	}
+
+	dw := calcDeadwood(hand, params)
+	if dw != 10 {
+		t.Fatalf("expected deadwood 10 (optimal run partition), got %d", dw)
+	}
+}
+
 func TestDeadwoodEmpty(t *testing.T) {
 	params := &genome.RummyParams{MeldTypes: genome.MeldBoth, MinMeldSize: 3}
 	dw := calcDeadwood(nil, params)

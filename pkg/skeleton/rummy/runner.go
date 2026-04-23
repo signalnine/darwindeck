@@ -385,21 +385,41 @@ func calcDeadwood(hand []sim.Card, params *genome.RummyParams) int {
 		return 0
 	}
 
-	// Find melds and mark used cards
+	// Candidate melds may share cards (e.g. 5H appears in both a 5-set and a
+	// 5H-6H-7H run). A single card can only sit in one meld, so we greedily
+	// assign cards to the highest-value meld first and skip any meld whose
+	// cards are no longer all available.
 	melds := findMelds(hand, params)
+	sort.SliceStable(melds, func(i, j int) bool {
+		return meldValue(melds[i]) > meldValue(melds[j])
+	})
+
 	used := make(map[int]bool)
 	for _, meld := range melds {
+		claim := make([]int, 0, len(meld))
+		ok := true
 		for _, mc := range meld {
+			idx := -1
 			for i, hc := range hand {
-				if hc == mc && !used[i] {
-					used[i] = true
+				if hc == mc && !used[i] && !containsInt(claim, i) {
+					idx = i
 					break
 				}
 			}
+			if idx < 0 {
+				ok = false
+				break
+			}
+			claim = append(claim, idx)
+		}
+		if !ok {
+			continue
+		}
+		for _, i := range claim {
+			used[i] = true
 		}
 	}
 
-	// Sum deadwood
 	total := 0
 	for i, card := range hand {
 		if !used[i] {
@@ -407,6 +427,23 @@ func calcDeadwood(hand []sim.Card, params *genome.RummyParams) int {
 		}
 	}
 	return total
+}
+
+func meldValue(meld []sim.Card) int {
+	total := 0
+	for _, c := range meld {
+		total += cardValue(c)
+	}
+	return total
+}
+
+func containsInt(xs []int, v int) bool {
+	for _, x := range xs {
+		if x == v {
+			return true
+		}
+	}
+	return false
 }
 
 func cardValue(c sim.Card) int {
