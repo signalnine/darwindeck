@@ -87,6 +87,31 @@ func TestRummyScorerPrefersMeld(t *testing.T) {
 	}
 }
 
+func TestCardDeadwoodAceIsOne(t *testing.T) {
+	// In rummy, Ace is worth 1 point of deadwood, face cards are worth 10.
+	// Regression: earlier code checked `Rank >= Ten` first, catching Ace
+	// (rank 14) and returning 10 for aces.
+	cases := []struct {
+		card Card
+		want int
+	}{
+		{Card{Suit: Hearts, Rank: Ace}, 1},
+		{Card{Suit: Spades, Rank: Ace}, 1},
+		{Card{Suit: Hearts, Rank: King}, 10},
+		{Card{Suit: Hearts, Rank: Queen}, 10},
+		{Card{Suit: Hearts, Rank: Jack}, 10},
+		{Card{Suit: Hearts, Rank: Ten}, 10},
+		{Card{Suit: Hearts, Rank: Nine}, 9},
+		{Card{Suit: Hearts, Rank: Two}, 2},
+	}
+	for _, c := range cases {
+		got := cardDeadwood(c.card)
+		if got != c.want {
+			t.Errorf("cardDeadwood(%s) = %d, want %d", c.card, got, c.want)
+		}
+	}
+}
+
 func TestGreedyAISelectsHighest(t *testing.T) {
 	scorer := &SheddingScorer{}
 	ai := &GreedyAI{Scorer: scorer}

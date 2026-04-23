@@ -411,10 +411,10 @@ func calcDeadwood(hand []sim.Card, params *genome.RummyParams) int {
 
 func cardValue(c sim.Card) int {
 	switch {
-	case c.Rank >= sim.Ten:
-		return 10 // 10, J, Q, K
 	case c.Rank == sim.Ace:
 		return 1 // Ace (low in rummy deadwood)
+	case c.Rank >= sim.Ten:
+		return 10 // 10, J, Q, K
 	default:
 		return int(c.Rank) // 2-9
 	}

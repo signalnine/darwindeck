@@ -152,6 +152,24 @@ func TestDeadwood(t *testing.T) {
 	}
 }
 
+func TestDeadwoodAceWorthOne(t *testing.T) {
+	// In rummy, Ace is worth 1 deadwood point, not 10. Regression:
+	// earlier code checked `Rank >= Ten` first, so Ace (rank 14) fell
+	// through the face-card case and scored 10.
+	params := &genome.RummyParams{MeldTypes: genome.MeldBoth, MinMeldSize: 3}
+
+	// Hand with a lone Ace and two unrelated cards — no melds possible.
+	// Expected deadwood: 1 (Ace) + 2 (Two) + 5 (Five) = 8.
+	hand := []sim.Card{
+		{Suit: sim.Hearts, Rank: sim.Ace},
+		{Suit: sim.Clubs, Rank: sim.Two},
+		{Suit: sim.Spades, Rank: sim.Five},
+	}
+	if dw := calcDeadwood(hand, params); dw != 8 {
+		t.Fatalf("expected deadwood 8 (Ace=1 + 2 + 5), got %d", dw)
+	}
+}
+
 func TestDeadwoodEmpty(t *testing.T) {
 	params := &genome.RummyParams{MeldTypes: genome.MeldBoth, MinMeldSize: 3}
 	dw := calcDeadwood(nil, params)
