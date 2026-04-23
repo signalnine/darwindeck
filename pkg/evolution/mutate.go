@@ -258,7 +258,7 @@ func mutateScoring(g *genome.Genome, rng *rand.Rand) {
 		// Add a scoring rule
 		g.Scoring.CardPoints = append(g.Scoring.CardPoints, genome.CardScoring{
 			Suit:   uint8(rng.IntN(5)),     // 0=all, 1-4=specific
-			Rank:   uint8(rng.IntN(14) + 1), // 1-14
+			Rank:   uint8(rng.IntN(13) + 2), // 2-14 (matches sim.Rank values)
 			Points: rng.IntN(13) + 1,        // 1-13
 		})
 	} else {

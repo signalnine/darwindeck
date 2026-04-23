@@ -133,6 +133,29 @@ func TestMutateDoesNotCrash(t *testing.T) {
 	}
 }
 
+func TestMutateScoringGeneratesValidRanks(t *testing.T) {
+	rng := rand.New(rand.NewPCG(7, 0))
+
+	// Valid ranks are 2-14 (see pkg/sim/card.go). Rank 0 is a wildcard,
+	// rank 1 is never emitted because no card has rank 1 -- if mutateScoring
+	// ever produces Rank=1 the resulting CardScoring rule is dead weight.
+	for i := 0; i < 1000; i++ {
+		g := &genome.Genome{}
+		mutateScoring(g, rng)
+		if len(g.Scoring.CardPoints) != 1 {
+			t.Fatalf("iteration %d: expected 1 CardScoring entry, got %d",
+				i, len(g.Scoring.CardPoints))
+		}
+		r := g.Scoring.CardPoints[0].Rank
+		if r == 1 {
+			t.Fatalf("iteration %d: mutateScoring emitted invalid Rank=1 (no card has rank 1)", i)
+		}
+		if r != 0 && (r < 2 || r > 14) {
+			t.Fatalf("iteration %d: mutateScoring emitted out-of-range Rank=%d", i, r)
+		}
+	}
+}
+
 func TestDedupPreservesDiversity(t *testing.T) {
 	// Create population with duplicates
 	pop := make([]*Individual, 10)
