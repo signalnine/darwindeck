@@ -87,6 +87,27 @@ func TestRummyScorerPrefersMeld(t *testing.T) {
 	}
 }
 
+func TestCardDeadwoodValues(t *testing.T) {
+	cases := []struct {
+		rank Rank
+		want int
+	}{
+		{Ace, 1},
+		{Two, 2},
+		{Nine, 9},
+		{Ten, 10},
+		{Jack, 10},
+		{Queen, 10},
+		{King, 10},
+	}
+	for _, tc := range cases {
+		got := cardDeadwood(Card{Suit: Hearts, Rank: tc.rank})
+		if got != tc.want {
+			t.Errorf("cardDeadwood(%s) = %d, want %d", tc.rank, got, tc.want)
+		}
+	}
+}
+
 func TestGreedyAISelectsHighest(t *testing.T) {
 	scorer := &SheddingScorer{}
 	ai := &GreedyAI{Scorer: scorer}

@@ -303,10 +303,10 @@ func (s *RummyScorer) cardMeldPotential(card Card, hand []Card) float64 {
 
 func cardDeadwood(c Card) int {
 	switch {
-	case c.Rank >= Ten:
-		return 10
 	case c.Rank == Ace:
 		return 1
+	case c.Rank >= Ten:
+		return 10
 	default:
 		return int(c.Rank)
 	}
