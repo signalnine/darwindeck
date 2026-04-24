@@ -82,21 +82,22 @@ func TestInvalidGenomeGetsZeroFitness(t *testing.T) {
 }
 
 func TestSkillGradient(t *testing.T) {
-	// Greedy should beat random in trick-taking (play to win tricks)
+	// Greedy should beat random in trick-taking (play to win tricks).
+	// Player 0 uses greedy; the other seats stay random.
 	g := seeds.Whist()
 	runner := GetRunner(g)
 	randomAI := &sim.RandomAI{}
-	greedyAI := GetGreedyAI(g)
 
 	randomResult := sim.RunBatch(g, runner, randomAI, 100, 0)
-	greedyResult := sim.RunBatch(g, runner, greedyAI, 100, 500)
+	greedyResult := runGreedyBatch(g, runner, 100, 500)
 
 	skill := computeSkillGradient(randomResult, greedyResult, g.Players)
 	t.Logf("Whist skill gradient: %.3f (random wins=%v, greedy wins=%v)",
 		skill, randomResult.WinCounts, greedyResult.WinCounts)
 
-	// Whist with random play: each player should win ~25%
-	// Greedy should do at least somewhat better
-	// But since ALL players are greedy in our simplified version, wins should be ~even
-	// The metric still works because it compares the two batch results
+	// With only P0 greedy vs random opponents, P0 should win noticeably
+	// more than the 1/N baseline. If this drops to zero the mix is broken.
+	if skill <= 0 {
+		t.Errorf("expected positive skill gradient for Whist greedy vs random, got %.3f", skill)
+	}
 }

@@ -58,11 +58,18 @@ func Evaluate(g *genome.Genome, baseSeed uint64) EvaluationResult {
 	return result
 }
 
-// runGreedyBatch runs games where player 0 uses greedy AI and others use random.
-// We do this by running the game loop manually with mixed AI.
+// runGreedyBatch runs games where player 0 uses greedy AI and others use
+// random. computeSkillGradient reads player 0's win rate, so mixing AIs per
+// seat is the only way the metric can distinguish skill from symmetry.
 func runGreedyBatch(g *genome.Genome, runner sim.GenericRunner, n int, baseSeed uint64, hooks ...sim.HookFunc) sim.BatchResult {
-	greedyAI := GetGreedyAI(g)
-	return sim.RunBatch(g, runner, greedyAI, n, baseSeed, hooks...)
+	players := make([]sim.AIPlayer, g.Players)
+	players[0] = GetGreedyAI(g)
+	random := &sim.RandomAI{}
+	for i := 1; i < g.Players; i++ {
+		players[i] = random
+	}
+	ai := &sim.PerPlayerAI{Players: players, Fallback: random}
+	return sim.RunBatch(g, runner, ai, n, baseSeed, hooks...)
 }
 
 // buildHookFuncs converts mechanic hooks into sim.HookFunc closures.
