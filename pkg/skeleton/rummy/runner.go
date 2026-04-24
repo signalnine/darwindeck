@@ -380,70 +380,226 @@ func findRuns(hand []sim.Card, minSize int) [][]sim.Card {
 // calcDeadwood calculates the total deadwood points in a hand.
 // Cards not part of any meld count as deadwood.
 // Face cards = 10, Ace = 1, others = face value.
+//
+// Maximal-meld greedy is wrong because a 4-of-a-kind set (or a long run)
+// can swallow a card that another meld needs. We enumerate all valid
+// sub-melds (sub-sets and sub-runs of size >= MinMeldSize) and choose the
+// max-value disjoint partition via subset DP.
 func calcDeadwood(hand []sim.Card, params *genome.RummyParams) int {
-	if len(hand) == 0 {
+	n := len(hand)
+	if n == 0 {
 		return 0
 	}
 
-	// Candidate melds may share cards (e.g. 5H appears in both a 5-set and a
-	// 5H-6H-7H run). A single card can only sit in one meld, so we greedily
-	// assign cards to the highest-value meld first and skip any meld whose
-	// cards are no longer all available.
-	melds := findMelds(hand, params)
-	sort.SliceStable(melds, func(i, j int) bool {
-		return meldValue(melds[i]) > meldValue(melds[j])
-	})
+	totalValue := 0
+	for _, c := range hand {
+		totalValue += cardValue(c)
+	}
 
-	used := make(map[int]bool)
-	for _, meld := range melds {
-		claim := make([]int, 0, len(meld))
-		ok := true
-		for _, mc := range meld {
-			idx := -1
-			for i, hc := range hand {
-				if hc == mc && !used[i] && !containsInt(claim, i) {
-					idx = i
-					break
-				}
-			}
-			if idx < 0 {
-				ok = false
-				break
-			}
-			claim = append(claim, idx)
+	candidates := enumerateMeldCandidates(hand, params)
+	if len(candidates) == 0 {
+		return totalValue
+	}
+
+	used := bestPartition(candidates, n)
+	dead := 0
+	for i, card := range hand {
+		if !used[i] {
+			dead += cardValue(card)
 		}
-		if !ok {
+	}
+	return dead
+}
+
+// meldCandidate is one disjoint-partition option, identified by hand indices.
+type meldCandidate struct {
+	mask  uint32 // bit i set if hand[i] is in this meld
+	value int
+}
+
+// enumerateMeldCandidates returns every valid sub-meld at size >= MinMeldSize.
+// Sub-sets: every k-combination of cards sharing a rank, for k in [min, count].
+// Sub-runs: every contiguous-rank window in a suit, for length in [min, runLen].
+func enumerateMeldCandidates(hand []sim.Card, params *genome.RummyParams) []meldCandidate {
+	var out []meldCandidate
+	min := params.MinMeldSize
+	if min < 1 {
+		return out
+	}
+
+	if params.MeldTypes == genome.MeldSets || params.MeldTypes == genome.MeldBoth {
+		byRank := make(map[sim.Rank][]int)
+		for i, c := range hand {
+			byRank[c.Rank] = append(byRank[c.Rank], i)
+		}
+		for _, idxs := range byRank {
+			if len(idxs) < min {
+				continue
+			}
+			for size := min; size <= len(idxs); size++ {
+				addCombinations(hand, idxs, size, &out)
+			}
+		}
+	}
+
+	if params.MeldTypes == genome.MeldRuns || params.MeldTypes == genome.MeldBoth {
+		bySuit := make(map[sim.Suit][]int)
+		for i, c := range hand {
+			bySuit[c.Suit] = append(bySuit[c.Suit], i)
+		}
+		for _, idxs := range bySuit {
+			if len(idxs) < min {
+				continue
+			}
+			sort.Slice(idxs, func(i, j int) bool {
+				return hand[idxs[i]].Rank < hand[idxs[j]].Rank
+			})
+			// Walk maximal consecutive-rank segments; equal or non-+1 ranks break.
+			i := 0
+			for i < len(idxs) {
+				j := i + 1
+				for j < len(idxs) && hand[idxs[j]].Rank == hand[idxs[j-1]].Rank+1 {
+					j++
+				}
+				segLen := j - i
+				if segLen >= min {
+					for size := min; size <= segLen; size++ {
+						for start := i; start+size <= j; start++ {
+							var mask uint32
+							v := 0
+							for k := start; k < start+size; k++ {
+								mask |= 1 << uint(idxs[k])
+								v += cardValue(hand[idxs[k]])
+							}
+							out = append(out, meldCandidate{mask: mask, value: v})
+						}
+					}
+				}
+				i = j
+			}
+		}
+	}
+	return out
+}
+
+func addCombinations(hand []sim.Card, idxs []int, size int, out *[]meldCandidate) {
+	chosen := make([]int, 0, size)
+	var pick func(start int)
+	pick = func(start int) {
+		if len(chosen) == size {
+			var mask uint32
+			v := 0
+			for _, k := range chosen {
+				mask |= 1 << uint(k)
+				v += cardValue(hand[k])
+			}
+			*out = append(*out, meldCandidate{mask: mask, value: v})
+			return
+		}
+		need := size - len(chosen)
+		for i := start; i <= len(idxs)-need; i++ {
+			chosen = append(chosen, idxs[i])
+			pick(i + 1)
+			chosen = chosen[:len(chosen)-1]
+		}
+	}
+	pick(0)
+}
+
+// bestPartition finds the max-value disjoint subset of candidates and returns
+// which hand indices it uses. Subset DP for handSize <= 20; backtracking for
+// larger (which shouldn't happen given HandSize is validated <= 13).
+func bestPartition(candidates []meldCandidate, handSize int) []bool {
+	if handSize <= 20 {
+		return bestPartitionDP(candidates, handSize)
+	}
+	return bestPartitionDFS(candidates, handSize)
+}
+
+func bestPartitionDP(candidates []meldCandidate, handSize int) []bool {
+	full := uint32(1)<<uint(handSize) - 1
+	size := int(full) + 1
+	value := make([]int, size)
+	pickedMask := make([]uint32, size)
+	pickedFrom := make([]int32, size)
+	for i := range pickedFrom {
+		pickedFrom[i] = -1
+	}
+
+	for mask := uint32(1); mask <= full; mask++ {
+		// Best when not using lowest set bit of mask.
+		lowBit := mask & (^mask + 1)
+		prev := mask ^ lowBit
+		value[mask] = value[prev]
+		pickedMask[mask] = 0
+		pickedFrom[mask] = -1
+
+		for ci, c := range candidates {
+			if c.mask&mask != c.mask {
+				continue
+			}
+			rest := mask ^ c.mask
+			if v := value[rest] + c.value; v > value[mask] {
+				value[mask] = v
+				pickedMask[mask] = c.mask
+				pickedFrom[mask] = int32(ci)
+			}
+		}
+	}
+
+	used := make([]bool, handSize)
+	mask := full
+	for mask != 0 {
+		if pickedFrom[mask] < 0 {
+			// Skipped lowest bit; nothing to mark used here.
+			lowBit := mask & (^mask + 1)
+			mask ^= lowBit
 			continue
 		}
-		for _, i := range claim {
+		cMask := pickedMask[mask]
+		for i := 0; i < handSize; i++ {
+			if cMask&(1<<uint(i)) != 0 {
+				used[i] = true
+			}
+		}
+		mask ^= cMask
+	}
+	return used
+}
+
+func bestPartitionDFS(candidates []meldCandidate, handSize int) []bool {
+	sort.SliceStable(candidates, func(i, j int) bool {
+		return candidates[i].value > candidates[j].value
+	})
+	bestVal := 0
+	bestUsed := uint64(0)
+	usedNow := uint64(0)
+	var dfs func(idx, val int)
+	dfs = func(idx, val int) {
+		if val > bestVal {
+			bestVal = val
+			bestUsed = usedNow
+		}
+		if idx >= len(candidates) {
+			return
+		}
+		c := candidates[idx]
+		cm := uint64(c.mask)
+		if usedNow&cm == 0 {
+			usedNow |= cm
+			dfs(idx+1, val+c.value)
+			usedNow &^= cm
+		}
+		dfs(idx+1, val)
+	}
+	dfs(0, 0)
+	used := make([]bool, handSize)
+	for i := 0; i < handSize; i++ {
+		if bestUsed&(1<<uint(i)) != 0 {
 			used[i] = true
 		}
 	}
-
-	total := 0
-	for i, card := range hand {
-		if !used[i] {
-			total += cardValue(card)
-		}
-	}
-	return total
-}
-
-func meldValue(meld []sim.Card) int {
-	total := 0
-	for _, c := range meld {
-		total += cardValue(c)
-	}
-	return total
-}
-
-func containsInt(xs []int, v int) bool {
-	for _, x := range xs {
-		if x == v {
-			return true
-		}
-	}
-	return false
+	return used
 }
 
 func cardValue(c sim.Card) int {

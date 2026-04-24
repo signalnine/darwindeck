@@ -177,6 +177,50 @@ func TestDeadwoodOverlappingSetAndRun(t *testing.T) {
 	}
 }
 
+func TestDeadwoodSubsetSetWithRun(t *testing.T) {
+	// 4 fives + a Spades run that needs 5S.
+	// Greedy by maximal-meld value picks the 4-set (value 20) and blocks
+	// the run, leaving 6S+7S = 13 deadwood.
+	// Optimal partition: 3-set [5H,5D,5C] + run [5S,6S,7S] -> 0 deadwood.
+	params := &genome.RummyParams{
+		MeldTypes:   genome.MeldBoth,
+		MinMeldSize: 3,
+	}
+	hand := []sim.Card{
+		{Suit: sim.Hearts, Rank: sim.Five},
+		{Suit: sim.Diamonds, Rank: sim.Five},
+		{Suit: sim.Clubs, Rank: sim.Five},
+		{Suit: sim.Spades, Rank: sim.Five},
+		{Suit: sim.Spades, Rank: sim.Six},
+		{Suit: sim.Spades, Rank: sim.Seven},
+	}
+	if dw := calcDeadwood(hand, params); dw != 0 {
+		t.Fatalf("expected deadwood 0 (3-set + run partition), got %d", dw)
+	}
+}
+
+func TestDeadwoodSubRunReleasesCardForSet(t *testing.T) {
+	// Run 5H..9H plus 9D,9C means optimal is run [5H,6H,7H,8H] + set [9H,9D,9C] = 0.
+	// Naive maximal-meld algorithm picks run [5H..9H] (value 35) which blocks the set,
+	// leaving 9D+9C = 20 deadwood.
+	params := &genome.RummyParams{
+		MeldTypes:   genome.MeldBoth,
+		MinMeldSize: 3,
+	}
+	hand := []sim.Card{
+		{Suit: sim.Hearts, Rank: sim.Five},
+		{Suit: sim.Hearts, Rank: sim.Six},
+		{Suit: sim.Hearts, Rank: sim.Seven},
+		{Suit: sim.Hearts, Rank: sim.Eight},
+		{Suit: sim.Hearts, Rank: sim.Nine},
+		{Suit: sim.Diamonds, Rank: sim.Nine},
+		{Suit: sim.Clubs, Rank: sim.Nine},
+	}
+	if dw := calcDeadwood(hand, params); dw != 0 {
+		t.Fatalf("expected deadwood 0 (sub-run + set partition), got %d", dw)
+	}
+}
+
 func TestDeadwoodEmpty(t *testing.T) {
 	params := &genome.RummyParams{MeldTypes: genome.MeldBoth, MinMeldSize: 3}
 	dw := calcDeadwood(nil, params)
