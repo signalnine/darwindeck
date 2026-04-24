@@ -1,6 +1,7 @@
 # tests/unit/test_web_routes_sessions.py
 """Tests for sessions API routes."""
 
+import json
 import os
 import tempfile
 import pytest
@@ -10,8 +11,15 @@ from sqlalchemy.orm import sessionmaker
 from fastapi.testclient import TestClient
 from fastapi import FastAPI
 
+from darwindeck.genome.examples import create_war_genome
+from darwindeck.genome.serialization import genome_to_dict
 from darwindeck.web.models import Base, Game, GameSession
 from darwindeck.web.dependencies import get_db, get_worker
+
+
+# A valid genome JSON so the sessions route can compile bytecode before
+# delegating to the (mocked) worker. Using War keeps the fixture small.
+VALID_GENOME_JSON = json.dumps(genome_to_dict(create_war_genome()))
 
 
 def create_test_app():
@@ -31,19 +39,25 @@ class MockWorker:
     def __init__(self):
         self.start_game_result = {
             "state": {
-                "turn": 0,
-                "active_player": 0,
-                "hands": [["Ah", "2s"], ["3d", "4c"]],
-                "legal_moves": [{"type": "play", "card": "Ah"}, {"type": "play", "card": "2s"}],
-            }
+                "turn_number": 0,
+                "current_player": 0,
+                "players": [{"hand": []}, {"hand": []}],
+                "deck": [],
+                "tableau": [],
+            },
+            "moves": [],
+            "winner": -1,
         }
         self.apply_move_result = {
             "state": {
-                "turn": 1,
-                "active_player": 1,
-                "hands": [["2s"], ["3d", "4c"]],
-                "legal_moves": [{"type": "play", "card": "3d"}],
-            }
+                "turn_number": 1,
+                "current_player": 1,
+                "players": [{"hand": []}, {"hand": []}],
+                "deck": [],
+                "tableau": [],
+            },
+            "moves": [],
+            "winner": -1,
         }
 
     async def execute(self, command: dict, timeout: float = 5.0) -> dict:
@@ -77,13 +91,13 @@ def client(mock_worker):
 
         # Create a session and add test data
         db = SessionLocal()
-        db.add(Game(id="TestGame", genome_json='{"name": "Test"}', fitness=0.8, status="active"))
+        db.add(Game(id="TestGame", genome_json=VALID_GENOME_JSON, fitness=0.8, status="active"))
         db.add(
             GameSession(
                 id="existing-session-123",
                 game_id="TestGame",
                 session_id="browser-session-abc",
-                state_json='{"turn": 5, "hands": [["Ah"], ["2s"]]}',
+                state_json='{"turn_number": 5, "current_player": 0, "players": [{"hand": []}, {"hand": []}]}',
                 version=5,
                 completed=False,
             )
@@ -93,7 +107,7 @@ def client(mock_worker):
                 id="completed-session-456",
                 game_id="TestGame",
                 session_id="browser-session-abc",
-                state_json='{"turn": 10, "winner": 0}',
+                state_json='{"turn_number": 10, "winner_id": 0}',
                 version=10,
                 completed=True,
             )
