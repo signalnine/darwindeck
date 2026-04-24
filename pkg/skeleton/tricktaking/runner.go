@@ -172,9 +172,10 @@ func (r *Runner) ApplyMove(state *sim.GameState, move sim.Move, g *genome.Genome
 		}
 	}
 
-	// Check if trump was broken (played off-suit with trump)
+	// Check if trump was broken (player played trump on a non-trump lead).
+	// Following trump on a trump-led trick is not "breaking" trump.
 	if state.TrumpSuit >= 0 && int(card.Suit) == state.TrumpSuit {
-		if len(state.TrickCards) > 1 {
+		if len(state.TrickCards) > 1 && int(state.TrickCards[0].Suit) != state.TrumpSuit {
 			state.TrickBroken = true
 		}
 	}

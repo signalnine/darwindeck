@@ -199,6 +199,117 @@ func TestTrumpBeatsOffSuit(t *testing.T) {
 	}
 }
 
+// trumpBrokenGenome builds a 2-player trick-taking genome with a fixed trump
+// suit and no lead restriction, so we can drive specific cards through ApplyMove.
+func trumpBrokenGenome(trump sim.Suit) *genome.Genome {
+	return &genome.Genome{
+		ID:       "trump-broken-test",
+		Skeleton: genome.TrickTaking,
+		Players:  2,
+		HandSize: 1,
+		TrickTaking: &genome.TrickTakingParams{
+			MustFollowSuit:  true,
+			TrickScoring:    genome.ScorePerTrick,
+			LeadRestriction: genome.LeadNone,
+			RoundsPerGame:   1,
+		},
+		TrumpRule: genome.TrumpFixed,
+		Scoring: genome.ScoringConfig{
+			TrumpSuit: uint8(trump) + 1,
+		},
+	}
+}
+
+func TestTrumpNotBrokenWhenTrumpIsLed(t *testing.T) {
+	g := trumpBrokenGenome(sim.Hearts)
+	runner := &Runner{}
+	rng := rand.New(rand.NewPCG(1, 0))
+	state := runner.Setup(g, rng)
+
+	// Set up a controlled trick: trump (Hearts) is led, follower follows trump.
+	state.Hands[0] = []sim.Card{{Suit: sim.Hearts, Rank: sim.Five}}
+	state.Hands[1] = []sim.Card{{Suit: sim.Hearts, Rank: sim.Seven}}
+	state.TrickCards = state.TrickCards[:0]
+	state.TrickPlayers = state.TrickPlayers[:0]
+	state.Active = 0
+	state.TrickBroken = false
+
+	runner.ApplyMove(state, sim.Move{
+		Type:     sim.MovePlay,
+		Cards:    []sim.Card{{Suit: sim.Hearts, Rank: sim.Five}},
+		PlayerID: 0,
+	}, g)
+	runner.ApplyMove(state, sim.Move{
+		Type:     sim.MovePlay,
+		Cards:    []sim.Card{{Suit: sim.Hearts, Rank: sim.Seven}},
+		PlayerID: 1,
+	}, g)
+
+	if state.TrickBroken {
+		t.Fatal("TrickBroken must stay false when trump suit is led and follower follows suit")
+	}
+}
+
+func TestTrumpBrokenWhenPlayedOffLead(t *testing.T) {
+	g := trumpBrokenGenome(sim.Hearts)
+	runner := &Runner{}
+	rng := rand.New(rand.NewPCG(1, 0))
+	state := runner.Setup(g, rng)
+
+	// Spades is led (non-trump), follower has no spades and plays trump.
+	state.Hands[0] = []sim.Card{{Suit: sim.Spades, Rank: sim.Five}}
+	state.Hands[1] = []sim.Card{{Suit: sim.Hearts, Rank: sim.Seven}}
+	state.TrickCards = state.TrickCards[:0]
+	state.TrickPlayers = state.TrickPlayers[:0]
+	state.Active = 0
+	state.TrickBroken = false
+
+	runner.ApplyMove(state, sim.Move{
+		Type:     sim.MovePlay,
+		Cards:    []sim.Card{{Suit: sim.Spades, Rank: sim.Five}},
+		PlayerID: 0,
+	}, g)
+	runner.ApplyMove(state, sim.Move{
+		Type:     sim.MovePlay,
+		Cards:    []sim.Card{{Suit: sim.Hearts, Rank: sim.Seven}},
+		PlayerID: 1,
+	}, g)
+
+	if !state.TrickBroken {
+		t.Fatal("TrickBroken must be set when a player plays trump on a non-trump lead")
+	}
+}
+
+func TestTrumpNotBrokenByOffSuitWhenTrumpLed(t *testing.T) {
+	g := trumpBrokenGenome(sim.Hearts)
+	runner := &Runner{}
+	rng := rand.New(rand.NewPCG(1, 0))
+	state := runner.Setup(g, rng)
+
+	// Trump is led; follower has no trump and dumps an off-suit card.
+	state.Hands[0] = []sim.Card{{Suit: sim.Hearts, Rank: sim.Five}}
+	state.Hands[1] = []sim.Card{{Suit: sim.Clubs, Rank: sim.Seven}}
+	state.TrickCards = state.TrickCards[:0]
+	state.TrickPlayers = state.TrickPlayers[:0]
+	state.Active = 0
+	state.TrickBroken = false
+
+	runner.ApplyMove(state, sim.Move{
+		Type:     sim.MovePlay,
+		Cards:    []sim.Card{{Suit: sim.Hearts, Rank: sim.Five}},
+		PlayerID: 0,
+	}, g)
+	runner.ApplyMove(state, sim.Move{
+		Type:     sim.MovePlay,
+		Cards:    []sim.Card{{Suit: sim.Clubs, Rank: sim.Seven}},
+		PlayerID: 1,
+	}, g)
+
+	if state.TrickBroken {
+		t.Fatal("TrickBroken must stay false when no trump is played")
+	}
+}
+
 func TestAllTrickSeedsValid(t *testing.T) {
 	seedGames := []*genome.Genome{
 		seeds.Whist(),
