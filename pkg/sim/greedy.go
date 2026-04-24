@@ -72,20 +72,6 @@ func (s *SheddingScorer) ScoreMove(move Move, state *GameState) float64 {
 		// Play isolated cards first (saves flexible ones for later)
 		score -= float64(connections) * 2.0
 
-		// Prefer cards that MATCH THE TOP CARD well (keeps options open for next turn)
-		// After playing, the new top IS this card. Count how many remaining hand cards
-		// will match it (giving us plays next turn too).
-		futureMatches := 0
-		for _, h := range hand {
-			if h == card {
-				continue
-			}
-			if h.Suit == card.Suit || h.Rank == card.Rank {
-				futureMatches++
-			}
-		}
-		score += float64(futureMatches) * 1.5
-
 		// If opponent is close to winning (few cards), prefer specials
 		// that disrupt them (draw-two, skip).
 		// Check if this is a special card that hurts opponent.

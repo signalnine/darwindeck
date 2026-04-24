@@ -5,6 +5,42 @@ import (
 	"testing"
 )
 
+func TestSheddingScorerPrefersIsolatedCard(t *testing.T) {
+	scorer := &SheddingScorer{}
+	// Hand: three kings share rank with each other; 5S shares neither
+	// suit nor rank with any other card. Playing 5S saves the flexible
+	// kings for later -- its score must beat playing a king, all else equal.
+	state := &GameState{
+		Hands: [][]Card{
+			{
+				{Suit: Hearts, Rank: King},
+				{Suit: Diamonds, Rank: King},
+				{Suit: Clubs, Rank: King},
+				{Suit: Spades, Rank: Five},
+			},
+		},
+		NumPlayers: 1,
+		Active:     0,
+	}
+
+	isolated := Move{Type: MovePlay, Cards: []Card{{Suit: Spades, Rank: Five}}, PlayerID: 0}
+	connected := Move{Type: MovePlay, Cards: []Card{{Suit: Hearts, Rank: King}}, PlayerID: 0}
+
+	isolatedScore := scorer.ScoreMove(isolated, state)
+	connectedScore := scorer.ScoreMove(connected, state)
+
+	// KH has 2 connections (same rank as KD and KC); 5S has 0.
+	// The isolation heuristic penalizes connections at 2.0 per connection,
+	// so the score difference must be at least 3.0 (two-connection gap).
+	// The buggy version had a duplicated loop with opposite sign that
+	// cancelled most of the penalty down to 0.5 per connection -- a
+	// ~1.0 gap that fails this assertion.
+	diff := isolatedScore - connectedScore
+	if diff < 3.0 {
+		t.Fatalf("isolation preference too weak: isolated=%.2f connected=%.2f diff=%.2f (want >= 3.0)", isolatedScore, connectedScore, diff)
+	}
+}
+
 func TestSheddingScorerPrefersPlay(t *testing.T) {
 	scorer := &SheddingScorer{}
 	state := &GameState{
