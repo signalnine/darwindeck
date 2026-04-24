@@ -228,7 +228,7 @@ func (e *Engine) Select() []*Individual {
 	}
 
 	// Diversity: kill duplicate genomes in top 50
-	dedup(nextGen)
+	e.dedup(nextGen)
 
 	return nextGen
 }
@@ -244,8 +244,10 @@ func (e *Engine) tournament() *Individual {
 	return best
 }
 
-// dedup removes duplicate genomes in the top 50 by hash.
-func dedup(pop []*Individual) {
+// dedup removes duplicate genomes in the top 50 by replacing each duplicate
+// with a fresh mutation. Preference order for the parent: a non-duplicate
+// individual already in pop, then a random seed, then the duplicate itself.
+func (e *Engine) dedup(pop []*Individual) {
 	seen := make(map[string]bool)
 	top := min(50, len(pop))
 	for i := 0; i < top; i++ {
@@ -254,16 +256,34 @@ func dedup(pop []*Individual) {
 		}
 		hash := genomeHash(pop[i].Genome)
 		if seen[hash] {
-			// Replace with a fresh mutation of a random valid individual
-			for j := 0; j < top; j++ {
-				if pop[j].Genome != nil && !seen[genomeHash(pop[j].Genome)] {
-					pop[i].Valid = false // Force re-evaluation
-					break
-				}
+			parent := e.dedupParent(pop, top, seen, hash, i)
+			if parent != nil {
+				child := Mutate(parent, e.rng, e.Seeds)
+				pop[i].Genome = child
+				pop[i].Valid = false
+				hash = genomeHash(child)
 			}
 		}
 		seen[hash] = true
 	}
+}
+
+// dedupParent picks a parent genome for replacing a duplicate at pop[i]:
+// first a pop entry whose hash differs from the duplicate, then a random
+// seed, and finally the duplicate itself as a last resort.
+func (e *Engine) dedupParent(pop []*Individual, top int, seen map[string]bool, dupHash string, i int) *genome.Genome {
+	for j := 0; j < top; j++ {
+		if j == i || pop[j].Genome == nil {
+			continue
+		}
+		if genomeHash(pop[j].Genome) != dupHash {
+			return pop[j].Genome
+		}
+	}
+	if len(e.Seeds) > 0 {
+		return e.Seeds[e.rng.IntN(len(e.Seeds))]
+	}
+	return pop[i].Genome
 }
 
 func genomeHash(g *genome.Genome) string {

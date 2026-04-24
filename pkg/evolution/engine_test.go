@@ -140,7 +140,7 @@ func TestDedupPreservesDiversity(t *testing.T) {
 	for i := range pop {
 		pop[i] = &Individual{
 			Genome: cloneGenome(g),
-			Valid:   true,
+			Valid:  true,
 		}
 	}
 
@@ -148,6 +148,45 @@ func TestDedupPreservesDiversity(t *testing.T) {
 	pop[1].Genome.Players = 3
 	pop[2].Genome.HandSize = 10
 
-	dedup(pop)
+	engine := NewEngine(DefaultConfig(), allSeeds())
+	engine.dedup(pop)
 	// Should not crash, dedup modifies in place
+}
+
+func TestDedupReplacesDuplicates(t *testing.T) {
+	// Build a population of 10 identical genomes. dedup should leave the
+	// first one untouched and replace each later duplicate with a mutated
+	// genome so the top-50 contains more than one distinct genomeHash.
+	pop := make([]*Individual, 10)
+	g := seeds.CrazyEights()
+	g.ID = "original-sentinel"
+	for i := range pop {
+		pop[i] = &Individual{Genome: cloneGenome(g), Valid: true}
+	}
+
+	engine := NewEngine(Config{BaseSeed: 7, Workers: 1}, allSeeds())
+	engine.dedup(pop)
+
+	hashes := make(map[string]int)
+	for _, ind := range pop {
+		hashes[genomeHash(ind.Genome)]++
+	}
+	if len(hashes) < 2 {
+		t.Fatalf("dedup left all genomes identical: %d unique hashes in %d individuals",
+			len(hashes), len(pop))
+	}
+
+	if pop[0].Genome.ID != "original-sentinel" {
+		t.Fatalf("dedup modified the first occurrence: ID=%q", pop[0].Genome.ID)
+	}
+
+	replaced := 0
+	for i := 1; i < len(pop); i++ {
+		if !pop[i].Valid {
+			replaced++
+		}
+	}
+	if replaced == 0 {
+		t.Fatal("dedup did not mark any replaced individuals as Valid=false")
+	}
 }
