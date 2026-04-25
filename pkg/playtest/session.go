@@ -89,17 +89,19 @@ func (s *Session) humanTurn(moves []sim.Move) {
 	}
 }
 
-func (s *Session) aiTurn(moves []sim.Move) {
+func (s *Session) aiTurn(moves []sim.Move) int {
+	actor := s.State.Active
 	move := s.AI.SelectMove(moves, s.State, s.RNG)
 	events := s.Runner.ApplyMove(s.State, move, s.Genome)
 
-	fmt.Printf("  Player %d: %s", s.State.Active, describeMoveShort(move))
+	fmt.Printf("  Player %d: %s", actor, describeMoveShort(move))
 	for _, e := range events {
 		if e.Type == sim.EventSpecialTriggered {
 			fmt.Printf(" [%s]", e.Detail)
 		}
 	}
 	fmt.Println()
+	return actor
 }
 
 func (s *Session) printState() {
