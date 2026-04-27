@@ -127,16 +127,18 @@ func (e *NoveltyEngine) evaluatePopulation() {
 					batchResult := sim.RunBatch(ind.Genome, runner, randomAI, 50, seed+5000)
 					ind.Behavior = ComputeBehavior(batchResult)
 				}
-
-				if result.Metrics.TotalFitness > e.BestFitness {
-					e.BestFitness = result.Metrics.TotalFitness
-					e.BestGenome = ind.Genome
-				}
 			}
 		}(i, ind)
 	}
 
 	wg.Wait()
+
+	for _, ind := range e.Population {
+		if ind.Valid && ind.Fitness.TotalFitness > e.BestFitness {
+			e.BestFitness = ind.Fitness.TotalFitness
+			e.BestGenome = ind.Genome
+		}
+	}
 }
 
 // computeNovelty calculates novelty score for each individual based on
