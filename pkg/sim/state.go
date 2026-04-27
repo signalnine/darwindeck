@@ -1,5 +1,7 @@
 package sim
 
+import "math/rand/v2"
+
 // PhaseType identifies the current phase of a game turn.
 type PhaseType uint8
 
@@ -84,6 +86,11 @@ type GameState struct {
 
 	// Events log for fitness analysis
 	Events []Event
+
+	// RNG used by runners that need to perform mid-game randomization
+	// (e.g. trick-taking round re-deals, rummy stock reshuffles). Set in
+	// Setup so CheckEnd/ApplyMove can reuse the game's seeded source.
+	RNG *rand.Rand
 }
 
 // NewGameState creates a fresh game state for the given number of players.

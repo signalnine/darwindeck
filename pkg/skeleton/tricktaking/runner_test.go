@@ -310,6 +310,54 @@ func TestTrumpNotBrokenByOffSuitWhenTrumpLed(t *testing.T) {
 	}
 }
 
+func TestMultiRoundReDeals(t *testing.T) {
+	g := seeds.Whist()
+	g.TrickTaking.RoundsPerGame = 3
+	g.HandSize = 4
+	g.Players = 2
+
+	runner := &Runner{}
+	rng := rand.New(rand.NewPCG(99, 0))
+	state := runner.Setup(g, rng)
+	ai := &sim.RandomAI{}
+
+	maxTurns := g.MaxTurns()
+	roundsCompleted := 0
+	prevRound := state.Round
+	for state.Turn < maxTurns {
+		winner := runner.CheckEnd(state, g)
+		if state.Round != prevRound {
+			roundsCompleted++
+			prevRound = state.Round
+			for i := 0; i < g.Players; i++ {
+				if len(state.Hands[i]) != g.HandSize {
+					t.Fatalf("after re-deal player %d hand size is %d, want %d",
+						i, len(state.Hands[i]), g.HandSize)
+				}
+			}
+			if len(state.TrickCards) != 0 {
+				t.Fatal("re-deal must clear TrickCards")
+			}
+			if state.TrickBroken {
+				t.Fatal("re-deal must clear TrickBroken")
+			}
+		}
+		if winner >= 0 {
+			break
+		}
+		moves := runner.GenerateMoves(state, g)
+		if len(moves) == 0 {
+			t.Fatalf("no moves at turn %d (round %d)", state.Turn, state.Round)
+		}
+		runner.ApplyMove(state, ai.SelectMove(moves, state, rng), g)
+	}
+
+	if roundsCompleted < g.TrickTaking.RoundsPerGame-1 {
+		t.Fatalf("only %d round transitions observed, expected at least %d",
+			roundsCompleted, g.TrickTaking.RoundsPerGame-1)
+	}
+}
+
 func TestAllTrickSeedsValid(t *testing.T) {
 	seedGames := []*genome.Genome{
 		seeds.Whist(),

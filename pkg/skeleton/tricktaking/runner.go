@@ -42,6 +42,7 @@ func (r *Runner) Setup(g *genome.Genome, rng *rand.Rand) *sim.GameState {
 	} else {
 		state.MaxRound = 1
 	}
+	state.RNG = rng
 
 	// Determine trump
 	state.TrumpSuit = determineTrump(g, deck, rng)
@@ -303,8 +304,43 @@ func (r *Runner) CheckEnd(state *sim.GameState, g *genome.Genome) int {
 		return findWinner(state, g)
 	}
 
-	// More rounds — would need re-deal (not yet implemented for multi-round)
-	return findWinner(state, g)
+	redealRound(state, g)
+	return -1
+}
+
+// redealRound prepares state for the next round of a multi-round game:
+// gather all played cards, shuffle, deal fresh hands, and reset trick
+// state. Cumulative scores carry across rounds; per-round trick piles do not.
+func redealRound(state *sim.GameState, g *genome.Genome) {
+	deck := make([]sim.Card, 0, 52)
+	for i := range state.Tableau {
+		deck = append(deck, state.Tableau[i]...)
+		state.Tableau[i] = state.Tableau[i][:0]
+	}
+	deck = append(deck, state.Deck...)
+	deck = append(deck, state.Discard...)
+	state.Discard = state.Discard[:0]
+
+	if state.RNG != nil {
+		sim.ShuffleDeck(deck, state.RNG)
+	}
+
+	for i := 0; i < g.Players; i++ {
+		hand, rest := sim.DrawN(deck, g.HandSize)
+		state.Hands[i] = append(state.Hands[i][:0], hand...)
+		deck = rest
+	}
+	state.Deck = deck
+
+	state.TrickCards = state.TrickCards[:0]
+	state.TrickPlayers = state.TrickPlayers[:0]
+	state.TrickBroken = false
+	state.TrickLeader = state.Round % state.NumPlayers
+	state.Active = state.TrickLeader
+
+	if state.RNG != nil {
+		state.TrumpSuit = determineTrump(g, state.Deck, state.RNG)
+	}
 }
 
 func findWinner(state *sim.GameState, g *genome.Genome) int {
