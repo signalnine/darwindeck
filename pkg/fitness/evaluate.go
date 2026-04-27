@@ -94,7 +94,7 @@ func buildHookFuncs(g *genome.Genome) []sim.HookFunc {
 					hook.Apply(state, g, event)
 				}
 			case mechanic.HookEndOfRound:
-				if event.Type == sim.EventRoundEnd || event.Type == sim.EventTrickWon {
+				if event.Type == sim.EventRoundEnd {
 					hook.Apply(state, g, event)
 				}
 			case mechanic.HookScoring:
