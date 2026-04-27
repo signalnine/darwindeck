@@ -209,9 +209,15 @@ func (e *MAPElitesEngine) evaluateAndInsert(genomes []*genome.Genome, gen int) {
 
 // randomArchiveOccupant returns a random genome from any occupied archive cell.
 func (e *MAPElitesEngine) randomArchiveOccupant() *genome.Genome {
-	// Collect all occupants
+	// Iterate skeletons in a stable order so seeded runs are reproducible;
+	// Go map iteration order is randomized per process and would otherwise
+	// shuffle the index space passed to rng.IntN.
 	var occupants []*genome.Genome
-	for _, archive := range e.Archives {
+	for _, skel := range []genome.SkeletonType{genome.Shedding, genome.TrickTaking, genome.Rummy} {
+		archive, ok := e.Archives[skel]
+		if !ok {
+			continue
+		}
 		for r := 0; r < GridSize; r++ {
 			for c := 0; c < GridSize; c++ {
 				if archive.Cells[r][c] != nil {
