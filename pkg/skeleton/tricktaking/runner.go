@@ -196,10 +196,12 @@ func (r *Runner) ApplyMove(state *sim.GameState, move sim.Move, g *genome.Genome
 		// Score the trick
 		scoreTrick(state, winner, g)
 
+		trickCardsCopy := make([]sim.Card, len(state.TrickCards))
+		copy(trickCardsCopy, state.TrickCards)
 		events = append(events, sim.Event{
 			Type:     sim.EventTrickWon,
 			PlayerID: winner,
-			Cards:    state.TrickCards,
+			Cards:    trickCardsCopy,
 		})
 
 		// Reset trick
