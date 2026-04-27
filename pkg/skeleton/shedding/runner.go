@@ -231,11 +231,13 @@ func applySpecialEffects(state *sim.GameState, card sim.Card, g *genome.Genome) 
 
 		switch sc.Type {
 		case genome.SpecialSkip:
-			// Skip is handled by advancing an extra player
+			// Skip is handled by advancing an extra player. Capture the
+			// player being skipped before NextPlayer rotates past them.
+			skipped := (state.Active + 1) % state.NumPlayers
 			state.NextPlayer()
 			events = append(events, sim.Event{
 				Type:     sim.EventSpecialTriggered,
-				PlayerID: state.Active,
+				PlayerID: skipped,
 				Detail:   "skip",
 			})
 
