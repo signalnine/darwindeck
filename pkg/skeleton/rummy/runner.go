@@ -273,9 +273,8 @@ func (r *Runner) ApplyMove(state *sim.GameState, move sim.Move, g *genome.Genome
 		}
 	}
 
-	if move.Type != sim.MoveDiscard {
-		state.Turn++
-	}
+	// Turn is bumped only in the MoveDiscard branch (which also advances
+	// the active player). Other moves stay within the same player's turn.
 
 	return events
 }
