@@ -16,7 +16,10 @@ func Crossover(a, b *genome.Genome, rng *rand.Rand) *genome.Genome {
 
 	child := cloneGenome(a)
 	child.ID = ""
-	child.Generation = max(a.Generation, b.Generation) + 1
+	// Mutate (called by the caller after crossover) is responsible for the
+	// final Generation++. Set the base to the higher parent generation so
+	// the post-Mutate value is max(a, b) + 1.
+	child.Generation = max(a.Generation, b.Generation)
 
 	// Shared params: coin flip each
 	if rng.Float64() < 0.5 {
