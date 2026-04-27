@@ -196,8 +196,20 @@ func (r *Runner) ApplyMove(state *sim.GameState, move sim.Move, g *genome.Genome
 		if params != nil {
 			hand := state.Hands[state.Active]
 			melds := findMelds(hand, params)
+			used := make(map[sim.Card]bool)
 			for _, meld := range melds {
+				overlap := false
 				for _, card := range meld {
+					if used[card] {
+						overlap = true
+						break
+					}
+				}
+				if overlap {
+					continue
+				}
+				for _, card := range meld {
+					used[card] = true
 					state.Hands[state.Active] = removeCard(state.Hands[state.Active], card)
 				}
 				meldCopy := make([]sim.Card, len(meld))
