@@ -195,6 +195,38 @@ type Genome struct {
 	TrumpRule    TrumpRule     `json:"trump_rule"`
 }
 
+// Clone returns a deep copy of the genome. Returns nil if g is nil.
+// Unlike a JSON round-trip, Clone is total: it cannot fail and never silently
+// produces a zero-value genome on error.
+func (g *Genome) Clone() *Genome {
+	if g == nil {
+		return nil
+	}
+	cp := *g
+	if g.Shedding != nil {
+		s := *g.Shedding
+		cp.Shedding = &s
+	}
+	if g.TrickTaking != nil {
+		t := *g.TrickTaking
+		cp.TrickTaking = &t
+	}
+	if g.Rummy != nil {
+		r := *g.Rummy
+		cp.Rummy = &r
+	}
+	if g.Borrowed != nil {
+		cp.Borrowed = append([]BorrowedMechanic(nil), g.Borrowed...)
+	}
+	if g.SpecialCards != nil {
+		cp.SpecialCards = append([]SpecialCard(nil), g.SpecialCards...)
+	}
+	if g.Scoring.CardPoints != nil {
+		cp.Scoring.CardPoints = append([]CardScoring(nil), g.Scoring.CardPoints...)
+	}
+	return &cp
+}
+
 // MaxTurns returns the computed maximum turns based on skeleton and params.
 func (g *Genome) MaxTurns() int {
 	switch g.Skeleton {

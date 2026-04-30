@@ -1,7 +1,6 @@
 package evolution
 
 import (
-	"encoding/json"
 	"fmt"
 	"math/rand/v2"
 
@@ -270,11 +269,7 @@ func mutateScoring(g *genome.Genome, rng *rand.Rand) {
 }
 
 func cloneGenome(g *genome.Genome) *genome.Genome {
-	// Deep copy via JSON (simple and correct)
-	data, _ := json.Marshal(g)
-	var copy genome.Genome
-	json.Unmarshal(data, &copy)
-	return &copy
+	return g.Clone()
 }
 
 func clampInt(v, min, max int) int {
