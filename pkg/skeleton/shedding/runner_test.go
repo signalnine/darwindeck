@@ -216,6 +216,122 @@ func TestSpecialCards(t *testing.T) {
 	}
 }
 
+// TestDrawTwoSkipsVictim ensures SpecialDrawTwo not only inflicts cards
+// on the next player but also forces them to lose their turn (Uno-style),
+// matching the SpecialSkip behavior for consistency (dd-jey).
+func TestDrawTwoSkipsVictim(t *testing.T) {
+	g := &genome.Genome{
+		ID:       "test-drawtwo",
+		Skeleton: genome.Shedding,
+		Players:  3,
+		HandSize: 3,
+		Shedding: &genome.SheddingParams{
+			MatchRule:   genome.MatchEither,
+			DrawPenalty: 1,
+		},
+		SpecialCards: []genome.SpecialCard{
+			{Type: genome.SpecialDrawTwo, ByRank: uint8(sim.Two)},
+		},
+	}
+	runner := &Runner{}
+	state := &sim.GameState{
+		NumPlayers: 3,
+		Active:     0,
+		Hands: [][]sim.Card{
+			{{Suit: sim.Hearts, Rank: sim.Two}}, // Player 0 plays the draw-two
+			{{Suit: sim.Hearts, Rank: sim.Five}},
+			{{Suit: sim.Hearts, Rank: sim.Six}},
+		},
+		Deck:    sim.StandardDeck(), // plenty of cards to draw
+		Discard: []sim.Card{{Suit: sim.Hearts, Rank: sim.Three}},
+		TopCard: &sim.Card{Suit: sim.Hearts, Rank: sim.Three},
+	}
+
+	move := sim.Move{
+		Type:     sim.MovePlay,
+		Cards:    []sim.Card{{Suit: sim.Hearts, Rank: sim.Two}},
+		PlayerID: 0,
+	}
+	runner.ApplyMove(state, move, g)
+
+	// Player 1 should have received 2 cards on top of their original 1.
+	if len(state.Hands[1]) != 3 {
+		t.Fatalf("victim hand size = %d, want 3 (1 original + 2 drawn)", len(state.Hands[1]))
+	}
+	// Active should have advanced past player 1 to player 2.
+	if state.Active != 2 {
+		t.Fatalf("Active = %d after draw_two, want 2 (victim should be skipped)", state.Active)
+	}
+}
+
+// TestDrawFourSkipsVictim mirrors TestDrawTwoSkipsVictim for SpecialDrawFour.
+func TestDrawFourSkipsVictim(t *testing.T) {
+	g := &genome.Genome{
+		ID:       "test-drawfour",
+		Skeleton: genome.Shedding,
+		Players:  3,
+		HandSize: 3,
+		Shedding: &genome.SheddingParams{
+			MatchRule:   genome.MatchEither,
+			DrawPenalty: 1,
+		},
+		SpecialCards: []genome.SpecialCard{
+			{Type: genome.SpecialDrawFour, ByRank: uint8(sim.Two)},
+		},
+	}
+	runner := &Runner{}
+	state := &sim.GameState{
+		NumPlayers: 3,
+		Active:     0,
+		Hands: [][]sim.Card{
+			{{Suit: sim.Hearts, Rank: sim.Two}},
+			{{Suit: sim.Hearts, Rank: sim.Five}},
+			{{Suit: sim.Hearts, Rank: sim.Six}},
+		},
+		Deck:    sim.StandardDeck(),
+		Discard: []sim.Card{{Suit: sim.Hearts, Rank: sim.Three}},
+		TopCard: &sim.Card{Suit: sim.Hearts, Rank: sim.Three},
+	}
+
+	move := sim.Move{
+		Type:     sim.MovePlay,
+		Cards:    []sim.Card{{Suit: sim.Hearts, Rank: sim.Two}},
+		PlayerID: 0,
+	}
+	runner.ApplyMove(state, move, g)
+
+	if len(state.Hands[1]) != 5 {
+		t.Fatalf("victim hand size = %d, want 5 (1 original + 4 drawn)", len(state.Hands[1]))
+	}
+	if state.Active != 2 {
+		t.Fatalf("Active = %d after draw_four, want 2 (victim should be skipped)", state.Active)
+	}
+}
+
+// TestCheckEndReturnsMinusOneAtMaxTurns verifies that CheckEnd does not
+// declare a winner when only the max-turns cap has been hit (no empty hand).
+// This is required so the batch runner records a Timeout rather than a
+// Completion -- otherwise Tier1 cannot detect hung shedding genomes (dd-4nd).
+func TestCheckEndReturnsMinusOneAtMaxTurns(t *testing.T) {
+	g := seeds.CrazyEights()
+	runner := &Runner{}
+	rng := rand.New(rand.NewPCG(1, 0))
+	state := runner.Setup(g, rng)
+
+	// Force the state to look like a stalled game: nobody has emptied their
+	// hand, and the turn counter sits at MaxTurns.
+	state.Turn = g.MaxTurns()
+	for i := range state.Hands {
+		if len(state.Hands[i]) == 0 {
+			state.Hands[i] = []sim.Card{{Suit: sim.Hearts, Rank: sim.Two}}
+		}
+	}
+
+	if winner := runner.CheckEnd(state, g); winner != -1 {
+		t.Fatalf("CheckEnd at max turns with non-empty hands returned %d, want -1", winner)
+	}
+}
+
 func TestMatchRules(t *testing.T) {
 	rules := []genome.MatchRule{
 		genome.MatchSuit,
@@ -245,8 +361,12 @@ func TestMatchRules(t *testing.T) {
 		}
 
 		t.Logf("MatchRule %d: %d/50 completed", rule, completions)
-		// MatchBoth is very restrictive — few matches possible, games may timeout
-		if rule != genome.MatchBoth && completions < 25 {
+		// Only MatchEither is permissive enough that random play reliably
+		// empties a hand inside the max-turn budget for this minimal genome
+		// (no specials, no wilds). MatchSuit / MatchRank / MatchBoth all
+		// legitimately time out under random play -- they need extra
+		// mechanics (wilds, draw penalties tuned harder, etc.) to terminate.
+		if rule == genome.MatchEither && completions < 25 {
 			t.Fatalf("MatchRule %d: too few completions %d/50", rule, completions)
 		}
 	}

@@ -269,15 +269,37 @@ func scoreTrick(state *sim.GameState, winner int, g *genome.Genome) {
 	}
 }
 
+// cardPointValue returns the point value of card under g's scoring rules.
+// When multiple rules match the same card (e.g. "all Queens = 10" and
+// "Queen of Spades = 13"), the most specific rule wins:
+//
+//	suit+rank > suit-only > rank-only > catch-all
+//
+// This makes scoring independent of CardPoints insertion order, so
+// mutators and crossover that permute the slice cannot accidentally
+// change a card's score.
 func cardPointValue(card sim.Card, g *genome.Genome) int {
+	bestPoints := 0
+	bestSpecificity := -1
 	for _, cp := range g.Scoring.CardPoints {
 		rankMatch := cp.Rank == 0 || cp.Rank == uint8(card.Rank)
 		suitMatch := cp.Suit == 0 || cp.Suit == uint8(card.Suit)+1
-		if rankMatch && suitMatch {
-			return cp.Points
+		if !rankMatch || !suitMatch {
+			continue
+		}
+		spec := 0
+		if cp.Suit != 0 {
+			spec += 2
+		}
+		if cp.Rank != 0 {
+			spec++
+		}
+		if spec > bestSpecificity {
+			bestSpecificity = spec
+			bestPoints = cp.Points
 		}
 	}
-	return 0
+	return bestPoints
 }
 
 func (r *Runner) CheckEnd(state *sim.GameState, g *genome.Genome) int {

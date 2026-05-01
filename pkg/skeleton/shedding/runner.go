@@ -151,20 +151,9 @@ func (r *Runner) CheckEnd(state *sim.GameState, g *genome.Genome) int {
 		}
 	}
 
-	// Check max turns
-	if state.Turn >= g.MaxTurns() {
-		// Game over — player with fewest cards wins
-		minCards := len(state.Hands[0])
-		winner := 0
-		for i := 1; i < state.NumPlayers; i++ {
-			if len(state.Hands[i]) < minCards {
-				minCards = len(state.Hands[i])
-				winner = i
-			}
-		}
-		return winner
-	}
-
+	// At max turns, return -1 so the batch runner classifies the game as a
+	// genuine timeout rather than a completion. Awarding the smallest hand
+	// here would mask hung shedding genomes from Tier1 timeout detection.
 	return -1
 }
 
@@ -257,6 +246,10 @@ func applySpecialEffects(state *sim.GameState, card sim.Card, g *genome.Genome) 
 			drawn, rest := sim.DrawN(state.Deck, 2)
 			state.Deck = rest
 			state.Hands[nextPlayer] = append(state.Hands[nextPlayer], drawn...)
+			// Standard Uno-style draw also forces the victim to lose their
+			// turn. Advance once here so the trailing NextPlayer in
+			// ApplyMove rotates past them.
+			state.NextPlayer()
 			events = append(events, sim.Event{
 				Type:     sim.EventSpecialTriggered,
 				PlayerID: nextPlayer,
@@ -269,6 +262,10 @@ func applySpecialEffects(state *sim.GameState, card sim.Card, g *genome.Genome) 
 			drawn, rest := sim.DrawN(state.Deck, 4)
 			state.Deck = rest
 			state.Hands[nextPlayer] = append(state.Hands[nextPlayer], drawn...)
+			// Standard Uno-style draw also forces the victim to lose their
+			// turn. Advance once here so the trailing NextPlayer in
+			// ApplyMove rotates past them.
+			state.NextPlayer()
 			events = append(events, sim.Event{
 				Type:     sim.EventSpecialTriggered,
 				PlayerID: nextPlayer,

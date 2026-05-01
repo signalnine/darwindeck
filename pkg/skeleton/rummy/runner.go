@@ -284,11 +284,9 @@ func (r *Runner) CheckEnd(state *sim.GameState, g *genome.Genome) int {
 		return scoreRound(state, g)
 	}
 
-	// Max turns check
-	if state.Turn >= g.MaxTurns() {
-		return scoreRound(state, g)
-	}
-
+	// At max turns, return -1 so the batch runner classifies the game as a
+	// genuine timeout rather than a scored completion. Scoring a hung round
+	// here would mask stalled rummy genomes from Tier1 timeout detection.
 	return -1
 }
 

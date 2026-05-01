@@ -97,6 +97,27 @@ func TestRummyDeterminism(t *testing.T) {
 	}
 }
 
+// TestCheckEndReturnsMinusOneAtMaxTurns verifies CheckEnd does not score a
+// hung round when only the max-turns cap has been hit. The batch runner
+// classifies that case as a Timeout, which Tier1 needs to detect stalls.
+func TestCheckEndReturnsMinusOneAtMaxTurns(t *testing.T) {
+	g := seeds.GinRummy()
+	runner := &Runner{}
+	rng := rand.New(rand.NewPCG(1, 0))
+	state := runner.Setup(g, rng)
+
+	// Force a stalled state: round has not ended, but turn counter is at the
+	// game-wide cap.
+	if state.Phase == sim.PhaseEnd {
+		t.Fatalf("setup unexpectedly produced PhaseEnd")
+	}
+	state.Turn = g.MaxTurns()
+
+	if winner := runner.CheckEnd(state, g); winner != -1 {
+		t.Fatalf("CheckEnd at max turns mid-round returned %d, want -1", winner)
+	}
+}
+
 func TestFindSets(t *testing.T) {
 	hand := []sim.Card{
 		{Suit: sim.Hearts, Rank: sim.King},

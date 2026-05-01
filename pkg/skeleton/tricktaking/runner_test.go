@@ -358,6 +358,48 @@ func TestMultiRoundReDeals(t *testing.T) {
 	}
 }
 
+// TestCardPointValueSpecificity verifies that overlapping CardPoints rules
+// are resolved by specificity (suit+rank > suit-only > rank-only > catch-all)
+// rather than by insertion order (dd-hzc).
+func TestCardPointValueSpecificity(t *testing.T) {
+	queenOfSpades := sim.Card{Suit: sim.Spades, Rank: sim.Queen}
+	queenOfHearts := sim.Card{Suit: sim.Hearts, Rank: sim.Queen}
+	twoOfSpades := sim.Card{Suit: sim.Spades, Rank: sim.Two}
+	threeOfHearts := sim.Card{Suit: sim.Hearts, Rank: sim.Three}
+
+	// Both orderings of the same rule set should produce the same scores.
+	allQueens := genome.CardScoring{Rank: uint8(sim.Queen), Points: 10}
+	qOfSpades := genome.CardScoring{Suit: uint8(sim.Spades) + 1, Rank: uint8(sim.Queen), Points: 13}
+	allHearts := genome.CardScoring{Suit: uint8(sim.Hearts) + 1, Points: 1}
+	catchAll := genome.CardScoring{Points: 99}
+
+	rulesA := []genome.CardScoring{allQueens, qOfSpades, allHearts, catchAll}
+	rulesB := []genome.CardScoring{catchAll, allHearts, qOfSpades, allQueens}
+
+	for _, rules := range [][]genome.CardScoring{rulesA, rulesB} {
+		g := &genome.Genome{
+			Scoring: genome.ScoringConfig{CardPoints: rules},
+		}
+		// Q of Spades: most specific match is the suit+rank rule (13).
+		if got := cardPointValue(queenOfSpades, g); got != 13 {
+			t.Errorf("Queen of Spades: got %d, want 13 (suit+rank should beat rank-only and catch-all)", got)
+		}
+		// Q of Hearts: matches "all Queens" (rank-only, 10) and "all Hearts"
+		// (suit-only, 1) and catch-all (99). Suit-only is most specific.
+		if got := cardPointValue(queenOfHearts, g); got != 1 {
+			t.Errorf("Queen of Hearts: got %d, want 1 (suit-only should beat rank-only and catch-all)", got)
+		}
+		// 2 of Spades: only catch-all matches (99).
+		if got := cardPointValue(twoOfSpades, g); got != 99 {
+			t.Errorf("Two of Spades: got %d, want 99 (catch-all)", got)
+		}
+		// 3 of Hearts: matches all Hearts (1) and catch-all (99). Suit-only wins.
+		if got := cardPointValue(threeOfHearts, g); got != 1 {
+			t.Errorf("Three of Hearts: got %d, want 1 (suit-only beats catch-all)", got)
+		}
+	}
+}
+
 func TestAllTrickSeedsValid(t *testing.T) {
 	seedGames := []*genome.Genome{
 		seeds.Whist(),
