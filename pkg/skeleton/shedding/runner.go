@@ -231,11 +231,18 @@ func applySpecialEffects(state *sim.GameState, card sim.Card, g *genome.Genome) 
 			})
 
 		case genome.SpecialReverse:
-			// In 2-player, reverse is the same as skip
+			// In 2-player, reverse is functionally a skip: flip direction so
+			// the trailing NextPlayer in ApplyMove lands back on the original
+			// player, mirroring Uno semantics.
+			// For 3+, flip the direction so subsequent NextPlayer calls walk
+			// the play order backward.
+			if state.Direction == 0 {
+				state.Direction = 1
+			}
+			state.Direction = -state.Direction
 			if state.NumPlayers == 2 {
 				state.NextPlayer()
 			}
-			// For 3+, we'd need a direction field — simplified for now
 			events = append(events, sim.Event{
 				Type:   sim.EventSpecialTriggered,
 				Detail: "reverse",

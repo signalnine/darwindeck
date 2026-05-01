@@ -65,6 +65,10 @@ type GameState struct {
 	Active     int // Active player index
 	Phase      PhaseType
 	NumPlayers int
+	// Direction is the play-order delta (+1 forward, -1 reversed). Zero is
+	// treated as +1 for backwards compatibility with states that do not set
+	// it explicitly.
+	Direction int
 
 	// Round tracking (for multi-round games like trick-taking)
 	Round    int
@@ -109,9 +113,15 @@ func (gs *GameState) ActiveHand() []Card {
 	return gs.Hands[gs.Active]
 }
 
-// NextPlayer advances to the next player.
+// NextPlayer advances to the next player in the current play direction.
+// Direction == 0 is treated as +1 so states constructed without explicit
+// initialisation continue to advance forward.
 func (gs *GameState) NextPlayer() {
-	gs.Active = (gs.Active + 1) % gs.NumPlayers
+	dir := gs.Direction
+	if dir == 0 {
+		dir = 1
+	}
+	gs.Active = ((gs.Active+dir)%gs.NumPlayers + gs.NumPlayers) % gs.NumPlayers
 }
 
 // AddEvent records a game event.

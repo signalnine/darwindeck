@@ -371,3 +371,107 @@ func TestMatchRules(t *testing.T) {
 		}
 	}
 }
+
+// TestReverseFlipsDirectionWith3Players ensures SpecialReverse actually
+// reverses play order in 3+ player games (dd-xns). With 4 players starting at
+// 0 and Direction=+1, a Reverse should make the next player be 3, not 1.
+func TestReverseFlipsDirectionWith3Players(t *testing.T) {
+	g := &genome.Genome{
+		ID:       "test-reverse-4p",
+		Skeleton: genome.Shedding,
+		Players:  4,
+		HandSize: 3,
+		Shedding: &genome.SheddingParams{
+			MatchRule:   genome.MatchEither,
+			DrawPenalty: 1,
+		},
+		SpecialCards: []genome.SpecialCard{
+			{Type: genome.SpecialReverse, ByRank: uint8(sim.Two)},
+		},
+	}
+	runner := &Runner{}
+	state := sim.NewGameState(4)
+	state.Active = 0
+	state.Hands = [][]sim.Card{
+		{{Suit: sim.Hearts, Rank: sim.Two}},
+		{{Suit: sim.Hearts, Rank: sim.Five}},
+		{{Suit: sim.Hearts, Rank: sim.Six}},
+		{{Suit: sim.Hearts, Rank: sim.Seven}},
+	}
+	state.Deck = sim.StandardDeck()
+	state.Discard = []sim.Card{{Suit: sim.Hearts, Rank: sim.Three}}
+	state.TopCard = &sim.Card{Suit: sim.Hearts, Rank: sim.Three}
+
+	runner.ApplyMove(state, sim.Move{
+		Type:     sim.MovePlay,
+		Cards:    []sim.Card{{Suit: sim.Hearts, Rank: sim.Two}},
+		PlayerID: 0,
+	}, g)
+
+	if state.Active != 3 {
+		t.Fatalf("Active = %d after Reverse from player 0 in 4-player game; want 3 (direction reversed)", state.Active)
+	}
+
+	// And after another normal turn the active should continue going backward.
+	state.Hands[3] = []sim.Card{{Suit: sim.Hearts, Rank: sim.Three}}
+	runner.ApplyMove(state, sim.Move{
+		Type:     sim.MovePlay,
+		Cards:    []sim.Card{{Suit: sim.Hearts, Rank: sim.Three}},
+		PlayerID: 3,
+	}, g)
+	if state.Active != 2 {
+		t.Fatalf("Active = %d after second move post-reverse; want 2 (still going backward)", state.Active)
+	}
+}
+
+// TestReverseTwoPlayerActsAsSkip preserves the 2-player Reverse semantics:
+// the same player gets to play again (Active returns to 0).
+func TestReverseTwoPlayerActsAsSkip(t *testing.T) {
+	g := &genome.Genome{
+		ID:       "test-reverse-2p",
+		Skeleton: genome.Shedding,
+		Players:  2,
+		HandSize: 3,
+		Shedding: &genome.SheddingParams{
+			MatchRule:   genome.MatchEither,
+			DrawPenalty: 1,
+		},
+		SpecialCards: []genome.SpecialCard{
+			{Type: genome.SpecialReverse, ByRank: uint8(sim.Two)},
+		},
+	}
+	runner := &Runner{}
+	state := sim.NewGameState(2)
+	state.Active = 0
+	state.Hands = [][]sim.Card{
+		{{Suit: sim.Hearts, Rank: sim.Two}},
+		{{Suit: sim.Hearts, Rank: sim.Five}},
+	}
+	state.Deck = sim.StandardDeck()
+	state.Discard = []sim.Card{{Suit: sim.Hearts, Rank: sim.Three}}
+	state.TopCard = &sim.Card{Suit: sim.Hearts, Rank: sim.Three}
+
+	runner.ApplyMove(state, sim.Move{
+		Type:     sim.MovePlay,
+		Cards:    []sim.Card{{Suit: sim.Hearts, Rank: sim.Two}},
+		PlayerID: 0,
+	}, g)
+
+	if state.Active != 0 {
+		t.Fatalf("Active = %d after Reverse in 2-player game; want 0 (acts as skip)", state.Active)
+	}
+}
+
+func TestNextPlayerHonorsDirection(t *testing.T) {
+	state := sim.NewGameState(4)
+	state.Active = 1
+	state.Direction = -1
+	state.NextPlayer()
+	if state.Active != 0 {
+		t.Fatalf("NextPlayer with Direction=-1 from Active=1: got %d, want 0", state.Active)
+	}
+	state.NextPlayer()
+	if state.Active != 3 {
+		t.Fatalf("NextPlayer wrap with Direction=-1 from Active=0: got %d, want 3", state.Active)
+	}
+}
