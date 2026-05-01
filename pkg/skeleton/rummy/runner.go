@@ -37,6 +37,7 @@ func (r *Runner) Setup(g *genome.Genome, rng *rand.Rand) *sim.GameState {
 	state.Phase = sim.PhaseDraw
 	state.Melds = make([][]sim.Card, 0)
 	state.MeldOwner = make([]int, 0)
+	state.RNG = rng
 
 	return state
 }
@@ -188,32 +189,32 @@ func (r *Runner) ApplyMove(state *sim.GameState, move sim.Move, g *genome.Genome
 			PlayerID: state.Active,
 			Cards:    move.Cards,
 		})
-		// Stay in meld phase (can lay multiple melds)
+		// Gin via meld: if all cards have been laid down, end the round here.
+		// Otherwise PhaseDiscard would be entered with an empty hand and
+		// MovePass on an empty discard hand never advances Turn or Phase.
+		if len(state.Hands[state.Active]) == 0 {
+			state.Phase = sim.PhaseEnd
+			events = append(events, sim.Event{
+				Type:     sim.EventRoundEnd,
+				PlayerID: state.Active,
+				Detail:   "gin",
+			})
+		}
+		// Otherwise stay in meld phase (can lay multiple melds)
 
 	case sim.MoveKnock:
-		// Knock: lay down all melds, then score
+		// Knock: lay down the optimal disjoint partition of melds (the same
+		// partition calcDeadwood scores against), then score the round.
 		params := g.Rummy
 		if params != nil {
 			hand := state.Hands[state.Active]
-			melds := findMelds(hand, params)
-			used := make(map[sim.Card]bool)
-			for _, meld := range melds {
-				overlap := false
-				for _, card := range meld {
-					if used[card] {
-						overlap = true
-						break
-					}
-				}
-				if overlap {
-					continue
-				}
-				for _, card := range meld {
-					used[card] = true
+			groups := bestMeldGroups(hand, params)
+			for _, group := range groups {
+				for _, card := range group {
 					state.Hands[state.Active] = removeCard(state.Hands[state.Active], card)
 				}
-				meldCopy := make([]sim.Card, len(meld))
-				copy(meldCopy, meld)
+				meldCopy := make([]sim.Card, len(group))
+				copy(meldCopy, group)
 				state.Melds = append(state.Melds, meldCopy)
 				state.MeldOwner = append(state.MeldOwner, state.Active)
 			}
@@ -255,11 +256,10 @@ func (r *Runner) ApplyMove(state *sim.GameState, move sim.Move, g *genome.Genome
 				top := state.Discard[len(state.Discard)-1]
 				state.Deck = state.Discard[:len(state.Discard)-1]
 				state.Discard = []sim.Card{top}
-				// Shuffle the new deck
-				// Use turn as entropy since we don't have rng here
-				for i := len(state.Deck) - 1; i > 0; i-- {
-					j := (state.Turn*31 + i*17) % (i + 1)
-					state.Deck[i], state.Deck[j] = state.Deck[j], state.Deck[i]
+				// Fisher-Yates with the game's seeded RNG so reshuffles
+				// stay reproducible across seeds and uniformly distributed.
+				if state.RNG != nil {
+					sim.ShuffleDeck(state.Deck, state.RNG)
 				}
 			}
 		}
@@ -521,13 +521,30 @@ func addCombinations(hand []sim.Card, idxs []int, size int, out *[]meldCandidate
 // which hand indices it uses. Subset DP for handSize <= 20; backtracking for
 // larger (which shouldn't happen given HandSize is validated <= 13).
 func bestPartition(candidates []meldCandidate, handSize int) []bool {
-	if handSize <= 20 {
-		return bestPartitionDP(candidates, handSize)
+	masks := bestPartitionMasks(candidates, handSize)
+	used := make([]bool, handSize)
+	for _, m := range masks {
+		for i := 0; i < handSize; i++ {
+			if m&(1<<uint(i)) != 0 {
+				used[i] = true
+			}
+		}
 	}
-	return bestPartitionDFS(candidates, handSize)
+	return used
 }
 
-func bestPartitionDP(candidates []meldCandidate, handSize int) []bool {
+// bestPartitionMasks returns the masks of the chosen meld candidates that
+// maximize total meld value. MoveKnock uses this to lay down the same
+// disjoint partition that calcDeadwood scores against, so the table state
+// matches the reported deadwood.
+func bestPartitionMasks(candidates []meldCandidate, handSize int) []uint32 {
+	if handSize <= 20 {
+		return bestPartitionMasksDP(candidates, handSize)
+	}
+	return bestPartitionMasksDFS(candidates, handSize)
+}
+
+func bestPartitionMasksDP(candidates []meldCandidate, handSize int) []uint32 {
 	full := uint32(1)<<uint(handSize) - 1
 	size := int(full) + 1
 	value := make([]int, size)
@@ -558,38 +575,34 @@ func bestPartitionDP(candidates []meldCandidate, handSize int) []bool {
 		}
 	}
 
-	used := make([]bool, handSize)
+	var masks []uint32
 	mask := full
 	for mask != 0 {
 		if pickedFrom[mask] < 0 {
-			// Skipped lowest bit; nothing to mark used here.
 			lowBit := mask & (^mask + 1)
 			mask ^= lowBit
 			continue
 		}
 		cMask := pickedMask[mask]
-		for i := 0; i < handSize; i++ {
-			if cMask&(1<<uint(i)) != 0 {
-				used[i] = true
-			}
-		}
+		masks = append(masks, cMask)
 		mask ^= cMask
 	}
-	return used
+	return masks
 }
 
-func bestPartitionDFS(candidates []meldCandidate, handSize int) []bool {
+func bestPartitionMasksDFS(candidates []meldCandidate, handSize int) []uint32 {
 	sort.SliceStable(candidates, func(i, j int) bool {
 		return candidates[i].value > candidates[j].value
 	})
 	bestVal := 0
-	bestUsed := uint64(0)
+	var bestMasks []uint32
 	usedNow := uint64(0)
+	var nowMasks []uint32
 	var dfs func(idx, val int)
 	dfs = func(idx, val int) {
 		if val > bestVal {
 			bestVal = val
-			bestUsed = usedNow
+			bestMasks = append(bestMasks[:0], nowMasks...)
 		}
 		if idx >= len(candidates) {
 			return
@@ -598,19 +611,41 @@ func bestPartitionDFS(candidates []meldCandidate, handSize int) []bool {
 		cm := uint64(c.mask)
 		if usedNow&cm == 0 {
 			usedNow |= cm
+			nowMasks = append(nowMasks, c.mask)
 			dfs(idx+1, val+c.value)
+			nowMasks = nowMasks[:len(nowMasks)-1]
 			usedNow &^= cm
 		}
 		dfs(idx+1, val)
 	}
 	dfs(0, 0)
-	used := make([]bool, handSize)
-	for i := 0; i < handSize; i++ {
-		if bestUsed&(1<<uint(i)) != 0 {
-			used[i] = true
+	out := make([]uint32, len(bestMasks))
+	copy(out, bestMasks)
+	return out
+}
+
+// bestMeldGroups returns the optimal disjoint partition of hand into melds
+// (each group of cards corresponds to one chosen meldCandidate). Empty when
+// no valid melds exist.
+func bestMeldGroups(hand []sim.Card, params *genome.RummyParams) [][]sim.Card {
+	candidates := enumerateMeldCandidates(hand, params)
+	if len(candidates) == 0 {
+		return nil
+	}
+	masks := bestPartitionMasks(candidates, len(hand))
+	groups := make([][]sim.Card, 0, len(masks))
+	for _, m := range masks {
+		var group []sim.Card
+		for i := 0; i < len(hand); i++ {
+			if m&(1<<uint(i)) != 0 {
+				group = append(group, hand[i])
+			}
+		}
+		if len(group) > 0 {
+			groups = append(groups, group)
 		}
 	}
-	return used
+	return groups
 }
 
 func cardValue(c sim.Card) int {

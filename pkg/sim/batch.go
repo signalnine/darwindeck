@@ -83,6 +83,17 @@ func RunBatch(g *genome.Genome, runner GenericRunner, ai AIPlayer, n int, baseSe
 func runSingleGame(g *genome.Genome, runner GenericRunner, ai AIPlayer, rng *rand.Rand, maxTurns int, hooks ...HookFunc) GameResult {
 	state := runner.Setup(g, rng)
 
+	// Cap inner iterations independently of maxTurns: some skeletons (rummy)
+	// run multiple ApplyMove calls per turn (draw, meld, discard) and a buggy
+	// runner/genome combo can stall in a phase without ever bumping Turn.
+	// Without this guard the game loop runs forever and EvaluatePopulation
+	// hangs across all workers (see dd-505).
+	iterCap := (maxTurns + 1) * 100
+	if iterCap < 10000 {
+		iterCap = 10000
+	}
+	iter := 0
+
 	for {
 		winner := runner.CheckEnd(state, g)
 		if winner >= 0 {
@@ -101,6 +112,16 @@ func runSingleGame(g *genome.Genome, runner GenericRunner, ai AIPlayer, rng *ran
 				Error:  "max_turns",
 			}
 		}
+
+		if iter >= iterCap {
+			return GameResult{
+				Winner: -1,
+				Turns:  state.Turn,
+				Events: state.Events,
+				Error:  "stuck",
+			}
+		}
+		iter++
 
 		moves := runner.GenerateMoves(state, g)
 		if len(moves) == 0 {
