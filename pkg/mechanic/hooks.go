@@ -86,9 +86,14 @@ func applyAvoidance(state *sim.GameState, g *genome.Genome, event sim.Event) {
 
 	for i := 0; i < state.NumPlayers; i++ {
 		penalty := 0
-		// Check cards in hand (shedding/rummy) or captured cards (trick-taking tableau)
+		// Check cards in hand (shedding/rummy) and captured cards (trick-taking tableau)
 		for _, card := range state.Hands[i] {
 			penalty += cardPenalty(card, g)
+		}
+		if i < len(state.Tableau) {
+			for _, card := range state.Tableau[i] {
+				penalty += cardPenalty(card, g)
+			}
 		}
 		state.Scores[i] -= penalty // Negative = bad
 	}

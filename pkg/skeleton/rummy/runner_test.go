@@ -308,6 +308,150 @@ func TestAllRummySeedsValid(t *testing.T) {
 	}
 }
 
+func TestSetupStoresRNG(t *testing.T) {
+	g := seeds.GinRummy()
+	runner := &Runner{}
+	rng := rand.New(rand.NewPCG(7, 0))
+	state := runner.Setup(g, rng)
+	if state.RNG != rng {
+		t.Fatalf("Setup should store rng on state.RNG (got %p, want %p)", state.RNG, rng)
+	}
+}
+
+func TestMeldingEmptyHandEndsRound(t *testing.T) {
+	// If a player melds away every card in hand, the round must end (gin).
+	// Otherwise the runner cycles between PhaseMeld(empty) -> Pass -> PhaseDiscard(empty) -> Pass forever.
+	g := &genome.Genome{
+		Skeleton: genome.Rummy,
+		Players:  2,
+		Rummy:    &genome.RummyParams{MeldTypes: genome.MeldBoth, MinMeldSize: 3},
+	}
+	runner := &Runner{}
+	state := sim.NewGameState(2)
+	state.Hands[0] = []sim.Card{
+		{Suit: sim.Hearts, Rank: sim.King},
+		{Suit: sim.Spades, Rank: sim.King},
+		{Suit: sim.Clubs, Rank: sim.King},
+	}
+	state.Hands[1] = []sim.Card{{Suit: sim.Diamonds, Rank: sim.Two}}
+	state.Phase = sim.PhaseMeld
+	state.Active = 0
+
+	move := sim.Move{Type: sim.MoveMeld, PlayerID: 0, Cards: append([]sim.Card{}, state.Hands[0]...)}
+	runner.ApplyMove(state, move, g)
+
+	if state.Phase != sim.PhaseEnd {
+		t.Fatalf("expected PhaseEnd after melding away whole hand, got %d", state.Phase)
+	}
+}
+
+// reshuffleState builds a 2-player rummy state poised to trigger the
+// stockpile reshuffle: empty deck, full discard, active hand has 2 cards
+// (so a discard does not gin-out and the else branch fires).
+func reshuffleState(rng *rand.Rand) *sim.GameState {
+	state := sim.NewGameState(2)
+	state.Hands[0] = []sim.Card{
+		{Suit: sim.Hearts, Rank: sim.Two},
+		{Suit: sim.Spades, Rank: sim.Three},
+	}
+	state.Hands[1] = []sim.Card{{Suit: sim.Clubs, Rank: sim.Four}}
+	state.Deck = nil
+	state.Discard = []sim.Card{
+		{Suit: sim.Hearts, Rank: sim.Five},
+		{Suit: sim.Hearts, Rank: sim.Six},
+		{Suit: sim.Hearts, Rank: sim.Seven},
+		{Suit: sim.Hearts, Rank: sim.Eight},
+		{Suit: sim.Hearts, Rank: sim.Nine},
+		{Suit: sim.Hearts, Rank: sim.Ten},
+		{Suit: sim.Diamonds, Rank: sim.Two},
+		{Suit: sim.Diamonds, Rank: sim.Three},
+		{Suit: sim.Diamonds, Rank: sim.Four},
+		{Suit: sim.Diamonds, Rank: sim.Five},
+		{Suit: sim.Diamonds, Rank: sim.Six},
+		{Suit: sim.Diamonds, Rank: sim.Seven},
+	}
+	state.Turn = 0
+	state.Active = 0
+	state.Phase = sim.PhaseDiscard
+	state.RNG = rng
+	return state
+}
+
+func TestStockpileReshuffleUsesRNG(t *testing.T) {
+	g := &genome.Genome{Skeleton: genome.Rummy, Players: 2, Rummy: &genome.RummyParams{}}
+	runner := &Runner{}
+
+	// Two states identical apart from RNG seed should produce different
+	// post-reshuffle deck orderings.
+	a := reshuffleState(rand.New(rand.NewPCG(1, 0)))
+	b := reshuffleState(rand.New(rand.NewPCG(2, 0)))
+	move := sim.Move{Type: sim.MoveDiscard, Cards: []sim.Card{{Suit: sim.Hearts, Rank: sim.Two}}, PlayerID: 0}
+	runner.ApplyMove(a, move, g)
+	runner.ApplyMove(b, move, g)
+
+	if len(a.Deck) != len(b.Deck) {
+		t.Fatalf("decks should be same length, got %d vs %d", len(a.Deck), len(b.Deck))
+	}
+	same := true
+	for i := range a.Deck {
+		if a.Deck[i] != b.Deck[i] {
+			same = false
+			break
+		}
+	}
+	if same {
+		t.Fatalf("reshuffle is deterministic across RNG seeds: deck=%v", a.Deck)
+	}
+}
+
+func TestStockpileReshufflePreservesCards(t *testing.T) {
+	g := &genome.Genome{Skeleton: genome.Rummy, Players: 2, Rummy: &genome.RummyParams{}}
+	runner := &Runner{}
+	state := reshuffleState(rand.New(rand.NewPCG(99, 0)))
+
+	originalDiscard := make([]sim.Card, len(state.Discard))
+	copy(originalDiscard, state.Discard)
+	expectedTop := originalDiscard[len(originalDiscard)-1]
+
+	move := sim.Move{Type: sim.MoveDiscard, Cards: []sim.Card{{Suit: sim.Hearts, Rank: sim.Two}}, PlayerID: 0}
+	runner.ApplyMove(state, move, g)
+
+	// After: discard = [discarded card] (the top after MoveDiscard appends, then reshuffle pulls all but top).
+	// originalDiscard had N cards. The MoveDiscard appended Hearts-Two. So pre-reshuffle discard had N+1 cards.
+	// Reshuffle keeps top (which is Hearts-Two -- the just-discarded card) and moves N cards into deck.
+	if len(state.Deck) != len(originalDiscard) {
+		t.Fatalf("expected deck length %d, got %d", len(originalDiscard), len(state.Deck))
+	}
+	if len(state.Discard) != 1 {
+		t.Fatalf("expected discard length 1, got %d", len(state.Discard))
+	}
+	// The top of new discard is the just-discarded card (Hearts-Two), not the previous top.
+	wantTop := sim.Card{Suit: sim.Hearts, Rank: sim.Two}
+	if state.Discard[0] != wantTop {
+		t.Fatalf("expected discard top %v, got %v", wantTop, state.Discard[0])
+	}
+	_ = expectedTop // not used (prior top moved into the deck)
+
+	// Multiset check: deck should contain originalDiscard exactly (in some order).
+	count := func(cards []sim.Card) map[sim.Card]int {
+		m := make(map[sim.Card]int)
+		for _, c := range cards {
+			m[c]++
+		}
+		return m
+	}
+	got := count(state.Deck)
+	want := count(originalDiscard)
+	if len(got) != len(want) {
+		t.Fatalf("multiset size mismatch: got %d kinds, want %d", len(got), len(want))
+	}
+	for c, n := range want {
+		if got[c] != n {
+			t.Fatalf("card %v count mismatch: got %d, want %d", c, got[c], n)
+		}
+	}
+}
+
 func TestPhaseProgression(t *testing.T) {
 	// Verify the draw → meld → discard phase cycle
 	g := seeds.GinRummy()
