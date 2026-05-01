@@ -7,6 +7,37 @@ import (
 	"github.com/darwindeck/darwindeck/pkg/genome"
 )
 
+func TestAddSpecialCardCanSetBySuit(t *testing.T) {
+	// addSpecialCard must exercise the BySuit dimension of the SpecialCard
+	// schema, otherwise suit-bound specials (e.g. Hearts wilds) are
+	// unreachable from evolution. See dd-umc.
+	sawNonZeroSuit := false
+	sawZeroSuit := false
+	for seed := uint64(0); seed < 500; seed++ {
+		rng := rand.New(rand.NewPCG(seed, 0))
+		g := &genome.Genome{}
+		addSpecialCard(g, rng)
+		if len(g.SpecialCards) != 1 {
+			t.Fatalf("seed %d: expected 1 special card, got %d", seed, len(g.SpecialCards))
+		}
+		sc := g.SpecialCards[0]
+		if sc.BySuit > 4 {
+			t.Errorf("seed %d: BySuit=%d out of range (want 0-4)", seed, sc.BySuit)
+		}
+		if sc.BySuit == 0 {
+			sawZeroSuit = true
+		} else {
+			sawNonZeroSuit = true
+		}
+	}
+	if !sawNonZeroSuit {
+		t.Errorf("addSpecialCard never produced BySuit != 0 in 500 trials; suit-bound specials unreachable")
+	}
+	if !sawZeroSuit {
+		t.Errorf("addSpecialCard never produced BySuit == 0 in 500 trials; suit-agnostic specials unreachable")
+	}
+}
+
 func TestMutateScoringNeverGeneratesInvalidRank(t *testing.T) {
 	// Valid card ranks are 2-14 (per pkg/sim/card.go); Rank=0 means
 	// "all ranks" wildcard. Rank=1 is invalid: it never matches any

@@ -172,6 +172,7 @@ func addSpecialCard(g *genome.Genome, rng *rand.Rand) {
 	sc := genome.SpecialCard{
 		Type:   types[rng.IntN(len(types))],
 		ByRank: ranks[rng.IntN(len(ranks))],
+		BySuit: uint8(rng.IntN(5)), // 0=any suit, 1-4=specific
 	}
 
 	g.SpecialCards = append(g.SpecialCards, sc)

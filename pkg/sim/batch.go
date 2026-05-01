@@ -40,7 +40,6 @@ func RunBatch(g *genome.Genome, runner GenericRunner, ai AIPlayer, n int, baseSe
 		GamesPlayed: n,
 		WinCounts:   make([]int, g.Players),
 		TurnsList:   make([]int, 0, n),
-		MinTurns:    1<<31 - 1,
 	}
 
 	maxTurns := g.MaxTurns()
@@ -52,7 +51,7 @@ func RunBatch(g *genome.Genome, runner GenericRunner, ai AIPlayer, n int, baseSe
 		result.TurnsList = append(result.TurnsList, gr.Turns)
 		result.TotalTurns += gr.Turns
 
-		if gr.Turns < result.MinTurns {
+		if i == 0 || gr.Turns < result.MinTurns {
 			result.MinTurns = gr.Turns
 		}
 		if gr.Turns > result.MaxTurns {
