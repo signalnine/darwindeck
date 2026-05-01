@@ -253,7 +253,7 @@ func cmdDescribe(args []string) {
 	fmt.Printf("Params: %s\n", g.ActiveParams())
 	fmt.Printf("Special Cards: %d\n", len(g.SpecialCards))
 	fmt.Printf("Borrowed Mechanics: %d\n", len(g.Borrowed))
-	fmt.Printf("Trump Rule: %d\n", g.TrumpRule)
+	fmt.Printf("Trump Rule: %s\n", g.TrumpRule)
 
 	errs := genome.Validate(&g)
 	if len(errs) > 0 {

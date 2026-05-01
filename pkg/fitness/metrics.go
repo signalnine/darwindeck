@@ -217,14 +217,14 @@ func computeSkillGradient(randomResult, greedyResult sim.BatchResult, numPlayers
 		greedyWR = float64(greedyResult.WinCounts[0]) / float64(greedyResult.Completions)
 	}
 
-	// Skill = how much better greedy does vs random baseline
-	// Cap at 1.0: greedy winning 100% vs 50% expected = skill 1.0
+	// Skill = how much better greedy does vs random baseline.
 	skillDiff := greedyWR - expectedWR
 	if skillDiff < 0 {
 		skillDiff = 0 // Greedy worse than random = no skill signal
 	}
 
-	// Normalize: a greedy player winning 2x the expected rate = perfect skill
+	// Normalize linearly from baseline (0.0) to a 100% greedy win rate (1.0).
+	// Saturates only when greedy wins every game, regardless of player count.
 	maxDiff := 1.0 - expectedWR
 	if maxDiff == 0 {
 		return 0

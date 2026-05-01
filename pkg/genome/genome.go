@@ -27,6 +27,15 @@ const (
 	MatchBoth                    // Match suit AND rank
 )
 
+var matchRuleNames = [4]string{"suit", "rank", "either", "both"}
+
+func (m MatchRule) String() string {
+	if int(m) >= len(matchRuleNames) {
+		return fmt.Sprintf("MatchRule(%d)", m)
+	}
+	return matchRuleNames[m]
+}
+
 // SheddingParams controls a shedding game.
 type SheddingParams struct {
 	MatchRule    MatchRule `json:"match_rule"`
@@ -46,6 +55,15 @@ const (
 	ScoreAvoidance                      // Points are bad (Hearts-style)
 )
 
+var trickScoringNames = [3]string{"per_trick", "card_points", "avoidance"}
+
+func (t TrickScoring) String() string {
+	if int(t) >= len(trickScoringNames) {
+		return fmt.Sprintf("TrickScoring(%d)", t)
+	}
+	return trickScoringNames[t]
+}
+
 // LeadRule defines restrictions on leading.
 type LeadRule uint8
 
@@ -54,6 +72,15 @@ const (
 	LeadNoTrumpUntilBroken            // Can't lead trump until broken
 	LeadWinnerLeads                   // Previous trick winner leads
 )
+
+var leadRuleNames = [3]string{"none", "no_trump_until_broken", "winner_leads"}
+
+func (l LeadRule) String() string {
+	if int(l) >= len(leadRuleNames) {
+		return fmt.Sprintf("LeadRule(%d)", l)
+	}
+	return leadRuleNames[l]
+}
 
 // TrickTakingParams controls a trick-taking game.
 type TrickTakingParams struct {
@@ -74,6 +101,15 @@ const (
 	MeldBoth                   // Sets and runs
 )
 
+var meldTypeNames = [3]string{"sets", "runs", "both"}
+
+func (m MeldType) String() string {
+	if int(m) >= len(meldTypeNames) {
+		return fmt.Sprintf("MeldType(%d)", m)
+	}
+	return meldTypeNames[m]
+}
+
 // DrawSource defines where players can draw from.
 type DrawSource uint8
 
@@ -82,6 +118,15 @@ const (
 	DrawDiscard
 	DrawEither
 )
+
+var drawSourceNames = [3]string{"deck", "discard", "either"}
+
+func (d DrawSource) String() string {
+	if int(d) >= len(drawSourceNames) {
+		return fmt.Sprintf("DrawSource(%d)", d)
+	}
+	return drawSourceNames[d]
+}
 
 // RummyParams controls a rummy game.
 type RummyParams struct {
@@ -104,6 +149,15 @@ const (
 	TrumpLed                      // First suit led becomes trump
 )
 
+var trumpRuleNames = [4]string{"none", "fixed", "cut", "led"}
+
+func (t TrumpRule) String() string {
+	if int(t) >= len(trumpRuleNames) {
+		return fmt.Sprintf("TrumpRule(%d)", t)
+	}
+	return trumpRuleNames[t]
+}
+
 // SpecialCardType defines special card effects.
 type SpecialCardType uint8
 
@@ -114,6 +168,15 @@ const (
 	SpecialDrawFour                         // Next player draws 4
 	SpecialWild                             // Can be played on anything
 )
+
+var specialCardTypeNames = [5]string{"skip", "reverse", "draw_two", "draw_four", "wild"}
+
+func (s SpecialCardType) String() string {
+	if int(s) >= len(specialCardTypeNames) {
+		return fmt.Sprintf("SpecialCardType(%d)", s)
+	}
+	return specialCardTypeNames[s]
+}
 
 // SpecialCard assigns a special effect to cards matching a condition.
 type SpecialCard struct {
@@ -131,6 +194,15 @@ const (
 	ScoreOnPlay
 	ScoreOnHandEnd
 )
+
+var scoringEventNames = [4]string{"trick_win", "capture", "play", "hand_end"}
+
+func (s ScoringEvent) String() string {
+	if int(s) >= len(scoringEventNames) {
+		return fmt.Sprintf("ScoringEvent(%d)", s)
+	}
+	return scoringEventNames[s]
+}
 
 // CardScoring assigns point values to cards.
 type CardScoring struct {
@@ -161,6 +233,18 @@ const (
 	MechPlayMultiple                      // Play multiple cards
 	MechFollowSuit                        // Must follow suit restriction
 )
+
+var mechanicNames = [8]string{
+	"trick_scoring", "meld_bonus", "draw_penalty", "knock",
+	"trump", "avoidance", "play_multiple", "follow_suit",
+}
+
+func (m MechanicType) String() string {
+	if int(m) >= len(mechanicNames) {
+		return fmt.Sprintf("MechanicType(%d)", m)
+	}
+	return mechanicNames[m]
+}
 
 // BorrowedMechanic represents a mechanic borrowed from another skeleton.
 type BorrowedMechanic struct {
@@ -251,19 +335,19 @@ func (g *Genome) ActiveParams() string {
 	switch g.Skeleton {
 	case Shedding:
 		if g.Shedding != nil {
-			return fmt.Sprintf("shedding{match=%d, draw=%d, stack=%v, multi=%v}",
+			return fmt.Sprintf("shedding{match=%s, draw=%d, stack=%v, multi=%v}",
 				g.Shedding.MatchRule, g.Shedding.DrawPenalty,
 				g.Shedding.CanStack, g.Shedding.PlayMultiple)
 		}
 	case TrickTaking:
 		if g.TrickTaking != nil {
-			return fmt.Sprintf("trick{follow=%v, scoring=%d, lead=%d, rounds=%d}",
+			return fmt.Sprintf("trick{follow=%v, scoring=%s, lead=%s, rounds=%d}",
 				g.TrickTaking.MustFollowSuit, g.TrickTaking.TrickScoring,
 				g.TrickTaking.LeadRestriction, g.TrickTaking.RoundsPerGame)
 		}
 	case Rummy:
 		if g.Rummy != nil {
-			return fmt.Sprintf("rummy{melds=%d, min=%d, draw=%d, layoff=%v, knock=%d}",
+			return fmt.Sprintf("rummy{melds=%s, min=%d, draw=%s, layoff=%v, knock=%d}",
 				g.Rummy.MeldTypes, g.Rummy.MinMeldSize, g.Rummy.DrawFrom,
 				g.Rummy.CanLayOff, g.Rummy.KnockThreshold)
 		}
