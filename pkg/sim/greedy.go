@@ -117,9 +117,23 @@ func (s *SheddingScorer) isOffensiveSpecial(card Card) bool {
 // --- Trick-Taking Greedy Scorer ---
 
 // TrickTakingScorer scores trick-taking moves.
+//
+// Trump suit is read from state.TrumpSuit at scoring time rather than
+// configured statically. This is required for TrumpCut and TrumpLed games
+// where trump is determined at runtime, not from the genome.
 type TrickTakingScorer struct {
 	Avoidance bool // True for Hearts-style (don't want to win tricks with point cards)
-	TrumpSuit int  // -1 = no trump
+}
+
+// effectiveTrump returns the trump suit known to the scorer at scoring time.
+// state.TrumpSuit uses -1 for "no trump" and -2 for "pending" (TrumpLed before
+// the first card is led); both collapse to -1 here, since the scorer cannot
+// reason about an unknown trump.
+func (s *TrickTakingScorer) effectiveTrump(state *GameState) int {
+	if state.TrumpSuit < 0 {
+		return -1
+	}
+	return state.TrumpSuit
 }
 
 func (s *TrickTakingScorer) ScoreMove(move Move, state *GameState) float64 {
@@ -137,7 +151,8 @@ func (s *TrickTakingScorer) ScoreMove(move Move, state *GameState) float64 {
 }
 
 func (s *TrickTakingScorer) scoreWinning(card Card, state *GameState, isLeading bool) float64 {
-	isTrump := s.TrumpSuit >= 0 && int(card.Suit) == s.TrumpSuit
+	trump := s.effectiveTrump(state)
+	isTrump := trump >= 0 && int(card.Suit) == trump
 
 	if isLeading {
 		// Lead high cards to win tricks
@@ -179,15 +194,16 @@ func (s *TrickTakingScorer) wouldWin(card Card, state *GameState) bool {
 		return true // Leading always "wins" so far
 	}
 
+	trump := s.effectiveTrump(state)
 	leadSuit := state.TrickCards[0].Suit
-	isTrump := s.TrumpSuit >= 0 && int(card.Suit) == s.TrumpSuit
+	isTrump := trump >= 0 && int(card.Suit) == trump
 
 	// Find current best
 	bestRank := state.TrickCards[0].Rank
-	bestIsTrump := s.TrumpSuit >= 0 && int(state.TrickCards[0].Suit) == s.TrumpSuit
+	bestIsTrump := trump >= 0 && int(state.TrickCards[0].Suit) == trump
 
 	for _, tc := range state.TrickCards[1:] {
-		tcTrump := s.TrumpSuit >= 0 && int(tc.Suit) == s.TrumpSuit
+		tcTrump := trump >= 0 && int(tc.Suit) == trump
 		if tcTrump && !bestIsTrump {
 			bestRank = tc.Rank
 			bestIsTrump = true

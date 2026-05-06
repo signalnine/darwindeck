@@ -62,10 +62,11 @@ func TestSheddingScorerPrefersPlay(t *testing.T) {
 }
 
 func TestTrickTakingScorerWinning(t *testing.T) {
-	scorer := &TrickTakingScorer{Avoidance: false, TrumpSuit: -1}
+	scorer := &TrickTakingScorer{Avoidance: false}
 	state := &GameState{
 		TrickCards: []Card{{Suit: Hearts, Rank: Five}},
 		Active:     1,
+		TrumpSuit:  -1,
 	}
 
 	highCard := Move{Type: MovePlay, Cards: []Card{{Suit: Hearts, Rank: King}}, PlayerID: 1}
@@ -83,10 +84,11 @@ func TestTrickTakingScorerWinning(t *testing.T) {
 }
 
 func TestTrickTakingAvoidance(t *testing.T) {
-	scorer := &TrickTakingScorer{Avoidance: true, TrumpSuit: -1}
+	scorer := &TrickTakingScorer{Avoidance: true}
 	state := &GameState{
 		TrickCards: []Card{{Suit: Hearts, Rank: Five}},
 		Active:     1,
+		TrumpSuit:  -1,
 	}
 
 	// In avoidance, playing a card that would win is bad
@@ -98,6 +100,41 @@ func TestTrickTakingAvoidance(t *testing.T) {
 
 	if winScore >= loseScore {
 		t.Fatalf("in avoidance, losing should score higher: win=%.1f lose=%.1f", winScore, loseScore)
+	}
+}
+
+// TestTrickTakingScorerReadsRuntimeTrump verifies the scorer reads trump
+// from the game state at scoring time (not from a static field), so it
+// behaves correctly for TrumpCut and TrumpLed games where trump is set
+// dynamically by the runner.
+func TestTrickTakingScorerReadsRuntimeTrump(t *testing.T) {
+	scorer := &TrickTakingScorer{Avoidance: false}
+
+	// Lead is hearts; spades is trump (as a TrumpCut runner would set it).
+	state := &GameState{
+		TrickCards: []Card{{Suit: Hearts, Rank: Ten}},
+		Active:     1,
+		TrumpSuit:  int(Spades),
+	}
+
+	// Following with a low spade (trump) should beat the led ten of hearts.
+	trumpCard := Move{Type: MovePlay, Cards: []Card{{Suit: Spades, Rank: Two}}, PlayerID: 1}
+	// Following with a hearts king beats the ten too, but is not trump.
+	heartsKing := Move{Type: MovePlay, Cards: []Card{{Suit: Hearts, Rank: King}}, PlayerID: 1}
+	// Off-suit non-trump cannot win.
+	offSuitJunk := Move{Type: MovePlay, Cards: []Card{{Suit: Diamonds, Rank: Three}}, PlayerID: 1}
+
+	trumpScore := scorer.ScoreMove(trumpCard, state)
+	heartsScore := scorer.ScoreMove(heartsKing, state)
+	offScore := scorer.ScoreMove(offSuitJunk, state)
+
+	// Trump 2 wins: 20 - 2*0.5 = 19. Hearts king wins: 20 - 13*0.5 = 13.5.
+	// Off-suit dump: -3*0.5 = -1.5.
+	if trumpScore <= heartsScore {
+		t.Fatalf("trumping should beat winning with high non-trump: trump=%.1f hearts=%.1f", trumpScore, heartsScore)
+	}
+	if heartsScore <= offScore {
+		t.Fatalf("winning should beat dumping: hearts=%.1f off=%.1f", heartsScore, offScore)
 	}
 }
 

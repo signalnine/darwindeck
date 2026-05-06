@@ -29,13 +29,8 @@ func GetGreedyAI(g *genome.Genome) sim.AIPlayer {
 		return &sim.GreedyAI{Scorer: &sim.SheddingScorer{}}
 	case genome.TrickTaking:
 		avoidance := g.TrickTaking != nil && g.TrickTaking.TrickScoring == genome.ScoreAvoidance
-		trumpSuit := -1
-		if g.TrumpRule == genome.TrumpFixed {
-			trumpSuit = int(g.Scoring.TrumpSuit) - 1
-		}
 		return &sim.GreedyAI{Scorer: &sim.TrickTakingScorer{
 			Avoidance: avoidance,
-			TrumpSuit: trumpSuit,
 		}}
 	case genome.Rummy:
 		return &sim.GreedyAI{Scorer: &sim.RummyScorer{}}
