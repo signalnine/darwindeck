@@ -4,6 +4,7 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	"github.com/darwindeck/darwindeck/pkg/fitness"
 	"github.com/darwindeck/darwindeck/pkg/genome"
 	"github.com/darwindeck/darwindeck/pkg/seeds"
 )
@@ -130,6 +131,102 @@ func TestMutateDoesNotCrash(t *testing.T) {
 		if child == nil {
 			t.Fatalf("mutation %d returned nil", i)
 		}
+	}
+}
+
+func TestSelectTracksBestRawFitnessAcrossPopulation(t *testing.T) {
+	// Population where the genome with highest SharedFitness has lower
+	// raw TotalFitness than another individual. Engine.BestFitness must
+	// track the highest TotalFitness across the whole population, not
+	// just position 0 of the SharedFitness-sorted population.
+	engine := NewEngine(Config{
+		PopulationSize: 3,
+		EliteSize:      1,
+		TournamentSize: 1,
+		Workers:        1,
+		BaseSeed:       1,
+	}, allSeeds())
+
+	gHighShared := seeds.CrazyEights()
+	gHighShared.ID = "high-shared-low-raw"
+	gHighRaw := seeds.MauMau()
+	gHighRaw.ID = "low-shared-high-raw"
+	gMid := seeds.Hearts()
+	gMid.ID = "middle"
+
+	engine.Population = []*Individual{
+		{
+			Genome:  gHighShared,
+			Valid:   true,
+			Fitness: fitness.Metrics{TotalFitness: 0.4, SharedFitness: 0.9},
+		},
+		{
+			Genome:  gMid,
+			Valid:   true,
+			Fitness: fitness.Metrics{TotalFitness: 0.5, SharedFitness: 0.6},
+		},
+		{
+			Genome:  gHighRaw,
+			Valid:   true,
+			Fitness: fitness.Metrics{TotalFitness: 0.8, SharedFitness: 0.5},
+		},
+	}
+
+	engine.Select()
+
+	if engine.BestFitness != 0.8 {
+		t.Fatalf("BestFitness=%.3f, want 0.8 (highest TotalFitness in population)",
+			engine.BestFitness)
+	}
+	if engine.BestGenome == nil || engine.BestGenome.ID != "low-shared-high-raw" {
+		got := "nil"
+		if engine.BestGenome != nil {
+			got = engine.BestGenome.ID
+		}
+		t.Fatalf("BestGenome ID=%s, want low-shared-high-raw", got)
+	}
+}
+
+func TestSelectIgnoresInvalidIndividualsForBestFitness(t *testing.T) {
+	// An invalid individual with a fabricated TotalFitness must not be
+	// chosen as BestGenome even if its TotalFitness is highest.
+	engine := NewEngine(Config{
+		PopulationSize: 2,
+		EliteSize:      1,
+		TournamentSize: 1,
+		Workers:        1,
+		BaseSeed:       1,
+	}, allSeeds())
+
+	gValid := seeds.CrazyEights()
+	gValid.ID = "valid-best"
+	gInvalid := seeds.MauMau()
+	gInvalid.ID = "invalid-but-high"
+
+	engine.Population = []*Individual{
+		{
+			Genome:  gValid,
+			Valid:   true,
+			Fitness: fitness.Metrics{TotalFitness: 0.5, SharedFitness: 0.5},
+		},
+		{
+			Genome:  gInvalid,
+			Valid:   false,
+			Fitness: fitness.Metrics{TotalFitness: 0.99, SharedFitness: 0.99},
+		},
+	}
+
+	engine.Select()
+
+	if engine.BestGenome == nil || engine.BestGenome.ID != "valid-best" {
+		got := "nil"
+		if engine.BestGenome != nil {
+			got = engine.BestGenome.ID
+		}
+		t.Fatalf("BestGenome ID=%s, want valid-best (invalid individuals must be ignored)", got)
+	}
+	if engine.BestFitness != 0.5 {
+		t.Fatalf("BestFitness=%.3f, want 0.5", engine.BestFitness)
 	}
 }
 

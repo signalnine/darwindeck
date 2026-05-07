@@ -189,10 +189,15 @@ func (e *Engine) Select() []*Individual {
 		return e.Population[i].Fitness.SharedFitness > e.Population[j].Fitness.SharedFitness
 	})
 
-	// Track best (use raw TotalFitness for reporting)
-	if len(e.Population) > 0 && e.Population[0].Fitness.TotalFitness > e.BestFitness {
-		e.BestFitness = e.Population[0].Fitness.TotalFitness
-		e.BestGenome = e.Population[0].Genome
+	// Track best by raw TotalFitness across the whole population -- the
+	// SharedFitness-sorted leader is not necessarily the highest raw fitness,
+	// because niche sharing can demote an overrepresented-niche genome that
+	// would otherwise be the best.
+	for _, ind := range e.Population {
+		if ind.Valid && ind.Fitness.TotalFitness > e.BestFitness {
+			e.BestFitness = ind.Fitness.TotalFitness
+			e.BestGenome = ind.Genome
+		}
 	}
 
 	nextGen := make([]*Individual, e.Config.PopulationSize)
