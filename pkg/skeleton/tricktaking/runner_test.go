@@ -400,6 +400,30 @@ func TestCardPointValueSpecificity(t *testing.T) {
 	}
 }
 
+// TestCheckEndReturnsTimeoutAtMaxTurns verifies that when state.Turn has
+// reached MaxTurns and hands are still non-empty, CheckEnd returns -1 so the
+// batch runner classifies the game as a timeout. Returning a winner here
+// would mask hung trick-taking genomes from Tier1 timeout detection (the
+// shedding and rummy runners already do this).
+func TestCheckEndReturnsTimeoutAtMaxTurns(t *testing.T) {
+	g := seeds.Whist()
+	runner := &Runner{}
+	rng := rand.New(rand.NewPCG(1, 0))
+	state := runner.Setup(g, rng)
+
+	// Force a stalled state: Turn at MaxTurns but every hand still has cards.
+	state.Turn = g.MaxTurns()
+	for i := range state.Hands {
+		if len(state.Hands[i]) == 0 {
+			state.Hands[i] = []sim.Card{{Suit: sim.Hearts, Rank: sim.Two}}
+		}
+	}
+
+	if winner := runner.CheckEnd(state, g); winner != -1 {
+		t.Fatalf("CheckEnd at MaxTurns with non-empty hands should return -1 (timeout); got %d", winner)
+	}
+}
+
 func TestAllTrickSeedsValid(t *testing.T) {
 	seedGames := []*genome.Genome{
 		seeds.Whist(),

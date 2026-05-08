@@ -36,6 +36,7 @@ func (r *Runner) Setup(g *genome.Genome, rng *rand.Rand) *sim.GameState {
 
 	state.Deck = deck
 	state.Phase = sim.PhasePlay
+	state.RNG = rng
 	return state
 }
 
@@ -75,8 +76,15 @@ func (r *Runner) GenerateMoves(state *sim.GameState, g *genome.Genome) []sim.Mov
 		}
 	}
 
-	// If no playable cards, must draw
+	// If no playable cards, must draw. If the deck is empty, recycle the
+	// discard pile (minus the top card) before falling through to Pass --
+	// otherwise the game pingpongs MovePass deterministically until MaxTurns
+	// and gets misclassified as a degenerate timeout. Mirrors the rummy
+	// runner's behavior in ApplyMove around MoveDiscard.
 	if len(moves) == 0 {
+		if len(state.Deck) == 0 && len(state.Discard) > 1 {
+			refillDeckFromDiscard(state)
+		}
 		if len(state.Deck) > 0 {
 			moves = append(moves, sim.Move{
 				Type:    sim.MoveDraw,
@@ -92,6 +100,22 @@ func (r *Runner) GenerateMoves(state *sim.GameState, g *genome.Genome) []sim.Mov
 	}
 
 	return moves
+}
+
+// refillDeckFromDiscard moves all but the top discard card into the deck and
+// shuffles using state.RNG. Called when the deck has emptied so shedding
+// games can recover instead of stalling on an unreachable discard pile.
+func refillDeckFromDiscard(state *sim.GameState) {
+	if len(state.Discard) <= 1 {
+		return
+	}
+	top := state.Discard[len(state.Discard)-1]
+	recycled := state.Discard[:len(state.Discard)-1]
+	state.Deck = append(state.Deck[:0], recycled...)
+	state.Discard = []sim.Card{top}
+	if state.RNG != nil {
+		sim.ShuffleDeck(state.Deck, state.RNG)
+	}
 }
 
 func (r *Runner) ApplyMove(state *sim.GameState, move sim.Move, g *genome.Genome) []sim.Event {
@@ -210,8 +234,20 @@ func removeCard(hand []sim.Card, card sim.Card) []sim.Card {
 }
 
 // applySpecialEffects handles special card effects when played.
+//
+// All victim/skip computations resolve against the player who actually
+// played the card (originActive). When two SpecialCards entries match the
+// same card (e.g. one by ByRank and another by BySuit), each effect's
+// "next player" must still mean origin+1, not origin+1+(prior advances).
+// We accumulate the total NextPlayer advances and apply them once at the
+// end so chained effects target the rightful victim.
 func applySpecialEffects(state *sim.GameState, card sim.Card, g *genome.Genome) []sim.Event {
 	var events []sim.Event
+	originActive := state.Active
+	advances := 0
+	nextOf := func() int {
+		return (originActive + 1) % state.NumPlayers
+	}
 
 	for _, sc := range g.SpecialCards {
 		if !cardMatchesSpecial(card, sc) {
@@ -220,10 +256,8 @@ func applySpecialEffects(state *sim.GameState, card sim.Card, g *genome.Genome) 
 
 		switch sc.Type {
 		case genome.SpecialSkip:
-			// Skip is handled by advancing an extra player. Capture the
-			// player being skipped before NextPlayer rotates past them.
-			skipped := (state.Active + 1) % state.NumPlayers
-			state.NextPlayer()
+			skipped := nextOf()
+			advances++
 			events = append(events, sim.Event{
 				Type:     sim.EventSpecialTriggered,
 				PlayerID: skipped,
@@ -241,7 +275,7 @@ func applySpecialEffects(state *sim.GameState, card sim.Card, g *genome.Genome) 
 			}
 			state.Direction = -state.Direction
 			if state.NumPlayers == 2 {
-				state.NextPlayer()
+				advances++
 			}
 			events = append(events, sim.Event{
 				Type:   sim.EventSpecialTriggered,
@@ -249,33 +283,33 @@ func applySpecialEffects(state *sim.GameState, card sim.Card, g *genome.Genome) 
 			})
 
 		case genome.SpecialDrawTwo:
-			nextPlayer := (state.Active + 1) % state.NumPlayers
+			victim := nextOf()
 			drawn, rest := sim.DrawN(state.Deck, 2)
 			state.Deck = rest
-			state.Hands[nextPlayer] = append(state.Hands[nextPlayer], drawn...)
+			state.Hands[victim] = append(state.Hands[victim], drawn...)
 			// Standard Uno-style draw also forces the victim to lose their
 			// turn. Advance once here so the trailing NextPlayer in
 			// ApplyMove rotates past them.
-			state.NextPlayer()
+			advances++
 			events = append(events, sim.Event{
 				Type:     sim.EventSpecialTriggered,
-				PlayerID: nextPlayer,
+				PlayerID: victim,
 				Cards:    drawn,
 				Detail:   "draw_two",
 			})
 
 		case genome.SpecialDrawFour:
-			nextPlayer := (state.Active + 1) % state.NumPlayers
+			victim := nextOf()
 			drawn, rest := sim.DrawN(state.Deck, 4)
 			state.Deck = rest
-			state.Hands[nextPlayer] = append(state.Hands[nextPlayer], drawn...)
+			state.Hands[victim] = append(state.Hands[victim], drawn...)
 			// Standard Uno-style draw also forces the victim to lose their
 			// turn. Advance once here so the trailing NextPlayer in
 			// ApplyMove rotates past them.
-			state.NextPlayer()
+			advances++
 			events = append(events, sim.Event{
 				Type:     sim.EventSpecialTriggered,
-				PlayerID: nextPlayer,
+				PlayerID: victim,
 				Cards:    drawn,
 				Detail:   "draw_four",
 			})
@@ -283,6 +317,10 @@ func applySpecialEffects(state *sim.GameState, card sim.Card, g *genome.Genome) 
 		case genome.SpecialWild:
 			// Wild effect is handled in move generation (always playable)
 		}
+	}
+
+	for i := 0; i < advances; i++ {
+		state.NextPlayer()
 	}
 
 	return events

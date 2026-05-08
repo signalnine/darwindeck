@@ -475,3 +475,113 @@ func TestNextPlayerHonorsDirection(t *testing.T) {
 		t.Fatalf("NextPlayer wrap with Direction=-1 from Active=0: got %d, want 3", state.Active)
 	}
 }
+
+// TestSetupStoresRNG ensures Setup wires state.RNG, which the discard
+// reshuffle path needs to randomize the recycled cards reproducibly.
+func TestSetupStoresRNG(t *testing.T) {
+	g := seeds.CrazyEights()
+	runner := &Runner{}
+	rng := rand.New(rand.NewPCG(11, 0))
+	state := runner.Setup(g, rng)
+	if state.RNG == nil {
+		t.Fatal("Setup did not store rng on state.RNG; reshuffle on empty deck cannot stay reproducible")
+	}
+}
+
+// TestGenerateMovesReshufflesDiscardWhenDeckEmpty constructs a state where
+// the deck is empty and the active player has no playable card, but the
+// discard pile has cards beyond the top. Real-world shedding games (Crazy
+// Eights, Mau-Mau) reshuffle the discard pile back into the deck instead of
+// looping passes. GenerateMoves must perform the reshuffle and offer a Draw
+// rather than a Pass so the game can progress.
+func TestGenerateMovesReshufflesDiscardWhenDeckEmpty(t *testing.T) {
+	g := seeds.CrazyEights()
+	runner := &Runner{}
+	rng := rand.New(rand.NewPCG(3, 0))
+	state := runner.Setup(g, rng)
+
+	// Force the stalled state: empty deck, top card of Hearts/Two, and a
+	// non-trivial pile underneath. Hand contains only a single Spades/Three
+	// which does not match Hearts/Two by suit or rank under MatchEither.
+	state.Deck = state.Deck[:0]
+	top := sim.Card{Suit: sim.Hearts, Rank: sim.Two}
+	pile := []sim.Card{
+		{Suit: sim.Hearts, Rank: sim.Four},
+		{Suit: sim.Diamonds, Rank: sim.Five},
+		{Suit: sim.Clubs, Rank: sim.Six},
+		{Suit: sim.Spades, Rank: sim.Seven},
+		top,
+	}
+	state.Discard = pile
+	state.TopCard = &sim.Card{Suit: top.Suit, Rank: top.Rank}
+	state.Hands[state.Active] = []sim.Card{{Suit: sim.Spades, Rank: sim.Three}}
+
+	moves := runner.GenerateMoves(state, g)
+	if len(moves) == 0 {
+		t.Fatal("expected a move (draw after reshuffle)")
+	}
+	if moves[0].Type != sim.MoveDraw {
+		t.Fatalf("expected MoveDraw after reshuffle; got %v", moves[0].Type)
+	}
+	if len(state.Deck) == 0 {
+		t.Fatal("expected state.Deck to be repopulated from discard pile")
+	}
+	if len(state.Discard) != 1 || state.Discard[0] != top {
+		t.Fatalf("expected discard reduced to top card only; got %d cards top=%v", len(state.Discard), state.Discard)
+	}
+}
+
+// TestStackedSpecialsTargetOriginalNextPlayer covers dd-rzo. When two
+// SpecialCards entries match the same played card (e.g. one keyed by ByRank
+// and another by BySuit), the second case used to read state.Active after
+// the first case had already advanced it via NextPlayer, mistargeting the
+// drawn cards or skipped player. With four players, a Skip+DrawTwo stack
+// played by player 0 must penalize player 1 (origin+1), not player 2.
+func TestStackedSpecialsTargetOriginalNextPlayer(t *testing.T) {
+	sevenOfClubs := sim.Card{Suit: sim.Clubs, Rank: sim.Seven}
+	g := &genome.Genome{
+		ID:       "test-stacked-specials",
+		Skeleton: genome.Shedding,
+		Players:  4,
+		HandSize: 1,
+		Shedding: &genome.SheddingParams{
+			MatchRule:   genome.MatchEither,
+			DrawPenalty: 1,
+		},
+		SpecialCards: []genome.SpecialCard{
+			{Type: genome.SpecialSkip, ByRank: uint8(sim.Seven)},
+			{Type: genome.SpecialDrawTwo, BySuit: uint8(sim.Clubs) + 1},
+		},
+	}
+
+	runner := &Runner{}
+	state := &sim.GameState{
+		NumPlayers: 4,
+		Active:     0,
+		Hands: [][]sim.Card{
+			{sevenOfClubs},
+			{{Suit: sim.Hearts, Rank: sim.Five}},
+			{{Suit: sim.Hearts, Rank: sim.Six}},
+			{{Suit: sim.Hearts, Rank: sim.Eight}},
+		},
+		Deck:    sim.StandardDeck(),
+		Discard: []sim.Card{{Suit: sim.Clubs, Rank: sim.Three}},
+		TopCard: &sim.Card{Suit: sim.Clubs, Rank: sim.Three},
+	}
+
+	runner.ApplyMove(state, sim.Move{
+		Type:     sim.MovePlay,
+		Cards:    []sim.Card{sevenOfClubs},
+		PlayerID: 0,
+	}, g)
+
+	// Player 1 (origin+1) is the rightful victim of the DrawTwo. They
+	// started with one card, must end with three.
+	if got := len(state.Hands[1]); got != 3 {
+		t.Fatalf("player 1 hand size = %d after stacked Skip+DrawTwo, want 3 (DrawTwo must target origin+1)", got)
+	}
+	// Player 2 should not have received any cards from the stacked specials.
+	if got := len(state.Hands[2]); got != 1 {
+		t.Fatalf("player 2 hand size = %d, want 1; specials wrongly targeted them after Skip rotated Active", got)
+	}
+}

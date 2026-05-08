@@ -313,10 +313,10 @@ func (r *Runner) CheckEnd(state *sim.GameState, g *genome.Genome) int {
 	}
 
 	if !allEmpty {
-		// Also check max turns
-		if state.Turn >= g.MaxTurns() {
-			return findWinner(state, g)
-		}
+		// At max turns with hands still in play, return -1 so the batch runner
+		// classifies this as a genuine timeout rather than a completion.
+		// Awarding findWinner here would mask hung trick-taking genomes from
+		// Tier1 timeout detection (matches shedding and rummy behavior).
 		return -1
 	}
 

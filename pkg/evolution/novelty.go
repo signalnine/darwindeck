@@ -3,6 +3,7 @@ package evolution
 import (
 	"fmt"
 	"math/rand/v2"
+	"runtime"
 	"sort"
 	"sync"
 
@@ -41,6 +42,9 @@ type NoveltyEngine struct {
 
 // NewNoveltyEngine creates a novelty search engine.
 func NewNoveltyEngine(config Config, seeds []*genome.Genome) *NoveltyEngine {
+	if config.Workers == 0 {
+		config.Workers = runtime.NumCPU()
+	}
 	return &NoveltyEngine{
 		Config: config,
 		Seeds:  seeds,
@@ -145,17 +149,25 @@ func (e *NoveltyEngine) evaluatePopulation() {
 // k-nearest neighbor distance in behavior space, computed WITHIN-SKELETON only.
 // Also applies fitness sharing by skeleton niche to prevent monopoly.
 func (e *NoveltyEngine) computeNovelty() {
-	// Collect behavior points per skeleton (population + archive)
-	perSkeleton := make(map[genome.SkeletonType][]BehaviorDescriptor)
+	// Collect behavior points per skeleton (population + archive). Track the
+	// owning *NoveltyIndividual so each individual can skip its own entry by
+	// identity instead of filtering zero-valued distances -- otherwise
+	// converged clusters drop their intra-cluster zeros and pull k-NN from
+	// faraway outliers, which would reward (not penalize) duplication.
+	type behaviorPoint struct {
+		Behavior BehaviorDescriptor
+		Owner    *NoveltyIndividual // nil for archive entries
+	}
+	perSkeleton := make(map[genome.SkeletonType][]behaviorPoint)
 	for _, ind := range e.Population {
 		if ind.Valid && ind.Fitness.TotalFitness >= FitnessFloor {
 			skel := ind.Genome.Skeleton
-			perSkeleton[skel] = append(perSkeleton[skel], ind.Behavior)
+			perSkeleton[skel] = append(perSkeleton[skel], behaviorPoint{Behavior: ind.Behavior, Owner: ind})
 		}
 	}
 	for _, arch := range e.Archive {
 		skel := arch.Genome.Skeleton
-		perSkeleton[skel] = append(perSkeleton[skel], arch.Behavior)
+		perSkeleton[skel] = append(perSkeleton[skel], behaviorPoint{Behavior: arch.Behavior, Owner: nil})
 	}
 
 	if len(perSkeleton) == 0 {
@@ -181,14 +193,14 @@ func (e *NoveltyEngine) computeNovelty() {
 		}
 
 		skel := ind.Genome.Skeleton
-		behaviors := perSkeleton[skel]
+		points := perSkeleton[skel]
 
 		var distances []float64
-		for _, b := range behaviors {
-			d := ind.Behavior.Distance(b)
-			if d > 0 {
-				distances = append(distances, d)
+		for _, p := range points {
+			if p.Owner == ind {
+				continue // skip self by identity, not by zero distance
 			}
+			distances = append(distances, ind.Behavior.Distance(p.Behavior))
 		}
 
 		if len(distances) == 0 {

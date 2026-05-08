@@ -3,6 +3,7 @@ package evolution
 import (
 	"fmt"
 	"math/rand/v2"
+	"runtime"
 	"sync"
 
 	"github.com/darwindeck/darwindeck/pkg/fitness"
@@ -40,6 +41,9 @@ type Archive struct {
 
 // NewMAPElitesEngine creates a MAP-Elites engine.
 func NewMAPElitesEngine(config Config, seeds []*genome.Genome) *MAPElitesEngine {
+	if config.Workers == 0 {
+		config.Workers = runtime.NumCPU()
+	}
 	return &MAPElitesEngine{
 		Config: config,
 		Seeds:  seeds,
