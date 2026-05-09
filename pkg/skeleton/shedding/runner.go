@@ -235,92 +235,98 @@ func removeCard(hand []sim.Card, card sim.Card) []sim.Card {
 
 // applySpecialEffects handles special card effects when played.
 //
-// All victim/skip computations resolve against the player who actually
-// played the card (originActive). When two SpecialCards entries match the
-// same card (e.g. one by ByRank and another by BySuit), each effect's
-// "next player" must still mean origin+1, not origin+1+(prior advances).
-// We accumulate the total NextPlayer advances and apply them once at the
-// end so chained effects target the rightful victim.
+// Multiple SpecialCard rules can match the same played card -- mutation
+// freely appends specials and never deduplicates by (Type, ByRank, BySuit).
+// To keep the simulation outcome aligned with what the rulebook describes,
+// each effect category is collected and applied at most once: duplicate
+// rules of the same type collapse into a single effect, and combinations
+// like Skip + DrawTwo skip the victim exactly once rather than rotating
+// two seats past them (cards-czo). This subsumes the partial fix from
+// dd-rzo which still allowed advances to accumulate per matching rule.
 func applySpecialEffects(state *sim.GameState, card sim.Card, g *genome.Genome) []sim.Event {
-	var events []sim.Event
-	originActive := state.Active
-	advances := 0
-	nextOf := func() int {
-		return (originActive + 1) % state.NumPlayers
-	}
+	var (
+		skip      bool
+		reverse   bool
+		drawCount int
+	)
 
 	for _, sc := range g.SpecialCards {
 		if !cardMatchesSpecial(card, sc) {
 			continue
 		}
-
 		switch sc.Type {
 		case genome.SpecialSkip:
-			skipped := nextOf()
-			advances++
-			events = append(events, sim.Event{
-				Type:     sim.EventSpecialTriggered,
-				PlayerID: skipped,
-				Detail:   "skip",
-			})
-
+			skip = true
 		case genome.SpecialReverse:
-			// In 2-player, reverse is functionally a skip: flip direction so
-			// the trailing NextPlayer in ApplyMove lands back on the original
-			// player, mirroring Uno semantics.
-			// For 3+, flip the direction so subsequent NextPlayer calls walk
-			// the play order backward.
-			if state.Direction == 0 {
-				state.Direction = 1
-			}
-			state.Direction = -state.Direction
-			if state.NumPlayers == 2 {
-				advances++
-			}
-			events = append(events, sim.Event{
-				Type:   sim.EventSpecialTriggered,
-				Detail: "reverse",
-			})
-
+			reverse = true
 		case genome.SpecialDrawTwo:
-			victim := nextOf()
-			drawn, rest := sim.DrawN(state.Deck, 2)
-			state.Deck = rest
-			state.Hands[victim] = append(state.Hands[victim], drawn...)
-			// Standard Uno-style draw also forces the victim to lose their
-			// turn. Advance once here so the trailing NextPlayer in
-			// ApplyMove rotates past them.
-			advances++
-			events = append(events, sim.Event{
-				Type:     sim.EventSpecialTriggered,
-				PlayerID: victim,
-				Cards:    drawn,
-				Detail:   "draw_two",
-			})
-
+			if drawCount == 0 {
+				drawCount = 2
+			}
 		case genome.SpecialDrawFour:
-			victim := nextOf()
-			drawn, rest := sim.DrawN(state.Deck, 4)
-			state.Deck = rest
-			state.Hands[victim] = append(state.Hands[victim], drawn...)
-			// Standard Uno-style draw also forces the victim to lose their
-			// turn. Advance once here so the trailing NextPlayer in
-			// ApplyMove rotates past them.
-			advances++
-			events = append(events, sim.Event{
-				Type:     sim.EventSpecialTriggered,
-				PlayerID: victim,
-				Cards:    drawn,
-				Detail:   "draw_four",
-			})
-
+			if drawCount == 0 {
+				drawCount = 4
+			}
 		case genome.SpecialWild:
 			// Wild effect is handled in move generation (always playable)
 		}
 	}
 
-	for i := 0; i < advances; i++ {
+	// Apply Reverse first so victim/skip lookups use the new direction.
+	if reverse {
+		if state.Direction == 0 {
+			state.Direction = 1
+		}
+		state.Direction = -state.Direction
+	}
+
+	// Compute the victim using the current direction. ApplyMove's trailing
+	// NextPlayer is what rotates *to* the victim normally; an extra advance
+	// here is what makes them get "skipped".
+	dir := state.Direction
+	if dir == 0 {
+		dir = 1
+	}
+	victim := ((state.Active+dir)%state.NumPlayers + state.NumPlayers) % state.NumPlayers
+
+	var events []sim.Event
+
+	if drawCount > 0 {
+		drawn, rest := sim.DrawN(state.Deck, drawCount)
+		state.Deck = rest
+		state.Hands[victim] = append(state.Hands[victim], drawn...)
+		detail := "draw_two"
+		if drawCount == 4 {
+			detail = "draw_four"
+		}
+		events = append(events, sim.Event{
+			Type:     sim.EventSpecialTriggered,
+			PlayerID: victim,
+			Cards:    drawn,
+			Detail:   detail,
+		})
+	}
+
+	// Skip the victim if any skip-style effect fired. Skip, DrawN (Uno-style
+	// "draw and lose your turn"), and Reverse-in-2-player all collapse to one
+	// extra advance regardless of how many matching rules contributed.
+	skipVictim := skip || drawCount > 0 || (reverse && state.NumPlayers == 2)
+	if skipVictim {
 		state.NextPlayer()
+	}
+
+	if skip {
+		events = append(events, sim.Event{
+			Type:     sim.EventSpecialTriggered,
+			PlayerID: victim,
+			Detail:   "skip",
+		})
+	}
+	if reverse {
+		events = append(events, sim.Event{
+			Type:   sim.EventSpecialTriggered,
+			Detail: "reverse",
+		})
 	}
 
 	return events

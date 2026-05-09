@@ -462,6 +462,140 @@ func TestReverseTwoPlayerActsAsSkip(t *testing.T) {
 	}
 }
 
+// TestSpecialSkipDoesNotCompoundWithDrawTwo verifies that when a card matches
+// multiple special-card rules (e.g. Skip + DrawTwo), the victim is skipped
+// once -- not twice -- and the trailing NextPlayer in ApplyMove still adds
+// exactly one normal advance. Without this, mutation that produces both rules
+// matching the same card silently rotates two seats past the victim (cards-czo).
+func TestSpecialSkipDoesNotCompoundWithDrawTwo(t *testing.T) {
+	g := &genome.Genome{
+		ID:       "test-czo-skip-drawtwo",
+		Skeleton: genome.Shedding,
+		Players:  4,
+		HandSize: 3,
+		Shedding: &genome.SheddingParams{
+			MatchRule:   genome.MatchEither,
+			DrawPenalty: 1,
+		},
+		SpecialCards: []genome.SpecialCard{
+			{Type: genome.SpecialSkip, ByRank: uint8(sim.Two)},
+			{Type: genome.SpecialDrawTwo, ByRank: uint8(sim.Two)},
+		},
+	}
+	runner := &Runner{}
+	state := sim.NewGameState(4)
+	state.Active = 0
+	state.Hands = [][]sim.Card{
+		{{Suit: sim.Hearts, Rank: sim.Two}},
+		{{Suit: sim.Hearts, Rank: sim.Five}},
+		{{Suit: sim.Hearts, Rank: sim.Six}},
+		{{Suit: sim.Hearts, Rank: sim.Seven}},
+	}
+	state.Deck = sim.StandardDeck()
+	state.Discard = []sim.Card{{Suit: sim.Hearts, Rank: sim.Three}}
+	state.TopCard = &sim.Card{Suit: sim.Hearts, Rank: sim.Three}
+
+	runner.ApplyMove(state, sim.Move{
+		Type:     sim.MovePlay,
+		Cards:    []sim.Card{{Suit: sim.Hearts, Rank: sim.Two}},
+		PlayerID: 0,
+	}, g)
+
+	if len(state.Hands[1]) != 3 {
+		t.Fatalf("victim hand size = %d, want 3 (1 original + 2 drawn)", len(state.Hands[1]))
+	}
+	if state.Active != 2 {
+		t.Fatalf("Active = %d after combined Skip+DrawTwo on a single card; want 2 (victim skipped exactly once)", state.Active)
+	}
+}
+
+// TestDuplicateSpecialSkipRulesDoNotCompound verifies that two Skip rules
+// matching the same card produce one skip, not two. Mutation does not
+// deduplicate by (Type, ByRank, BySuit), so this case is reachable in
+// evolved populations (cards-czo).
+func TestDuplicateSpecialSkipRulesDoNotCompound(t *testing.T) {
+	g := &genome.Genome{
+		ID:       "test-czo-double-skip",
+		Skeleton: genome.Shedding,
+		Players:  4,
+		HandSize: 3,
+		Shedding: &genome.SheddingParams{
+			MatchRule:   genome.MatchEither,
+			DrawPenalty: 1,
+		},
+		SpecialCards: []genome.SpecialCard{
+			{Type: genome.SpecialSkip, ByRank: uint8(sim.Two)},
+			{Type: genome.SpecialSkip}, // any rank/suit -- also matches the Two
+		},
+	}
+	runner := &Runner{}
+	state := sim.NewGameState(4)
+	state.Active = 0
+	state.Hands = [][]sim.Card{
+		{{Suit: sim.Hearts, Rank: sim.Two}},
+		{{Suit: sim.Hearts, Rank: sim.Five}},
+		{{Suit: sim.Hearts, Rank: sim.Six}},
+		{{Suit: sim.Hearts, Rank: sim.Seven}},
+	}
+	state.Deck = sim.StandardDeck()
+	state.Discard = []sim.Card{{Suit: sim.Hearts, Rank: sim.Three}}
+	state.TopCard = &sim.Card{Suit: sim.Hearts, Rank: sim.Three}
+
+	runner.ApplyMove(state, sim.Move{
+		Type:     sim.MovePlay,
+		Cards:    []sim.Card{{Suit: sim.Hearts, Rank: sim.Two}},
+		PlayerID: 0,
+	}, g)
+
+	if state.Active != 2 {
+		t.Fatalf("Active = %d after duplicate Skip rules on one card; want 2 (one skip past victim)", state.Active)
+	}
+}
+
+// TestDuplicateDrawTwoRulesDoNotStack verifies that two DrawTwo rules matching
+// the same card draw 2 cards once, not 4. Compounding here would silently
+// double-penalize the victim relative to the rulebook (cards-czo).
+func TestDuplicateDrawTwoRulesDoNotStack(t *testing.T) {
+	g := &genome.Genome{
+		ID:       "test-czo-double-drawtwo",
+		Skeleton: genome.Shedding,
+		Players:  3,
+		HandSize: 3,
+		Shedding: &genome.SheddingParams{
+			MatchRule:   genome.MatchEither,
+			DrawPenalty: 1,
+		},
+		SpecialCards: []genome.SpecialCard{
+			{Type: genome.SpecialDrawTwo, ByRank: uint8(sim.Two)},
+			{Type: genome.SpecialDrawTwo}, // any rank/suit -- also matches the Two
+		},
+	}
+	runner := &Runner{}
+	state := sim.NewGameState(3)
+	state.Active = 0
+	state.Hands = [][]sim.Card{
+		{{Suit: sim.Hearts, Rank: sim.Two}},
+		{{Suit: sim.Hearts, Rank: sim.Five}},
+		{{Suit: sim.Hearts, Rank: sim.Six}},
+	}
+	state.Deck = sim.StandardDeck()
+	state.Discard = []sim.Card{{Suit: sim.Hearts, Rank: sim.Three}}
+	state.TopCard = &sim.Card{Suit: sim.Hearts, Rank: sim.Three}
+
+	runner.ApplyMove(state, sim.Move{
+		Type:     sim.MovePlay,
+		Cards:    []sim.Card{{Suit: sim.Hearts, Rank: sim.Two}},
+		PlayerID: 0,
+	}, g)
+
+	if len(state.Hands[1]) != 3 {
+		t.Fatalf("victim hand size = %d, want 3 (1 original + 2 drawn); duplicate DrawTwo must not stack", len(state.Hands[1]))
+	}
+	if state.Active != 2 {
+		t.Fatalf("Active = %d; want 2 (one skip past victim)", state.Active)
+	}
+}
+
 func TestNextPlayerHonorsDirection(t *testing.T) {
 	state := sim.NewGameState(4)
 	state.Active = 1
