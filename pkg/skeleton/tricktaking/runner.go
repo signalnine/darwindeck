@@ -26,6 +26,12 @@ func (r *Runner) Setup(g *genome.Genome, rng *rand.Rand) *sim.GameState {
 
 	state := sim.NewGameState(g.Players)
 
+	// Determine trump from the full pre-deal deck so TrumpCut still picks a
+	// real suit when HandSize*Players == 52 empties the post-deal remainder
+	// (cards-6u5). Other TrumpRule values don't read the deck, so the early
+	// call is harmless for them.
+	state.TrumpSuit = determineTrump(g, deck, rng)
+
 	// Deal hands
 	for i := 0; i < g.Players; i++ {
 		hand, rest := sim.DrawN(deck, g.HandSize)
@@ -43,9 +49,6 @@ func (r *Runner) Setup(g *genome.Genome, rng *rand.Rand) *sim.GameState {
 		state.MaxRound = 1
 	}
 	state.RNG = rng
-
-	// Determine trump
-	state.TrumpSuit = determineTrump(g, deck, rng)
 
 	// Initialize trick state
 	state.TrickCards = make([]sim.Card, 0, g.Players)
@@ -347,6 +350,12 @@ func redealRound(state *sim.GameState, g *genome.Genome) {
 		sim.ShuffleDeck(deck, state.RNG)
 	}
 
+	// Cut for trump from the full pre-deal deck so TrumpCut keeps a real
+	// suit when the round-end re-deal empties the deck (cards-6u5).
+	if state.RNG != nil {
+		state.TrumpSuit = determineTrump(g, deck, state.RNG)
+	}
+
 	for i := 0; i < g.Players; i++ {
 		hand, rest := sim.DrawN(deck, g.HandSize)
 		state.Hands[i] = append(state.Hands[i][:0], hand...)
@@ -359,10 +368,6 @@ func redealRound(state *sim.GameState, g *genome.Genome) {
 	state.TrickBroken = false
 	state.TrickLeader = state.Round % state.NumPlayers
 	state.Active = state.TrickLeader
-
-	if state.RNG != nil {
-		state.TrumpSuit = determineTrump(g, state.Deck, state.RNG)
-	}
 }
 
 func findWinner(state *sim.GameState, g *genome.Genome) int {

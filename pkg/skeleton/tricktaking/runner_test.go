@@ -424,6 +424,84 @@ func TestCheckEndReturnsTimeoutAtMaxTurns(t *testing.T) {
 	}
 }
 
+// TestTrumpCutAssignsTrumpEvenWhenDeckFullyDealt verifies cards-6u5: when
+// HandSize*Players == 52 the post-deal remainder is empty, and TrumpCut would
+// silently fall back to TrumpNone. Trump must be picked from the pre-deal
+// deck so a genome's declared TrumpRule is honoured regardless of slack.
+func TestTrumpCutAssignsTrumpEvenWhenDeckFullyDealt(t *testing.T) {
+	g := &genome.Genome{
+		ID:       "trump-cut-full-deal",
+		Skeleton: genome.TrickTaking,
+		Players:  4,
+		HandSize: 13, // 4*13 == 52, deck is empty after dealing
+		TrickTaking: &genome.TrickTakingParams{
+			MustFollowSuit:  true,
+			TrickScoring:    genome.ScorePerTrick,
+			LeadRestriction: genome.LeadNone,
+			RoundsPerGame:   1,
+		},
+		TrumpRule: genome.TrumpCut,
+	}
+
+	for seed := uint64(0); seed < 10; seed++ {
+		runner := &Runner{}
+		rng := rand.New(rand.NewPCG(seed, 0))
+		state := runner.Setup(g, rng)
+		if state.TrumpSuit < 0 || state.TrumpSuit > 3 {
+			t.Fatalf("seed %d: TrumpCut with HandSize*Players==52 must assign a real trump suit (0-3); got %d",
+				seed, state.TrumpSuit)
+		}
+	}
+}
+
+// TestTrumpCutRedealAssignsTrumpEvenWhenDeckFullyDealt covers the same
+// regression at round-end re-deal: redealRound also calls determineTrump on
+// the post-deal slack, so TrumpCut must remain a real suit after a re-deal
+// that empties the deck.
+func TestTrumpCutRedealAssignsTrumpEvenWhenDeckFullyDealt(t *testing.T) {
+	g := &genome.Genome{
+		ID:       "trump-cut-full-deal-redeal",
+		Skeleton: genome.TrickTaking,
+		Players:  4,
+		HandSize: 13,
+		TrickTaking: &genome.TrickTakingParams{
+			MustFollowSuit:  true,
+			TrickScoring:    genome.ScorePerTrick,
+			LeadRestriction: genome.LeadNone,
+			RoundsPerGame:   2,
+		},
+		TrumpRule: genome.TrumpCut,
+	}
+	runner := &Runner{}
+	rng := rand.New(rand.NewPCG(3, 0))
+	state := runner.Setup(g, rng)
+	ai := &sim.RandomAI{}
+
+	maxTurns := g.MaxTurns()
+	sawRound1 := false
+	for state.Turn < maxTurns {
+		winner := runner.CheckEnd(state, g)
+		if state.Round == 1 && !sawRound1 {
+			sawRound1 = true
+			if state.TrumpSuit < 0 || state.TrumpSuit > 3 {
+				t.Fatalf("after re-deal, TrumpCut must keep a real trump suit (0-3); got %d", state.TrumpSuit)
+			}
+		}
+		if winner >= 0 {
+			break
+		}
+		moves := runner.GenerateMoves(state, g)
+		if len(moves) == 0 {
+			t.Fatalf("no moves at turn %d (round %d)", state.Turn, state.Round)
+		}
+		runner.ApplyMove(state, ai.SelectMove(moves, state, rng), g)
+	}
+
+	if !sawRound1 {
+		t.Fatal("multi-round game never advanced to round 1; cannot exercise re-deal trump assignment")
+	}
+}
+
 func TestAllTrickSeedsValid(t *testing.T) {
 	seedGames := []*genome.Genome{
 		seeds.Whist(),

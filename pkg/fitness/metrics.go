@@ -136,10 +136,18 @@ func computeGameArc(result sim.BatchResult) float64 {
 		entropy -= p * math.Log2(p)
 	}
 
-	// Also consider turn variance: games should have varying length
-	// (different games play out differently = good arc)
+	// Also consider how much game length varies between runs. Use the
+	// coefficient of variation (stddev/mean) so the score is scale-invariant:
+	// a rummy genome averaging 80 turns no longer trivially saturates the
+	// term over a 12-turn shedding genome with the same relative spread
+	// (cards-6n3). A CV of ~0.4 saturates the score, matching the original
+	// "interesting spread" expectation.
 	turnVariance := computeTurnVariance(result)
-	turnScore := clamp(turnVariance/100, 0, 1) // Normalize: 100 variance = max
+	turnScore := 0.0
+	if result.AvgTurns > 0 && turnVariance > 0 {
+		cv := math.Sqrt(turnVariance) / result.AvgTurns
+		turnScore = clamp(cv/0.4, 0, 1)
+	}
 
 	// Combine entropy (who wins varies) with turn variance (how it plays varies)
 	entropyScore := entropy / maxEntropy
