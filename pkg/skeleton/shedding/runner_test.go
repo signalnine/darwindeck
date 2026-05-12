@@ -665,6 +665,211 @@ func TestGenerateMovesReshufflesDiscardWhenDeckEmpty(t *testing.T) {
 	}
 }
 
+// TestDrawTwoHonorsReversedDirection covers dd-itq. When Direction=-1, the
+// SpecialDrawTwo victim must be origin-1 (next-in-direction), not origin+1.
+// Three players, P0 plays a DrawTwo with Direction=-1: P2 receives the 2
+// cards and is skipped; Active lands on P1.
+func TestDrawTwoHonorsReversedDirection(t *testing.T) {
+	g := &genome.Genome{
+		ID:       "test-drawtwo-dir-neg",
+		Skeleton: genome.Shedding,
+		Players:  3,
+		HandSize: 1,
+		Shedding: &genome.SheddingParams{
+			MatchRule:   genome.MatchEither,
+			DrawPenalty: 1,
+		},
+		SpecialCards: []genome.SpecialCard{
+			{Type: genome.SpecialDrawTwo, ByRank: uint8(sim.Two)},
+		},
+	}
+	runner := &Runner{}
+	state := &sim.GameState{
+		NumPlayers: 3,
+		Active:     0,
+		Direction:  -1,
+		Hands: [][]sim.Card{
+			{{Suit: sim.Hearts, Rank: sim.Two}},
+			{{Suit: sim.Hearts, Rank: sim.Five}},
+			{{Suit: sim.Hearts, Rank: sim.Six}},
+		},
+		Deck:    sim.StandardDeck(),
+		Discard: []sim.Card{{Suit: sim.Hearts, Rank: sim.Three}},
+		TopCard: &sim.Card{Suit: sim.Hearts, Rank: sim.Three},
+	}
+
+	runner.ApplyMove(state, sim.Move{
+		Type:     sim.MovePlay,
+		Cards:    []sim.Card{{Suit: sim.Hearts, Rank: sim.Two}},
+		PlayerID: 0,
+	}, g)
+
+	if got := len(state.Hands[2]); got != 3 {
+		t.Fatalf("player 2 hand size = %d after DrawTwo with Direction=-1, want 3 (origin-1 victim)", got)
+	}
+	if got := len(state.Hands[1]); got != 1 {
+		t.Fatalf("player 1 hand size = %d, want 1; DrawTwo with Direction=-1 wrongly targeted them", got)
+	}
+	if state.Active != 1 {
+		t.Fatalf("Active = %d after DrawTwo with Direction=-1, want 1 (P2 victim should be skipped)", state.Active)
+	}
+}
+
+// TestDrawFourHonorsReversedDirection covers dd-itq for DrawFour.
+func TestDrawFourHonorsReversedDirection(t *testing.T) {
+	g := &genome.Genome{
+		ID:       "test-drawfour-dir-neg",
+		Skeleton: genome.Shedding,
+		Players:  3,
+		HandSize: 1,
+		Shedding: &genome.SheddingParams{
+			MatchRule:   genome.MatchEither,
+			DrawPenalty: 1,
+		},
+		SpecialCards: []genome.SpecialCard{
+			{Type: genome.SpecialDrawFour, ByRank: uint8(sim.Two)},
+		},
+	}
+	runner := &Runner{}
+	state := &sim.GameState{
+		NumPlayers: 3,
+		Active:     0,
+		Direction:  -1,
+		Hands: [][]sim.Card{
+			{{Suit: sim.Hearts, Rank: sim.Two}},
+			{{Suit: sim.Hearts, Rank: sim.Five}},
+			{{Suit: sim.Hearts, Rank: sim.Six}},
+		},
+		Deck:    sim.StandardDeck(),
+		Discard: []sim.Card{{Suit: sim.Hearts, Rank: sim.Three}},
+		TopCard: &sim.Card{Suit: sim.Hearts, Rank: sim.Three},
+	}
+
+	runner.ApplyMove(state, sim.Move{
+		Type:     sim.MovePlay,
+		Cards:    []sim.Card{{Suit: sim.Hearts, Rank: sim.Two}},
+		PlayerID: 0,
+	}, g)
+
+	if got := len(state.Hands[2]); got != 5 {
+		t.Fatalf("player 2 hand size = %d after DrawFour with Direction=-1, want 5 (origin-1 victim)", got)
+	}
+	if got := len(state.Hands[1]); got != 1 {
+		t.Fatalf("player 1 hand size = %d, want 1; DrawFour with Direction=-1 wrongly targeted them", got)
+	}
+	if state.Active != 1 {
+		t.Fatalf("Active = %d after DrawFour with Direction=-1, want 1 (P2 victim should be skipped)", state.Active)
+	}
+}
+
+// TestSkipHonorsReversedDirection covers dd-itq for Skip.
+func TestSkipHonorsReversedDirection(t *testing.T) {
+	g := &genome.Genome{
+		ID:       "test-skip-dir-neg",
+		Skeleton: genome.Shedding,
+		Players:  3,
+		HandSize: 1,
+		Shedding: &genome.SheddingParams{
+			MatchRule:   genome.MatchEither,
+			DrawPenalty: 1,
+		},
+		SpecialCards: []genome.SpecialCard{
+			{Type: genome.SpecialSkip, ByRank: uint8(sim.Two)},
+		},
+	}
+	runner := &Runner{}
+	state := &sim.GameState{
+		NumPlayers: 3,
+		Active:     0,
+		Direction:  -1,
+		Hands: [][]sim.Card{
+			{{Suit: sim.Hearts, Rank: sim.Two}},
+			{{Suit: sim.Hearts, Rank: sim.Five}},
+			{{Suit: sim.Hearts, Rank: sim.Six}},
+		},
+		Deck:    sim.StandardDeck(),
+		Discard: []sim.Card{{Suit: sim.Hearts, Rank: sim.Three}},
+		TopCard: &sim.Card{Suit: sim.Hearts, Rank: sim.Three},
+	}
+
+	events := runner.ApplyMove(state, sim.Move{
+		Type:     sim.MovePlay,
+		Cards:    []sim.Card{{Suit: sim.Hearts, Rank: sim.Two}},
+		PlayerID: 0,
+	}, g)
+
+	if state.Active != 1 {
+		t.Fatalf("Active = %d after Skip with Direction=-1, want 1 (P2 should be skipped)", state.Active)
+	}
+
+	var foundSkip bool
+	for _, e := range events {
+		if e.Type == sim.EventSpecialTriggered && e.Detail == "skip" {
+			foundSkip = true
+			if e.PlayerID != 2 {
+				t.Fatalf("Skip event PlayerID = %d, want 2 (origin-1 with Direction=-1)", e.PlayerID)
+			}
+		}
+	}
+	if !foundSkip {
+		t.Fatal("expected a skip EventSpecialTriggered, found none")
+	}
+}
+
+// TestChainedReverseDrawTwoHonorsNewDirection covers dd-itq for mid-loop
+// direction flips. With 4 players starting at Direction=+1 and Active=0,
+// playing a card that matches BOTH a Reverse and a DrawTwo special must apply
+// Reverse first (flipping direction to -1), then DrawTwo against the new
+// origin-1 victim = player 3, not origin+1.
+func TestChainedReverseDrawTwoHonorsNewDirection(t *testing.T) {
+	threeOfClubs := sim.Card{Suit: sim.Clubs, Rank: sim.Three}
+	g := &genome.Genome{
+		ID:       "test-chained-reverse-drawtwo",
+		Skeleton: genome.Shedding,
+		Players:  4,
+		HandSize: 1,
+		Shedding: &genome.SheddingParams{
+			MatchRule:   genome.MatchEither,
+			DrawPenalty: 1,
+		},
+		SpecialCards: []genome.SpecialCard{
+			{Type: genome.SpecialReverse, ByRank: uint8(sim.Three)},
+			{Type: genome.SpecialDrawTwo, BySuit: uint8(sim.Clubs) + 1},
+		},
+	}
+	runner := &Runner{}
+	state := &sim.GameState{
+		NumPlayers: 4,
+		Active:     0,
+		Direction:  1,
+		Hands: [][]sim.Card{
+			{threeOfClubs},
+			{{Suit: sim.Hearts, Rank: sim.Five}},
+			{{Suit: sim.Hearts, Rank: sim.Six}},
+			{{Suit: sim.Hearts, Rank: sim.Eight}},
+		},
+		Deck:    sim.StandardDeck(),
+		Discard: []sim.Card{{Suit: sim.Clubs, Rank: sim.Four}},
+		TopCard: &sim.Card{Suit: sim.Clubs, Rank: sim.Four},
+	}
+
+	runner.ApplyMove(state, sim.Move{
+		Type:     sim.MovePlay,
+		Cards:    []sim.Card{threeOfClubs},
+		PlayerID: 0,
+	}, g)
+
+	if got := len(state.Hands[3]); got != 3 {
+		t.Fatalf("player 3 hand size = %d after Reverse+DrawTwo chain, want 3 (DrawTwo must target new origin-1 victim after Reverse)", got)
+	}
+	if got := len(state.Hands[1]); got != 1 {
+		t.Fatalf("player 1 hand size = %d, want 1; DrawTwo used stale direction and hit origin+1", got)
+	}
+	if state.Direction != -1 {
+		t.Fatalf("Direction = %d after Reverse, want -1", state.Direction)
+	}
+}
+
 // TestStackedSpecialsTargetOriginalNextPlayer covers dd-rzo. When two
 // SpecialCards entries match the same played card (e.g. one keyed by ByRank
 // and another by BySuit), the second case used to read state.Active after

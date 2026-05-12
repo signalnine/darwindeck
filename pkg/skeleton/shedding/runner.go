@@ -243,6 +243,11 @@ func removeCard(hand []sim.Card, card sim.Card) []sim.Card {
 // like Skip + DrawTwo skip the victim exactly once rather than rotating
 // two seats past them (cards-czo). This subsumes the partial fix from
 // dd-rzo which still allowed advances to accumulate per matching rule.
+//
+// Victim selection reads state.Direction *after* Reverse has been applied,
+// so chained Reverse+DrawN / Reverse+Skip combos target the new
+// origin-adjacent player, and starts in Direction=-1 honor the reversed
+// play order rather than always targeting origin+1 (dd-itq).
 func applySpecialEffects(state *sim.GameState, card sim.Card, g *genome.Genome) []sim.Event {
 	var (
 		skip      bool
