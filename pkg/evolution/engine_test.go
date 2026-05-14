@@ -287,3 +287,140 @@ func TestDedupReplacesDuplicates(t *testing.T) {
 		t.Fatal("dedup did not mark any replaced individuals as Valid=false")
 	}
 }
+
+// TestGenomeHashDistinguishesBorrowedScoringAndSpecialCards verifies that
+// genomeHash incorporates every field mutation/crossover can change. Prior
+// versions hashed only len(SpecialCards), and omitted Borrowed and Scoring
+// entirely, so legitimately diverse genomes collapsed into one bucket and
+// got mutated away by dedup (dd-7v8).
+func TestGenomeHashDistinguishesBorrowedScoringAndSpecialCards(t *testing.T) {
+	base := func() *genome.Genome {
+		return &genome.Genome{
+			Skeleton: genome.Shedding,
+			Players:  4,
+			HandSize: 7,
+			Shedding: &genome.SheddingParams{MatchRule: genome.MatchEither},
+		}
+	}
+
+	t.Run("SpecialCards content (same length, different cards)", func(t *testing.T) {
+		a := base()
+		a.SpecialCards = []genome.SpecialCard{{Type: genome.SpecialSkip, ByRank: 7}}
+		b := base()
+		b.SpecialCards = []genome.SpecialCard{{Type: genome.SpecialDrawTwo, ByRank: 2}}
+
+		if genomeHash(a) == genomeHash(b) {
+			t.Fatalf("SpecialCards with different contents but equal length must hash differently")
+		}
+	})
+
+	t.Run("Borrowed mechanics", func(t *testing.T) {
+		a := base()
+		a.Borrowed = []genome.BorrowedMechanic{{Source: genome.Rummy, Mechanic: genome.MechMeldBonus}}
+		b := base()
+		b.Borrowed = nil
+
+		if genomeHash(a) == genomeHash(b) {
+			t.Fatalf("genome with borrowed mechanic must hash differently from genome without")
+		}
+	})
+
+	t.Run("Scoring CardPoints", func(t *testing.T) {
+		a := base()
+		a.Scoring = genome.ScoringConfig{CardPoints: []genome.CardScoring{{Rank: uint8(13), Points: 10}}}
+		b := base()
+		b.Scoring = genome.ScoringConfig{}
+
+		if genomeHash(a) == genomeHash(b) {
+			t.Fatalf("genome with CardPoints must hash differently from genome without")
+		}
+	})
+
+	t.Run("Scoring TrumpSuit", func(t *testing.T) {
+		a := base()
+		a.Scoring = genome.ScoringConfig{TrumpSuit: 1}
+		b := base()
+		b.Scoring = genome.ScoringConfig{TrumpSuit: 4}
+
+		if genomeHash(a) == genomeHash(b) {
+			t.Fatalf("genome with different TrumpSuit must hash differently")
+		}
+	})
+}
+
+// TestGenomeHashIgnoresIDGenerationFitness confirms genomeHash deliberately
+// excludes identity/lineage fields so that two genomes that differ only in
+// bookkeeping (and are semantically identical) still collapse during dedup.
+func TestGenomeHashIgnoresIDGenerationFitness(t *testing.T) {
+	mk := func(id string, gen int, fit float64) *genome.Genome {
+		return &genome.Genome{
+			ID:         id,
+			Generation: gen,
+			Fitness:    fit,
+			Skeleton:   genome.Shedding,
+			Players:    4,
+			HandSize:   7,
+			Shedding:   &genome.SheddingParams{MatchRule: genome.MatchEither},
+		}
+	}
+
+	a := mk("alpha", 0, 0.1)
+	b := mk("beta", 17, 0.99)
+
+	if genomeHash(a) != genomeHash(b) {
+		t.Fatalf("ID/Generation/Fitness must not affect genomeHash:\n  a=%s\n  b=%s",
+			genomeHash(a), genomeHash(b))
+	}
+}
+
+// TestGenomeHashStableUnderSliceReorder ensures semantically-equal genomes
+// whose mutable slices have been permuted still produce the same hash. This
+// keeps dedup robust against crossover/mutation that reorders Borrowed,
+// SpecialCards, or Scoring.CardPoints without changing meaning.
+func TestGenomeHashStableUnderSliceReorder(t *testing.T) {
+	mk := func() *genome.Genome {
+		return &genome.Genome{
+			Skeleton: genome.Shedding,
+			Players:  4,
+			HandSize: 7,
+			Shedding: &genome.SheddingParams{MatchRule: genome.MatchEither},
+		}
+	}
+
+	a := mk()
+	a.Borrowed = []genome.BorrowedMechanic{
+		{Source: genome.Rummy, Mechanic: genome.MechMeldBonus},
+		{Source: genome.TrickTaking, Mechanic: genome.MechAvoidance},
+	}
+	a.SpecialCards = []genome.SpecialCard{
+		{Type: genome.SpecialSkip, ByRank: 7},
+		{Type: genome.SpecialReverse, ByRank: 11},
+	}
+	a.Scoring = genome.ScoringConfig{
+		CardPoints: []genome.CardScoring{
+			{Rank: 13, Points: 10},
+			{Suit: 1, Points: 1},
+		},
+	}
+
+	b := mk()
+	b.Borrowed = []genome.BorrowedMechanic{
+		{Source: genome.TrickTaking, Mechanic: genome.MechAvoidance},
+		{Source: genome.Rummy, Mechanic: genome.MechMeldBonus},
+	}
+	b.SpecialCards = []genome.SpecialCard{
+		{Type: genome.SpecialReverse, ByRank: 11},
+		{Type: genome.SpecialSkip, ByRank: 7},
+	}
+	b.Scoring = genome.ScoringConfig{
+		CardPoints: []genome.CardScoring{
+			{Suit: 1, Points: 1},
+			{Rank: 13, Points: 10},
+		},
+	}
+
+	if genomeHash(a) != genomeHash(b) {
+		t.Fatalf("semantically equal genomes with permuted slices must hash equally:\n  a=%s\n  b=%s",
+			genomeHash(a), genomeHash(b))
+	}
+}

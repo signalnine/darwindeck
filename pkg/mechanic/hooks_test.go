@@ -209,6 +209,56 @@ func TestRunHooksFiltersByPoint(t *testing.T) {
 	}
 }
 
+// TestCardPenaltySpecificity verifies that cardPenalty resolves overlapping
+// CardPoints rules by specificity (suit+rank > suit-only > rank-only > catch-all)
+// rather than by insertion order, mirroring cardPointValue. dd-cto regression.
+func TestCardPenaltySpecificity(t *testing.T) {
+	queenOfSpades := sim.Card{Suit: sim.Spades, Rank: sim.Queen}
+	queenOfHearts := sim.Card{Suit: sim.Hearts, Rank: sim.Queen}
+	twoOfSpades := sim.Card{Suit: sim.Spades, Rank: sim.Two}
+	threeOfHearts := sim.Card{Suit: sim.Hearts, Rank: sim.Three}
+
+	allQueens := genome.CardScoring{Rank: uint8(sim.Queen), Points: 10}
+	qOfSpades := genome.CardScoring{Suit: uint8(sim.Spades) + 1, Rank: uint8(sim.Queen), Points: 13}
+	allHearts := genome.CardScoring{Suit: uint8(sim.Hearts) + 1, Points: 1}
+	catchAll := genome.CardScoring{Points: 99}
+
+	rulesA := []genome.CardScoring{allQueens, qOfSpades, allHearts, catchAll}
+	rulesB := []genome.CardScoring{catchAll, allHearts, qOfSpades, allQueens}
+
+	for _, rules := range [][]genome.CardScoring{rulesA, rulesB} {
+		g := &genome.Genome{
+			Scoring: genome.ScoringConfig{CardPoints: rules},
+		}
+		if got := cardPenalty(queenOfSpades, g); got != 13 {
+			t.Errorf("Queen of Spades: got %d, want 13 (suit+rank should beat rank-only and catch-all)", got)
+		}
+		if got := cardPenalty(queenOfHearts, g); got != 1 {
+			t.Errorf("Queen of Hearts: got %d, want 1 (suit-only should beat rank-only and catch-all)", got)
+		}
+		if got := cardPenalty(twoOfSpades, g); got != 99 {
+			t.Errorf("Two of Spades: got %d, want 99 (catch-all)", got)
+		}
+		if got := cardPenalty(threeOfHearts, g); got != 1 {
+			t.Errorf("Three of Hearts: got %d, want 1 (suit-only beats catch-all)", got)
+		}
+	}
+}
+
+func TestCardPenaltyNoMatch(t *testing.T) {
+	g := &genome.Genome{
+		Scoring: genome.ScoringConfig{
+			CardPoints: []genome.CardScoring{
+				{Suit: uint8(sim.Hearts) + 1, Points: 1},
+			},
+		},
+	}
+	got := cardPenalty(sim.Card{Suit: sim.Spades, Rank: sim.Two}, g)
+	if got != 0 {
+		t.Errorf("no matching rule should return 0, got %d", got)
+	}
+}
+
 func TestBorrowedMechanicInEvolution(t *testing.T) {
 	// A shedding game with avoidance borrowed should still complete
 	g := &genome.Genome{

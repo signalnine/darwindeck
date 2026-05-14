@@ -179,15 +179,11 @@ func applyTrickScoring(state *sim.GameState, g *genome.Genome, event sim.Event) 
 	}
 }
 
+// cardPenalty returns the penalty points for card under g's scoring rules.
+// Delegates to genome.MatchCardPoints so penalty resolution stays in lockstep
+// with cardPointValue in pkg/skeleton/tricktaking/runner.go (dd-cto).
 func cardPenalty(card sim.Card, g *genome.Genome) int {
-	for _, cp := range g.Scoring.CardPoints {
-		rankMatch := cp.Rank == 0 || cp.Rank == uint8(card.Rank)
-		suitMatch := cp.Suit == 0 || cp.Suit == uint8(card.Suit)+1
-		if rankMatch && suitMatch {
-			return cp.Points
-		}
-	}
-	return 0
+	return genome.MatchCardPoints(g.Scoring.CardPoints, uint8(card.Rank), uint8(card.Suit))
 }
 
 func sortInts(a []int) {

@@ -218,6 +218,40 @@ type ScoringConfig struct {
 	TrumpSuit  uint8         `json:"trump_suit,omitempty"` // 1-4 for fixed trump
 }
 
+// MatchCardPoints returns the points awarded for a card under the given
+// CardScoring rules. rank and suit are taken straight from sim.Card (suit
+// is 0-indexed; CardScoring.Suit uses 1-4 with 0 meaning "any suit").
+//
+// When multiple rules match the same card, the most specific wins:
+//
+//	suit+rank > suit-only > rank-only > catch-all
+//
+// This makes scoring independent of slice order, so mutators or crossover
+// that permute the rules cannot accidentally change a card's score.
+func MatchCardPoints(rules []CardScoring, rank, suit uint8) int {
+	bestPoints := 0
+	bestSpecificity := -1
+	for _, cp := range rules {
+		rankMatch := cp.Rank == 0 || cp.Rank == rank
+		suitMatch := cp.Suit == 0 || cp.Suit == suit+1
+		if !rankMatch || !suitMatch {
+			continue
+		}
+		spec := 0
+		if cp.Suit != 0 {
+			spec += 2
+		}
+		if cp.Rank != 0 {
+			spec++
+		}
+		if spec > bestSpecificity {
+			bestSpecificity = spec
+			bestPoints = cp.Points
+		}
+	}
+	return bestPoints
+}
+
 // --- Borrowed Mechanics ---
 
 // MechanicType identifies a borrowable mechanic.

@@ -291,11 +291,94 @@ func (e *Engine) dedupParent(pop []*Individual, top int, seen map[string]bool, d
 	return pop[i].Genome
 }
 
+// genomeHash returns a dedup key covering every field that mutation or
+// crossover can change. ID, Generation, and Fitness are deliberately omitted
+// so semantically identical genomes still collapse. Borrowed, SpecialCards,
+// and Scoring.CardPoints are canonicalized into a deterministic order so
+// permutations that don't change meaning still hash equally.
 func genomeHash(g *genome.Genome) string {
-	// Hash key params (not ID/generation/fitness)
-	return fmt.Sprintf("%d_%d_%d_%d_%v_%v_%v_%d",
-		g.Skeleton, g.Players, g.HandSize, g.TrumpRule,
-		g.Shedding, g.TrickTaking, g.Rummy, len(g.SpecialCards))
+	canon := struct {
+		Skeleton     genome.SkeletonType
+		Players      int
+		HandSize     int
+		TrumpRule    genome.TrumpRule
+		Shedding     *genome.SheddingParams
+		TrickTaking  *genome.TrickTakingParams
+		Rummy        *genome.RummyParams
+		Borrowed     []genome.BorrowedMechanic
+		SpecialCards []genome.SpecialCard
+		Scoring      genome.ScoringConfig
+	}{
+		Skeleton:     g.Skeleton,
+		Players:      g.Players,
+		HandSize:     g.HandSize,
+		TrumpRule:    g.TrumpRule,
+		Shedding:     g.Shedding,
+		TrickTaking:  g.TrickTaking,
+		Rummy:        g.Rummy,
+		Borrowed:     sortedBorrowed(g.Borrowed),
+		SpecialCards: sortedSpecialCards(g.SpecialCards),
+		Scoring: genome.ScoringConfig{
+			CardPoints: sortedCardPoints(g.Scoring.CardPoints),
+			TrumpSuit:  g.Scoring.TrumpSuit,
+		},
+	}
+	b, err := json.Marshal(canon)
+	if err != nil {
+		return fmt.Sprintf("err:%v", err)
+	}
+	return string(b)
+}
+
+func sortedBorrowed(in []genome.BorrowedMechanic) []genome.BorrowedMechanic {
+	if len(in) == 0 {
+		return nil
+	}
+	out := append([]genome.BorrowedMechanic(nil), in...)
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Source != out[j].Source {
+			return out[i].Source < out[j].Source
+		}
+		return out[i].Mechanic < out[j].Mechanic
+	})
+	return out
+}
+
+func sortedSpecialCards(in []genome.SpecialCard) []genome.SpecialCard {
+	if len(in) == 0 {
+		return nil
+	}
+	out := append([]genome.SpecialCard(nil), in...)
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Type != out[j].Type {
+			return out[i].Type < out[j].Type
+		}
+		if out[i].ByRank != out[j].ByRank {
+			return out[i].ByRank < out[j].ByRank
+		}
+		return out[i].BySuit < out[j].BySuit
+	})
+	return out
+}
+
+func sortedCardPoints(in []genome.CardScoring) []genome.CardScoring {
+	if len(in) == 0 {
+		return nil
+	}
+	out := append([]genome.CardScoring(nil), in...)
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Rank != out[j].Rank {
+			return out[i].Rank < out[j].Rank
+		}
+		if out[i].Suit != out[j].Suit {
+			return out[i].Suit < out[j].Suit
+		}
+		if out[i].Event != out[j].Event {
+			return out[i].Event < out[j].Event
+		}
+		return out[i].Points < out[j].Points
+	})
+	return out
 }
 
 // Run executes the full evolution loop.
