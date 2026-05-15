@@ -136,13 +136,18 @@ func validateBorrowed(g *Genome) []string {
 		}
 	}
 
-	// Check for duplicate borrows
-	seen := make(map[MechanicType]bool)
+	// Check for duplicate borrows (keyed on full (Source, Mechanic) pair).
+	type borrowKey struct {
+		source   SkeletonType
+		mechanic MechanicType
+	}
+	seen := make(map[borrowKey]bool)
 	for _, b := range g.Borrowed {
-		if seen[b.Mechanic] {
-			errs = append(errs, fmt.Sprintf("duplicate borrowed mechanic: %d", b.Mechanic))
+		k := borrowKey{b.Source, b.Mechanic}
+		if seen[k] {
+			errs = append(errs, fmt.Sprintf("duplicate borrowed mechanic: %d from %s", b.Mechanic, b.Source))
 		}
-		seen[b.Mechanic] = true
+		seen[k] = true
 	}
 
 	return errs

@@ -452,6 +452,53 @@ func TestStockpileReshufflePreservesCards(t *testing.T) {
 	}
 }
 
+// TestScoreRoundPreservesHookContributions verifies that scoreRound uses
+// additive deadwood (-=) instead of assignment (=), so that any prior
+// contributions written by HookScoring/HookEndOfRound hooks survive into the
+// final scores used to pick the winner. dd-2lq regression: when scoreRound
+// used `state.Scores[i] = -deadwood` it clobbered hook output, silently
+// neutralizing every borrowed scoring mechanic that targets Rummy.
+func TestScoreRoundPreservesHookContributions(t *testing.T) {
+	g := seeds.GinRummy()
+
+	state := &sim.GameState{
+		Hands: [][]sim.Card{
+			// Player 0: 5-card deadwood (low value).
+			{
+				{Suit: sim.Hearts, Rank: sim.Two},
+				{Suit: sim.Spades, Rank: sim.Three},
+				{Suit: sim.Clubs, Rank: sim.Four},
+				{Suit: sim.Diamonds, Rank: sim.Five},
+				{Suit: sim.Hearts, Rank: sim.Six},
+			},
+			// Player 1: identical 5-card deadwood — without hook input the
+			// score tiebreak goes to the lower index.
+			{
+				{Suit: sim.Hearts, Rank: sim.Two},
+				{Suit: sim.Spades, Rank: sim.Three},
+				{Suit: sim.Clubs, Rank: sim.Four},
+				{Suit: sim.Diamonds, Rank: sim.Five},
+				{Suit: sim.Hearts, Rank: sim.Six},
+			},
+		},
+		// Simulate a HookScoring/HookEndOfRound hook having already awarded
+		// player 1 a large bonus before CheckEnd→scoreRound runs.
+		Scores:     []int{0, 1000},
+		NumPlayers: 2,
+	}
+
+	winner := scoreRound(state, g)
+
+	if winner != 1 {
+		t.Fatalf("hook gave player 1 a +1000 bonus on identical deadwood; "+
+			"scoreRound clobbered it (winner=%d, scores=%v)", winner, state.Scores)
+	}
+	if state.Scores[1] <= state.Scores[0] {
+		t.Fatalf("player 1's hook bonus should survive deadwood subtraction "+
+			"(scores=%v)", state.Scores)
+	}
+}
+
 func TestPhaseProgression(t *testing.T) {
 	// Verify the draw → meld → discard phase cycle
 	g := seeds.GinRummy()

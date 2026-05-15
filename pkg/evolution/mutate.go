@@ -219,10 +219,10 @@ func addBorrowedMechanic(g *genome.Genome, rng *rand.Rand) {
 		return
 	}
 
-	// Don't add duplicates
+	// Don't add duplicates (matched on full (Source, Mechanic) key).
 	pick := candidates[rng.IntN(len(candidates))]
 	for _, b := range g.Borrowed {
-		if b.Mechanic == pick.Mechanic {
+		if b.Source == pick.Source && b.Mechanic == pick.Mechanic {
 			return
 		}
 	}

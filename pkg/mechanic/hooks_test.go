@@ -259,6 +259,46 @@ func TestCardPenaltyNoMatch(t *testing.T) {
 	}
 }
 
+// TestTrickScoringCountsMelds verifies that applyTrickScoring awards a bonus
+// for a Rummy-shaped state where captures live in state.Melds / state.MeldOwner
+// rather than state.Tableau. Without counting melds, MechTrickScoring borrowed
+// into Rummy (its only whitelisted host) is silently a no-op. dd-25u regression.
+func TestTrickScoringCountsMelds(t *testing.T) {
+	g := &genome.Genome{
+		Skeleton: genome.Rummy,
+		Players:  2,
+		Borrowed: []genome.BorrowedMechanic{
+			{Source: genome.TrickTaking, Mechanic: genome.MechTrickScoring},
+		},
+	}
+
+	state := &sim.GameState{
+		// Hands empty (post-round), Tableau empty (rummy never populates it).
+		Hands:   [][]sim.Card{{}, {}},
+		Tableau: [][]sim.Card{{}, {}},
+		// Player 0 laid down a 3-card set; player 1 laid down nothing.
+		Melds: [][]sim.Card{
+			{
+				{Suit: sim.Hearts, Rank: sim.King},
+				{Suit: sim.Spades, Rank: sim.King},
+				{Suit: sim.Clubs, Rank: sim.King},
+			},
+		},
+		MeldOwner:  []int{0},
+		Scores:     []int{0, 0},
+		NumPlayers: 2,
+	}
+
+	applyTrickScoring(state, g, sim.Event{})
+
+	if state.Scores[0] != 3 {
+		t.Fatalf("player 0 owns a 3-card meld; expected +3 bonus, got %d", state.Scores[0])
+	}
+	if state.Scores[1] != 0 {
+		t.Fatalf("player 1 owns no melds; expected 0, got %d", state.Scores[1])
+	}
+}
+
 func TestBorrowedMechanicInEvolution(t *testing.T) {
 	// A shedding game with avoidance borrowed should still complete
 	g := &genome.Genome{

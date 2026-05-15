@@ -163,14 +163,36 @@ func applyDrawPenalty(state *sim.GameState, g *genome.Genome, event sim.Event) {
 }
 
 // applyTrickScoring adds trick-like scoring to non-trick games.
-// Awards points for playing the highest card each turn cycle.
+// Awards a bonus to the player who "captured" the most cards this round.
+//
+// For trick-taking hosts, captures live in state.Tableau. For rummy hosts
+// (the only currently-whitelisted Rummy borrow target for MechTrickScoring),
+// the runner never populates Tableau; laid-down melds live in state.Melds /
+// state.MeldOwner instead. Counting both keeps the borrow functional across
+// every legal host without coupling skeletons via shared tableau semantics
+// (dd-25u).
 func applyTrickScoring(state *sim.GameState, g *genome.Genome, event sim.Event) {
-	// At end of round, player with most cards captured (in tableau) gets bonus
+	captures := make([]int, state.NumPlayers)
+	for i := 0; i < state.NumPlayers; i++ {
+		if i < len(state.Tableau) {
+			captures[i] += len(state.Tableau[i])
+		}
+	}
+	for mi, owner := range state.MeldOwner {
+		if owner < 0 || owner >= state.NumPlayers {
+			continue
+		}
+		if mi >= len(state.Melds) {
+			continue
+		}
+		captures[owner] += len(state.Melds[mi])
+	}
+
 	maxCapture := 0
 	captureWinner := 0
-	for i := 0; i < state.NumPlayers; i++ {
-		if len(state.Tableau[i]) > maxCapture {
-			maxCapture = len(state.Tableau[i])
+	for i, c := range captures {
+		if c > maxCapture {
+			maxCapture = c
 			captureWinner = i
 		}
 	}

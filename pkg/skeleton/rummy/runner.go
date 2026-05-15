@@ -296,10 +296,14 @@ func scoreRound(state *sim.GameState, g *genome.Genome) int {
 		return 0
 	}
 
-	// Score each player's deadwood
+	// Score each player's deadwood. Use -= so any contributions already
+	// written by HookScoring/HookEndOfRound hooks (applyAvoidance,
+	// applyTrickScoring, applyMeldBonus) survive scoreRound. Using = here
+	// would clobber them and silently neutralize every borrowed scoring
+	// mechanic that targets Rummy (dd-2lq).
 	for i := 0; i < state.NumPlayers; i++ {
 		deadwood := calcDeadwood(state.Hands[i], params)
-		state.Scores[i] = -deadwood // Negative deadwood = better
+		state.Scores[i] -= deadwood
 	}
 
 	// Highest score (least deadwood) wins
