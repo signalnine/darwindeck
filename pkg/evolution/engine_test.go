@@ -72,6 +72,55 @@ func TestCrossoverDifferentSkeleton(t *testing.T) {
 	}
 }
 
+func TestCrossoverDoesNotAliasScoringCardPoints(t *testing.T) {
+	a := seeds.Hearts()
+	b := seeds.Hearts()
+	// Differentiate B's CardPoints so aliasing into B's backing array
+	// is detectable (and distinct from A's).
+	b.Scoring.CardPoints = []genome.CardScoring{
+		{Suit: 2, Points: 5},
+		{Rank: 12, Suit: 3, Points: 25},
+	}
+
+	aBefore := append([]genome.CardScoring(nil), a.Scoring.CardPoints...)
+	bBefore := append([]genome.CardScoring(nil), b.Scoring.CardPoints...)
+
+	// Run crossover across many seeds so both parent-A and parent-B
+	// adoption paths for Scoring are exercised. Mutating the child's
+	// CardPoints in place must never leak into either parent.
+	for i := 0; i < 50; i++ {
+		rng := rand.New(rand.NewPCG(uint64(i), 0))
+		child := Crossover(a, b, rng)
+		if child == nil {
+			t.Fatalf("crossover unexpectedly returned nil on iter %d", i)
+		}
+		for j := range child.Scoring.CardPoints {
+			child.Scoring.CardPoints[j].Points = 999
+		}
+	}
+
+	if !cardPointsEqual(a.Scoring.CardPoints, aBefore) {
+		t.Errorf("parent A CardPoints mutated by child: got %+v, want %+v",
+			a.Scoring.CardPoints, aBefore)
+	}
+	if !cardPointsEqual(b.Scoring.CardPoints, bBefore) {
+		t.Errorf("parent B CardPoints mutated by child: got %+v, want %+v",
+			b.Scoring.CardPoints, bBefore)
+	}
+}
+
+func cardPointsEqual(x, y []genome.CardScoring) bool {
+	if len(x) != len(y) {
+		return false
+	}
+	for i := range x {
+		if x[i] != y[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func TestCloneGenome(t *testing.T) {
 	original := seeds.CrazyEights()
 	clone := cloneGenome(original)

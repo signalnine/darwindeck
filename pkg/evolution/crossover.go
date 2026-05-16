@@ -52,9 +52,14 @@ func Crossover(a, b *genome.Genome, rng *rand.Rand) *genome.Genome {
 		child.Borrowed = cloneBorrowed(b.Borrowed)
 	}
 
-	// Scoring: take from one parent
+	// Scoring: take from one parent. Deep-copy the CardPoints slice so
+	// subsequent in-place mutation on the child does not alias parent B's
+	// backing array (parent A is already deep-copied via cloneGenome).
 	if rng.Float64() < 0.5 {
-		child.Scoring = b.Scoring
+		child.Scoring = genome.ScoringConfig{
+			CardPoints: append([]genome.CardScoring(nil), b.Scoring.CardPoints...),
+			TrumpSuit:  b.Scoring.TrumpSuit,
+		}
 	}
 
 	return child
