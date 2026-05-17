@@ -169,6 +169,46 @@ func TestSmallEvolution(t *testing.T) {
 	}
 }
 
+// TestRunUpdatesBestFitnessFromFinalEvaluation pins the fix for dd-1xy. With
+// Generations=0, Select never runs, so the only place BestFitness/BestGenome
+// can be set is after the final EvaluatePopulation. Before the fix, both
+// stayed at their zero values regardless of how good the evaluated population
+// was.
+func TestRunUpdatesBestFitnessFromFinalEvaluation(t *testing.T) {
+	config := Config{
+		PopulationSize: 10,
+		Generations:    0,
+		EliteSize:      2,
+		TournamentSize: 3,
+		Workers:        2,
+		BaseSeed:       42,
+	}
+	engine := NewEngine(config, allSeeds())
+	engine.Run(nil)
+
+	hasValid := false
+	var maxFit float64
+	for _, ind := range engine.Population {
+		if ind.Valid {
+			hasValid = true
+			if ind.Fitness.TotalFitness > maxFit {
+				maxFit = ind.Fitness.TotalFitness
+			}
+		}
+	}
+	if !hasValid {
+		t.Skip("no valid individuals in initial population; cannot exercise tracking")
+	}
+
+	if engine.BestGenome == nil {
+		t.Fatal("BestGenome=nil after Run; final EvaluatePopulation must update best")
+	}
+	if engine.BestFitness != maxFit {
+		t.Fatalf("BestFitness=%.6f, want %.6f (max valid TotalFitness in final population)",
+			engine.BestFitness, maxFit)
+	}
+}
+
 func TestMutateDoesNotCrash(t *testing.T) {
 	rng := rand.New(rand.NewPCG(99, 0))
 	seedList := allSeeds()

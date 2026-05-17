@@ -182,6 +182,21 @@ func (e *Engine) applyFitnessSharing() {
 	}
 }
 
+// updateBestFitness scans the current Population and updates BestFitness /
+// BestGenome whenever a valid individual's raw TotalFitness exceeds the
+// current record. Called after every EvaluatePopulation so that genomes
+// produced by the final Select() round (which are evaluated by Run's
+// post-loop EvaluatePopulation but never feed back into a subsequent
+// Select) are still recorded.
+func (e *Engine) updateBestFitness() {
+	for _, ind := range e.Population {
+		if ind.Valid && ind.Fitness.TotalFitness > e.BestFitness {
+			e.BestFitness = ind.Fitness.TotalFitness
+			e.BestGenome = ind.Genome
+		}
+	}
+}
+
 // Select performs tournament selection to create the next generation.
 func (e *Engine) Select() []*Individual {
 	// Sort by shared fitness (descending) -- niche-adjusted
@@ -193,12 +208,7 @@ func (e *Engine) Select() []*Individual {
 	// SharedFitness-sorted leader is not necessarily the highest raw fitness,
 	// because niche sharing can demote an overrepresented-niche genome that
 	// would otherwise be the best.
-	for _, ind := range e.Population {
-		if ind.Valid && ind.Fitness.TotalFitness > e.BestFitness {
-			e.BestFitness = ind.Fitness.TotalFitness
-			e.BestGenome = ind.Genome
-		}
-	}
+	e.updateBestFitness()
 
 	nextGen := make([]*Individual, e.Config.PopulationSize)
 
@@ -411,8 +421,11 @@ func (e *Engine) Run(progress func(gen int, best float64, avg float64)) {
 		e.Population = e.Select()
 	}
 
-	// Final evaluation
+	// Final evaluation. Select never runs on this population, so update
+	// BestFitness directly to capture any post-final-Select offspring whose
+	// raw fitness beats the prior best.
 	e.EvaluatePopulation()
+	e.updateBestFitness()
 }
 
 // TopN returns the top N genomes ensuring skeleton diversity.
