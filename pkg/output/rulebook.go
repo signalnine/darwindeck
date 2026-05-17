@@ -258,14 +258,20 @@ func meldDescription(p *genome.RummyParams) string {
 }
 
 func specialCardName(sc genome.SpecialCard) string {
-	rank := ""
-	if sc.ByRank != 0 {
-		r := sim.Rank(sc.ByRank)
-		rank = r.String() + "s"
-	} else {
-		rank = "All cards"
+	suitNames := [5]string{"", "Club", "Diamond", "Heart", "Spade"}
+	hasRank := sc.ByRank != 0
+	hasSuit := sc.BySuit >= 1 && int(sc.BySuit) < len(suitNames)
+
+	switch {
+	case hasRank && hasSuit:
+		return fmt.Sprintf("the %s of %ss", sim.Rank(sc.ByRank).String(), suitNames[sc.BySuit])
+	case hasRank:
+		return fmt.Sprintf("any %s", sim.Rank(sc.ByRank).String())
+	case hasSuit:
+		return fmt.Sprintf("any %s", suitNames[sc.BySuit])
+	default:
+		return "any card"
 	}
-	return rank
 }
 
 func specialCardEffect(sc genome.SpecialCard) string {
