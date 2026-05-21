@@ -316,18 +316,23 @@ func scoreRound(state *sim.GameState, g *genome.Genome) int {
 	return best
 }
 
-// findMelds finds all valid melds in a hand (greedy, largest first).
+// findMelds returns every valid sub-meld in a hand (sub-sets and sub-runs of
+// size >= MinMeldSize). Shares enumeration with calcDeadwood's
+// enumerateMeldCandidates so the move generator offers exactly the
+// partitions the scorer considers: a player holding 4-of-a-kind can choose
+// any 3-card subset, and a 4-card run can be laid as either sub-run.
 func findMelds(hand []sim.Card, params *genome.RummyParams) [][]sim.Card {
-	var melds [][]sim.Card
-
-	if params.MeldTypes == genome.MeldSets || params.MeldTypes == genome.MeldBoth {
-		melds = append(melds, findSets(hand, params.MinMeldSize)...)
+	candidates := enumerateMeldCandidates(hand, params)
+	melds := make([][]sim.Card, 0, len(candidates))
+	for _, c := range candidates {
+		var group []sim.Card
+		for i := 0; i < len(hand); i++ {
+			if c.mask&(1<<uint(i)) != 0 {
+				group = append(group, hand[i])
+			}
+		}
+		melds = append(melds, group)
 	}
-
-	if params.MeldTypes == genome.MeldRuns || params.MeldTypes == genome.MeldBoth {
-		melds = append(melds, findRuns(hand, params.MinMeldSize)...)
-	}
-
 	return melds
 }
 

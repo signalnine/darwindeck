@@ -499,6 +499,122 @@ func TestScoreRoundPreservesHookContributions(t *testing.T) {
 	}
 }
 
+// TestGenerateMeldMovesOffersSubsetsOfFourOfAKind verifies that a hand with
+// 4 cards of the same rank produces multiple meld move options at
+// MinMeldSize=3: each 3-card subset plus the 4-card set, rather than only
+// the maximal 4-set. dd-9hy: generateMeldMoves was only returning maximal
+// melds, blocking optimal sub-meld choices.
+func TestGenerateMeldMovesOffersSubsetsOfFourOfAKind(t *testing.T) {
+	g := &genome.Genome{
+		Skeleton: genome.Rummy,
+		Players:  2,
+		Rummy: &genome.RummyParams{
+			MeldTypes:      genome.MeldBoth,
+			MinMeldSize:    3,
+			KnockThreshold: 0,
+		},
+	}
+	runner := &Runner{}
+	state := sim.NewGameState(2)
+	state.Hands[0] = []sim.Card{
+		{Suit: sim.Spades, Rank: sim.King},
+		{Suit: sim.Hearts, Rank: sim.King},
+		{Suit: sim.Diamonds, Rank: sim.King},
+		{Suit: sim.Clubs, Rank: sim.King},
+		{Suit: sim.Hearts, Rank: sim.Two},
+	}
+	state.Phase = sim.PhaseMeld
+	state.Active = 0
+
+	moves := runner.GenerateMoves(state, g)
+
+	meldMoves := 0
+	threeCardKingMelds := 0
+	fourCardKingMelds := 0
+	for _, m := range moves {
+		if m.Type != sim.MoveMeld {
+			continue
+		}
+		meldMoves++
+		allKings := true
+		for _, c := range m.Cards {
+			if c.Rank != sim.King {
+				allKings = false
+				break
+			}
+		}
+		if !allKings {
+			continue
+		}
+		switch len(m.Cards) {
+		case 3:
+			threeCardKingMelds++
+		case 4:
+			fourCardKingMelds++
+		}
+	}
+
+	// C(4,3) = 4 distinct 3-card subsets, plus the 4-card set.
+	if threeCardKingMelds != 4 {
+		t.Fatalf("expected 4 three-card king meld options, got %d (meld moves total: %d)",
+			threeCardKingMelds, meldMoves)
+	}
+	if fourCardKingMelds != 1 {
+		t.Fatalf("expected 1 four-card king meld option, got %d", fourCardKingMelds)
+	}
+}
+
+// TestGenerateMeldMovesOffersSubRuns verifies that a 4-card run produces
+// both the maximal run and the 3-card sub-run options at MinMeldSize=3.
+// Without sub-run enumeration the player cannot lay a 3-card run keeping
+// the 4th card for later use.
+func TestGenerateMeldMovesOffersSubRuns(t *testing.T) {
+	g := &genome.Genome{
+		Skeleton: genome.Rummy,
+		Players:  2,
+		Rummy: &genome.RummyParams{
+			MeldTypes:      genome.MeldBoth,
+			MinMeldSize:    3,
+			KnockThreshold: 0,
+		},
+	}
+	runner := &Runner{}
+	state := sim.NewGameState(2)
+	state.Hands[0] = []sim.Card{
+		{Suit: sim.Hearts, Rank: sim.Five},
+		{Suit: sim.Hearts, Rank: sim.Six},
+		{Suit: sim.Hearts, Rank: sim.Seven},
+		{Suit: sim.Hearts, Rank: sim.Eight},
+		{Suit: sim.Spades, Rank: sim.Two},
+	}
+	state.Phase = sim.PhaseMeld
+	state.Active = 0
+
+	moves := runner.GenerateMoves(state, g)
+
+	threeCardRuns := 0
+	fourCardRuns := 0
+	for _, m := range moves {
+		if m.Type != sim.MoveMeld {
+			continue
+		}
+		switch len(m.Cards) {
+		case 3:
+			threeCardRuns++
+		case 4:
+			fourCardRuns++
+		}
+	}
+
+	// Two 3-card sub-runs: [5,6,7] and [6,7,8]. One 4-card run: [5,6,7,8].
+	if threeCardRuns != 2 {
+		t.Fatalf("expected 2 three-card sub-run options, got %d", threeCardRuns)
+	}
+	if fourCardRuns != 1 {
+		t.Fatalf("expected 1 four-card run option, got %d", fourCardRuns)
+	}
+}
+
 func TestPhaseProgression(t *testing.T) {
 	// Verify the draw → meld → discard phase cycle
 	g := seeds.GinRummy()
