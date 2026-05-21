@@ -213,6 +213,26 @@ func (r *Runner) ApplyMove(state *sim.GameState, move sim.Move, g *genome.Genome
 		state.TrickPlayers = state.TrickPlayers[:0]
 		state.Active = winner
 		state.TrickLeader = winner
+
+		// If all hands are now empty, this trick ended a round. Emit
+		// EventRoundEnd so borrowed-mechanic hooks gated on HookScoring /
+		// HookEndOfRound (MechAvoidance, MechMeldBonus) fire before CheckEnd
+		// runs redealRound (which clears state.Tableau) -- otherwise these
+		// borrows silently no-op on TrickTaking hosts (dd-4ql).
+		allEmpty := true
+		for _, hand := range state.Hands {
+			if len(hand) > 0 {
+				allEmpty = false
+				break
+			}
+		}
+		if allEmpty {
+			events = append(events, sim.Event{
+				Type:     sim.EventRoundEnd,
+				PlayerID: winner,
+				Detail:   "tricks_complete",
+			})
+		}
 	} else {
 		state.NextPlayer()
 	}

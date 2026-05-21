@@ -124,15 +124,16 @@ func (r *Runner) ApplyMove(state *sim.GameState, move sim.Move, g *genome.Genome
 	switch move.Type {
 	case sim.MovePlay:
 		card := move.Cards[0]
+		player := state.Active
 		// Remove card from hand
-		state.Hands[state.Active] = removeCard(state.Hands[state.Active], card)
+		state.Hands[player] = removeCard(state.Hands[player], card)
 		// Add to discard pile
 		state.Discard = append(state.Discard, card)
 		state.TopCard = &sim.Card{Suit: card.Suit, Rank: card.Rank}
 
 		events = append(events, sim.Event{
 			Type:     sim.EventCardPlayed,
-			PlayerID: state.Active,
+			PlayerID: player,
 			Cards:    []sim.Card{card},
 			Detail:   "discard", // Shedding plays go to shared discard pile
 		})
@@ -140,6 +141,22 @@ func (r *Runner) ApplyMove(state *sim.GameState, move sim.Move, g *genome.Genome
 		// Apply special card effects
 		effects := applySpecialEffects(state, card, g)
 		events = append(events, effects...)
+
+		// If this play emptied a hand, the game is over (CheckEnd returns
+		// that player as winner on the next loop). Emit EventRoundEnd so
+		// borrowed-mechanic hooks gated on HookScoring/HookEndOfRound (e.g.
+		// MechAvoidance, MechMeldBonus) actually fire -- without this they
+		// silently no-op on Shedding hosts (dd-4ql).
+		for i, hand := range state.Hands {
+			if len(hand) == 0 {
+				events = append(events, sim.Event{
+					Type:     sim.EventRoundEnd,
+					PlayerID: i,
+					Detail:   "hand_empty",
+				})
+				break
+			}
+		}
 
 	case sim.MoveDraw:
 		penalty := 1
