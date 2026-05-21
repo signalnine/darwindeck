@@ -113,8 +113,11 @@ var validBorrows = map[SkeletonType]map[MechanicType]bool{
 		MechAvoidance: true, // Penalty cards (HookScoring)
 	},
 	TrickTaking: {
-		MechMeldBonus:   true, // Bonus for collecting melds from tricks
-		MechDrawPenalty: true, // Penalty draws
+		MechMeldBonus: true, // Bonus for collecting melds from tricks
+		// MechDrawPenalty intentionally NOT borrowable here: applyDrawPenalty
+		// appends a card to the active player's hand on face-card plays, which
+		// breaks the trick-taking runner's "all hands empty at round end"
+		// invariant and causes ~99% timeout rates (dd-wfi).
 	},
 	Rummy: {
 		MechTrickScoring: true, // Score based on some trick-like mechanic

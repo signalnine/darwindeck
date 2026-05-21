@@ -10,8 +10,12 @@ import (
 
 // TestBorrowedHooksFireDuringBatchSim asserts that every whitelisted
 // (skeleton, mechanic) borrow combination produces hook invocations during
-// a real batch sim. Without this, the hook can be silently registered but
-// never fire (dd-4ql).
+// a real batch sim AND completes a healthy fraction of the games it runs.
+//
+// Hook-fired-at-least-once is necessary but not sufficient: a borrow that
+// fires the hook AND breaks the host runner so ~all games timeout is exactly
+// the dd-wfi failure mode (MechDrawPenalty x TrickTaking pre-fix). The 70%
+// completion floor catches that class of bug.
 //
 // MechTrump / MechPlayMultiple are not in BuildHooks (handled structurally),
 // so they are intentionally excluded from this check.
@@ -24,11 +28,13 @@ func TestBorrowedHooksFireDuringBatchSim(t *testing.T) {
 		{genome.Shedding, genome.Rummy, genome.MechMeldBonus},
 		{genome.Shedding, genome.TrickTaking, genome.MechAvoidance},
 		{genome.TrickTaking, genome.Rummy, genome.MechMeldBonus},
-		{genome.TrickTaking, genome.Shedding, genome.MechDrawPenalty},
 		{genome.Rummy, genome.TrickTaking, genome.MechTrickScoring},
 		{genome.Rummy, genome.Shedding, genome.MechDrawPenalty},
 		{genome.Rummy, genome.TrickTaking, genome.MechAvoidance},
 	}
+
+	const games = 50
+	const minCompletionRate = 0.70
 
 	for _, tc := range cases {
 		tc := tc
@@ -70,13 +76,19 @@ func TestBorrowedHooksFireDuringBatchSim(t *testing.T) {
 			}
 
 			ai := &sim.RandomAI{}
-			sim.RunBatch(g, runner, ai, 50, 42, funcs...)
+			result := sim.RunBatch(g, runner, ai, games, 42, funcs...)
 
 			for i, count := range counters {
 				if count == 0 {
-					t.Errorf("hook %d (point=%d) for %s borrowing %s never fired across 50 games",
-						i, hooks[i].Point, tc.host, tc.mechanic)
+					t.Errorf("hook %d (point=%d) for %s borrowing %s never fired across %d games",
+						i, hooks[i].Point, tc.host, tc.mechanic, games)
 				}
+			}
+
+			rate := float64(result.Completions) / float64(result.GamesPlayed)
+			if rate < minCompletionRate {
+				t.Errorf("%s borrowing %s: completion rate %.2f (%d/%d) below floor %.2f -- borrow likely breaks host runner invariants",
+					tc.host, tc.mechanic, rate, result.Completions, result.GamesPlayed, minCompletionRate)
 			}
 		})
 	}

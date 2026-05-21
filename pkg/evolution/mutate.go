@@ -205,9 +205,10 @@ func addBorrowedMechanic(g *genome.Genome, rng *rand.Rand) {
 	case genome.TrickTaking:
 		// MechPlayMultiple dropped: tricktaking move-gen only ever
 		// produces single-card plays (see dd-lnh).
+		// MechDrawPenalty dropped: appending cards mid-round breaks
+		// the empty-hand round-end invariant (see dd-wfi).
 		candidates = []genome.BorrowedMechanic{
 			{Source: genome.Rummy, Mechanic: genome.MechMeldBonus},
-			{Source: genome.Shedding, Mechanic: genome.MechDrawPenalty},
 		}
 	case genome.Rummy:
 		candidates = []genome.BorrowedMechanic{
