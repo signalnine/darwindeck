@@ -55,8 +55,39 @@ func TestMutateScoringNeverGeneratesInvalidRank(t *testing.T) {
 		if got == 1 {
 			t.Errorf("seed %d: mutateScoring produced invalid Rank=1", seed)
 		}
-		if got < 2 || got > 14 {
-			t.Errorf("seed %d: mutateScoring produced out-of-range Rank=%d (want 2-14)", seed, got)
+		if got != 0 && (got < 2 || got > 14) {
+			t.Errorf("seed %d: mutateScoring produced out-of-range Rank=%d (want 0 or 2-14)", seed, got)
 		}
+	}
+}
+
+func TestMutateScoringCanProduceRankZero(t *testing.T) {
+	// mutateScoring must reach the Rank=0 ("all ranks") wildcard, otherwise
+	// catch-all rules like "every red card is worth 2 points" are
+	// unreachable from evolution -- only the 13 per-rank variants can be
+	// produced. See dd-eir.
+	sawRankZero := false
+	sawSpecificRank := false
+	for seed := uint64(0); seed < 500; seed++ {
+		rng := rand.New(rand.NewPCG(seed, 0))
+		g := &genome.Genome{
+			Scoring: genome.ScoringConfig{CardPoints: nil},
+		}
+		mutateScoring(g, rng)
+		if len(g.Scoring.CardPoints) == 0 {
+			t.Fatalf("seed %d: expected mutateScoring to add a card point rule", seed)
+		}
+		r := g.Scoring.CardPoints[0].Rank
+		if r == 0 {
+			sawRankZero = true
+		} else {
+			sawSpecificRank = true
+		}
+	}
+	if !sawRankZero {
+		t.Errorf("mutateScoring never produced Rank=0 in 500 trials; catch-all rules unreachable")
+	}
+	if !sawSpecificRank {
+		t.Errorf("mutateScoring never produced a specific rank in 500 trials; rank-specific rules unreachable")
 	}
 }

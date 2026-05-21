@@ -196,16 +196,18 @@ func addBorrowedMechanic(g *genome.Genome, rng *rand.Rand) {
 
 	switch g.Skeleton {
 	case genome.Shedding:
+		// MechTrump dropped: shedding runner has no trump implementation
+		// (see dd-lnh).
 		candidates = []genome.BorrowedMechanic{
 			{Source: genome.Rummy, Mechanic: genome.MechMeldBonus},
-			{Source: genome.TrickTaking, Mechanic: genome.MechTrump},
 			{Source: genome.TrickTaking, Mechanic: genome.MechAvoidance},
 		}
 	case genome.TrickTaking:
+		// MechPlayMultiple dropped: tricktaking move-gen only ever
+		// produces single-card plays (see dd-lnh).
 		candidates = []genome.BorrowedMechanic{
 			{Source: genome.Rummy, Mechanic: genome.MechMeldBonus},
 			{Source: genome.Shedding, Mechanic: genome.MechDrawPenalty},
-			{Source: genome.Shedding, Mechanic: genome.MechPlayMultiple},
 		}
 	case genome.Rummy:
 		candidates = []genome.BorrowedMechanic{
@@ -255,11 +257,17 @@ func changeSkeleton(g *genome.Genome, rng *rand.Rand, allSeeds []*genome.Genome)
 
 func mutateScoring(g *genome.Genome, rng *rand.Rand) {
 	if len(g.Scoring.CardPoints) == 0 {
-		// Add a scoring rule
+		// Add a scoring rule. Rank=0 is the "all ranks" wildcard; reach it
+		// with a small probability so catch-all rules like "every Heart
+		// scores N" are evolvable (see dd-eir).
+		rank := uint8(0)
+		if rng.Float64() >= 0.15 {
+			rank = uint8(rng.IntN(13) + 2) // 2-14 (Rank=1 is invalid)
+		}
 		g.Scoring.CardPoints = append(g.Scoring.CardPoints, genome.CardScoring{
-			Suit:   uint8(rng.IntN(5)),      // 0=all, 1-4=specific
-			Rank:   uint8(rng.IntN(13) + 2), // 2-14 (Rank=1 is invalid; 0=all is reserved)
-			Points: rng.IntN(13) + 1,        // 1-13
+			Suit:   uint8(rng.IntN(5)), // 0=all, 1-4=specific
+			Rank:   rank,
+			Points: rng.IntN(13) + 1, // 1-13
 		})
 	} else {
 		// Modify existing

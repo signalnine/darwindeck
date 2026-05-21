@@ -173,6 +173,50 @@ func TestValidRummy(t *testing.T) {
 	}
 }
 
+func TestSheddingTrumpBorrowRejected(t *testing.T) {
+	// MechTrump in shedding had no runner-side implementation (shedding
+	// runner never reads TrumpRule/TrumpSuit). Allowing it via the
+	// validBorrows whitelist let evolution waste a search dimension on a
+	// no-op. See dd-lnh.
+	g := &Genome{
+		Skeleton: Shedding,
+		Players:  2,
+		HandSize: 7,
+		Shedding: &SheddingParams{MatchRule: MatchEither, DrawPenalty: 1},
+		Borrowed: []BorrowedMechanic{
+			{Source: TrickTaking, Mechanic: MechTrump},
+		},
+	}
+	errs := Validate(g)
+	if len(errs) == 0 {
+		t.Fatal("expected validation to reject MechTrump borrow in shedding (no runner support)")
+	}
+}
+
+func TestTrickTakingPlayMultipleBorrowRejected(t *testing.T) {
+	// MechPlayMultiple in trick-taking had no runner-side implementation
+	// (tricktaking move-gen only ever produces single-card plays). See
+	// dd-lnh.
+	g := &Genome{
+		Skeleton: TrickTaking,
+		Players:  4,
+		HandSize: 13,
+		TrickTaking: &TrickTakingParams{
+			MustFollowSuit:  true,
+			TrickScoring:    ScorePerTrick,
+			LeadRestriction: LeadNone,
+			RoundsPerGame:   1,
+		},
+		Borrowed: []BorrowedMechanic{
+			{Source: Shedding, Mechanic: MechPlayMultiple},
+		},
+	}
+	errs := Validate(g)
+	if len(errs) == 0 {
+		t.Fatal("expected validation to reject MechPlayMultiple borrow in trick-taking (no runner support)")
+	}
+}
+
 func TestCardPointsScoringRequiresConfig(t *testing.T) {
 	g := &Genome{
 		Skeleton: TrickTaking,

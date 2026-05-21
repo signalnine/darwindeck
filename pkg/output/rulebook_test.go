@@ -1,9 +1,11 @@
 package output
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/darwindeck/darwindeck/pkg/genome"
+	"github.com/darwindeck/darwindeck/pkg/seeds"
 )
 
 func TestSpecialCardName(t *testing.T) {
@@ -69,5 +71,18 @@ func TestSpecialCardNameDistinguishesAllCardsFromSuitBound(t *testing.T) {
 	if specialCardName(anyCard) == specialCardName(anyDiamond) {
 		t.Errorf("any-card and any-Diamond must produce distinct names; both returned %q",
 			specialCardName(anyCard))
+	}
+}
+
+func TestSheddingRulebookDoesNotClaimFewestCardsTiebreak(t *testing.T) {
+	// The shedding runner does NOT award the fewest-cards player on
+	// deck-out; CheckEnd returns -1 (timeout) so the batch runner
+	// classifies the game as a timeout. The rulebook must not claim
+	// otherwise. See dd-73h.
+	g := seeds.CrazyEights()
+	rb := GenerateRulebook(g)
+
+	if strings.Contains(rb, "fewest cards wins") {
+		t.Errorf("shedding rulebook still claims 'fewest cards wins' on deck-out, but the runner returns -1 (timeout)")
 	}
 }

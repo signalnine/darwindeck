@@ -104,16 +104,17 @@ func validateRummy(p *RummyParams) []string {
 }
 
 // validBorrows defines which mechanics can be borrowed by which skeletons.
+// Only mechanics with runner-side implementations belong here -- whitelisting
+// a no-op borrow wastes evolutionary search dimensions and produces rulebooks
+// that lie about behaviour (see dd-lnh).
 var validBorrows = map[SkeletonType]map[MechanicType]bool{
 	Shedding: {
-		MechMeldBonus:    true, // Bonus for playing sets/runs
-		MechTrump:        true, // Trump suit makes certain cards special
-		MechAvoidance:    true, // Penalty cards
+		MechMeldBonus: true, // Bonus for playing sets/runs (HookEndOfRound)
+		MechAvoidance: true, // Penalty cards (HookScoring)
 	},
 	TrickTaking: {
-		MechMeldBonus:    true, // Bonus for collecting melds from tricks
-		MechDrawPenalty:  true, // Penalty draws
-		MechPlayMultiple: true, // Play multiple cards
+		MechMeldBonus:   true, // Bonus for collecting melds from tricks
+		MechDrawPenalty: true, // Penalty draws
 	},
 	Rummy: {
 		MechTrickScoring: true, // Score based on some trick-like mechanic

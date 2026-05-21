@@ -68,7 +68,7 @@ func writeSheddingRules(b *strings.Builder, g *genome.Genome) {
 	}
 
 	b.WriteString("### Winning\n\n")
-	b.WriteString("The first player to play all their cards wins. If the deck runs out, the player with the fewest cards wins.\n\n")
+	b.WriteString("The first player to play all their cards wins. If no player can play and the deck runs out, the game ends in a draw.\n\n")
 }
 
 func writeTrickTakingRules(b *strings.Builder, g *genome.Genome) {
