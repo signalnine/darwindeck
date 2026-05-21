@@ -109,6 +109,61 @@ func TestCrossoverDoesNotAliasScoringCardPoints(t *testing.T) {
 	}
 }
 
+// TestCrossoverProducesValidGenomes pins dd-kcp: Crossover output must
+// pass genome.Validate for every same-skeleton seed pair across many RNG
+// seeds. Before the repair step, independent coin flips on TrumpRule and
+// Scoring let Spades x Hearts produce TrumpFixed with TrumpSuit=0.
+func TestCrossoverProducesValidGenomes(t *testing.T) {
+	seedList := allSeeds()
+
+	for _, a := range seedList {
+		for _, b := range seedList {
+			if a.Skeleton != b.Skeleton {
+				continue
+			}
+			a, b := a, b
+			name := a.ID + "_x_" + b.ID
+			t.Run(name, func(t *testing.T) {
+				for i := 0; i < 200; i++ {
+					rng := rand.New(rand.NewPCG(uint64(i), 7))
+					child := Crossover(a, b, rng)
+					if child == nil {
+						t.Fatalf("same-skeleton crossover returned nil (iter %d)", i)
+					}
+					if errs := genome.Validate(child); len(errs) > 0 {
+						t.Errorf("iter %d: Crossover(%s, %s) produced invalid child: %v",
+							i, a.ID, b.ID, errs)
+					}
+				}
+			})
+		}
+	}
+}
+
+// TestCrossoverProducesValidGenomesAfterMutation extends the property test
+// to mutated parents, which can drift HandSize/Players away from the seed
+// values, exposing the HandSize*Players>52 case the issue describes.
+func TestCrossoverProducesValidGenomesAfterMutation(t *testing.T) {
+	seedList := allSeeds()
+
+	for trial := 0; trial < 500; trial++ {
+		rng := rand.New(rand.NewPCG(uint64(trial), 11))
+		a := Mutate(seedList[rng.IntN(len(seedList))], rng, seedList)
+		b := Mutate(seedList[rng.IntN(len(seedList))], rng, seedList)
+		if a.Skeleton != b.Skeleton {
+			continue
+		}
+		child := Crossover(a, b, rng)
+		if child == nil {
+			t.Fatalf("trial %d: same-skeleton crossover returned nil", trial)
+		}
+		if errs := genome.Validate(child); len(errs) > 0 {
+			t.Errorf("trial %d: Crossover(%s, %s) produced invalid child: %v",
+				trial, a.ID, b.ID, errs)
+		}
+	}
+}
+
 func cardPointsEqual(x, y []genome.CardScoring) bool {
 	if len(x) != len(y) {
 		return false

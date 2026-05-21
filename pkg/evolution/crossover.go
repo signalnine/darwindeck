@@ -62,7 +62,71 @@ func Crossover(a, b *genome.Genome, rng *rand.Rand) *genome.Genome {
 		}
 	}
 
+	repairCrossoverInvariants(child, a, b, rng)
+
 	return child
+}
+
+// repairCrossoverInvariants restores genome invariants that independent
+// coin flips on related fields can violate. Without this, callers that
+// run Crossover without a following Mutate (test code, future seeding
+// paths) get children that genome.Validate rejects (see dd-kcp).
+func repairCrossoverInvariants(child, a, b *genome.Genome, rng *rand.Rand) {
+	// HandSize * Players must fit in a 52-card deck. The standard
+	// engine path relies on Mutate to clamp this; mirror that loop
+	// here so Crossover's contract is "valid in, valid out."
+	for child.HandSize*child.Players > 52 {
+		if rng.Float64() < 0.5 {
+			child.HandSize--
+		} else {
+			child.Players--
+		}
+		if child.HandSize < 3 {
+			child.HandSize = 3
+		}
+		if child.Players < 2 {
+			child.Players = 2
+		}
+	}
+
+	// TrumpFixed must be paired with a valid TrumpSuit (1-4). The
+	// TrumpRule and Scoring coin flips are independent, so a child
+	// can pick TrumpFixed from one parent and TrumpSuit=0 from the
+	// other. Pull the suit from whichever parent contributed the
+	// TrumpFixed rule; if neither did, downgrade the rule.
+	if child.TrumpRule == genome.TrumpFixed &&
+		(child.Scoring.TrumpSuit < 1 || child.Scoring.TrumpSuit > 4) {
+		switch {
+		case a.TrumpRule == genome.TrumpFixed && a.Scoring.TrumpSuit >= 1 && a.Scoring.TrumpSuit <= 4:
+			child.Scoring.TrumpSuit = a.Scoring.TrumpSuit
+		case b.TrumpRule == genome.TrumpFixed && b.Scoring.TrumpSuit >= 1 && b.Scoring.TrumpSuit <= 4:
+			child.Scoring.TrumpSuit = b.Scoring.TrumpSuit
+		default:
+			child.TrumpRule = genome.TrumpNone
+		}
+	}
+
+	// ScoreCardPoints / ScoreAvoidance require non-empty CardPoints.
+	// The TrickScoring coin flip lives in crossoverTrickTaking; the
+	// CardPoints coin flip lives in the Scoring block above. They can
+	// disagree (e.g. take Hearts' ScoreCardPoints with Whist's empty
+	// CardPoints). Recover by adopting a non-empty CardPoints slice
+	// from whichever parent had this scoring rule; otherwise fall
+	// back to ScorePerTrick which has no card-points dependency.
+	if child.Skeleton == genome.TrickTaking && child.TrickTaking != nil {
+		ts := child.TrickTaking.TrickScoring
+		needsPoints := ts == genome.ScoreCardPoints || ts == genome.ScoreAvoidance
+		if needsPoints && len(child.Scoring.CardPoints) == 0 {
+			switch {
+			case a.TrickTaking != nil && a.TrickTaking.TrickScoring == ts && len(a.Scoring.CardPoints) > 0:
+				child.Scoring.CardPoints = append([]genome.CardScoring(nil), a.Scoring.CardPoints...)
+			case b.TrickTaking != nil && b.TrickTaking.TrickScoring == ts && len(b.Scoring.CardPoints) > 0:
+				child.Scoring.CardPoints = append([]genome.CardScoring(nil), b.Scoring.CardPoints...)
+			default:
+				child.TrickTaking.TrickScoring = genome.ScorePerTrick
+			}
+		}
+	}
 }
 
 func crossoverShedding(child *genome.Genome, a, b *genome.Genome, rng *rand.Rand) {
