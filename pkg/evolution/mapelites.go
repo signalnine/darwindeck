@@ -266,8 +266,15 @@ func (e *MAPElitesEngine) totalStats() (int, float64) {
 
 // AllQualified returns all genomes in the archives with their behaviors.
 func (e *MAPElitesEngine) AllQualified() []*Individual {
+	// Iterate skeletons in a stable order so seeded runs are reproducible;
+	// Go map iteration order is randomized per process and would otherwise
+	// shuffle the output across runs with the same seed.
 	var result []*Individual
-	for _, archive := range e.Archives {
+	for _, skel := range []genome.SkeletonType{genome.Shedding, genome.TrickTaking, genome.Rummy} {
+		archive, ok := e.Archives[skel]
+		if !ok {
+			continue
+		}
 		for r := 0; r < GridSize; r++ {
 			for c := 0; c < GridSize; c++ {
 				if archive.Cells[r][c] != nil {
