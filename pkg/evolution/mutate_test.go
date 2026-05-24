@@ -91,3 +91,61 @@ func TestMutateScoringCanProduceRankZero(t *testing.T) {
 		t.Errorf("mutateScoring never produced a specific rank in 500 trials; rank-specific rules unreachable")
 	}
 }
+
+// TestAddSpecialCardCoversAllTypes verifies addSpecialCard samples every
+// SpecialCardType. Missing SpecialDrawFour from the type slice silently made
+// DrawFour unreachable through mutation despite the runner implementing it
+// (dd-9w1). Mirrors the dd-eir / dd-umc fixes for catch-all coverage.
+func TestAddSpecialCardCoversAllTypes(t *testing.T) {
+	allTypes := []genome.SpecialCardType{
+		genome.SpecialSkip,
+		genome.SpecialReverse,
+		genome.SpecialDrawTwo,
+		genome.SpecialDrawFour,
+		genome.SpecialWild,
+	}
+	seen := make(map[genome.SpecialCardType]bool, len(allTypes))
+	for seed := uint64(0); seed < 1000; seed++ {
+		rng := rand.New(rand.NewPCG(seed, 0))
+		g := &genome.Genome{}
+		addSpecialCard(g, rng)
+		if len(g.SpecialCards) != 1 {
+			t.Fatalf("seed %d: expected 1 special card, got %d", seed, len(g.SpecialCards))
+		}
+		seen[g.SpecialCards[0].Type] = true
+	}
+	for _, ty := range allTypes {
+		if !seen[ty] {
+			t.Errorf("addSpecialCard never produced SpecialCardType=%v in 1000 trials; type is unreachable from mutation", ty)
+		}
+	}
+}
+
+// TestAddSpecialCardCanProduceRankZero verifies addSpecialCard samples
+// ByRank=0 ("any rank") so catch-all specials like "every Heart is wild" are
+// reachable via cumulative mutation, not only via seed copy. Mirrors dd-eir
+// for the special-card mutation operator (dd-g2m).
+func TestAddSpecialCardCanProduceRankZero(t *testing.T) {
+	sawRankZero := false
+	sawSpecificRank := false
+	for seed := uint64(0); seed < 1000; seed++ {
+		rng := rand.New(rand.NewPCG(seed, 0))
+		g := &genome.Genome{}
+		addSpecialCard(g, rng)
+		if len(g.SpecialCards) != 1 {
+			t.Fatalf("seed %d: expected 1 special card, got %d", seed, len(g.SpecialCards))
+		}
+		r := g.SpecialCards[0].ByRank
+		if r == 0 {
+			sawRankZero = true
+		} else {
+			sawSpecificRank = true
+		}
+	}
+	if !sawRankZero {
+		t.Errorf("addSpecialCard never produced ByRank=0 in 1000 trials; catch-all specials unreachable from mutation")
+	}
+	if !sawSpecificRank {
+		t.Errorf("addSpecialCard never produced a specific rank in 1000 trials")
+	}
+}

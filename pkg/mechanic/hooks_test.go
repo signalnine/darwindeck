@@ -145,6 +145,46 @@ func TestMeldBonusAwardsPoints(t *testing.T) {
 	}
 }
 
+// TestMeldBonusIncludesTableauCaptures covers dd-no2. MechMeldBonus is
+// whitelisted as a TrickTaking-host borrow, but EventRoundEnd only fires once
+// hands are empty -- so at scoring time the bonus must come from cards
+// captured in state.Tableau (same shape as applyAvoidance / applyTrickScoring).
+// Without scanning Tableau the borrow is silently a no-op for trick-taking.
+func TestMeldBonusIncludesTableauCaptures(t *testing.T) {
+	g := &genome.Genome{
+		Skeleton: genome.TrickTaking,
+		Players:  2,
+		Borrowed: []genome.BorrowedMechanic{
+			{Source: genome.Rummy, Mechanic: genome.MechMeldBonus},
+		},
+	}
+
+	state := &sim.GameState{
+		// Hands empty (post-trick-round)
+		Hands: [][]sim.Card{{}, {}},
+		// Player 0 captured three Kings (a set) in their tableau.
+		Tableau: [][]sim.Card{
+			{
+				{Suit: sim.Hearts, Rank: sim.King},
+				{Suit: sim.Spades, Rank: sim.King},
+				{Suit: sim.Clubs, Rank: sim.King},
+			},
+			{{Suit: sim.Hearts, Rank: sim.Two}, {Suit: sim.Spades, Rank: sim.Five}},
+		},
+		Scores:     []int{0, 0},
+		NumPlayers: 2,
+	}
+
+	applyMeldBonus(state, g, sim.Event{})
+
+	if state.Scores[0] <= 0 {
+		t.Fatalf("player 0 should receive meld bonus from tableau set, got %d", state.Scores[0])
+	}
+	if state.Scores[1] != 0 {
+		t.Fatalf("player 1 has no meld; expected 0, got %d", state.Scores[1])
+	}
+}
+
 func TestDrawPenaltyOnFaceCards(t *testing.T) {
 	g := &genome.Genome{
 		Skeleton: genome.TrickTaking,
@@ -296,6 +336,86 @@ func TestTrickScoringCountsMelds(t *testing.T) {
 	}
 	if state.Scores[1] != 0 {
 		t.Fatalf("player 1 owns no melds; expected 0, got %d", state.Scores[1])
+	}
+}
+
+// TestTrickScoringTieSplitsBonus covers dd-hid. When two players tie for the
+// most captures the bonus must not be awarded only to the lowest-indexed
+// player; instead it is split across tied players so positional index does
+// not systematically inflate one seat's score.
+func TestTrickScoringTieSplitsBonus(t *testing.T) {
+	g := &genome.Genome{
+		Skeleton: genome.Rummy,
+		Players:  3,
+		Borrowed: []genome.BorrowedMechanic{
+			{Source: genome.TrickTaking, Mechanic: genome.MechTrickScoring},
+		},
+	}
+
+	// P1 and P2 each own a 3-card meld; P0 owns none. P1 and P2 are tied
+	// at 3 captures.
+	state := &sim.GameState{
+		Hands:   [][]sim.Card{{}, {}, {}},
+		Tableau: [][]sim.Card{{}, {}, {}},
+		Melds: [][]sim.Card{
+			{
+				{Suit: sim.Hearts, Rank: sim.King},
+				{Suit: sim.Spades, Rank: sim.King},
+				{Suit: sim.Clubs, Rank: sim.King},
+			},
+			{
+				{Suit: sim.Hearts, Rank: sim.Queen},
+				{Suit: sim.Spades, Rank: sim.Queen},
+				{Suit: sim.Clubs, Rank: sim.Queen},
+			},
+		},
+		MeldOwner:  []int{1, 2},
+		Scores:     []int{0, 0, 0},
+		NumPlayers: 3,
+	}
+
+	applyTrickScoring(state, g, sim.Event{})
+
+	if state.Scores[0] != 0 {
+		t.Fatalf("player 0 has no captures; expected 0, got %d", state.Scores[0])
+	}
+	if state.Scores[1] != state.Scores[2] {
+		t.Fatalf("tied players must receive equal bonus; P1=%d P2=%d", state.Scores[1], state.Scores[2])
+	}
+	if state.Scores[1] == 0 {
+		t.Fatalf("tied players should still receive a bonus, got 0 for P1 and P2")
+	}
+}
+
+// TestTrickScoringThreeWayTieSplitsBonus extends dd-hid to confirm splitting
+// across three tied players also produces equal scores -- not just a 2-way
+// tie. Catches a "first or last wins" half-fix that picks one tied winner.
+func TestTrickScoringThreeWayTieSplitsBonus(t *testing.T) {
+	g := &genome.Genome{
+		Skeleton: genome.Rummy,
+		Players:  3,
+		Borrowed: []genome.BorrowedMechanic{
+			{Source: genome.TrickTaking, Mechanic: genome.MechTrickScoring},
+		},
+	}
+
+	state := &sim.GameState{
+		Hands:   [][]sim.Card{{}, {}, {}},
+		Tableau: [][]sim.Card{{}, {}, {}},
+		Melds: [][]sim.Card{
+			{{Suit: sim.Hearts, Rank: sim.King}, {Suit: sim.Spades, Rank: sim.King}, {Suit: sim.Clubs, Rank: sim.King}},
+			{{Suit: sim.Hearts, Rank: sim.Queen}, {Suit: sim.Spades, Rank: sim.Queen}, {Suit: sim.Clubs, Rank: sim.Queen}},
+			{{Suit: sim.Hearts, Rank: sim.Jack}, {Suit: sim.Spades, Rank: sim.Jack}, {Suit: sim.Clubs, Rank: sim.Jack}},
+		},
+		MeldOwner:  []int{0, 1, 2},
+		Scores:     []int{0, 0, 0},
+		NumPlayers: 3,
+	}
+
+	applyTrickScoring(state, g, sim.Event{})
+
+	if state.Scores[0] != state.Scores[1] || state.Scores[1] != state.Scores[2] {
+		t.Fatalf("3-way tie must yield equal bonus; got %d / %d / %d", state.Scores[0], state.Scores[1], state.Scores[2])
 	}
 }
 

@@ -166,12 +166,24 @@ func addSpecialCard(g *genome.Genome, rng *rand.Rand) {
 		genome.SpecialSkip,
 		genome.SpecialReverse,
 		genome.SpecialDrawTwo,
+		genome.SpecialDrawFour,
 		genome.SpecialWild,
+	}
+
+	// Sample ByRank=0 ("any rank") with ~15% probability so catch-all
+	// specials like "every Heart is wild" are reachable through cumulative
+	// mutation, not only via seed copy. Mirrors the mutateScoring catch-all
+	// convention from dd-eir (dd-g2m).
+	var byRank uint8
+	if rng.Float64() < 0.15 {
+		byRank = 0
+	} else {
+		byRank = ranks[rng.IntN(len(ranks))]
 	}
 
 	sc := genome.SpecialCard{
 		Type:   types[rng.IntN(len(types))],
-		ByRank: ranks[rng.IntN(len(ranks))],
+		ByRank: byRank,
 		BySuit: uint8(rng.IntN(5)), // 0=any suit, 1-4=specific
 	}
 

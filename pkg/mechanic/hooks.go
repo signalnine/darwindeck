@@ -100,14 +100,20 @@ func applyAvoidance(state *sim.GameState, g *genome.Genome, event sim.Event) {
 }
 
 // applyMeldBonus awards bonus points for sets/runs in a player's hand or tableau.
+// Trick-taking hosts only fire EventRoundEnd once hands are empty, so the
+// bonus must consider state.Tableau captures too -- otherwise the borrow is
+// silently a no-op on every non-Rummy host (dd-no2).
 func applyMeldBonus(state *sim.GameState, g *genome.Genome, event sim.Event) {
 	for i := 0; i < state.NumPlayers; i++ {
-		hand := state.Hands[i]
+		cards := append([]sim.Card(nil), state.Hands[i]...)
+		if i < len(state.Tableau) {
+			cards = append(cards, state.Tableau[i]...)
+		}
 		bonus := 0
 
 		// Check for sets (3+ same rank)
 		rankCount := make(map[sim.Rank]int)
-		for _, c := range hand {
+		for _, c := range cards {
 			rankCount[c.Rank]++
 		}
 		for _, count := range rankCount {
@@ -118,7 +124,7 @@ func applyMeldBonus(state *sim.GameState, g *genome.Genome, event sim.Event) {
 
 		// Check for runs (3+ consecutive same suit)
 		suitCards := make(map[sim.Suit][]int)
-		for _, c := range hand {
+		for _, c := range cards {
 			suitCards[c.Suit] = append(suitCards[c.Suit], int(c.Rank))
 		}
 		for _, ranks := range suitCards {
@@ -189,15 +195,32 @@ func applyTrickScoring(state *sim.GameState, g *genome.Genome, event sim.Event) 
 	}
 
 	maxCapture := 0
-	captureWinner := 0
-	for i, c := range captures {
+	for _, c := range captures {
 		if c > maxCapture {
 			maxCapture = c
-			captureWinner = i
 		}
 	}
-	if maxCapture > 0 {
-		state.Scores[captureWinner] += maxCapture
+	if maxCapture == 0 {
+		return
+	}
+	// Split the bonus across every player tied for max captures. A strict
+	// "first wins" tiebreak biased toward the lowest-indexed seat (dd-hid),
+	// systematically inflating greedy's apparent score whenever a borrowed
+	// trick-scoring host produced a tie.
+	tied := 0
+	for _, c := range captures {
+		if c == maxCapture {
+			tied++
+		}
+	}
+	share := maxCapture / tied
+	if share == 0 {
+		return
+	}
+	for i, c := range captures {
+		if c == maxCapture {
+			state.Scores[i] += share
+		}
 	}
 }
 

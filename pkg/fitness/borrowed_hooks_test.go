@@ -94,6 +94,107 @@ func TestBorrowedHooksFireDuringBatchSim(t *testing.T) {
 	}
 }
 
+// TestBorrowedHooksMutateStateDuringBatchSim guards against the silent-no-op
+// failure mode that hook-fire counters miss: a hook can fire on the right
+// event and still leave state unchanged because it reads from a location the
+// host runner never populates (e.g. MechMeldBonus reading state.Hands on a
+// trick-taking host whose hands are empty by the time EventRoundEnd fires --
+// dd-no2). For each whitelisted borrow combination, observe state.Scores and
+// state.Hands deltas across hook invocations and require at least one mutation
+// during the batch -- a hook that never moves state across 50 games is
+// effectively unwired.
+func TestBorrowedHooksMutateStateDuringBatchSim(t *testing.T) {
+	cases := []struct {
+		host     genome.SkeletonType
+		source   genome.SkeletonType
+		mechanic genome.MechanicType
+	}{
+		{genome.Shedding, genome.Rummy, genome.MechMeldBonus},
+		{genome.Shedding, genome.TrickTaking, genome.MechAvoidance},
+		{genome.TrickTaking, genome.Rummy, genome.MechMeldBonus},
+		{genome.Rummy, genome.TrickTaking, genome.MechTrickScoring},
+		{genome.Rummy, genome.Shedding, genome.MechDrawPenalty},
+		{genome.Rummy, genome.TrickTaking, genome.MechAvoidance},
+	}
+
+	const games = 50
+
+	for _, tc := range cases {
+		tc := tc
+		name := tc.host.String() + "_borrows_" + tc.mechanic.String()
+		t.Run(name, func(t *testing.T) {
+			g := buildBorrowingGenome(tc.host, tc.source, tc.mechanic)
+			// MechMeldBonus on a Shedding host fires correctly but the loser's
+			// hand is usually 1-2 cards at EventRoundEnd, so 3-of-a-kind melds
+			// are essentially never present at hand sizes below ~8. Bump this
+			// case so the integration check exercises a configuration where the
+			// hook can plausibly mutate state.
+			if tc.host == genome.Shedding && tc.mechanic == genome.MechMeldBonus {
+				g.HandSize = 10
+			}
+			if errs := genome.Validate(g); len(errs) > 0 {
+				t.Fatalf("genome should be valid: %v", errs)
+			}
+
+			hooks := mechanic.BuildHooks(g)
+			if len(hooks) == 0 {
+				t.Fatalf("expected at least one hook")
+			}
+
+			mutations := 0
+			funcs := make([]sim.HookFunc, len(hooks))
+			for i := range hooks {
+				h := hooks[i]
+				funcs[i] = func(state *sim.GameState, gg *genome.Genome, event sim.Event) {
+					shouldApply := false
+					switch h.Point {
+					case mechanic.HookAfterPlay:
+						shouldApply = event.Type == sim.EventCardPlayed
+					case mechanic.HookEndOfRound, mechanic.HookScoring:
+						shouldApply = event.Type == sim.EventRoundEnd
+					}
+					if !shouldApply {
+						return
+					}
+
+					scoresBefore := append([]int(nil), state.Scores...)
+					handSizesBefore := make([]int, len(state.Hands))
+					for k, hand := range state.Hands {
+						handSizesBefore[k] = len(hand)
+					}
+
+					h.Apply(state, gg, event)
+
+					for k, v := range state.Scores {
+						if k >= len(scoresBefore) || v != scoresBefore[k] {
+							mutations++
+							return
+						}
+					}
+					for k, hand := range state.Hands {
+						if k >= len(handSizesBefore) || len(hand) != handSizesBefore[k] {
+							mutations++
+							return
+						}
+					}
+				}
+			}
+
+			runner := GetRunner(g)
+			if runner == nil {
+				t.Fatalf("no runner for %s", tc.host)
+			}
+
+			sim.RunBatch(g, runner, &sim.RandomAI{}, games, 42, funcs...)
+
+			if mutations == 0 {
+				t.Errorf("%s borrowing %s: hook never mutated state across %d games -- borrow is silently a no-op",
+					tc.host, tc.mechanic, games)
+			}
+		})
+	}
+}
+
 // buildBorrowingGenome constructs a minimal but valid genome that hosts the
 // given borrow. Each host gets the parameters its runner needs to actually
 // complete games (otherwise Tier1 timeouts would mask hook coverage).

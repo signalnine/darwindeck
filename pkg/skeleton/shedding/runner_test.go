@@ -870,6 +870,104 @@ func TestChainedReverseDrawTwoHonorsNewDirection(t *testing.T) {
 	}
 }
 
+// TestDrawTwoRecyclesDiscardWhenDeckEmpty covers dd-9jy. When the deck is empty
+// and a DrawTwo fires, the simulation must recycle the discard pile (minus the
+// just-played top card) into the deck before drawing, so the victim actually
+// receives the penalty cards instead of the effect silently no-opping.
+func TestDrawTwoRecyclesDiscardWhenDeckEmpty(t *testing.T) {
+	g := &genome.Genome{
+		ID:       "test-drawtwo-empty-deck",
+		Skeleton: genome.Shedding,
+		Players:  3,
+		HandSize: 1,
+		Shedding: &genome.SheddingParams{
+			MatchRule:   genome.MatchEither,
+			DrawPenalty: 1,
+		},
+		SpecialCards: []genome.SpecialCard{
+			{Type: genome.SpecialDrawTwo, ByRank: uint8(sim.Seven)},
+		},
+	}
+	runner := &Runner{}
+	state := &sim.GameState{
+		NumPlayers: 3,
+		Active:     0,
+		Hands: [][]sim.Card{
+			{{Suit: sim.Hearts, Rank: sim.Seven}},
+			{{Suit: sim.Clubs, Rank: sim.Five}},
+			{{Suit: sim.Diamonds, Rank: sim.Six}},
+		},
+		Deck: nil, // empty
+		Discard: []sim.Card{
+			{Suit: sim.Hearts, Rank: sim.Four},
+			{Suit: sim.Diamonds, Rank: sim.Five},
+			{Suit: sim.Clubs, Rank: sim.Six},
+			{Suit: sim.Spades, Rank: sim.Eight},
+			{Suit: sim.Hearts, Rank: sim.Nine},
+		},
+		TopCard: &sim.Card{Suit: sim.Hearts, Rank: sim.Nine},
+		RNG:     rand.New(rand.NewPCG(42, 0)),
+	}
+
+	runner.ApplyMove(state, sim.Move{
+		Type:     sim.MovePlay,
+		Cards:    []sim.Card{{Suit: sim.Hearts, Rank: sim.Seven}},
+		PlayerID: 0,
+	}, g)
+
+	if got := len(state.Hands[1]); got != 3 {
+		t.Fatalf("victim hand size = %d, want 3 (1 original + 2 drawn after discard recycle)", got)
+	}
+}
+
+// TestDrawFourRecyclesDiscardWhenDeckEmpty covers dd-9jy for DrawFour: the
+// discard pile must be recycled so the victim actually receives 4 cards.
+func TestDrawFourRecyclesDiscardWhenDeckEmpty(t *testing.T) {
+	g := &genome.Genome{
+		ID:       "test-drawfour-empty-deck",
+		Skeleton: genome.Shedding,
+		Players:  3,
+		HandSize: 1,
+		Shedding: &genome.SheddingParams{
+			MatchRule:   genome.MatchEither,
+			DrawPenalty: 1,
+		},
+		SpecialCards: []genome.SpecialCard{
+			{Type: genome.SpecialDrawFour, ByRank: uint8(sim.Seven)},
+		},
+	}
+	runner := &Runner{}
+	state := &sim.GameState{
+		NumPlayers: 3,
+		Active:     0,
+		Hands: [][]sim.Card{
+			{{Suit: sim.Hearts, Rank: sim.Seven}},
+			{{Suit: sim.Clubs, Rank: sim.Five}},
+			{{Suit: sim.Diamonds, Rank: sim.Six}},
+		},
+		Deck: nil,
+		Discard: []sim.Card{
+			{Suit: sim.Hearts, Rank: sim.Four},
+			{Suit: sim.Diamonds, Rank: sim.Five},
+			{Suit: sim.Clubs, Rank: sim.Six},
+			{Suit: sim.Spades, Rank: sim.Eight},
+			{Suit: sim.Hearts, Rank: sim.Nine},
+		},
+		TopCard: &sim.Card{Suit: sim.Hearts, Rank: sim.Nine},
+		RNG:     rand.New(rand.NewPCG(42, 0)),
+	}
+
+	runner.ApplyMove(state, sim.Move{
+		Type:     sim.MovePlay,
+		Cards:    []sim.Card{{Suit: sim.Hearts, Rank: sim.Seven}},
+		PlayerID: 0,
+	}, g)
+
+	if got := len(state.Hands[1]); got != 5 {
+		t.Fatalf("victim hand size = %d, want 5 (1 original + 4 drawn after discard recycle)", got)
+	}
+}
+
 // TestStackedSpecialsTargetOriginalNextPlayer covers dd-rzo. When two
 // SpecialCards entries match the same played card (e.g. one keyed by ByRank
 // and another by BySuit), the second case used to read state.Active after

@@ -314,6 +314,13 @@ func applySpecialEffects(state *sim.GameState, card sim.Card, g *genome.Genome) 
 	var events []sim.Event
 
 	if drawCount > 0 {
+		// If the deck cannot cover the penalty, recycle the discard pile
+		// (minus the just-played top card) so the special card actually
+		// inflicts cards on the victim. Without this the effect silently
+		// no-ops late game when the deck has been exhausted (dd-9jy).
+		if len(state.Deck) < drawCount && len(state.Discard) > 1 {
+			refillDeckFromDiscard(state)
+		}
 		drawn, rest := sim.DrawN(state.Deck, drawCount)
 		state.Deck = rest
 		state.Hands[victim] = append(state.Hands[victim], drawn...)
