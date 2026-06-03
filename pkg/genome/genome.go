@@ -13,7 +13,12 @@ const (
 
 var skeletonNames = [3]string{"shedding", "trick_taking", "rummy"}
 
-func (s SkeletonType) String() string { return skeletonNames[s] }
+func (s SkeletonType) String() string {
+	if int(s) >= len(skeletonNames) {
+		return fmt.Sprintf("SkeletonType(%d)", int(s))
+	}
+	return skeletonNames[s]
+}
 
 // --- Shedding Parameters ---
 
