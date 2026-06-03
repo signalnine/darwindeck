@@ -52,6 +52,9 @@ type SheddingScorer struct{}
 func (s *SheddingScorer) ScoreMove(move Move, state *GameState) float64 {
 	switch move.Type {
 	case MovePlay:
+		if len(move.Cards) == 0 {
+			return 0
+		}
 		card := move.Cards[0]
 		score := 10.0 // Base: playing is better than drawing
 
