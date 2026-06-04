@@ -134,6 +134,35 @@ func average(xs []int) float64 {
 	return float64(sum) / float64(len(xs))
 }
 
+func TestSkillGradientUsesEmpiricalBaseline(t *testing.T) {
+	// Greedy always plays seat 0. A game with first-player advantage gives seat 0
+	// a high random win rate; comparing greedy's seat-0 rate against the theoretical
+	// 1/N rather than the *measured* seat-0 random rate miscredits that structural
+	// edge as skill. The baseline must come from randomResult, not 1/numPlayers.
+	mk := func(seat0Wins int) sim.BatchResult {
+		return sim.BatchResult{Completions: 100, WinCounts: []int{seat0Wins, 100 - seat0Wins}}
+	}
+
+	// Zero true skill (greedy == random seat-0 rate) must score 0, regardless of
+	// how strong the first-player advantage is.
+	if got := computeSkillGradient(mk(60), mk(60), 2); got != 0 {
+		t.Errorf("FPA game with greedy==random seat-0 rate (60%%) must score 0, got %.3f", got)
+	}
+	if got := computeSkillGradient(mk(50), mk(50), 2); got != 0 {
+		t.Errorf("fair game with greedy==random seat-0 rate (50%%) must score 0, got %.3f", got)
+	}
+
+	// A genuine skill edge over the empirical baseline still scores positive.
+	if got := computeSkillGradient(mk(50), mk(60), 2); got <= 0 {
+		t.Errorf("greedy seat-0 rate (60%%) above random baseline (50%%) must score >0, got %.3f", got)
+	}
+
+	// Greedy worse than the empirical baseline clamps to 0.
+	if got := computeSkillGradient(mk(60), mk(40), 2); got != 0 {
+		t.Errorf("greedy seat-0 rate (40%%) below random baseline (60%%) must score 0, got %.3f", got)
+	}
+}
+
 func TestSkillGradient(t *testing.T) {
 	// Greedy should beat random in trick-taking (play to win tricks).
 	// Player 0 uses greedy; the other seats stay random.

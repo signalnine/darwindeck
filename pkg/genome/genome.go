@@ -43,10 +43,8 @@ func (m MatchRule) String() string {
 
 // SheddingParams controls a shedding game.
 type SheddingParams struct {
-	MatchRule    MatchRule `json:"match_rule"`
-	DrawPenalty  int       `json:"draw_penalty"`   // Cards drawn on no match (1-3)
-	CanStack     bool      `json:"can_stack"`       // Chain effects (draw-2 on draw-2)
-	PlayMultiple bool      `json:"play_multiple"`   // Play runs/sets at once
+	MatchRule   MatchRule `json:"match_rule"`
+	DrawPenalty int       `json:"draw_penalty"` // Cards drawn on no match (1-3)
 }
 
 // --- Trick-Taking Parameters ---
@@ -136,10 +134,9 @@ func (d DrawSource) String() string {
 // RummyParams controls a rummy game.
 type RummyParams struct {
 	MeldTypes      MeldType   `json:"meld_types"`
-	MinMeldSize    int        `json:"min_meld_size"`    // 2-4
+	MinMeldSize    int        `json:"min_meld_size"`   // 2-4
 	DrawFrom       DrawSource `json:"draw_from"`
-	CanLayOff      bool       `json:"can_lay_off"`      // Extend existing melds
-	KnockThreshold int        `json:"knock_threshold"`  // Deadwood to knock (0 = gin only)
+	KnockThreshold int        `json:"knock_threshold"` // Deadwood to knock (0 = gin only)
 }
 
 // --- Shared Mechanics ---
@@ -374,9 +371,8 @@ func (g *Genome) ActiveParams() string {
 	switch g.Skeleton {
 	case Shedding:
 		if g.Shedding != nil {
-			return fmt.Sprintf("shedding{match=%s, draw=%d, stack=%v, multi=%v}",
-				g.Shedding.MatchRule, g.Shedding.DrawPenalty,
-				g.Shedding.CanStack, g.Shedding.PlayMultiple)
+			return fmt.Sprintf("shedding{match=%s, draw=%d}",
+				g.Shedding.MatchRule, g.Shedding.DrawPenalty)
 		}
 	case TrickTaking:
 		if g.TrickTaking != nil {
@@ -386,9 +382,9 @@ func (g *Genome) ActiveParams() string {
 		}
 	case Rummy:
 		if g.Rummy != nil {
-			return fmt.Sprintf("rummy{melds=%s, min=%d, draw=%s, layoff=%v, knock=%d}",
+			return fmt.Sprintf("rummy{melds=%s, min=%d, draw=%s, knock=%d}",
 				g.Rummy.MeldTypes, g.Rummy.MinMeldSize, g.Rummy.DrawFrom,
-				g.Rummy.CanLayOff, g.Rummy.KnockThreshold)
+				g.Rummy.KnockThreshold)
 		}
 	}
 	return "none"

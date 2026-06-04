@@ -7,6 +7,27 @@ import (
 	"github.com/darwindeck/darwindeck/pkg/genome"
 )
 
+func TestAddSpecialCardSkipsNonShedding(t *testing.T) {
+	// Special cards are a shedding-only feature; the trick-taking and rummy
+	// runners never read them, so mutation must not add them to those
+	// skeletons (dd-24e).
+	for seed := uint64(0); seed < 200; seed++ {
+		rng := rand.New(rand.NewPCG(seed, 0))
+		g := &genome.Genome{Skeleton: genome.TrickTaking}
+		addSpecialCard(g, rng)
+		if len(g.SpecialCards) != 0 {
+			t.Fatalf("seed %d: addSpecialCard added a special card to a trick-taking genome", seed)
+		}
+	}
+	// Sanity: shedding genomes still receive special cards.
+	rng := rand.New(rand.NewPCG(1, 0))
+	g := &genome.Genome{Skeleton: genome.Shedding}
+	addSpecialCard(g, rng)
+	if len(g.SpecialCards) != 1 {
+		t.Fatalf("expected shedding genome to receive a special card, got %d", len(g.SpecialCards))
+	}
+}
+
 func TestAddSpecialCardCanSetBySuit(t *testing.T) {
 	// addSpecialCard must exercise the BySuit dimension of the SpecialCard
 	// schema, otherwise suit-bound specials (e.g. Hearts wilds) are

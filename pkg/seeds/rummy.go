@@ -14,7 +14,6 @@ func GinRummy() *genome.Genome {
 			MeldTypes:      genome.MeldBoth,
 			MinMeldSize:    3,
 			DrawFrom:       genome.DrawEither,
-			CanLayOff:      false,
 			KnockThreshold: 10,
 		},
 	}
@@ -32,7 +31,6 @@ func KnockRummy() *genome.Genome {
 			MeldTypes:      genome.MeldBoth,
 			MinMeldSize:    3,
 			DrawFrom:       genome.DrawEither,
-			CanLayOff:      false,
 			KnockThreshold: 15,
 		},
 	}

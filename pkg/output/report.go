@@ -57,7 +57,7 @@ func quickTake(g *genome.Genome) string {
 			modifiers = append(modifiers, borrowedQuickDesc(bm))
 		}
 	}
-	if len(g.SpecialCards) > 0 {
+	if g.Skeleton == genome.Shedding && len(g.SpecialCards) > 0 {
 		modifiers = append(modifiers, fmt.Sprintf("%d special card effects", len(g.SpecialCards)))
 	}
 	if g.TrumpRule != genome.TrumpNone {

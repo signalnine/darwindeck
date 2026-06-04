@@ -52,6 +52,15 @@ func Validate(g *Genome) []string {
 		errs = append(errs, "trump rule not applicable to rummy skeleton")
 	}
 
+	// Special cards are only consumed by the shedding runner. On any other
+	// skeleton they are inert bits that still get rendered in the rulebook, so
+	// reject them at Tier 0 rather than ship a game that lies about its rules
+	// (dd-24e).
+	if len(g.SpecialCards) > 0 && g.Skeleton != Shedding {
+		errs = append(errs, fmt.Sprintf("special cards only supported by shedding skeleton, got %d on %s",
+			len(g.SpecialCards), g.Skeleton))
+	}
+
 	// Validate borrowed mechanics
 	errs = append(errs, validateBorrowed(g)...)
 

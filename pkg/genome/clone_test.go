@@ -9,10 +9,8 @@ func TestCloneDeepCopyAllPointers(t *testing.T) {
 		Players:  2,
 		HandSize: 7,
 		Shedding: &SheddingParams{
-			MatchRule:    MatchEither,
-			DrawPenalty:  1,
-			CanStack:     false,
-			PlayMultiple: false,
+			MatchRule:   MatchEither,
+			DrawPenalty: 1,
 		},
 		TrickTaking: &TrickTakingParams{
 			MustFollowSuit: true,

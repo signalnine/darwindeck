@@ -216,7 +216,15 @@ func computeSkillGradient(randomResult, greedyResult sim.BatchResult, numPlayers
 		return 0
 	}
 
-	expectedWR := 1.0 / float64(numPlayers) // Random baseline
+	// Baseline = the *empirical* seat-0 win rate under all-random play. Greedy
+	// always occupies seat 0, so any structural first-player advantage already
+	// shows up in randomResult.WinCounts[0]; measuring against the theoretical
+	// 1/numPlayers would miscredit that seat edge as skill (dd-qt7). Fall back to
+	// the theoretical rate only when the random batch produced no completions.
+	baselineWR := 1.0 / float64(numPlayers)
+	if randomResult.Completions > 0 && len(randomResult.WinCounts) > 0 {
+		baselineWR = float64(randomResult.WinCounts[0]) / float64(randomResult.Completions)
+	}
 
 	// In greedy games, player 0 uses greedy AI, rest use random.
 	// Greedy win rate = player 0's wins / total completions.
@@ -225,15 +233,15 @@ func computeSkillGradient(randomResult, greedyResult sim.BatchResult, numPlayers
 		greedyWR = float64(greedyResult.WinCounts[0]) / float64(greedyResult.Completions)
 	}
 
-	// Skill = how much better greedy does vs random baseline.
-	skillDiff := greedyWR - expectedWR
+	// Skill = how much better greedy does vs the measured random baseline.
+	skillDiff := greedyWR - baselineWR
 	if skillDiff < 0 {
-		skillDiff = 0 // Greedy worse than random = no skill signal
+		skillDiff = 0 // Greedy no better than random seat 0 = no skill signal
 	}
 
-	// Normalize linearly from baseline (0.0) to a 100% greedy win rate (1.0).
-	// Saturates only when greedy wins every game, regardless of player count.
-	maxDiff := 1.0 - expectedWR
+	// Normalize linearly from the baseline (0.0) to a 100% greedy win rate (1.0).
+	// Saturates only when greedy wins every game.
+	maxDiff := 1.0 - baselineWR
 	if maxDiff == 0 {
 		return 0
 	}

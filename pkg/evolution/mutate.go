@@ -91,25 +91,12 @@ func tweakParameter(g *genome.Genome, rng *rand.Rand) {
 	}
 }
 
+// flipBool toggles a boolean skeleton parameter. Shedding and rummy no longer
+// expose any runner-consumed bool (CanStack/PlayMultiple/CanLayOff were inert
+// and removed -- dd-027), so only trick-taking's MustFollowSuit remains.
 func flipBool(g *genome.Genome, rng *rand.Rand) {
-	switch g.Skeleton {
-	case genome.Shedding:
-		if g.Shedding != nil {
-			switch rng.IntN(2) {
-			case 0:
-				g.Shedding.CanStack = !g.Shedding.CanStack
-			case 1:
-				g.Shedding.PlayMultiple = !g.Shedding.PlayMultiple
-			}
-		}
-	case genome.TrickTaking:
-		if g.TrickTaking != nil {
-			g.TrickTaking.MustFollowSuit = !g.TrickTaking.MustFollowSuit
-		}
-	case genome.Rummy:
-		if g.Rummy != nil {
-			g.Rummy.CanLayOff = !g.Rummy.CanLayOff
-		}
+	if g.Skeleton == genome.TrickTaking && g.TrickTaking != nil {
+		g.TrickTaking.MustFollowSuit = !g.TrickTaking.MustFollowSuit
 	}
 }
 
@@ -157,6 +144,11 @@ func changeEnum(g *genome.Genome, rng *rand.Rand) {
 }
 
 func addSpecialCard(g *genome.Genome, rng *rand.Rand) {
+	// Only the shedding runner applies special-card effects; adding them to
+	// other skeletons produces inert genome bits and lying rulebooks (dd-24e).
+	if g.Skeleton != genome.Shedding {
+		return
+	}
 	if len(g.SpecialCards) >= 6 {
 		return // Cap at 6 special cards
 	}

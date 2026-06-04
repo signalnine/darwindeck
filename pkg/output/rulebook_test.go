@@ -8,6 +8,52 @@ import (
 	"github.com/darwindeck/darwindeck/pkg/seeds"
 )
 
+func TestRulebookOmitsUnsupportedMechanics(t *testing.T) {
+	// CanStack/PlayMultiple (shedding) and CanLayOff (rummy) were inert genome
+	// bits no runner ever read, yet the rulebook advertised "play multiple
+	// matching cards" and "extend existing melds". They were removed (dd-027);
+	// guard against any rulebook re-introducing those claims.
+	banned := []string{
+		"play multiple matching cards",
+		"extend existing melds",
+	}
+	allSeeds := []*genome.Genome{
+		seeds.CrazyEights(), seeds.MauMau(),
+		seeds.Whist(), seeds.Hearts(), seeds.Spades(), seeds.OhHell(),
+		seeds.GinRummy(), seeds.KnockRummy(),
+	}
+	for _, g := range allSeeds {
+		rb := GenerateRulebook(g)
+		for _, phrase := range banned {
+			if strings.Contains(rb, phrase) {
+				t.Errorf("%s rulebook advertises unsupported mechanic %q", g.ID, phrase)
+			}
+		}
+	}
+}
+
+func TestRulebookOmitsSpecialCardsForNonShedding(t *testing.T) {
+	// The trick-taking and rummy runners never apply special-card effects, so
+	// the rulebook must not advertise them on those skeletons (dd-24e).
+	g := &genome.Genome{
+		ID:       "tt-with-specials",
+		Skeleton: genome.TrickTaking,
+		Players:  4,
+		HandSize: 13,
+		TrickTaking: &genome.TrickTakingParams{
+			MustFollowSuit:  true,
+			TrickScoring:    genome.ScorePerTrick,
+			LeadRestriction: genome.LeadNone,
+			RoundsPerGame:   1,
+		},
+		SpecialCards: []genome.SpecialCard{{Type: genome.SpecialSkip, ByRank: 7}},
+	}
+	rb := GenerateRulebook(g)
+	if strings.Contains(rb, "Special Cards") || strings.Contains(rb, "Skip the next player") {
+		t.Errorf("trick-taking rulebook must not advertise special cards:\n%s", rb)
+	}
+}
+
 func TestSpecialCardName(t *testing.T) {
 	tests := []struct {
 		name string

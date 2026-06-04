@@ -26,7 +26,10 @@ func GenerateRulebook(g *genome.Genome) string {
 		writeRummyRules(&b, g)
 	}
 
-	if len(g.SpecialCards) > 0 {
+	// Special cards are only simulated by the shedding runner, so only render
+	// them for shedding games -- otherwise the rulebook advertises skip/draw
+	// effects that never fire (dd-24e).
+	if g.Skeleton == genome.Shedding && len(g.SpecialCards) > 0 {
 		writeSpecialCards(&b, g)
 	}
 
@@ -61,10 +64,6 @@ func writeSheddingRules(b *strings.Builder, g *genome.Genome) {
 		matchDesc := matchRuleDescription(g.Shedding.MatchRule)
 		b.WriteString(fmt.Sprintf("Play a card from your hand that **%s** the top card of the discard pile.\n\n", matchDesc))
 		b.WriteString(fmt.Sprintf("If you cannot play, **draw %d card(s)** from the deck.\n\n", g.Shedding.DrawPenalty))
-
-		if g.Shedding.PlayMultiple {
-			b.WriteString("You may play multiple matching cards at once.\n\n")
-		}
 	}
 
 	b.WriteString("### Winning\n\n")
@@ -250,9 +249,6 @@ func meldDescription(p *genome.RummyParams) string {
 		parts = append(parts, fmt.Sprintf("sequences of %d+ consecutive cards in the same suit", p.MinMeldSize))
 	case genome.MeldBoth:
 		parts = append(parts, fmt.Sprintf("groups of %d+ same-rank cards OR sequences of %d+ consecutive same-suit cards", p.MinMeldSize, p.MinMeldSize))
-	}
-	if p.CanLayOff {
-		parts = append(parts, "You may also extend existing melds on the table")
 	}
 	return strings.Join(parts, ". ")
 }

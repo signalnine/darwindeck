@@ -42,8 +42,10 @@ func Crossover(a, b *genome.Genome, rng *rand.Rand) *genome.Genome {
 		crossoverRummy(child, a, b, rng)
 	}
 
-	// Special cards: take from one parent
-	if rng.Float64() < 0.5 {
+	// Special cards: take from one parent. Only shedding consumes them, and
+	// crossover is same-skeleton, so a non-shedding child must never inherit
+	// them (dd-24e).
+	if child.Skeleton == genome.Shedding && rng.Float64() < 0.5 {
 		child.SpecialCards = cloneSpecialCards(b.SpecialCards)
 	}
 
@@ -139,12 +141,6 @@ func crossoverShedding(child *genome.Genome, a, b *genome.Genome, rng *rand.Rand
 	if rng.Float64() < 0.5 {
 		child.Shedding.DrawPenalty = b.Shedding.DrawPenalty
 	}
-	if rng.Float64() < 0.5 {
-		child.Shedding.CanStack = b.Shedding.CanStack
-	}
-	if rng.Float64() < 0.5 {
-		child.Shedding.PlayMultiple = b.Shedding.PlayMultiple
-	}
 }
 
 func crossoverTrickTaking(child *genome.Genome, a, b *genome.Genome, rng *rand.Rand) {
@@ -177,9 +173,6 @@ func crossoverRummy(child *genome.Genome, a, b *genome.Genome, rng *rand.Rand) {
 	}
 	if rng.Float64() < 0.5 {
 		child.Rummy.DrawFrom = b.Rummy.DrawFrom
-	}
-	if rng.Float64() < 0.5 {
-		child.Rummy.CanLayOff = b.Rummy.CanLayOff
 	}
 	if rng.Float64() < 0.5 {
 		child.Rummy.KnockThreshold = b.Rummy.KnockThreshold

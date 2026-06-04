@@ -11,10 +11,8 @@ func CrazyEights() *genome.Genome {
 		Players:  2,
 		HandSize: 7,
 		Shedding: &genome.SheddingParams{
-			MatchRule:    genome.MatchEither,
-			DrawPenalty:  1,
-			CanStack:     false,
-			PlayMultiple: false,
+			MatchRule:   genome.MatchEither,
+			DrawPenalty: 1,
 		},
 		SpecialCards: []genome.SpecialCard{
 			{Type: genome.SpecialWild, ByRank: uint8(8)}, // 8s are wild
@@ -31,10 +29,8 @@ func MauMau() *genome.Genome {
 		Players:  3,
 		HandSize: 5,
 		Shedding: &genome.SheddingParams{
-			MatchRule:    genome.MatchEither,
-			DrawPenalty:  1,
-			CanStack:     true,
-			PlayMultiple: false,
+			MatchRule:   genome.MatchEither,
+			DrawPenalty: 1,
 		},
 		SpecialCards: []genome.SpecialCard{
 			{Type: genome.SpecialWild, ByRank: uint8(8)},        // 8s are wild

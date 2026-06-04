@@ -163,13 +163,44 @@ func TestValidRummy(t *testing.T) {
 			MeldTypes:      MeldBoth,
 			MinMeldSize:    3,
 			DrawFrom:       DrawEither,
-			CanLayOff:      false,
 			KnockThreshold: 10,
 		},
 	}
 	errs := Validate(g)
 	if len(errs) != 0 {
 		t.Fatalf("expected no errors, got: %v", errs)
+	}
+}
+
+func TestValidateRejectsSpecialCardsOnNonShedding(t *testing.T) {
+	// Only the shedding runner reads g.SpecialCards. A trick-taking or rummy
+	// genome carrying special cards advertises skip/draw effects that never
+	// fire, so Tier 0 must reject them (dd-24e).
+	g := &Genome{
+		Skeleton: TrickTaking,
+		Players:  4,
+		HandSize: 13,
+		TrickTaking: &TrickTakingParams{
+			MustFollowSuit:  true,
+			TrickScoring:    ScorePerTrick,
+			LeadRestriction: LeadNone,
+			RoundsPerGame:   1,
+		},
+		SpecialCards: []SpecialCard{{Type: SpecialSkip, ByRank: 7}},
+	}
+	if errs := Validate(g); len(errs) == 0 {
+		t.Fatal("expected validation to reject SpecialCards on a trick-taking skeleton")
+	}
+
+	r := &Genome{
+		Skeleton:     Rummy,
+		Players:      2,
+		HandSize:     10,
+		Rummy:        &RummyParams{MeldTypes: MeldBoth, MinMeldSize: 3, DrawFrom: DrawEither, KnockThreshold: 10},
+		SpecialCards: []SpecialCard{{Type: SpecialDrawTwo, ByRank: 2}},
+	}
+	if errs := Validate(r); len(errs) == 0 {
+		t.Fatal("expected validation to reject SpecialCards on a rummy skeleton")
 	}
 }
 
