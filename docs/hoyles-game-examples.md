@@ -1,7 +1,7 @@
 # Hoyle's Card Games - Genome Schema Examples
 
 **Date:** 2026-01-10
-**Source:** Hoyle's Encyclopedia of Card Games by Walter B. Gibson
+**Source:** Hoyle's Encyclopedia of Card Games by Walter B. Gibson (Doubleday; consult a purchased or library copy -- the book is copyrighted and is not distributed with this repository)
 **Purpose:** Validate genome schema against real card games from Hoyle's
 
 ## Overview
