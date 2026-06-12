@@ -27,6 +27,14 @@ type MAPElitesEngine struct {
 	Archives map[genome.SkeletonType]*Archive
 	rng      *rand.Rand
 
+	// evaluate is the fitness seam (default fitness.Evaluate); tests stub
+	// it to make challenge re-evaluations deterministic and free.
+	evaluate func(*genome.Genome, uint64) fitness.EvaluationResult
+
+	// challenges counts incumbent re-evaluations, deriving a fresh seed for
+	// each (see nextChallengeSeed).
+	challenges uint64
+
 	// Stats
 	BestFitness float64
 	BestGenome  *genome.Genome
@@ -52,7 +60,8 @@ func NewMAPElitesEngine(config Config, seeds []*genome.Genome) *MAPElitesEngine 
 			genome.TrickTaking: {},
 			genome.Rummy:       {},
 		},
-		rng: rand.New(rand.NewPCG(config.BaseSeed, 0)),
+		rng:      rand.New(rand.NewPCG(config.BaseSeed, 0)),
+		evaluate: fitness.Evaluate,
 	}
 }
 
@@ -150,7 +159,7 @@ func (e *MAPElitesEngine) evaluateAndInsert(genomes []*genome.Genome, gen int) {
 			defer func() { <-sem }()
 
 			seed := e.Config.BaseSeed + uint64(gen)*10000 + uint64(idx)
-			result := fitness.Evaluate(g, seed)
+			result := e.evaluate(g, seed)
 
 			// No fitness gate here: archive ADMISSION is floor-free (audit
 			// Task 18). The old hardcoded 0.70 cutoff silently emptied the
@@ -190,6 +199,53 @@ func (e *MAPElitesEngine) evaluateAndInsert(genomes []*genome.Genome, gen int) {
 	}
 }
 
+// mapElitesChallengeSeedBase/Stride derive the fresh seeds for incumbent
+// challenge re-evaluations. The base (2^40) sits far above the offspring
+// evaluation band (BaseSeed + gen*10000 + idx, internal derived seeds
+// spanning < +2020), so re-evaluation games never replay offspring
+// evaluation games; the stride covers one evaluation's internal span. The
+// counter advances once per challenge, and insertion is sequential
+// (evaluateAndInsert inserts after the parallel eval completes), so the
+// sequence is deterministic for a fixed run.
+const (
+	mapElitesChallengeSeedBase   = uint64(1) << 40
+	mapElitesChallengeSeedStride = 10000
+)
+
+func (e *MAPElitesEngine) nextChallengeSeed() uint64 {
+	seed := e.Config.BaseSeed + mapElitesChallengeSeedBase + e.challenges*mapElitesChallengeSeedStride
+	e.challenges++
+	return seed
+}
+
+// reevaluateIncumbent runs one fresh-seed evaluation of an occupied cell's
+// incumbent and folds it into the incumbent's running mean (the same
+// EvalCount/FitnessSum pattern the engines use, audit Task 13.3). An
+// invalid re-evaluation (Tier 0/1 kill at the fresh seed) means the
+// incumbent is flaky: its history resets and its mean reads 0, so it must
+// re-qualify from scratch -- the engines' policy. QDScore follows the
+// published mean.
+func (e *MAPElitesEngine) reevaluateIncumbent(archive *Archive, cell *ArchiveCell) {
+	ind := cell.Individual
+	result := e.evaluate(ind.Genome, e.nextChallengeSeed())
+	if result.Valid {
+		ind.FitnessSum += result.Metrics.TotalFitness
+		ind.EvalCount++
+	} else {
+		ind.FitnessSum = 0
+		ind.EvalCount = 0
+	}
+
+	old := ind.Fitness.TotalFitness
+	mean := 0.0
+	if ind.EvalCount > 0 {
+		mean = ind.FitnessSum / float64(ind.EvalCount)
+	}
+	ind.Fitness.TotalFitness = mean
+	ind.Genome.Fitness = mean
+	archive.QDScore += mean - old
+}
+
 // insert offers an evaluated genome to its skeleton archive. Admission is
 // pure cell-local elitism: the cell keeps its best occupant REGARDLESS of
 // the global FitnessFloor (audit Task 18) -- sub-floor occupants are
@@ -197,19 +253,30 @@ func (e *MAPElitesEngine) evaluateAndInsert(genomes []*genome.Genome, gen int) {
 // all occupants), while the floor applies to output via AllQualified.
 // Ties keep the incumbent (strict > comparison). Returns true if the
 // genome took the cell.
+//
+// Challenge re-evaluation (reviewer finding 3, the MAP-Elites winner's
+// curse): cells used to admit on a single-seed evaluation and never
+// re-evaluate, so a lucky eval (instant-knock's 0.431 on its one surviving
+// seed, clearing the 0.42 output floor) held its cell permanently. Now a
+// challenger to an OCCUPIED cell triggers one fresh-seed re-evaluation of
+// the incumbent first, and the comparison runs on running means on both
+// sides (the challenger's mean is its single eval). Repeated challenges
+// drag a lucky mean toward its true value until an honestly better
+// challenger evicts it. Cost is bounded: re-evaluations happen on cell
+// collisions only.
 func (e *MAPElitesEngine) insert(g *genome.Genome, metrics fitness.Metrics, behavior BehaviorDescriptor) bool {
 	archive := e.Archives[g.Skeleton]
 	row, col := behavior.GridCell(GridSize)
 
 	cell := archive.Cells[row][col]
-	if cell != nil && metrics.TotalFitness <= cell.Individual.Fitness.TotalFitness {
-		return false
-	}
-
-	if cell == nil {
-		archive.Occupied++
-	} else {
+	if cell != nil {
+		e.reevaluateIncumbent(archive, cell)
+		if metrics.TotalFitness <= cell.Individual.Fitness.TotalFitness {
+			return false
+		}
 		archive.QDScore -= cell.Individual.Fitness.TotalFitness
+	} else {
+		archive.Occupied++
 	}
 
 	archive.Cells[row][col] = &ArchiveCell{
@@ -217,6 +284,9 @@ func (e *MAPElitesEngine) insert(g *genome.Genome, metrics fitness.Metrics, beha
 			Genome:  g,
 			Fitness: metrics,
 			Valid:   true,
+			// Start the running mean so this occupant can be challenged.
+			EvalCount:  1,
+			FitnessSum: metrics.TotalFitness,
 		},
 		Behavior: behavior,
 	}

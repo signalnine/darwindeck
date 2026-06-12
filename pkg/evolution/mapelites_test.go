@@ -128,7 +128,12 @@ func TestAllQualifiedRowMajorWithinArchive(t *testing.T) {
 // 18, engine previously 0% covered): when two genomes map to the same
 // behavior cell, the fitter one holds the cell regardless of insertion
 // order, Occupied counts the cell once, and QDScore reflects only the
-// winner. Ties keep the incumbent (strict > comparison).
+// winner. Ties keep the incumbent (strict > comparison). Since the
+// winner's-curse fix the comparison runs against the incumbent's
+// running mean after a challenge re-evaluation; the eval seam is stubbed to
+// return the incumbent's first value so the mean stays put and this test
+// pins pure comparison semantics (TestChallengeReevaluation* pin the
+// mean-movement behavior).
 func TestInsertSameCellKeepsFitter(t *testing.T) {
 	b := BehaviorDescriptor{0.55, 0.25} // cell (2,5), pinned by TestGridCellBounds
 	cases := []struct {
@@ -143,6 +148,7 @@ func TestInsertSameCellKeepsFitter(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			e := NewMAPElitesEngine(Config{BaseSeed: 1, Workers: 1}, allSeeds())
+			e.evaluate = stubEval(tc.first, nil)
 			gA := &genome.Genome{ID: "A", Skeleton: genome.Shedding}
 			gB := &genome.Genome{ID: "B", Skeleton: genome.Shedding}
 			e.insert(gA, fitness.Metrics{TotalFitness: tc.first}, b)
