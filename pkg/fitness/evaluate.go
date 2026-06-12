@@ -104,10 +104,14 @@ func evaluate(g *genome.Genome, baseSeed uint64, mcts *MCTSEvalConfig) Evaluatio
 
 	// Degeneracy veto (Task 28 round 2): the random batch's turn records are
 	// checked for game-shaped non-game signatures BEFORE the genome is
-	// declared valid. A vetoed genome still reports its metrics (the
-	// calibrate subcommand shows them) but is fitness 0 in the pipeline,
-	// exactly like a Tier 1 kill. Both modes share this path, so an MCTS
-	// grant can never resurrect a vetoed genome.
+	// declared valid. A vetoed genome's metrics are still computed into
+	// EvaluationResult.Metrics (the calibrate subcommand, however, prints
+	// n/a for vetoed evals) but it is fitness 0 in the pipeline, exactly
+	// like a Tier 1 kill. Both modes share this path, so an MCTS grant can
+	// never resurrect a vetoed genome. KNOWN GAP (round-3 hazard): all
+	// three detectors see only RANDOM play -- a genome healthy under random
+	// play but degenerate under skilled play escapes the veto; designer
+	// review is the backstop.
 	if reason := CheckDegeneracy(randomResult, g); reason != "" {
 		result.DegenerateReason = reason
 		// No greedy batch for a dead genome: metrics are reported for
