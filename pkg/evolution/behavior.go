@@ -4,8 +4,30 @@ import (
 	"math"
 
 	"github.com/darwindeck/darwindeck/pkg/fitness"
+	"github.com/darwindeck/darwindeck/pkg/genome"
+	"github.com/darwindeck/darwindeck/pkg/mechanic"
 	"github.com/darwindeck/darwindeck/pkg/sim"
 )
+
+// behaviorBatchGames is the sample size for descriptor batches.
+const behaviorBatchGames = 50
+
+// BehaviorBatch runs the canonical descriptor batch for g: 50 random-AI
+// games WITH the genome's borrowed-mechanic hooks. Hooks are mandatory
+// (reviewer finding 6): the descriptor must describe the HOOKED game -- the
+// same game the fitness pipeline evaluates and humans playtest --
+// and mechanic.HooksFor is the single hook-construction site (audit Task
+// 24). This is the only place QD code may build a behavior batch; the
+// novelty engine, MAP-Elites, and the experiment harness all call it, so a
+// hook-construction change lands in every descriptor at once. ok is false
+// when g has no runner.
+func BehaviorBatch(g *genome.Genome, seed uint64) (result sim.BatchResult, ok bool) {
+	runner := fitness.GetRunner(g)
+	if runner == nil {
+		return sim.BatchResult{}, false
+	}
+	return sim.RunBatch(g, runner, &sim.RandomAI{}, behaviorBatchGames, seed, mechanic.HooksFor(g)...), true
+}
 
 // BehaviorDescriptor is a 2D point in behavior space.
 // X = decision density, Y = interaction.

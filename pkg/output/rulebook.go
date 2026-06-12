@@ -93,7 +93,10 @@ func writeSheddingRoundStructure(b *strings.Builder, g *genome.Genome) {
 	} else {
 		b.WriteString(fmt.Sprintf("After %d rounds, the **highest total score** wins. Emptying your hand ends a round, but points come from the banked scoring -- a player can win on points without ending a single round.\n\n", rounds))
 	}
-	b.WriteString("If scores are tied, the tied player holding the fewest cards at the end of the final round wins.\n\n")
+	// Full tiebreak chain, matching the shedding runner's CheckEnd exactly:
+	// banked score, then fewest cards in hand, then seat order (the runner's
+	// strict comparison keeps the earliest-seated tied player).
+	b.WriteString("If scores are tied, the tied player holding the fewest cards at the end of the final round wins; if that is tied too, the tied player seated earliest in the turn order (closest to the dealer's left) wins.\n\n")
 }
 
 func hasAvoidanceBorrow(g *genome.Genome) bool {

@@ -236,6 +236,18 @@ func runSingleGame(g *genome.Genome, runner GenericRunner, ai AIPlayer, rng *ran
 		// Post-move option count for the actual next actor. Skipped when the
 		// move ended the game (CheckEnd is pure): there is no next turn to
 		// perturb, and probing terminal states is meaningless.
+		//
+		// ROUND BOUNDARY: when a move ends a ROUND but not the game
+		// (multi-round shedding/trick-taking), this probe still runs -- the
+		// redeal happens in the NEXT iteration's Upkeep -- so the one record
+		// per round-ending move measures the next player's post-move options
+		// against a pre-redeal baseline. That delta compares a hand about to
+		// be thrown away, but the noise is bounded: at most one such record
+		// per round (RoundsPerGame <= 13 records per game), against hundreds
+		// of in-round records, and it can only blur OptionDelta toward 0 or a
+		// spurious nonzero on a turn that was genuinely a coupling boundary
+		// anyway. Not worth special-casing; revisit if rounds ever shorten to
+		// a handful of moves.
 		delta := 0
 		if mode != deltaModeNone && runner.CheckEnd(state, g) < 0 {
 			next := state.Active

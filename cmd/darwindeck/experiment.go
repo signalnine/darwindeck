@@ -13,10 +13,8 @@ import (
 	"time"
 
 	"github.com/darwindeck/darwindeck/pkg/evolution"
-	"github.com/darwindeck/darwindeck/pkg/fitness"
 	"github.com/darwindeck/darwindeck/pkg/genome"
 	"github.com/darwindeck/darwindeck/pkg/seeds"
-	"github.com/darwindeck/darwindeck/pkg/sim"
 )
 
 // ExperimentResult holds metrics for one run.
@@ -144,17 +142,18 @@ func runExperiment(configName string, config evolution.Config, allSeeds []*genom
 		engine := evolution.NewEngine(config, allSeeds)
 		engine.Run(nil)
 
-		// Collect qualified individuals and compute behaviors
+		// Collect qualified individuals and compute behaviors.
+		// evolution.BehaviorBatch is the single descriptor-batch site: it
+		// runs the genome's borrowed-mechanic hooks, so the descriptor
+		// describes the same hooked game fitness evaluated.
 		for _, ind := range engine.Population {
 			if !ind.Valid || ind.Fitness.TotalFitness < evolution.FitnessFloor {
 				continue
 			}
-			runner := fitness.GetRunner(ind.Genome)
-			if runner == nil {
+			result, ok := evolution.BehaviorBatch(ind.Genome, config.BaseSeed+99999)
+			if !ok {
 				continue
 			}
-			randomAI := &sim.RandomAI{}
-			result := sim.RunBatch(ind.Genome, runner, randomAI, 50, config.BaseSeed+99999)
 			behavior := evolution.ComputeBehavior(result)
 			individuals = append(individuals, ind)
 			behaviors = append(behaviors, behavior)
@@ -165,12 +164,10 @@ func runExperiment(configName string, config evolution.Config, allSeeds []*genom
 		engine.Run(nil)
 		allQ := engine.AllQualified()
 		for _, ind := range allQ {
-			runner := fitness.GetRunner(ind.Genome)
-			if runner == nil {
+			result, ok := evolution.BehaviorBatch(ind.Genome, config.BaseSeed+99999)
+			if !ok {
 				continue
 			}
-			randomAI := &sim.RandomAI{}
-			result := sim.RunBatch(ind.Genome, runner, randomAI, 50, config.BaseSeed+99999)
 			behavior := evolution.ComputeBehavior(result)
 			individuals = append(individuals, ind)
 			behaviors = append(behaviors, behavior)

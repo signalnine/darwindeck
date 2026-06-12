@@ -156,13 +156,18 @@ func multiRoundSheddingGenome(borrow genome.MechanicType, source genome.Skeleton
 
 // TestSheddingRulebookRendersRoundStructure (Task 22 test c): a multi-round
 // genome's rulebook must describe the round structure -- rounds played,
-// round end on hand-empty, score banking, and the highest-total win rule.
+// round end on hand-empty, score banking, the highest-total win rule, and
+// the FULL tiebreak chain CheckEnd actually applies: fewest cards in hand,
+// then lowest seat (reviewer finding 8 -- the rulebook used to stop at
+// fewest cards, leaving a rules hole human players would hit).
 func TestSheddingRulebookRendersRoundStructure(t *testing.T) {
 	rb := GenerateRulebook(multiRoundSheddingGenome(genome.MechMeldBonus, genome.Rummy))
 	for _, phrase := range []string{
 		"3 rounds",
 		"ends the round",
 		"highest total score",
+		"fewest cards",
+		"earliest in the turn order",
 	} {
 		if !strings.Contains(rb, phrase) {
 			t.Errorf("multi-round rulebook missing %q:\n%s", phrase, rb)

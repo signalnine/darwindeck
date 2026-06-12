@@ -8,7 +8,6 @@ import (
 
 	"github.com/darwindeck/darwindeck/pkg/fitness"
 	"github.com/darwindeck/darwindeck/pkg/genome"
-	"github.com/darwindeck/darwindeck/pkg/sim"
 )
 
 const GridSize = 10
@@ -170,13 +169,12 @@ func (e *MAPElitesEngine) evaluateAndInsert(genomes []*genome.Genome, gen int) {
 				return
 			}
 
-			// Compute behavior from a fresh batch
-			runner := fitness.GetRunner(g)
-			if runner == nil {
+			// Compute behavior from a fresh batch (hooks included --
+			// BehaviorBatch is the single descriptor-batch site).
+			batchResult, ok := BehaviorBatch(g, seed+5000)
+			if !ok {
 				return
 			}
-			randomAI := &sim.RandomAI{}
-			batchResult := sim.RunBatch(g, runner, randomAI, 50, seed+5000)
 			behavior := ComputeBehavior(batchResult)
 
 			results[idx] = evalResult{

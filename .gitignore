@@ -48,7 +48,10 @@ experiments/
 *.test
 *.out
 gosim/vendor/
-output/
+# Anchored: only the top-level run-output directory is ignored (Task 4).
+# The unanchored form also matched the tracked Go package pkg/output/,
+# blocking git add there.
+/output/
 /darwindeck
 .worktrees/
 bin/

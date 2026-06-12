@@ -243,8 +243,13 @@ func computeInteraction(result sim.BatchResult) float64 {
 //
 // skillScale = 0.5, justified by the measured classic spread over
 // CalibrationSeeds (post-Task-20 block in calibration_test.go): the
-// strongest classic greedy term is gin rummy's 0.905 (greedyWR 0.945 over a
-// 0.484 empirical baseline at seed 44), i.e. raw ~0.36 with its MCTS term 0
+// strongest classic greedy term is gin rummy's 0.905, the cross-seed MEAN
+// of the normalized term over CalibrationSeeds (sd 0.011, Task 13.5 table).
+// The single-seed rates measured at seed 44 -- greedyWR 0.945 over a 0.484
+// empirical baseline -- give (0.945-0.484)/(1-0.484) = 0.893 for THAT seed,
+// about 1 sd below the mean; an earlier revision of this comment glued the
+// seed-44 rates onto the cross-seed mean as if 0.905 followed from them.
+// Either way raw ~= 0.4*0.90 ~= 0.36 with the MCTS term 0
 // (greedy outplays 20-determinization ISMCTS at gin: mctsWR 0.900). At raw
 // scale (1.0) every real game would compress below ~0.45 and gin would lose
 // its calibration margin over the instant-knock fixture (measured: gin
@@ -262,10 +267,15 @@ const (
 // computeSkillGradient measures whether better play leads to better results,
 // on two tiers: greedy AI over the empirical random baseline, and ISMCTS
 // over the empirical greedy baseline (audit Task 20). All win rates are
-// seat-0 rates; every baseline is EMPIRICAL from the paired batch run on the
-// same seeds (dd-qt7) -- a structural first-player advantage appears in all
-// three rates and cancels out of both difference terms, so a zero-skill game
-// scores 0 regardless of FPA.
+// seat-0 rates; every baseline is an empirical seat-0 baseline from an
+// INDEPENDENT random batch (dd-qt7) -- the batches are NOT same-seed paired
+// (the pipeline seeds them at distinct offsets: random +100, greedy +1000,
+// MCTS +2000). A structural first-player advantage appears in all three
+// rates IN EXPECTATION and cancels out of both difference terms, so a
+// zero-skill game scores ~0 regardless of FPA; but unpaired differencing
+// roughly doubles the variance of each difference vs a paired design.
+// Future win: paired (same-seed) batch seeding plus a calibration
+// re-baseline.
 //
 // mctsResult is the zero value in default (greedy-only) mode -- Task 19's
 // 2s/genome MCTS budget FAILED (~14.5s measured, see pkg/sim/mcts.go), so

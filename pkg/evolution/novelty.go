@@ -10,7 +10,6 @@ import (
 
 	"github.com/darwindeck/darwindeck/pkg/fitness"
 	"github.com/darwindeck/darwindeck/pkg/genome"
-	"github.com/darwindeck/darwindeck/pkg/sim"
 )
 
 const (
@@ -195,11 +194,9 @@ func (e *NoveltyEngine) evaluatePopulation() {
 			ind.EvalCount++
 			ind.Fitness.TotalFitness = ind.publishedFitness()
 
-			// Compute behavior from a fresh batch
-			runner := fitness.GetRunner(ind.Genome)
-			if runner != nil {
-				randomAI := &sim.RandomAI{}
-				batchResult := sim.RunBatch(ind.Genome, runner, randomAI, 50, seed+5000)
+			// Compute behavior from a fresh batch (hooks included --
+			// BehaviorBatch is the single descriptor-batch site).
+			if batchResult, ok := BehaviorBatch(ind.Genome, seed+5000); ok {
 				ind.Behavior = ComputeBehavior(batchResult)
 			}
 		}(i, ind)

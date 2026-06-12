@@ -174,8 +174,15 @@ func TestAddSpecialCardCanProduceRankZero(t *testing.T) {
 // TestTweakParameterReachesSheddingRounds (Task 22): RoundsPerGame is an
 // evolvable shedding parameter -- tweakParameter must be able to move it,
 // always landing in 1-5 (never back to the legacy 0 encoding, which would
-// make a mutated multi-round genome silently single-round).
+// make a mutated multi-round genome silently single-round). The field is
+// only LIVE when the genome carries a scoring borrow
+// (genome.SheddingMultiRound), so the fixtures carry MechMeldBonus; the
+// borrow-less case is pinned separately below.
 func TestTweakParameterReachesSheddingRounds(t *testing.T) {
+	scoringBorrow := []genome.BorrowedMechanic{
+		{Source: genome.Rummy, Mechanic: genome.MechMeldBonus},
+	}
+
 	seen := map[int]bool{}
 	for seed := uint64(0); seed < 500; seed++ {
 		rng := rand.New(rand.NewPCG(seed, 0))
@@ -183,6 +190,7 @@ func TestTweakParameterReachesSheddingRounds(t *testing.T) {
 			Skeleton: genome.Shedding,
 			Players:  2,
 			HandSize: 7,
+			Borrowed: scoringBorrow,
 			Shedding: &genome.SheddingParams{
 				MatchRule:     genome.MatchEither,
 				DrawPenalty:   2,
@@ -211,6 +219,7 @@ func TestTweakParameterReachesSheddingRounds(t *testing.T) {
 			Skeleton: genome.Shedding,
 			Players:  2,
 			HandSize: 7,
+			Borrowed: scoringBorrow,
 			Shedding: &genome.SheddingParams{MatchRule: genome.MatchEither, DrawPenalty: 1},
 		}
 		tweakParameter(g, rng)
@@ -224,5 +233,31 @@ func TestTweakParameterReachesSheddingRounds(t *testing.T) {
 	}
 	if !reachedOne {
 		t.Error("tweakParameter never normalized a legacy RoundsPerGame=0 genome into 1-5")
+	}
+}
+
+// TestTweakParameterSkipsRoundsWithoutScoringBorrow (reviewer finding,
+// coherent-mutation principle): without a scoring borrow RoundsPerGame is
+// inert (genome.SheddingMultiRound is false regardless of its value), so
+// tweakParameter must not burn mutation pressure on it -- borrow-less
+// shedding genomes spend the whole skeleton-param branch on DrawPenalty.
+func TestTweakParameterSkipsRoundsWithoutScoringBorrow(t *testing.T) {
+	for seed := uint64(0); seed < 500; seed++ {
+		rng := rand.New(rand.NewPCG(seed, 0))
+		g := &genome.Genome{
+			Skeleton: genome.Shedding,
+			Players:  2,
+			HandSize: 7,
+			Shedding: &genome.SheddingParams{
+				MatchRule:     genome.MatchEither,
+				DrawPenalty:   2,
+				RoundsPerGame: 3,
+			},
+		}
+		tweakParameter(g, rng)
+		if g.Shedding.RoundsPerGame != 3 {
+			t.Fatalf("seed %d: tweakParameter moved RoundsPerGame to %d on a borrow-less genome (inert field)",
+				seed, g.Shedding.RoundsPerGame)
+		}
 	}
 }

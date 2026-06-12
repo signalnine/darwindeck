@@ -73,14 +73,24 @@ func tweakParameter(g *genome.Genome, rng *rand.Rand) {
 	switch g.Skeleton {
 	case genome.Shedding:
 		if g.Shedding != nil {
-			switch rng.IntN(2) {
+			// RoundsPerGame is mutable only when the genome carries a
+			// scoring borrow: without one the field is inert
+			// (genome.SheddingMultiRound is false regardless of its value),
+			// and mutating it would burn mutation pressure on a no-op --
+			// the repo's coherent-mutation principle (a mutation that
+			// touches a mechanic must touch a LIVE mechanic). Borrow-less
+			// genomes spend the whole branch on DrawPenalty.
+			options := 1
+			if g.HasScoringBorrow() {
+				options = 2
+			}
+			switch rng.IntN(options) {
 			case 0:
 				g.Shedding.DrawPenalty = clampInt(g.Shedding.DrawPenalty+rng.IntN(3)-1, 1, 3)
 			case 1:
-				// Banked-score rounds (Task 22); >1 only takes effect with a
-				// scoring borrow (see genome.SheddingMultiRound). The clamp
-				// floor also normalizes the legacy 0 ("unset") encoding into
-				// the evolvable 1-5 range.
+				// Banked-score rounds (Task 22). The clamp floor also
+				// normalizes the legacy 0 ("unset") encoding into the
+				// evolvable 1-5 range.
 				g.Shedding.RoundsPerGame = clampInt(g.Shedding.RoundsPerGame+rng.IntN(3)-1, 1, 5)
 			}
 		}
