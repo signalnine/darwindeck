@@ -126,9 +126,14 @@ func NoFollowAvoidanceTrick() *genome.Genome {
 		Players:  2,
 		HandSize: 12,
 		TrickTaking: &genome.TrickTakingParams{
-			MustFollowSuit:  false,
-			TrickScoring:    genome.ScoreAvoidance,
-			LeadRestriction: genome.LeadWinnerLeads,
+			MustFollowSuit: false,
+			TrickScoring:   genome.ScoreAvoidance,
+			// The champion carried lead_restriction 2 (winner_leads), which
+			// was the INERT encoding of the skeleton's hardcoded turn order
+			// (byte-identical traces; the value is reserved and Tier-0
+			// rejected since the round-2 commit 6). Encoded as LeadNone so
+			// the fixture stays Tier-0 valid; behavior is unchanged.
+			LeadRestriction: genome.LeadNone,
 			RoundsPerGame:   2,
 		},
 		Scoring: genome.ScoringConfig{

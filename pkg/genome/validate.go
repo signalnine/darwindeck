@@ -97,6 +97,13 @@ func validateTrickTaking(p *TrickTakingParams) []string {
 	if p.LeadRestriction > LeadWinnerLeads {
 		errs = append(errs, fmt.Sprintf("invalid lead_restriction: %d", p.LeadRestriction))
 	}
+	// LeadWinnerLeads is reserved: winner-leads is the skeleton's fixed turn
+	// order (hardcoded in the runner), so the value is inert -- a genome
+	// carrying it advertises a parameter that cannot do anything (dd-027
+	// class; see the LeadRule type doc).
+	if p.LeadRestriction == LeadWinnerLeads {
+		errs = append(errs, "lead_restriction 2 (winner_leads) is reserved: winner-leads is the trick-taking skeleton's fixed turn order, the value is inert")
+	}
 	if p.RoundsPerGame < 1 || p.RoundsPerGame > 13 {
 		errs = append(errs, fmt.Sprintf("rounds_per_game must be 1-13, got %d", p.RoundsPerGame))
 	}

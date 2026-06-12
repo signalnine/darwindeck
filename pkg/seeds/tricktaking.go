@@ -7,6 +7,10 @@ import (
 
 // Whist returns the Whist seed genome.
 // Simplest trick-taker: follow suit, trump cut from deck, score per trick.
+// LeadRestriction is LeadNone: the trick winner leading next is the
+// skeleton's hardcoded turn order, not a card restriction (the former
+// LeadWinnerLeads encoding was inert and is now reserved -- byte-identical
+// traces, pinned by TestReservedWinnerLeadsValueIsInert).
 func Whist() *genome.Genome {
 	return &genome.Genome{
 		ID:       "whist",
@@ -16,7 +20,7 @@ func Whist() *genome.Genome {
 		TrickTaking: &genome.TrickTakingParams{
 			MustFollowSuit:  true,
 			TrickScoring:    genome.ScorePerTrick,
-			LeadRestriction: genome.LeadWinnerLeads,
+			LeadRestriction: genome.LeadNone,
 			RoundsPerGame:   1,
 		},
 		TrumpRule: genome.TrumpCut,
@@ -83,7 +87,7 @@ func OhHell() *genome.Genome {
 		TrickTaking: &genome.TrickTakingParams{
 			MustFollowSuit:  true,
 			TrickScoring:    genome.ScorePerTrick,
-			LeadRestriction: genome.LeadWinnerLeads,
+			LeadRestriction: genome.LeadNone, // winner-leads is hardcoded; see Whist
 			RoundsPerGame:   1,
 		},
 		TrumpRule: genome.TrumpCut,

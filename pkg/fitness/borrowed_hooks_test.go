@@ -269,7 +269,7 @@ func buildBorrowingGenome(host, source genome.SkeletonType, mech genome.Mechanic
 		g.TrickTaking = &genome.TrickTakingParams{
 			MustFollowSuit:  true,
 			TrickScoring:    genome.ScorePerTrick,
-			LeadRestriction: genome.LeadWinnerLeads,
+			LeadRestriction: genome.LeadNone, // LeadWinnerLeads is reserved/inert
 			RoundsPerGame:   1,
 		}
 		g.TrumpRule = genome.TrumpCut

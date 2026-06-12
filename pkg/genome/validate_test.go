@@ -142,7 +142,7 @@ func TestValidTrickTaking(t *testing.T) {
 		TrickTaking: &TrickTakingParams{
 			MustFollowSuit:  true,
 			TrickScoring:    ScorePerTrick,
-			LeadRestriction: LeadWinnerLeads,
+			LeadRestriction: LeadNone,
 			RoundsPerGame:   1,
 		},
 		TrumpRule: TrumpCut,
@@ -442,5 +442,33 @@ func TestSheddingMultiRoundScalesMaxTurns(t *testing.T) {
 	inert := sheddingGenomeWithRounds(3)
 	if got := inert.MaxTurns(); got != single {
 		t.Errorf("rounds-without-borrow MaxTurns = %d, want unchanged %d", got, single)
+	}
+}
+
+// TestLeadWinnerLeadsReserved (Task 28 round 2, the dd-027 inert-param
+// class): winner-leads is the trick-taking skeleton's FIXED turn order,
+// hardcoded in the runner's trick resolution -- as a LeadRule value it was
+// behaviorally identical to LeadNone, a phantom search dimension whose only
+// effect was hash-distinct clone genomes. The enum value stays (removing it
+// would renumber nothing -- it is the last value -- but the MechTrump
+// precedent keeps reserved values nameable in error messages); validation
+// rejects it.
+func TestLeadWinnerLeadsReserved(t *testing.T) {
+	g := &Genome{
+		ID:       "winner-leads-carrier",
+		Skeleton: TrickTaking,
+		Players:  4,
+		HandSize: 13,
+		TrickTaking: &TrickTakingParams{
+			MustFollowSuit:  true,
+			TrickScoring:    ScorePerTrick,
+			LeadRestriction: LeadWinnerLeads,
+			RoundsPerGame:   1,
+		},
+		TrumpRule: TrumpCut,
+	}
+	errs := Validate(g)
+	if len(errs) == 0 {
+		t.Fatal("LeadWinnerLeads must be rejected as reserved (inert: winner-leads is hardcoded)")
 	}
 }

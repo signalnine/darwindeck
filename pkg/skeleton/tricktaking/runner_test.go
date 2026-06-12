@@ -716,3 +716,67 @@ func TestProgressAvoidanceInversion(t *testing.T) {
 		t.Errorf("avoidance scoring: low scorer must lead, got %v", pa)
 	}
 }
+
+// TestLeadRestrictionIsBehavioral (Task 28 round 2, commit 6 semantic pin):
+// two genomes differing ONLY in LeadRestriction must produce different play
+// traces. LeadNoTrumpUntilBroken really restricts which cards may lead
+// (canLead); with fixed-spade trump and random play over 30 seeds, at least
+// one game's event stream must diverge from the unrestricted twin's. This is
+// the field's reason to exist -- if this test ever needs weakening, remove
+// the field across all six surfaces instead (dd-027 pattern).
+func TestLeadRestrictionIsBehavioral(t *testing.T) {
+	mk := func(lead genome.LeadRule) *genome.Genome {
+		return &genome.Genome{
+			ID:       "lead-semantics",
+			Skeleton: genome.TrickTaking,
+			Players:  4,
+			HandSize: 13,
+			TrickTaking: &genome.TrickTakingParams{
+				MustFollowSuit:  true,
+				TrickScoring:    genome.ScorePerTrick,
+				LeadRestriction: lead,
+				RoundsPerGame:   1,
+			},
+			TrumpRule: genome.TrumpFixed,
+			Scoring:   genome.ScoringConfig{TrumpSuit: uint8(sim.Spades) + 1},
+		}
+	}
+
+	free := sim.RunBatch(mk(genome.LeadNone), &Runner{}, &sim.RandomAI{}, 30, 7)
+	held := sim.RunBatch(mk(genome.LeadNoTrumpUntilBroken), &Runner{}, &sim.RandomAI{}, 30, 7)
+
+	if reflect.DeepEqual(free.AllEvents, held.AllEvents) {
+		t.Fatal("LeadNone and LeadNoTrumpUntilBroken produced identical traces over 30 seeds: the field is inert")
+	}
+}
+
+// TestReservedWinnerLeadsValueIsInert pins WHY LeadWinnerLeads is reserved
+// and Tier-0-rejected: winner-leads is the skeleton's hardcoded turn order
+// (ApplyMove sets state.Active = trick winner unconditionally), so the value
+// is byte-identical to LeadNone in play. If someone ever gives it real
+// semantics, this test fails and the reservation (genome.Validate rejection,
+// mutation exclusion) must be lifted in the same change.
+func TestReservedWinnerLeadsValueIsInert(t *testing.T) {
+	mk := func(lead genome.LeadRule) *genome.Genome {
+		return &genome.Genome{
+			ID:       "winner-leads-inert",
+			Skeleton: genome.TrickTaking,
+			Players:  4,
+			HandSize: 13,
+			TrickTaking: &genome.TrickTakingParams{
+				MustFollowSuit:  true,
+				TrickScoring:    genome.ScorePerTrick,
+				LeadRestriction: lead,
+				RoundsPerGame:   1,
+			},
+			TrumpRule: genome.TrumpCut,
+		}
+	}
+
+	none := sim.RunBatch(mk(genome.LeadNone), &Runner{}, &sim.RandomAI{}, 20, 3)
+	reserved := sim.RunBatch(mk(genome.LeadWinnerLeads), &Runner{}, &sim.RandomAI{}, 20, 3)
+
+	if !reflect.DeepEqual(none.AllEvents, reserved.AllEvents) {
+		t.Fatal("LeadWinnerLeads diverged from LeadNone: the value gained semantics -- lift the Tier-0 reservation or keep them in sync")
+	}
+}

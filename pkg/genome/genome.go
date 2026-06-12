@@ -77,13 +77,26 @@ func (t TrickScoring) String() string {
 	return trickScoringNames[t]
 }
 
-// LeadRule defines restrictions on leading.
+// LeadRule defines restrictions on WHICH CARDS may lead a trick (consumed by
+// the trick-taking runner's canLead).
+//
+// LeadWinnerLeads is RESERVED (Task 28 round 2, dd-027 inert-param class):
+// winner-leads is the trick-taking skeleton's fixed turn order, hardcoded in
+// ApplyMove's trick resolution (state.Active = winner), so as a LeadRule
+// value it was byte-identical to LeadNone -- a phantom search dimension whose
+// only effect was hash-distinct clone genomes (the rejected no-follow
+// flagship champion carried it). Validation rejects it; mutation never
+// produces it; the constant stays so the value remains nameable in error
+// messages (the MechTrump precedent -- and pre-existing serialized genomes
+// decode without renumbering). TestReservedWinnerLeadsValueIsInert pins the
+// inertness: anyone giving the value real semantics must lift the
+// reservation in the same change.
 type LeadRule uint8
 
 const (
 	LeadNone          LeadRule = iota // No restriction
 	LeadNoTrumpUntilBroken            // Can't lead trump until broken
-	LeadWinnerLeads                   // Previous trick winner leads
+	LeadWinnerLeads                   // RESERVED: inert (see type doc); rejected by Validate
 )
 
 var leadRuleNames = [3]string{"none", "no_trump_until_broken", "winner_leads"}

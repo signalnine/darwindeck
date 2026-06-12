@@ -139,7 +139,9 @@ func changeEnum(g *genome.Genome, rng *rand.Rand) {
 					}
 				}
 			case 1:
-				g.TrickTaking.LeadRestriction = genome.LeadRule(rng.IntN(3))
+				// LeadWinnerLeads (2) is reserved/inert (see genome.LeadRule):
+				// only the two behavioral values are in the search space.
+				g.TrickTaking.LeadRestriction = genome.LeadRule(rng.IntN(2))
 			}
 		}
 		// Also mutate trump rule

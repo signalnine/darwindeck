@@ -254,9 +254,11 @@ func leadRestrictionDescription(r genome.LeadRule) string {
 	switch r {
 	case genome.LeadNoTrumpUntilBroken:
 		return "Cannot lead trump until trump has been played off-suit"
-	case genome.LeadWinnerLeads:
-		return "The winner of the previous trick leads"
 	default:
+		// LeadWinnerLeads is reserved/inert (see genome.LeadRule): the
+		// universal "The trick winner leads the next trick." sentence already
+		// states the hardcoded turn order, so describing the value as an
+		// extra restriction would duplicate (not lie about) the rules.
 		return ""
 	}
 }
