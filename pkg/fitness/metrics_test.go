@@ -1100,3 +1100,51 @@ func TestSkillGradient(t *testing.T) {
 		t.Errorf("expected positive skill gradient for Whist greedy vs random, got %.3f", skill)
 	}
 }
+
+// TestDecisionDensityRummyDeadwoodConsequence (Task 28 round 3, the
+// predicted count-gamed density archetype, arrived as r2 ranks 21-30): under
+// the count-based rummy exception ("meaningful iff >= 2 legal moves") the
+// pair-meld archetype (min_meld_size 2, DrawEither, big hands over a starved
+// stock) pinned density 0.80 ABOVE gin's 0.69 -- pair hands manufacture
+// option counts in every phase while the choices carry no deadwood
+// consequence. With the deadwood-consequence probe (rummy.Runner
+// ChoiceMatters), gin must sit clearly above the pair-meld archetype on
+// density, and gin itself must not crater (its discard decisions are real).
+func TestDecisionDensityRummyDeadwoodConsequence(t *testing.T) {
+	// rank22-style pair-meld: 4p, hand 12, sets of 2, DrawEither, knock 21
+	// (3-card stock; the archetype that parked churn just under the 0.10
+	// veto cliff).
+	pairMeld := &genome.Genome{
+		ID:       "pair-meld-inline",
+		Skeleton: genome.Rummy,
+		Players:  4,
+		HandSize: 12,
+		Rummy: &genome.RummyParams{
+			MeldTypes:      genome.MeldSets,
+			MinMeldSize:    2,
+			DrawFrom:       genome.DrawEither,
+			KnockThreshold: 21,
+		},
+	}
+	gin := seeds.GinRummy()
+
+	ginResult := sim.RunBatch(gin, GetRunner(gin), &sim.RandomAI{}, 30, 11)
+	pairResult := sim.RunBatch(pairMeld, GetRunner(pairMeld), &sim.RandomAI{}, 30, 11)
+
+	ginDensity := computeDecisionDensity(ginResult)
+	pairDensity := computeDecisionDensity(pairResult)
+	t.Logf("gin density %.3f, pair-meld density %.3f", ginDensity, pairDensity)
+
+	// Measured at the round-3 commit: gin 0.365 vs pair-meld 0.276 (gap
+	// +0.089; per-seed density sd is ~0.003 in the calibration table, so the
+	// +0.05 bar leaves ~30 sd of regression headroom). Under the count
+	// exception the same batches measured gin 0.691 vs pair-meld 0.869 --
+	// the INVERTED ordering this test exists to keep dead.
+	if ginDensity <= pairDensity+0.05 {
+		t.Errorf("gin density %.3f must clearly exceed pair-meld %.3f (+0.05): the count-gamed archetype is back",
+			ginDensity, pairDensity)
+	}
+	if ginDensity < 0.30 {
+		t.Errorf("gin density cratered to %.3f (< 0.30); the probe is collapsing real discard decisions", ginDensity)
+	}
+}

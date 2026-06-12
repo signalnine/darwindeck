@@ -828,3 +828,294 @@ func removeCard(hand []sim.Card, card sim.Card) []sim.Card {
 	}
 	return hand
 }
+
+// --- Choice-impact probe (Task 28 round 3, rummy density fix) ---
+
+// ChoiceMatters implements sim.ChoiceConsequenceProber: the rummy-real
+// meaningfulness test that replaced the count-based exception ("meaningful
+// iff >= 2 legal moves"), which the r2 flagship's pair-meld archetype gamed
+// (min_meld_size 2 inflates option counts in every phase; pinned density
+// 0.80 > gin 0.69). A rummy turn is meaningful iff the acting player's
+// options differ in DEADWOOD CONSEQUENCE, per phase:
+//
+//	draw    -- a real deck-vs-discard choice exists AND the KNOWN top card
+//	           is a structural information edge: it enters the best
+//	           partition (deadwood(hand+top) < deadwood(hand) + value(top))
+//	           AND its meld gain beats the best of the sampled deck cards --
+//	           the lottery's plausible outcomes. A structurally inert top is
+//	           a deadwood lottery ticket the deck offers equally; a melding
+//	           top in a pairing-trivial genome is no edge because most deck
+//	           cards meld too.
+//	meld    -- NEVER meaningful: the phase is consequence-free on hands (see
+//	           the inline comment -- laying is already credited by the best
+//	           partition, knocking changes no hand). Knock-timing quality is
+//	           the skill metric's domain, not density's.
+//	discard -- the sampled discard options span a deadwood-delta range > 0:
+//	           not all resulting best-partition deadwoods are equal. Sampled
+//	           at the same deterministic index spread as the sim package's
+//	           choice probes (first/last/third-points, up to 4) to bound the
+//	           DP cost.
+//
+// END-AT-WILL VOIDING (draw + discard): when the acting player's hand
+// already satisfies the knock condition (deadwood <= KnockThreshold), the
+// round continues only at their pleasure -- the one live decision left is
+// knock/no-knock, and it is counted exactly once, at the meld phase.
+// Counting every draw/discard made in that state as meaningful would
+// double-count that single decision N times per cycle; this was the
+// pair-meld archetype's residual inflation (loose thresholds over trivially
+// melding hands keep every seat end-at-will from the second cycle, measured
+// discard rate 0.996 while the game is a knock race). Gin-shaped genomes
+// (threshold 0) are essentially never end-at-will before the auto-win, so
+// their discard decisions keep full weight.
+//
+// The probe must stay PURE (no state mutation): the batch runner calls it on
+// the live game state before the chosen move applies.
+func (r *Runner) ChoiceMatters(state *sim.GameState, g *genome.Genome, moves []sim.Move) bool {
+	params := g.Rummy
+	if params == nil || len(moves) < 2 {
+		return false
+	}
+	hand := state.Hands[state.Active]
+
+	switch state.Phase {
+	case sim.PhaseDraw:
+		// Identify the discard-top draw among the options (Cards non-empty).
+		var top *sim.Card
+		for i := range moves {
+			if moves[i].Type == sim.MoveDraw && len(moves[i].Cards) > 0 {
+				top = &moves[i].Cards[0]
+			}
+		}
+		if top == nil {
+			return false // deck-only: no draw choice exists
+		}
+		base := calcDeadwood(hand, params)
+		if base <= params.KnockThreshold {
+			// END-AT-WILL VOIDING (see the type doc): the hand already
+			// satisfies the knock condition; the live decision is
+			// knock/no-knock, counted once at the meld phase.
+			return false
+		}
+		// Structural gain of a candidate card at two tiers: full melds
+		// (the real partition) and NEAR-melds (proto-melds: MinMeldSize-1
+		// groups, floored at 2 -- the pair/two-card-run building blocks that
+		// make gin's draw decision real long before a meld completes). The
+		// near tier collapses onto the full tier for pairing-trivial genomes
+		// (MinMeldSize 2), so it can never double-credit them.
+		probe := newGainProbe(hand, base, params)
+		topFull := probe.full(*top)
+		topNear := probe.near(*top)
+		if topFull <= 0 && topNear <= 0 {
+			return false // structurally inert top: the deck lottery dominates
+		}
+		// The known top is an information edge only if it CLEARLY dominates
+		// the lottery: it must strictly beat the best of the sampled deck
+		// cards (the lottery's plausible best, ~upper quartile of 4 spread
+		// samples) lexicographically -- full-meld gain first, proto-meld
+		// gain as the tiebreak. In a pairing-trivial genome most deck cards
+		// meld too (the pair-meld archetype's draw inflation: 0.44
+		// "meaningful" under a naive top-melds test); in a gin-shaped genome
+		// the deck's sampled best is usually 0 and a melding or pairing top
+		// is a real edge.
+		deck := state.Deck
+		if len(deck) == 0 {
+			return true // no lottery alternative left to compare against
+		}
+		idxs := [4]int{0, len(deck) - 1, len(deck) / 3, (2 * len(deck)) / 3}
+		bestFull, bestNear := 0, 0
+		seenIdx := -1
+		for _, di := range idxs {
+			if di == seenIdx { // collapse duplicate spread indices on tiny decks
+				continue
+			}
+			seenIdx = di
+			full := probe.full(deck[di])
+			if full > bestFull {
+				bestFull, bestNear = full, probe.near(deck[di])
+			} else if full == bestFull {
+				// Near tier is only a tiebreak: compute it lazily.
+				if near := probe.near(deck[di]); near > bestNear {
+					bestNear = near
+				}
+			}
+		}
+		return topFull > bestFull || (topFull == bestFull && topNear > bestNear)
+
+	case sim.PhaseMeld:
+		// The meld phase is consequence-FREE on hands in this engine, so no
+		// meld-phase record is a meaningful density decision:
+		//   - meld vs pass: calcDeadwood's best partition already credits
+		//     melds held in hand, and bankDeadwood scores hands by the same
+		//     partition, so laying changes nothing.
+		//   - knock vs pass: knocking ends the round but changes NO hand's
+		//     deadwood -- the winner is lowest-deadwood either way. Knock
+		//     TIMING quality is the SKILL metric's domain, where the ISMCTS
+		//     tier measurably rewards it (TestMCTSTierRewardsDegenKnockTiming);
+		//     crediting it to density let knock-race archetypes (loose
+		//     thresholds, instant melds) bank a meaningful record on every
+		//     knock-legal meld visit -- and a turn laying k melds re-banked
+		//     it k times.
+		return false
+
+	case sim.PhaseDiscard:
+		base := calcDeadwood(hand, params)
+		// END-AT-WILL VOIDING (see the type doc): a knockable hand's discard
+		// micro-choice is subordinate to the knock decision itself.
+		if base <= params.KnockThreshold {
+			return false
+		}
+		// Deterministic sample spread, mirroring the sim package's
+		// choiceSampleIndices: first, last, and the two third-points.
+		// Throughput: a discard that participates in no meld candidate
+		// (canParticipate prefilter) removes exactly its own deadwood, so
+		// its resulting deadwood is base - value(d) with no DP.
+		probe := newGainProbe(hand, base, params)
+		n := len(moves)
+		indices := [4]int{0, n - 1, n / 3, (2 * n) / 3}
+		scratch := make([]sim.Card, 0, len(hand))
+		first := 0
+		seen := false
+		for _, idx := range indices {
+			m := moves[idx]
+			if m.Type != sim.MoveDiscard || len(m.Cards) == 0 {
+				continue
+			}
+			var dw int
+			if !probe.canParticipate(m.Cards[0], params) {
+				dw = base - cardValue(m.Cards[0])
+			} else {
+				scratch = scratch[:0]
+				removed := false
+				for _, c := range hand {
+					if !removed && c == m.Cards[0] {
+						removed = true
+						continue
+					}
+					scratch = append(scratch, c)
+				}
+				dw = calcDeadwood(scratch, params)
+			}
+			if !seen {
+				first, seen = dw, true
+			} else if dw != first {
+				return true
+			}
+		}
+		return false
+	}
+
+	// Unknown phase: preserve the count semantics (>= 2 moves) rather than
+	// silently zeroing a future phase's density.
+	return true
+}
+
+// meldImprovement returns how many deadwood points card c sheds by entering
+// the hand's best partition: base + value(c) - deadwood(hand+c). Zero means
+// the card sits outside every meld (pure deadwood); positive means it joins
+// or completes one. buf is a caller-owned scratch slice reused across calls
+// so probe loops stay allocation-light.
+func meldImprovement(hand []sim.Card, c sim.Card, base int, params *genome.RummyParams, buf *[]sim.Card) int {
+	*buf = append(append((*buf)[:0], hand...), c)
+	return base + cardValue(c) - calcDeadwood(*buf, params)
+}
+
+// gainProbe computes two-tier structural gains for candidate cards against a
+// fixed hand, with the throughput hot path in mind (the probe runs on every
+// multi-option draw record; the deadwood DP is the expensive part):
+//   - the base is computed once per probe;
+//   - canParticipate is a no-DP prefilter: a card with NO same-rank hand
+//     card and NO same-suit card within run reach takes part in no meld
+//     candidate, so its gain is exactly 0 -- most deck samples in gin-shaped
+//     genomes exit here;
+//   - the near tier is an O(hand) pairwise surrogate, never a DP: at
+//     MinMeldSize-1 the candidate count explodes (every pair is a
+//     candidate) and the DP was measured at 56% of the whole rummy batch.
+type gainProbe struct {
+	hand   []sim.Card
+	base   int
+	params *genome.RummyParams
+	buf    []sim.Card
+}
+
+func newGainProbe(hand []sim.Card, base int, params *genome.RummyParams) *gainProbe {
+	return &gainProbe{
+		hand:   hand,
+		base:   base,
+		params: params,
+		buf:    make([]sim.Card, 0, len(hand)+1),
+	}
+}
+
+func (p *gainProbe) full(c sim.Card) int {
+	if !p.canParticipate(c, p.params) {
+		return 0
+	}
+	return meldImprovement(p.hand, c, p.base, p.params, &p.buf)
+}
+
+// near scores c's PROTO-MELD strength: the value of the strongest pairwise
+// building block c forms with a hand card (value(c) + best compatible
+// partner) -- the pair/two-card-run combinations that make gin's draw
+// decision real long before a meld completes. For pairing-trivial genomes
+// (MinMeldSize 2) a "proto-meld" IS a full meld, so the tier collapses onto
+// full() and can never double-credit them. An O(hand) surrogate by design:
+// magnitudes are only ever compared lexicographically after the full tier,
+// between candidates scored by the same rule.
+func (p *gainProbe) near(c sim.Card) int {
+	if p.params.MinMeldSize <= 2 {
+		return p.full(c)
+	}
+	sets := p.params.MeldTypes == genome.MeldSets || p.params.MeldTypes == genome.MeldBoth
+	runs := p.params.MeldTypes == genome.MeldRuns || p.params.MeldTypes == genome.MeldBoth
+	reach := p.params.MinMeldSize - 1
+	best := 0
+	for _, h := range p.hand {
+		compatible := false
+		if sets && h.Rank == c.Rank {
+			compatible = true
+		}
+		if runs && h.Suit == c.Suit {
+			d := int(h.Rank) - int(c.Rank)
+			if d < 0 {
+				d = -d
+			}
+			if d != 0 && d <= reach {
+				compatible = true
+			}
+		}
+		if compatible {
+			if v := cardValue(h); v > best {
+				best = v
+			}
+		}
+	}
+	if best == 0 {
+		return 0
+	}
+	return cardValue(c) + best
+}
+
+// canParticipate reports whether c could join ANY meld candidate with the
+// hand under the given params: a same-rank card (sets) or a same-suit card
+// within MinMeldSize-1 ranks (runs). If neither exists, adding c cannot
+// change the best partition and its gain is exactly 0 -- no DP needed.
+func (p *gainProbe) canParticipate(c sim.Card, params *genome.RummyParams) bool {
+	sets := params.MeldTypes == genome.MeldSets || params.MeldTypes == genome.MeldBoth
+	runs := params.MeldTypes == genome.MeldRuns || params.MeldTypes == genome.MeldBoth
+	reach := params.MinMeldSize - 1
+	for _, h := range p.hand {
+		if sets && h.Rank == c.Rank {
+			return true
+		}
+		if runs && h.Suit == c.Suit {
+			d := int(h.Rank) - int(c.Rank)
+			if d < 0 {
+				d = -d
+			}
+			if d != 0 && d <= reach {
+				return true
+			}
+		}
+	}
+	return false
+}

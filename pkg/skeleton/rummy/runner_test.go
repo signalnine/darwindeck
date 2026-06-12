@@ -900,3 +900,195 @@ func TestProgressClampsExcessDeadwood(t *testing.T) {
 		t.Errorf("Progress[1] = %v, want %v (deadwood 2 of estimate 10)", got, want)
 	}
 }
+
+// --- Task 28 round 3: deadwood-consequence choice probe ---
+
+func proberState(hand []sim.Card, discardTop *sim.Card, phase sim.PhaseType) *sim.GameState {
+	state := sim.NewGameState(2)
+	state.Hands[0] = hand
+	state.Active = 0
+	state.Phase = phase
+	state.Deck = []sim.Card{{Suit: sim.Clubs, Rank: sim.Two}, {Suit: sim.Diamonds, Rank: sim.Nine}}
+	if discardTop != nil {
+		state.Discard = []sim.Card{*discardTop}
+	}
+	return state
+}
+
+func rummyGenome(params genome.RummyParams) *genome.Genome {
+	p := params
+	return &genome.Genome{Skeleton: genome.Rummy, Players: 2, HandSize: 7, Rummy: &p}
+}
+
+// TestChoiceMattersDraw: a DrawEither draw decision is meaningful iff the
+// KNOWN discard top interacts with the hand's meld structure (it enters the
+// best partition: deadwood(hand+top) < deadwood(hand) + value(top)).
+// Otherwise the known card is a pure deadwood lottery ticket the unknown
+// deck offers equally, and deck-vs-discard is noise.
+func TestChoiceMattersDraw(t *testing.T) {
+	r := &Runner{}
+	g := rummyGenome(genome.RummyParams{MeldTypes: genome.MeldSets, MinMeldSize: 3, DrawFrom: genome.DrawEither, KnockThreshold: 10})
+
+	hand := []sim.Card{
+		{Suit: sim.Hearts, Rank: sim.King},
+		{Suit: sim.Spades, Rank: sim.King},
+		{Suit: sim.Hearts, Rank: sim.Five},
+		{Suit: sim.Clubs, Rank: sim.Nine},
+	}
+
+	// Top completes the king set: taking it changes the best partition.
+	melding := sim.Card{Suit: sim.Clubs, Rank: sim.King}
+	state := proberState(hand, &melding, sim.PhaseDraw)
+	moves := r.GenerateMoves(state, g)
+	if len(moves) != 2 {
+		t.Fatalf("premise: DrawEither with deck+discard must offer 2 draws, got %d", len(moves))
+	}
+	if !r.ChoiceMatters(state, g, moves) {
+		t.Error("meld-completing discard top must make the draw choice meaningful")
+	}
+
+	// Top is an unrelated card: no meld interaction, the choice is noise.
+	useless := sim.Card{Suit: sim.Diamonds, Rank: sim.Queen}
+	state = proberState(hand, &useless, sim.PhaseDraw)
+	moves = r.GenerateMoves(state, g)
+	if len(moves) != 2 {
+		t.Fatalf("premise: expected 2 draw moves, got %d", len(moves))
+	}
+	if r.ChoiceMatters(state, g, moves) {
+		t.Error("structurally inert discard top must not make the draw choice meaningful")
+	}
+}
+
+// TestChoiceMattersMeld: the meld phase is consequence-FREE on hands in this
+// engine, so NO meld-phase record is a meaningful density decision: laying a
+// meld is already credited by calcDeadwood's best partition (zero deadwood
+// delta), and knocking ends the round without changing any hand's deadwood
+// (the winner is lowest-deadwood either way). Knock-timing quality belongs
+// to the SKILL metric (the ISMCTS tier measurably rewards it); crediting it
+// to density let knock-race archetypes bank a meaningful record on every
+// knock-legal meld visit -- k times per turn when laying k melds.
+func TestChoiceMattersMeld(t *testing.T) {
+	r := &Runner{}
+	g := rummyGenome(genome.RummyParams{MeldTypes: genome.MeldSets, MinMeldSize: 2, DrawFrom: genome.DrawEither, KnockThreshold: 15})
+
+	// Pair-heavy hand, deadwood 9 (the lone nine): knock legal (9 <= 15),
+	// melds available -- and still not a density decision.
+	hand := []sim.Card{
+		{Suit: sim.Hearts, Rank: sim.King},
+		{Suit: sim.Spades, Rank: sim.King},
+		{Suit: sim.Hearts, Rank: sim.Five},
+		{Suit: sim.Clubs, Rank: sim.Five},
+		{Suit: sim.Clubs, Rank: sim.Nine},
+	}
+	state := proberState(hand, nil, sim.PhaseMeld)
+	moves := r.GenerateMoves(state, g)
+	hasKnock := false
+	for _, m := range moves {
+		if m.Type == sim.MoveKnock {
+			hasKnock = true
+		}
+	}
+	if !hasKnock {
+		t.Fatalf("premise: knock must be legal (deadwood 9 <= threshold 15); moves %v", moves)
+	}
+	if r.ChoiceMatters(state, g, moves) {
+		t.Error("meld-phase records are consequence-free on hands; knock-legal visits must not be density decisions")
+	}
+
+	// Melds + pass without a legal knock: zero deadwood consequence.
+	gNoKnock := rummyGenome(genome.RummyParams{MeldTypes: genome.MeldSets, MinMeldSize: 2, DrawFrom: genome.DrawEither, KnockThreshold: 0})
+	state = proberState(hand, nil, sim.PhaseMeld)
+	moves = r.GenerateMoves(state, gNoKnock)
+	if len(moves) < 2 {
+		t.Fatalf("premise: pair melds + pass must offer >= 2 moves, got %d", len(moves))
+	}
+	if r.ChoiceMatters(state, gNoKnock, moves) {
+		t.Error("meld-vs-pass has zero deadwood consequence; must not be meaningful")
+	}
+}
+
+// TestChoiceMattersDiscard: a discard decision is meaningful iff the options
+// differ in deadwood consequence -- the resulting best-partition deadwood
+// spans a range > 0 across (sampled) discards.
+func TestChoiceMattersDiscard(t *testing.T) {
+	r := &Runner{}
+	g := rummyGenome(genome.RummyParams{MeldTypes: genome.MeldSets, MinMeldSize: 3, DrawFrom: genome.DrawEither, KnockThreshold: 10})
+
+	// Mixed hand: discarding the king (10 deadwood) vs the five (5) vs a
+	// melded card (breaks the set) all land on different deadwood.
+	mixed := []sim.Card{
+		{Suit: sim.Hearts, Rank: sim.Seven},
+		{Suit: sim.Spades, Rank: sim.Seven},
+		{Suit: sim.Clubs, Rank: sim.Seven},
+		{Suit: sim.Hearts, Rank: sim.King},
+		{Suit: sim.Clubs, Rank: sim.Five},
+	}
+	state := proberState(mixed, nil, sim.PhaseDiscard)
+	moves := r.GenerateMoves(state, g)
+	if !r.ChoiceMatters(state, g, moves) {
+		t.Error("discards with differing deadwood consequence must be meaningful")
+	}
+
+	// Four queens, min meld 3: discarding ANY of them leaves a 3-set and
+	// deadwood 0 -- all options equivalent, no decision.
+	quads := []sim.Card{
+		{Suit: sim.Hearts, Rank: sim.Queen},
+		{Suit: sim.Spades, Rank: sim.Queen},
+		{Suit: sim.Clubs, Rank: sim.Queen},
+		{Suit: sim.Diamonds, Rank: sim.Queen},
+	}
+	state = proberState(quads, nil, sim.PhaseDiscard)
+	moves = r.GenerateMoves(state, g)
+	if len(moves) != 4 {
+		t.Fatalf("premise: 4 discard options, got %d", len(moves))
+	}
+	if r.ChoiceMatters(state, g, moves) {
+		t.Error("equivalent-consequence discards must not be meaningful")
+	}
+}
+
+// TestChoiceMattersEndAtWillVoiding: once the acting player's hand already
+// satisfies the knock condition, the round continues only at their pleasure
+// -- the ONE live decision is knock/no-knock (counted at the meld phase),
+// and counting every draw/discard in that state as meaningful would
+// double-count it N times. This is the pair-meld archetype's residual
+// inflation: knock is available almost from the deal, yet every discard
+// still scored as a "decision".
+func TestChoiceMattersEndAtWillVoiding(t *testing.T) {
+	r := &Runner{}
+	// Loose threshold: the pair-heavy hand (deadwood 9) is knockable.
+	g := rummyGenome(genome.RummyParams{MeldTypes: genome.MeldSets, MinMeldSize: 2, DrawFrom: genome.DrawEither, KnockThreshold: 15})
+
+	knockable := []sim.Card{
+		{Suit: sim.Hearts, Rank: sim.King},
+		{Suit: sim.Spades, Rank: sim.King},
+		{Suit: sim.Hearts, Rank: sim.Five},
+		{Suit: sim.Clubs, Rank: sim.Five},
+		{Suit: sim.Clubs, Rank: sim.Nine},
+	}
+
+	// Discard phase: differing deadwood consequences, but the hand is
+	// end-at-will -- not meaningful.
+	state := proberState(knockable, nil, sim.PhaseDiscard)
+	moves := r.GenerateMoves(state, g)
+	if r.ChoiceMatters(state, g, moves) {
+		t.Error("discard while knockable (end-at-will) must not be meaningful")
+	}
+
+	// Draw phase: a meld-completing top, but the hand is end-at-will.
+	top := sim.Card{Suit: sim.Clubs, Rank: sim.King}
+	state = proberState(knockable, &top, sim.PhaseDraw)
+	moves = r.GenerateMoves(state, g)
+	if r.ChoiceMatters(state, g, moves) {
+		t.Error("draw while knockable (end-at-will) must not be meaningful")
+	}
+
+	// Same hand under a tight threshold (not knockable): the same discard
+	// choices are live again.
+	tight := rummyGenome(genome.RummyParams{MeldTypes: genome.MeldSets, MinMeldSize: 2, DrawFrom: genome.DrawEither, KnockThreshold: 5})
+	state = proberState(knockable, nil, sim.PhaseDiscard)
+	moves = r.GenerateMoves(state, tight)
+	if !r.ChoiceMatters(state, tight, moves) {
+		t.Error("discard below the knock condition must stay meaningful")
+	}
+}

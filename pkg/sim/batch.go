@@ -557,16 +557,21 @@ func optionDeltaModeFor(g *genome.Genome) optionDeltaMode {
 //	              non-completing plays; trick-COMPLETING plays keep probe 0 --
 //	              the option-count probe is undefined across trick
 //	              resolution, and post-trick hand sizes are equal anyway
-//	rummy/none:   no probe; meaningful iff >= 2 legal moves (unchanged
-//	              semantics). The cheap probe cannot capture rummy's coupling
-//	              surface: a discard's value to the next player is
-//	              hidden-information-dependent (the known card vs the unknown
-//	              stock), and the next player's own option COUNTS are
-//	              insensitive to WHICH card is discarded -- a count probe
-//	              would collapse gin rummy's core discard decision exactly as
-//	              hard as a degenerate's. Per the Task 7 discipline, do not
-//	              improvise a rummy definition in code; the pair-meld fixture
-//	              is separated by the calibration gate instead.
+//	rummy:        deadwood-consequence probe, OWNED BY THE SKELETON (Task 28
+//	              round 3): the runner implements ChoiceConsequenceProber and
+//	              judges the turn by whether its options differ in resulting
+//	              best-partition deadwood (see rummy.Runner.ChoiceMatters).
+//	              The round-2 count exception ("meaningful iff >= 2 legal
+//	              moves") was predicted to be gamed and was: the r2 flagship's
+//	              ranks 21-30 were all pair-meld archetypes whose option
+//	              counts are inflated in every phase (pinned density 0.80 >
+//	              gin 0.69). The option-SET probe used by shedding/trick-
+//	              taking remains wrong for rummy (a discard's value to the
+//	              next player is hidden-information-dependent), which is why
+//	              the consequence semantics live with the skeleton, not here.
+//	none:         no probe; meaningful iff >= 2 legal moves (a skeleton
+//	              without a prober keeps count semantics rather than
+//	              silently zeroing its density).
 //
 // Collapse cases (Task 28 round-2 fixtures): all-wild same-effect shedding
 // hands (A1) and no-follow trick hands (A2) sample identical signatures =>
@@ -622,6 +627,17 @@ func specialEffectProfile(g *genome.Genome, c Card) uint8 {
 	return profile
 }
 
+// ChoiceConsequenceProber is an optional GenericRunner extension (Task 28
+// round 3): a skeleton that knows its own consequence structure judges
+// whether a decision point's options plausibly differ in outcome. The batch
+// runner calls it with the live pre-move state and the full legal-move list;
+// implementations MUST be pure (no state mutation) and cheap enough for the
+// hot loop -- they run once per recorded turn. Currently implemented by the
+// rummy runner (deadwood-consequence semantics).
+type ChoiceConsequenceProber interface {
+	ChoiceMatters(state *GameState, g *genome.Genome, moves []Move) bool
+}
+
 // turnIsMeaningful implements the choice-impact test described above.
 // scratch is a caller-owned Card reused for the hypothetical top-card swap so
 // the hot loop stays allocation-free. All state mutations are swap+restore;
@@ -631,6 +647,11 @@ func turnIsMeaningful(runner GenericRunner, state *GameState, g *genome.Genome, 
 		return false
 	}
 	if mode != deltaModeShedding && mode != deltaModeTrickTaking {
+		// Skeleton-owned consequence probe (rummy): the runner judges its
+		// own turn. Without a prober, count semantics (>= 2 moves) stand.
+		if prober, ok := runner.(ChoiceConsequenceProber); ok {
+			return prober.ChoiceMatters(state, g, moves)
+		}
 		return true
 	}
 	var buf [maxChoiceSamples]int
