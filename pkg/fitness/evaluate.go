@@ -6,6 +6,14 @@ import (
 	"github.com/darwindeck/darwindeck/pkg/sim"
 )
 
+// Tier 2 sample sizes. Greedy was raised from 50 to 200 (Task 13.2): at 50
+// games the standard error on the seat-0 win rate is ~0.07, which drowns the
+// skill-gradient signal; 200 games cut it to ~0.035.
+const (
+	tier2RandomGames = 200
+	tier2GreedyGames = 200
+)
+
 // EvaluationResult holds the complete fitness evaluation.
 type EvaluationResult struct {
 	Tier0Errors []string
@@ -17,7 +25,7 @@ type EvaluationResult struct {
 // Evaluate runs the full tiered evaluation pipeline for a genome.
 // Tier 0: static validation
 // Tier 1: 5 quick games
-// Tier 2: 200 random + 50 greedy games → fitness metrics
+// Tier 2: 200 random + 200 greedy games → fitness metrics
 func Evaluate(g *genome.Genome, baseSeed uint64) EvaluationResult {
 	result := EvaluationResult{}
 
@@ -45,12 +53,12 @@ func Evaluate(g *genome.Genome, baseSeed uint64) EvaluationResult {
 	// Build hooks for borrowed mechanics
 	hooks := buildHookFuncs(g)
 
-	// 200 games with random AI
+	// Games with random AI
 	randomAI := &sim.RandomAI{}
-	randomResult := sim.RunBatch(g, runner, randomAI, 200, baseSeed+100, hooks...)
+	randomResult := sim.RunBatch(g, runner, randomAI, tier2RandomGames, baseSeed+100, hooks...)
 
-	// 50 games with greedy AI (player 0) vs random opponents
-	greedyResult := runGreedyBatch(g, runner, 50, baseSeed+1000, hooks...)
+	// Games with greedy AI (player 0) vs random opponents
+	greedyResult := runGreedyBatch(g, runner, tier2GreedyGames, baseSeed+1000, hooks...)
 
 	// Compute fitness metrics
 	result.Metrics = ComputeFitness(randomResult, greedyResult, g.Players)
