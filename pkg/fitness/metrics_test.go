@@ -1,6 +1,8 @@
 package fitness
 
 import (
+	"math"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/darwindeck/darwindeck/pkg/genome"
@@ -139,57 +141,197 @@ func TestInvalidGenomeGetsZeroFitness(t *testing.T) {
 	}
 }
 
-// TestGameArcTurnScoreIsScaleInvariant verifies cards-6n3: two batches with
-// the same relative turn-count spread should produce similar GameArc
-// turn-score contributions, regardless of absolute game length. The previous
-// "/100" normalization meant a long-running genome saturated the term on
-// trivial absolute spread while a short genome with the same proportional
-// spread got near-zero credit.
-func TestGameArcTurnScoreIsScaleInvariant(t *testing.T) {
-	// Same coefficient of variation (~0.2), different magnitudes.
-	shortTurns := []int{10, 12, 12, 14, 10, 14}            // mean=12, stddev≈1.8
-	longTurns := []int{70, 80, 80, 90, 70, 90}             // mean=80, stddev≈8.6 (same CV)
-	evenWinShort := []int{1, 1}                            // 2 players, even wins
-	evenWinLong := []int{1, 1}
+// The turn-CV scale-invariance regression test (cards-6n3) was deleted along
+// with the turn-CV term itself: audit Task 10 replaced the seat-entropy +
+// turn-CV GameArc with a lead-trajectory arc (comeback + resolution + lead
+// changes), and duration spread is SessionLength's job, not the arc's. See
+// docs/plans/2026-06-11-audit-remediation.md, Task 10.
 
-	shortBatch := sim.BatchResult{
-		Completions: len(shortTurns),
-		WinCounts:   evenWinShort,
-		TurnsList:   shortTurns,
-		AvgTurns:    average(shortTurns),
-	}
-	longBatch := sim.BatchResult{
-		Completions: len(longTurns),
-		WinCounts:   evenWinLong,
-		TurnsList:   longTurns,
-		AvgTurns:    average(longTurns),
-	}
-
-	shortArc := computeGameArc(shortBatch)
-	longArc := computeGameArc(longBatch)
-
-	// With variance-only normalization (the bug), longArc swamps shortArc
-	// because variance scales with mean^2. After the fix the two batches
-	// should score within ~10% of each other.
-	diff := longArc - shortArc
-	if diff < 0 {
-		diff = -diff
-	}
-	if diff > 0.1 {
-		t.Fatalf("GameArc turn-score must be scale-invariant: short=%.3f long=%.3f diff=%.3f (want diff<=0.1)",
-			shortArc, longArc, diff)
+// leaderBatch builds a BatchResult whose only populated per-game data is the
+// leader tracks -- the sole input the lead-trajectory GameArc consumes.
+func leaderBatch(tracks ...[]int8) sim.BatchResult {
+	return sim.BatchResult{
+		GamesPlayed: len(tracks),
+		AllLeaders:  tracks,
 	}
 }
 
-func average(xs []int) float64 {
-	if len(xs) == 0 {
-		return 0
+// repeatLeader returns a track of n samples all led by player p.
+func repeatLeader(p int8, n int) []int8 {
+	track := make([]int8, n)
+	for i := range track {
+		track[i] = p
 	}
-	sum := 0
-	for _, x := range xs {
-		sum += x
+	return track
+}
+
+// comebackTrack: 20 samples where player 1 leads through the midgame sample
+// (index 10), there is a brief scuffle, and player 0 takes the lead for good
+// at 75% (index 15) and wins. 3 lead changes.
+func comebackTrack() []int8 {
+	return []int8{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0}
+}
+
+// holdTrack: 20 samples with an early scuffle (3 lead changes) after which
+// player 0 leads from before midgame to the win.
+func holdTrack() []int8 {
+	return []int8{1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+}
+
+// TestGameArcWireToWireForegoneConclusion: required case (a). A leader who is
+// ahead at every sample and wins gives resolution=1, comeback=0, zero lead
+// changes => arc = 0.4*tent(0, 0.5) + 0.4*1 + 0.2*0 = 0.4 exactly.
+func TestGameArcWireToWireForegoneConclusion(t *testing.T) {
+	tracks := make([][]int8, 6)
+	for i := range tracks {
+		tracks[i] = repeatLeader(0, 20)
 	}
-	return float64(sum) / float64(len(xs))
+	batch := leaderBatch(tracks...)
+
+	comeback, resolution, leadChanges, counted := arcStats(batch)
+	if counted != 6 {
+		t.Fatalf("all 6 tracks qualify, counted %d", counted)
+	}
+	if resolution != 1.0 {
+		t.Errorf("wire-to-wire winner must give resolution 1.0, got %.3f", resolution)
+	}
+	if comeback != 0.0 {
+		t.Errorf("wire-to-wire winner must give comeback 0.0, got %.3f", comeback)
+	}
+	if leadChanges != 0.0 {
+		t.Errorf("wire-to-wire track has 0 lead changes, got %.3f", leadChanges)
+	}
+
+	got := computeGameArc(batch)
+	if math.Abs(got-0.4) > 1e-9 {
+		t.Fatalf("wire-to-wire batch must score exactly 0.4 (resolution-only), got %.4f", got)
+	}
+}
+
+// TestGameArcRandomLeaderRandomWinnerIsLow: required case (b). With 4 players
+// and an i.i.d.-random leader at every sample, the final sample (the inferred
+// winner) is independent of the 90% sample, so resolution ~ 1/N and the arc
+// must land well below a good arc (~0.5 = 0.4*tent(0.75,0.5) + 0.4*0.25 +
+// 0.2*saturated lead changes), while staying above zero.
+func TestGameArcRandomLeaderRandomWinnerIsLow(t *testing.T) {
+	rng := rand.New(rand.NewPCG(42, 0))
+	tracks := make([][]int8, 60)
+	for i := range tracks {
+		track := make([]int8, 40)
+		for j := range track {
+			track[j] = int8(rng.IntN(4))
+		}
+		tracks[i] = track
+	}
+	batch := leaderBatch(tracks...)
+
+	_, resolution, _, counted := arcStats(batch)
+	if counted != 60 {
+		t.Fatalf("all 60 tracks qualify, counted %d", counted)
+	}
+	if resolution < 0.10 || resolution > 0.45 {
+		t.Errorf("random-track resolution should be near 1/N = 0.25, got %.3f", resolution)
+	}
+
+	got := computeGameArc(batch)
+	t.Logf("random-leader arc: %.3f (resolution %.3f)", got, resolution)
+	if got <= 0.05 || got >= 0.6 {
+		t.Fatalf("random leader + random winner must score a low (but nonzero) arc, got %.3f", got)
+	}
+}
+
+// TestGameArcComebackBatchIsHigh: required case (c). Games where the winner
+// trails at the 50% sample and leads from 75% on, mixed with held-lead games
+// so the batch comeback rate sits at the 0.5 target (a batch where the winner
+// ALWAYS comes from behind is itself a foregone conclusion -- the midgame
+// leader always loses -- and the tent term zeroes it by design; see
+// TestGameArcAllComebackIsAntiPredictive). Resolution 1, comeback 0.5, 3 lead
+// changes per game => arc must exceed 0.7.
+func TestGameArcComebackBatchIsHigh(t *testing.T) {
+	tracks := make([][]int8, 0, 10)
+	for i := 0; i < 5; i++ {
+		tracks = append(tracks, comebackTrack(), holdTrack())
+	}
+	batch := leaderBatch(tracks...)
+
+	got := computeGameArc(batch)
+	t.Logf("comeback-mix arc: %.3f", got)
+	if got <= 0.7 {
+		t.Fatalf("winner-trails-at-50%%-leads-from-75%% mix must score arc > 0.7, got %.3f", got)
+	}
+}
+
+// TestGameArcAllComebackIsAntiPredictive documents the tent term: if EVERY
+// game is a comeback, the midgame leader always loses, which is just an
+// inverted foregone conclusion. comeback=1 => tent=0, so only resolution
+// (0.4) and saturated lead changes (0.2) score: arc = 0.6 exactly, strictly
+// below the mixed batch of TestGameArcComebackBatchIsHigh. This is why the
+// plan's test (c) shape needs a ~0.5 batch comeback rate to clear 0.7.
+func TestGameArcAllComebackIsAntiPredictive(t *testing.T) {
+	tracks := make([][]int8, 10)
+	for i := range tracks {
+		tracks[i] = comebackTrack()
+	}
+	batch := leaderBatch(tracks...)
+
+	got := computeGameArc(batch)
+	if math.Abs(got-0.6) > 1e-9 {
+		t.Fatalf("all-comeback batch must score exactly 0.6 (tent(1,0.5)=0), got %.4f", got)
+	}
+}
+
+// TestGameArcSkipsShortAndWinnerlessTracks: tracks with fewer than 4 leader
+// samples, or without a strict final leader (no winner), contribute nothing;
+// a batch with no qualifying game scores 0.
+func TestGameArcSkipsShortAndWinnerlessTracks(t *testing.T) {
+	short := []int8{0, 0, 0}             // 3 samples < 4 minimum
+	winnerless := []int8{0, 0, 0, 0, -1} // tie at the end => no strict winner
+
+	if got := computeGameArc(leaderBatch(short, winnerless)); got != 0 {
+		t.Fatalf("batch with only short/winnerless tracks must score 0, got %.4f", got)
+	}
+	if got := computeGameArc(sim.BatchResult{}); got != 0 {
+		t.Fatalf("empty batch must score 0, got %.4f", got)
+	}
+
+	// One qualifying wire-to-wire game alongside the skipped tracks: only it
+	// counts, so the batch scores the wire-to-wire 0.4.
+	got := computeGameArc(leaderBatch(short, winnerless, repeatLeader(0, 8)))
+	if math.Abs(got-0.4) > 1e-9 {
+		t.Fatalf("skipped tracks must not dilute qualifying games: want 0.4, got %.4f", got)
+	}
+}
+
+// TestGameArcLeadChangesIgnoreTies: -1 (tie) samples are skipped when
+// counting lead changes -- a tie interlude within one player's lead is not a
+// lead change, while a tie bridging two different leaders is exactly one.
+func TestGameArcLeadChangesIgnoreTies(t *testing.T) {
+	sameLeader := []int8{0, -1, 0, -1, 0, 0, 0, 0}
+	_, _, leadChanges, counted := arcStats(leaderBatch(sameLeader))
+	if counted != 1 {
+		t.Fatalf("track qualifies (8 samples, strict final leader), counted %d", counted)
+	}
+	if leadChanges != 0 {
+		t.Errorf("0,-1,0 interludes are not lead changes: want 0, got %.3f", leadChanges)
+	}
+
+	bridged := []int8{0, 0, -1, 1, 1, 1, 1, 1}
+	_, _, leadChanges, _ = arcStats(leaderBatch(bridged))
+	if leadChanges != 1 {
+		t.Errorf("0,-1,1 bridge is exactly one lead change: want 1, got %.3f", leadChanges)
+	}
+
+	// A tie at the 50% sample means the winner was not strictly leading
+	// there: it counts as a comeback, and a tie at 90% counts against
+	// resolution.
+	midTie := []int8{0, 0, 0, 0, 0, 0, -1, 0, 0, 0, -1, 0} // n=12: samples at idx 6 (50%) and 10 (90%) are ties
+	comeback, resolution, _, _ := arcStats(leaderBatch(midTie))
+	if comeback != 1 {
+		t.Errorf("tie at the 50%% sample counts toward comeback: want 1, got %.3f", comeback)
+	}
+	if resolution != 0 {
+		t.Errorf("tie at the 90%% sample counts against resolution: want 0, got %.3f", resolution)
+	}
 }
 
 func TestSkillGradientUsesEmpiricalBaseline(t *testing.T) {

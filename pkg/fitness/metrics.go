@@ -67,74 +67,90 @@ func computeDecisionDensity(result sim.BatchResult) float64 {
 	return float64(meaningful) / float64(total)
 }
 
-// computeGameArc measures whether the game has a proper narrative arc:
-// uncertainty early → convergence → resolution.
-// We use the variance of win distribution across the game as a proxy.
+// computeGameArc: a good arc = early uncertainty (the eventual winner was not
+// already leading at midgame) + late resolution (the leader near the end
+// wins). Computed from the per-game leader tracks (audit Tasks 8 + 10):
+//
+//	comeback    = P(winner != leader at the 50% sample), target ~0.5, score peaks there
+//	resolution  = P(winner == leader at the 90% sample)
+//	leadChanges = mean lead changes per game (-1 tie samples ignored), saturating at 3
+//
+//	arc = 0.4*tent(comeback, 0.5) + 0.4*resolution + 0.2*min(leadChanges/3, 1)
+//
+// A pure coin flip decided on the last move scores low on resolution; a
+// foregone conclusion (wire-to-wire leader, or a midgame leader who ALWAYS
+// loses) scores 0 on comeback's tent. The old seat-entropy + turn-CV metric
+// gave both ~1.0. The previous turn-CV term is gone entirely: duration spread
+// is SessionLength's concern (plan Task 10 decision).
+//
+// The per-game winner is inferred from the final leader sample: the winner's
+// final Progress is the strict maximum in a completed game (audit Task 8), so
+// the last track entry identifies them. Games with fewer than 4 leader
+// samples or no strict final leader (-1: tied, so no winner attributable) are
+// skipped; a batch with no qualifying game scores 0.
 func computeGameArc(result sim.BatchResult) float64 {
-	if result.Completions == 0 {
+	comeback, resolution, leadChanges, counted := arcStats(result)
+	if counted == 0 {
 		return 0
 	}
-
-	numPlayers := len(result.WinCounts)
-	if numPlayers == 0 {
-		return 0
-	}
-
-	// Measure how evenly wins are distributed (high entropy = good arc)
-	// A game where anyone can win has better arc than a deterministic one
-	totalWins := 0
-	for _, w := range result.WinCounts {
-		totalWins += w
-	}
-	if totalWins == 0 {
-		return 0
-	}
-
-	// Shannon entropy of win distribution, normalized to [0,1]
-	maxEntropy := math.Log2(float64(numPlayers))
-	if maxEntropy == 0 {
-		return 0
-	}
-
-	entropy := 0.0
-	for _, w := range result.WinCounts {
-		if w == 0 {
-			continue
-		}
-		p := float64(w) / float64(totalWins)
-		entropy -= p * math.Log2(p)
-	}
-
-	// Also consider how much game length varies between runs. Use the
-	// coefficient of variation (stddev/mean) so the score is scale-invariant:
-	// a rummy genome averaging 80 turns no longer trivially saturates the
-	// term over a 12-turn shedding genome with the same relative spread
-	// (cards-6n3). A CV of ~0.4 saturates the score, matching the original
-	// "interesting spread" expectation.
-	turnVariance := computeTurnVariance(result)
-	turnScore := 0.0
-	if result.AvgTurns > 0 && turnVariance > 0 {
-		cv := math.Sqrt(turnVariance) / result.AvgTurns
-		turnScore = clamp(cv/0.4, 0, 1)
-	}
-
-	// Combine entropy (who wins varies) with turn variance (how it plays varies)
-	entropyScore := entropy / maxEntropy
-	return clamp(entropyScore*0.6+turnScore*0.4, 0, 1)
+	return 0.4*tent(comeback, 0.5) + 0.4*resolution + 0.2*math.Min(leadChanges/3, 1)
 }
 
-func computeTurnVariance(result sim.BatchResult) float64 {
-	if len(result.TurnsList) < 2 {
-		return 0
+// arcStats aggregates the three arc components over qualifying games (>= 4
+// leader samples and a strict final leader). comeback and resolution are
+// batch-level probabilities; leadChanges is the mean per qualifying game.
+func arcStats(result sim.BatchResult) (comeback, resolution, leadChanges float64, counted int) {
+	comebacks, resolutions, changes := 0, 0, 0
+	for _, track := range result.AllLeaders {
+		n := len(track)
+		if n < 4 {
+			continue
+		}
+		winner := track[n-1]
+		if winner < 0 {
+			continue
+		}
+		counted++
+		// A -1 (tie) at a sample point means the winner was NOT strictly
+		// leading there: it counts toward comeback and against resolution.
+		if track[n/2] != winner {
+			comebacks++
+		}
+		if track[n*9/10] == winner {
+			resolutions++
+		}
+		changes += countLeadChanges(track)
 	}
+	if counted == 0 {
+		return 0, 0, 0, 0
+	}
+	games := float64(counted)
+	return float64(comebacks) / games, float64(resolutions) / games, float64(changes) / games, counted
+}
 
-	mean := result.AvgTurns
-	sumSq := 0.0
-	for _, t := range result.TurnsList {
-		diff := float64(t) - mean
-		sumSq += diff * diff
+// countLeadChanges counts transitions between distinct non-tie leaders.
+// Tie samples (-1) are skipped entirely: 0,-1,0 is no change; 0,-1,1 is one.
+func countLeadChanges(track []int8) int {
+	changes := 0
+	prev := int8(-1)
+	seen := false
+	for _, leader := range track {
+		if leader < 0 {
+			continue
+		}
+		if seen && leader != prev {
+			changes++
+		}
+		prev = leader
+		seen = true
 	}
-	return sumSq / float64(len(result.TurnsList))
+	return changes
+}
+
+// tent scores x against a target c > 0: 1 at x == c, falling linearly to 0 at
+// 0 and 2c.
+func tent(x, c float64) float64 {
+	return clamp(1-math.Abs(x-c)/c, 0, 1)
 }
 
 // computeInteraction measures how much players' actions affect each other.
