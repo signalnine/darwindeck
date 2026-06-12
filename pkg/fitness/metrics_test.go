@@ -33,6 +33,64 @@ func TestSessionLengthScoring(t *testing.T) {
 	}
 }
 
+// turnsFixture builds a single-game AllTurns batch with `forced` records of
+// 1 legal move and `choice` records of >=2 legal moves.
+func turnsFixture(forced, choice int) sim.BatchResult {
+	records := make([]sim.TurnRecord, 0, forced+choice)
+	for i := 0; i < forced; i++ {
+		records = append(records, sim.TurnRecord{Player: i % 2, LegalMoves: 1})
+	}
+	for i := 0; i < choice; i++ {
+		records = append(records, sim.TurnRecord{Player: i % 2, LegalMoves: 3})
+	}
+	return sim.BatchResult{AllTurns: [][]sim.TurnRecord{records}}
+}
+
+func TestDecisionDensityAllForcedIsZero(t *testing.T) {
+	got := computeDecisionDensity(turnsFixture(10, 0))
+	if got != 0.0 {
+		t.Fatalf("all-forced fixture (every turn 1 legal move) must score 0.0, got %.3f", got)
+	}
+}
+
+func TestDecisionDensityAllChoiceIsOne(t *testing.T) {
+	got := computeDecisionDensity(turnsFixture(0, 10))
+	if got != 1.0 {
+		t.Fatalf("all-choice fixture (every turn >=2 legal moves) must score 1.0, got %.3f", got)
+	}
+}
+
+func TestDecisionDensityMixed30_70(t *testing.T) {
+	// 30% of turns offer a real choice, 70% are forced => density 0.3.
+	got := computeDecisionDensity(turnsFixture(7, 3))
+	if diff := got - 0.3; diff > 1e-9 || diff < -1e-9 {
+		t.Fatalf("mixed 30/70 fixture must score 0.3, got %.3f", got)
+	}
+}
+
+func TestDecisionDensityEmptyBatchIsZero(t *testing.T) {
+	if got := computeDecisionDensity(sim.BatchResult{}); got != 0.0 {
+		t.Fatalf("empty batch must score 0.0, got %.3f", got)
+	}
+}
+
+// TestDecisionDensityWhistNotPinned: the old event-taxonomy metric scored every
+// trick-taking game exactly 1.0 (every event was a "play"). Real whist forces
+// follow-suit on many turns, so legal-move-count density must be strictly
+// between 0 and 1.
+func TestDecisionDensityWhistNotPinned(t *testing.T) {
+	g := seeds.Whist()
+	runner := GetRunner(g)
+	result := sim.RunBatch(g, runner, &sim.RandomAI{}, 50, 0)
+
+	density := computeDecisionDensity(result)
+	t.Logf("Whist decision density: %.3f", density)
+
+	if density <= 0.0 || density >= 1.0 {
+		t.Fatalf("whist density must be strictly between 0 and 1 (old structural pin was 1.0), got %.3f", density)
+	}
+}
+
 func TestFullEvaluation(t *testing.T) {
 	allSeeds := []*genome.Genome{
 		seeds.CrazyEights(),

@@ -48,54 +48,23 @@ func ComputeFitness(
 	return m
 }
 
-// computeDecisionDensity measures the fraction of turns with >1 legal move
-// that resulted in different events (proxy for "choice mattered").
-// Analyzed from event logs.
+// computeDecisionDensity: fraction of decision points where the acting player
+// had >= 2 legal moves. This is the metric CLAUDE.md always claimed.
+// Forced turns (1 legal move) are not decisions regardless of event type.
 func computeDecisionDensity(result sim.BatchResult) float64 {
-	if len(result.AllEvents) == 0 {
-		return 0
-	}
-
-	totalDecisions := 0
-	meaningfulDecisions := 0
-
-	for _, events := range result.AllEvents {
-		// Count play events (decisions) vs draw/pass events (forced)
-		plays := 0
-		draws := 0
-		for _, e := range events {
-			switch e.Type {
-			case sim.EventCardPlayed:
-				plays++
-			case sim.EventMeldLaid:
-				// Choosing to meld is a meaningful decision
-				plays++
-			case sim.EventCardDrawn:
-				// Drawing from discard is a choice; from deck is forced
-				if e.Detail == "discard" {
-					plays++
-				} else {
-					draws++
-				}
+	total, meaningful := 0, 0
+	for _, turns := range result.AllTurns {
+		for _, tr := range turns {
+			total++
+			if tr.LegalMoves >= 2 {
+				meaningful++
 			}
 		}
-
-		total := plays + draws
-		if total == 0 {
-			continue
-		}
-
-		// Decision density: fraction of turns that were plays (not forced draws)
-		totalDecisions += total
-		meaningfulDecisions += plays
 	}
-
-	if totalDecisions == 0 {
+	if total == 0 {
 		return 0
 	}
-
-	density := float64(meaningfulDecisions) / float64(totalDecisions)
-	return clamp(density, 0, 1)
+	return float64(meaningful) / float64(total)
 }
 
 // computeGameArc measures whether the game has a proper narrative arc:
