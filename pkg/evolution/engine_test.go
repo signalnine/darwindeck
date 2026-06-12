@@ -203,6 +203,14 @@ func TestSmallEvolution(t *testing.T) {
 		Workers:        2,
 		BaseSeed:       42,
 		SaveTopN:       5,
+		// Exercise the production MCTS-for-top-decile wiring (Task 20b) at
+		// reduced search strength so the smoke test stays fast. Measured
+		// cost of enabling this: 1.55s -> 2.31s wall (2 MCTS grants per
+		// generation pass at these knobs). Production strength (zero-value
+		// MCTSEval) would add ~14.5s per granted genome -- never use it in
+		// tests.
+		MCTSDecile: 0.10,
+		MCTSEval:   fitness.MCTSEvalConfig{Iterations: 10, Determinizations: 2},
 	}
 
 	engine := NewEngine(config, allSeeds())
@@ -410,8 +418,8 @@ func TestSelectCarriesEvalStateToElitesOnly(t *testing.T) {
 	gC.ID = "low"
 
 	engine.Population = []*Individual{
-		{Genome: gA, Valid: true, EvalCount: 4, FitnessSum: 2.0,
-			Fitness: fitness.Metrics{TotalFitness: 0.5, SharedFitness: 0.9}},
+		{Genome: gA, Valid: true, EvalCount: 4, FitnessSum: 2.0, MctsSum: 1.1, MctsCount: 2,
+			Fitness: fitness.Metrics{TotalFitness: 0.55, SharedFitness: 0.9}},
 		{Genome: gB, Valid: true, EvalCount: 2, FitnessSum: 0.8,
 			Fitness: fitness.Metrics{TotalFitness: 0.4, SharedFitness: 0.6}},
 		{Genome: gC, Valid: true, EvalCount: 1, FitnessSum: 0.3,
@@ -428,11 +436,19 @@ func TestSelectCarriesEvalStateToElitesOnly(t *testing.T) {
 		t.Fatalf("elite must carry running-mean state: EvalCount=%d FitnessSum=%.2f, want 4/2.00",
 			elite.EvalCount, elite.FitnessSum)
 	}
+	if elite.MctsCount != 2 || elite.MctsSum != 1.1 {
+		t.Fatalf("elite must carry the MCTS accumulator too: MctsCount=%d MctsSum=%.2f, want 2/1.10",
+			elite.MctsCount, elite.MctsSum)
+	}
 
 	for i := 1; i < len(nextGen); i++ {
 		if nextGen[i].EvalCount != 0 || nextGen[i].FitnessSum != 0 {
 			t.Errorf("offspring %d must start with zero eval state, got EvalCount=%d FitnessSum=%.2f",
 				i, nextGen[i].EvalCount, nextGen[i].FitnessSum)
+		}
+		if nextGen[i].MctsCount != 0 || nextGen[i].MctsSum != 0 {
+			t.Errorf("offspring %d must start with zero MCTS state, got MctsCount=%d MctsSum=%.2f",
+				i, nextGen[i].MctsCount, nextGen[i].MctsSum)
 		}
 		if nextGen[i].Valid {
 			t.Errorf("offspring %d must start invalid (needs evaluation)", i)
@@ -446,8 +462,8 @@ func TestSelectCarriesEvalStateToElitesOnly(t *testing.T) {
 func TestDedupResetsEvalState(t *testing.T) {
 	g := seeds.CrazyEights()
 	pop := []*Individual{
-		{Genome: cloneGenome(g), Valid: true, EvalCount: 3, FitnessSum: 1.5},
-		{Genome: cloneGenome(g), Valid: true, EvalCount: 3, FitnessSum: 1.5},
+		{Genome: cloneGenome(g), Valid: true, EvalCount: 3, FitnessSum: 1.5, MctsSum: 0.9, MctsCount: 2},
+		{Genome: cloneGenome(g), Valid: true, EvalCount: 3, FitnessSum: 1.5, MctsSum: 0.9, MctsCount: 2},
 	}
 
 	engine := NewEngine(Config{BaseSeed: 7, Workers: 1}, allSeeds())
@@ -462,6 +478,10 @@ func TestDedupResetsEvalState(t *testing.T) {
 		if ind.EvalCount != 0 || ind.FitnessSum != 0 {
 			t.Errorf("replaced individual %d kept stale eval state: EvalCount=%d FitnessSum=%.2f",
 				i, ind.EvalCount, ind.FitnessSum)
+		}
+		if ind.MctsCount != 0 || ind.MctsSum != 0 {
+			t.Errorf("replaced individual %d kept stale MCTS state: MctsCount=%d MctsSum=%.2f",
+				i, ind.MctsCount, ind.MctsSum)
 		}
 	}
 	if replaced == 0 {

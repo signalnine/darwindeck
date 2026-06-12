@@ -182,14 +182,18 @@ func (e *NoveltyEngine) evaluatePopulation() {
 				// A genome that fails Tier 0/1 on re-evaluation is flaky
 				// (e.g. degenerate under some seeds). Drop its history so
 				// it must re-qualify from scratch if it ever passes again.
+				// Both accumulators go: the MCTS mean describes the same
+				// now-discredited genome.
 				ind.EvalCount = 0
 				ind.FitnessSum = 0
+				ind.MctsSum = 0
+				ind.MctsCount = 0
 				return
 			}
 
 			ind.FitnessSum += result.Metrics.TotalFitness
 			ind.EvalCount++
-			ind.Fitness.TotalFitness = ind.FitnessSum / float64(ind.EvalCount)
+			ind.Fitness.TotalFitness = ind.publishedFitness()
 
 			// Compute behavior from a fresh batch
 			runner := fitness.GetRunner(ind.Genome)
@@ -202,7 +206,25 @@ func (e *NoveltyEngine) evaluatePopulation() {
 	}
 
 	wg.Wait()
+
+	// MCTS-for-top-decile (audit Task 20b): same pass as the baseline
+	// engine, BEFORE best-fitness/novelty bookkeeping so everything
+	// downstream flows from the published (possibly MCTS-mean) fitness.
+	e.runMCTSTopDecile()
+
 	e.updateBestFitness()
+}
+
+// runMCTSTopDecile applies the shared decile pass to this engine's
+// population (see evaluateTopDecileMCTS in engine.go).
+func (e *NoveltyEngine) runMCTSTopDecile() {
+	cands := make([]mctsCandidate, 0, len(e.Population))
+	for i, ind := range e.Population {
+		if ind != nil && ind.Valid {
+			cands = append(cands, mctsCandidate{ind: &ind.Individual, idx: i})
+		}
+	}
+	evaluateTopDecileMCTS(e.Config, e.Generation, cands)
 }
 
 // updateBestFitness recomputes BestFitness/BestGenome from the CURRENT
@@ -435,6 +457,8 @@ func (e *NoveltyEngine) selectNext() []*NoveltyIndividual {
 				Valid:      true,
 				EvalCount:  e.Population[i].EvalCount,
 				FitnessSum: e.Population[i].FitnessSum,
+				MctsSum:    e.Population[i].MctsSum,
+				MctsCount:  e.Population[i].MctsCount,
 			},
 			Behavior: e.Population[i].Behavior,
 		}

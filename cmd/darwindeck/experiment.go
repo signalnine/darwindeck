@@ -49,6 +49,8 @@ func cmdExperiment(args []string) {
 	outputDir := fs.String("output", "output/experiments", "output directory")
 	parallel := fs.Int("parallel", 3, "number of experiments to run in parallel")
 	configsFlag := fs.String("configs", "baseline,map-elites,novelty", "comma-separated list of configs to run")
+	mctsDecile := fs.Float64("mcts-decile", 0.10,
+		"fraction of each generation (ranked by greedy-only running mean) re-evaluated with MCTS; 0 disables (baseline/novelty only)")
 	fs.Parse(args)
 
 	configs := splitCSV(*configsFlag)
@@ -107,6 +109,7 @@ func cmdExperiment(args []string) {
 				Workers:        *workers / *parallel, // divide workers among parallel runs
 				BaseSeed:       spec.seed * 1000,
 				SaveTopN:       20,
+				MCTSDecile:     *mctsDecile, // default on (0.10); MAP-Elites ignores it
 			}
 
 			runStart := time.Now()

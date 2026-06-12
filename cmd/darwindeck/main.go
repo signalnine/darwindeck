@@ -77,6 +77,8 @@ func cmdEvolve(args []string) {
 	algorithm := fs.String("algorithm", "hybrid", "algorithm: baseline, hybrid (novelty+sharing), mapelites")
 	floor := fs.Float64("fitness-floor", evolution.DefaultFitnessFloor,
 		"minimum fitness for QD consideration (default derived from the seed-calibration suite)")
+	mctsDecile := fs.Float64("mcts-decile", 0.10,
+		"fraction of each generation (ranked by greedy-only running mean) re-evaluated with MCTS; 0 disables (baseline/hybrid only)")
 
 	fs.Parse(args)
 	evolution.FitnessFloor = *floor
@@ -94,6 +96,7 @@ func cmdEvolve(args []string) {
 		BaseSeed:       *seed,
 		SaveTopN:       *topN,
 		OutputDir:      *outDir,
+		MCTSDecile:     *mctsDecile,
 	}
 
 	allSeeds := getAllSeeds()
@@ -103,6 +106,7 @@ func cmdEvolve(args []string) {
 	fmt.Printf("  Population: %d\n", config.PopulationSize)
 	fmt.Printf("  Generations: %d\n", config.Generations)
 	fmt.Printf("  Workers: %d\n", config.Workers)
+	fmt.Printf("  MCTS decile: %.2f\n", config.MCTSDecile)
 	fmt.Printf("  Seeds: %d games across 3 skeletons\n", len(allSeeds))
 	fmt.Printf("  Output: %s\n\n", config.OutputDir)
 

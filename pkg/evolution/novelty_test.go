@@ -107,8 +107,8 @@ func TestNoveltySelectNextCarriesEvalState(t *testing.T) {
 	gC.ID = "low"
 
 	e.Population = []*NoveltyIndividual{
-		{Individual: Individual{Genome: gA, Valid: true, EvalCount: 4, FitnessSum: 2.0,
-			Fitness: fitness.Metrics{TotalFitness: 0.5, SharedFitness: 0.9}},
+		{Individual: Individual{Genome: gA, Valid: true, EvalCount: 4, FitnessSum: 2.0, MctsSum: 1.1, MctsCount: 2,
+			Fitness: fitness.Metrics{TotalFitness: 0.55, SharedFitness: 0.9}},
 			Behavior: BehaviorDescriptor{0.3, 0.4}},
 		{Individual: Individual{Genome: gB, Valid: true, EvalCount: 2, FitnessSum: 0.8,
 			Fitness: fitness.Metrics{TotalFitness: 0.4, SharedFitness: 0.6}}},
@@ -126,6 +126,10 @@ func TestNoveltySelectNextCarriesEvalState(t *testing.T) {
 		t.Fatalf("elite must carry running-mean state: EvalCount=%d FitnessSum=%.2f, want 4/2.00",
 			elite.EvalCount, elite.FitnessSum)
 	}
+	if elite.MctsCount != 2 || elite.MctsSum != 1.1 {
+		t.Fatalf("elite must carry the MCTS accumulator too: MctsCount=%d MctsSum=%.2f, want 2/1.10",
+			elite.MctsCount, elite.MctsSum)
+	}
 	if elite.Behavior != (BehaviorDescriptor{0.3, 0.4}) {
 		t.Fatalf("elite must carry Behavior, got %v", elite.Behavior)
 	}
@@ -134,6 +138,10 @@ func TestNoveltySelectNextCarriesEvalState(t *testing.T) {
 		if nextGen[i].EvalCount != 0 || nextGen[i].FitnessSum != 0 {
 			t.Errorf("offspring %d must start with zero eval state, got EvalCount=%d FitnessSum=%.2f",
 				i, nextGen[i].EvalCount, nextGen[i].FitnessSum)
+		}
+		if nextGen[i].MctsCount != 0 || nextGen[i].MctsSum != 0 {
+			t.Errorf("offspring %d must start with zero MCTS state, got MctsCount=%d MctsSum=%.2f",
+				i, nextGen[i].MctsCount, nextGen[i].MctsSum)
 		}
 		if nextGen[i].Valid {
 			t.Errorf("offspring %d must start invalid (needs evaluation)", i)

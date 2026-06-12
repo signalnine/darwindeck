@@ -3,6 +3,7 @@ package evolution
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/rand/v2"
 	"os"
 	"runtime"
@@ -23,6 +24,23 @@ type Config struct {
 	BaseSeed       uint64
 	SaveTopN       int
 	OutputDir      string
+
+	// MCTSDecile enables MCTS-for-top-decile mode (audit Task 20b, the
+	// plan's production fallback after Task 19's 2s/genome MCTS budget
+	// FAILED by ~7x): after each generation's greedy evaluation pass, the
+	// top MCTSDecile fraction of valid individuals -- ranked by the
+	// greedy-only running mean -- each receive one fitness.EvaluateWithMCTS
+	// at a distinct seed offset, accumulated into the separate
+	// MctsSum/MctsCount running mean. 0 disables (zero-value Config =
+	// greedy-only, the pre-Task-20b pipeline); the production default is
+	// 0.10 (DefaultConfig, the evolve command's -mcts-decile flag). Applies
+	// to Engine and NoveltyEngine; MAP-Elites instead re-evaluates
+	// incumbents on cell challenge (see mapelites.go).
+	MCTSDecile float64
+	// MCTSEval tunes the decile pass's search strength. The zero value is
+	// production strength (200 iterations / 10 determinizations); tests
+	// dial it down.
+	MCTSEval fitness.MCTSEvalConfig
 }
 
 // DefaultConfig returns sensible defaults.
@@ -36,6 +54,7 @@ func DefaultConfig() Config {
 		BaseSeed:       42,
 		SaveTopN:       20,
 		OutputDir:      "output",
+		MCTSDecile:     0.10,
 	}
 }
 
@@ -58,6 +77,40 @@ type Individual struct {
 	EvalCount int
 	// FitnessSum is the sum of raw TotalFitness over those evaluations.
 	FitnessSum float64
+
+	// MctsSum/MctsCount are the SECOND accumulator of the two-accumulator
+	// design (audit Task 20b): a running mean over full two-tier
+	// (fitness.EvaluateWithMCTS) evaluations, granted once per generation to
+	// individuals in the top Config.MCTSDecile of the greedy-only ranking.
+	// MCTS-mode samples NEVER mix into FitnessSum/EvalCount: that greedy-only
+	// mean stays pure as the decile ranking key (mixing modes would corrupt
+	// the ranking that decides who gets MCTS -- the reviewer's mode-mixing
+	// warning). Published fitness is MctsSum/MctsCount once MctsCount > 0
+	// (see publishedFitness). Both fields reset wherever EvalCount resets:
+	// mutation/crossover offspring, dedup replacement, invalid re-evaluation.
+	MctsSum   float64
+	MctsCount int
+}
+
+// greedyMean returns the greedy-only running mean -- the decile ranking key
+// and the published fitness while no MCTS evaluations exist. 0 before any
+// valid evaluation.
+func (ind *Individual) greedyMean() float64 {
+	if ind.EvalCount == 0 {
+		return 0
+	}
+	return ind.FitnessSum / float64(ind.EvalCount)
+}
+
+// publishedFitness is the selection/output fitness: the MCTS running mean
+// once any two-tier evaluations exist, else the greedy-only running mean.
+// SharedFitness, novelty, BestFitness, and TopN all flow from this value
+// exactly as they previously flowed from the greedy mean.
+func (ind *Individual) publishedFitness() float64 {
+	if ind.MctsCount > 0 {
+		return ind.MctsSum / float64(ind.MctsCount)
+	}
+	return ind.greedyMean()
 }
 
 // Engine runs the evolutionary algorithm.
@@ -129,24 +182,129 @@ func (e *Engine) EvaluatePopulation() {
 				// A genome that fails Tier 0/1 on re-evaluation is flaky
 				// (e.g. degenerate under some seeds). Drop its history so
 				// it must re-qualify from scratch if it ever passes again.
+				// Both accumulators go: the MCTS mean describes the same
+				// now-discredited genome.
 				ind.EvalCount = 0
 				ind.FitnessSum = 0
+				ind.MctsSum = 0
+				ind.MctsCount = 0
 				return
 			}
 
 			ind.FitnessSum += result.Metrics.TotalFitness
 			ind.EvalCount++
-			ind.Fitness.TotalFitness = ind.FitnessSum / float64(ind.EvalCount)
+			ind.Fitness.TotalFitness = ind.publishedFitness()
 			ind.Genome.Fitness = ind.Fitness.TotalFitness
 		}(i, ind)
 	}
 
 	wg.Wait()
 
+	// MCTS-for-top-decile (audit Task 20b): grant one two-tier evaluation to
+	// the top of the greedy-only ranking, BEFORE sharing so SharedFitness
+	// flows from the published (possibly MCTS-mean) fitness.
+	e.runMCTSTopDecile()
+
 	// Apply fitness sharing: divide fitness by niche count.
 	// Niches are defined by skeleton type. This prevents a single skeleton
 	// from monopolizing the population.
 	e.applyFitnessSharing()
+}
+
+// runMCTSTopDecile applies the shared decile pass to this engine's
+// population.
+func (e *Engine) runMCTSTopDecile() {
+	cands := make([]mctsCandidate, 0, len(e.Population))
+	for i, ind := range e.Population {
+		if ind != nil && ind.Valid {
+			cands = append(cands, mctsCandidate{ind: ind, idx: i})
+		}
+	}
+	evaluateTopDecileMCTS(e.Config, e.Generation, cands)
+}
+
+// mctsSeedOffset places the decile pass's evaluation seeds in a band
+// disjoint from the greedy pass's. The greedy pass evaluates individual idx
+// at BaseSeed + gen*10000 + idx, whose internal batches derive game seeds at
+// +0..9 (Tier 1), +100..299 (random), and +1000..1199 (greedy); the decile
+// pass adds +2000..2019 (MCTS batch) on top of its own base. With this
+// offset the two passes' derived seed bands cannot overlap for populations
+// up to ~2900, so the MCTS running mean never re-samples the exact games the
+// greedy running mean already consumed. The novelty engine's behavior batch
+// (seed+5000, 50 games) shares part of this band by construction; that is
+// harmless -- behavior is a descriptor, not a fitness sample, so no
+// statistical coupling enters either running mean.
+const mctsSeedOffset = 5000
+
+// mctsCandidate pairs a valid individual with its population index, which
+// the decile pass needs for seed derivation.
+type mctsCandidate struct {
+	ind *Individual
+	idx int
+}
+
+// evaluateTopDecileMCTS implements MCTS-for-top-decile (audit Task 20b),
+// shared by Engine and NoveltyEngine: rank the valid individuals by
+// greedy-only running mean, give the top ceil(decile*N) one
+// fitness.EvaluateWithMCTS each at a distinct seed, and accumulate the
+// result into the separate MCTS running mean. The greedy accumulator is
+// never touched (mode purity); published fitness flips to the MCTS mean via
+// publishedFitness. cfg.MCTSDecile <= 0 disables the pass entirely.
+//
+// HAZARD (pinned by TestMCTSTierRewardsDegenKnockTiming, pkg/fitness): the
+// MCTS skill term cannot tell depth-in-a-rich-game from greedy-incompetence-
+// in-a-trivial-one -- it fires hard on the instant-knock degenerate. The
+// decile gate is the mitigation: only genomes already elite on greedy-only
+// rank ever receive the term. This function is where that gate is ENFORCED
+// in code rather than by convention.
+func evaluateTopDecileMCTS(cfg Config, gen int, cands []mctsCandidate) {
+	if cfg.MCTSDecile <= 0 || len(cands) == 0 {
+		return
+	}
+
+	// Stable sort: ties keep population order, so the granted set is
+	// deterministic for a fixed seed.
+	sort.SliceStable(cands, func(a, b int) bool {
+		return cands[a].ind.greedyMean() > cands[b].ind.greedyMean()
+	})
+
+	n := int(math.Ceil(cfg.MCTSDecile * float64(len(cands))))
+	if n < 1 {
+		n = 1
+	}
+	if n > len(cands) {
+		n = len(cands)
+	}
+
+	workers := cfg.Workers
+	if workers < 1 {
+		workers = 1
+	}
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, workers)
+	for _, c := range cands[:n] {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(c mctsCandidate) {
+			defer wg.Done()
+			defer func() { <-sem }()
+
+			seed := cfg.BaseSeed + uint64(gen)*10000 + uint64(c.idx) + mctsSeedOffset
+			result := fitness.EvaluateWithMCTS(c.ind.Genome, seed, cfg.MCTSEval)
+			if !result.Valid {
+				// Flaky at this seed: skip the sample. Validity resets are
+				// owned by the main evaluation pass, which already passed
+				// this individual this generation.
+				return
+			}
+
+			c.ind.MctsSum += result.Metrics.TotalFitness
+			c.ind.MctsCount++
+			c.ind.Fitness.TotalFitness = c.ind.publishedFitness()
+			c.ind.Genome.Fitness = c.ind.Fitness.TotalFitness
+		}(c)
+	}
+	wg.Wait()
 }
 
 // applyFitnessSharing divides each genome's fitness by the count of valid
@@ -260,6 +418,8 @@ func (e *Engine) Select() []*Individual {
 			Valid:      true,
 			EvalCount:  e.Population[i].EvalCount,
 			FitnessSum: e.Population[i].FitnessSum,
+			MctsSum:    e.Population[i].MctsSum,
+			MctsCount:  e.Population[i].MctsCount,
 		}
 	}
 
@@ -317,9 +477,12 @@ func (e *Engine) dedup(pop []*Individual) {
 				child := Mutate(parent, e.rng, e.Seeds)
 				pop[i].Genome = child
 				pop[i].Valid = false
-				// The genome changed: prior evaluations are meaningless.
+				// The genome changed: prior evaluations are meaningless --
+				// in both modes.
 				pop[i].EvalCount = 0
 				pop[i].FitnessSum = 0
+				pop[i].MctsSum = 0
+				pop[i].MctsCount = 0
 				hash = genomeHash(child)
 			}
 		}
