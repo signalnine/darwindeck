@@ -517,6 +517,40 @@ func TestGameArcWinnerFromBatchNotFinalLeader(t *testing.T) {
 	}
 }
 
+// TestGameArcShortCoinFlipScoresLowResolution (audit Wave D fix 2): the
+// metric's headline promise is "a pure coin flip decided on the last move
+// scores low on resolution". But for any track of n <= 10 samples,
+// n*9/10 == n-1: the resolution sample WAS the final sample, which correlates
+// with (here, equals) the winner, so ultra-short games -- the instant-knock
+// degenerate class the calibration suite targets -- got resolution ~1 for
+// free. With the sample clamped to min(n*9/10, n-2), a 6-sample batch whose
+// lead see-saws and is decided only by the final flip scores ZERO resolution
+// (the old index scored it 1.0, arc 0.6).
+func TestGameArcShortCoinFlipScoresLowResolution(t *testing.T) {
+	flipA := []int8{0, 1, 0, 1, 0, 1} // winner 1, trailing at every even sample
+	flipB := []int8{1, 0, 1, 0, 1, 0} // winner 0, mirrored
+	tracks := make([][]int8, 0, 10)
+	for i := 0; i < 5; i++ {
+		tracks = append(tracks, flipA, flipB)
+	}
+	batch := leaderBatch(tracks...)
+
+	_, resolution, _, counted := arcStats(batch)
+	if counted != 10 {
+		t.Fatalf("all 10 tracks qualify (6 samples, completed), counted %d", counted)
+	}
+	if resolution != 0 {
+		t.Fatalf("coin flip decided at the final sample must score 0 resolution, got %.3f", resolution)
+	}
+
+	// The whole arc collapses to the saturated lead-changes term (0.2):
+	// comeback 0 (the winner leads at the 50%% sample in both shapes) zeroes
+	// the tent, resolution is 0, lead changes saturate.
+	if got := computeGameArc(batch); math.Abs(got-0.2) > 1e-9 {
+		t.Fatalf("coin-flip batch must score exactly 0.2 (lead-changes term only), got %.4f", got)
+	}
+}
+
 // TestGameArcLeadChangesIgnoreTies: -1 (tie) samples are skipped when
 // counting lead changes -- a tie interlude within one player's lead is not a
 // lead change, while a tie bridging two different leaders is exactly one.

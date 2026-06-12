@@ -72,7 +72,9 @@ func computeDecisionDensity(result sim.BatchResult) float64 {
 // wins). Computed from the per-game leader tracks (audit Tasks 8 + 10):
 //
 //	comeback    = P(winner != leader at the 50% sample), target ~0.5, score peaks there
-//	resolution  = P(winner == leader at the 90% sample)
+//	resolution  = P(winner == leader at the 90% sample, clamped to the
+//	              second-to-last sample so short tracks never sample the
+//	              final, winner-correlated entry -- audit Wave D fix 2)
 //	leadChanges = mean lead changes per game (-1 tie samples ignored), saturating at 3
 //
 //	arc = 0.4*tent(comeback, 0.5) + 0.4*resolution + 0.2*min(leadChanges/3, 1)
@@ -122,7 +124,17 @@ func arcStats(result sim.BatchResult) (comeback, resolution, leadChanges float64
 		if track[n/2] != winner {
 			comebacks++
 		}
-		if track[n*9/10] == winner {
+		// Resolution sample: nominally the 90% mark, clamped to n-2 so it is
+		// never the final sample itself. For n <= 10, n*9/10 == n-1, and the
+		// final leader correlates with the winner, so ultra-short games (the
+		// instant-knock degenerate class the calibration suite targets) got
+		// resolution ~1 for free (audit Wave D fix 2). The >= 4 sample
+		// minimum above keeps the index >= 2, after the midgame sample.
+		resIdx := n * 9 / 10
+		if resIdx > n-2 {
+			resIdx = n - 2
+		}
+		if track[resIdx] == winner {
 			resolutions++
 		}
 		changes += countLeadChanges(track)
