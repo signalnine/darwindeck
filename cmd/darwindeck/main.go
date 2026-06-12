@@ -75,8 +75,11 @@ func cmdEvolve(args []string) {
 	outDir := fs.String("output", "", "output directory (default: auto-generated)")
 	verbose := fs.Bool("verbose", false, "verbose output")
 	algorithm := fs.String("algorithm", "hybrid", "algorithm: baseline, hybrid (novelty+sharing), mapelites")
+	floor := fs.Float64("fitness-floor", evolution.DefaultFitnessFloor,
+		"minimum fitness for QD consideration (default derived from the seed-calibration suite)")
 
 	fs.Parse(args)
+	evolution.FitnessFloor = *floor
 
 	if *outDir == "" {
 		*outDir = filepath.Join("output", time.Now().Format("2006-01-02_15-04-05"))

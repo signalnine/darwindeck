@@ -13,11 +13,24 @@ import (
 )
 
 const (
-	NoveltyK         = 15   // k-nearest neighbors for novelty
-	NoveltyWeight    = 0.5  // weight of novelty vs fitness
-	NoveltyThreshold = 0.3  // min novelty to enter archive
-	FitnessFloor     = 0.70 // minimum fitness to be considered
+	NoveltyK         = 15  // k-nearest neighbors for novelty
+	NoveltyWeight    = 0.5 // weight of novelty vs fitness
+	NoveltyThreshold = 0.3 // min novelty to enter archive
+
+	// DefaultFitnessFloor is derived from the seed-calibration suite
+	// (Task 15): worst classic survivor-conditioned mean (crazy-eights
+	// 0.475 at the Task 14 commit) minus 0.05. The previous folklore value
+	// 0.70 sat ABOVE every trick-taking classic, zeroing the selection
+	// gradient for human-validated games. If the calibration suite's
+	// worst-classic mean moves, re-derive this constant
+	// (TestCalibrationClassicsAboveFloor enforces the relationship).
+	DefaultFitnessFloor = 0.42
 )
+
+// FitnessFloor is the minimum fitness for QD consideration (novelty archive
+// admission, sharing, output ranking). Overridable via the evolve command's
+// -fitness-floor flag; everything else should treat it as a constant.
+var FitnessFloor = DefaultFitnessFloor
 
 // NoveltyIndividual extends Individual with behavior and novelty score.
 type NoveltyIndividual struct {
