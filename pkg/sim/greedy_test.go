@@ -3,6 +3,8 @@ package sim
 import (
 	"math/rand/v2"
 	"testing"
+
+	"github.com/darwindeck/darwindeck/pkg/genome"
 )
 
 func TestSheddingScorerPrefersIsolatedCard(t *testing.T) {
@@ -58,6 +60,123 @@ func TestSheddingScorerPrefersPlay(t *testing.T) {
 
 	if playScore <= drawScore {
 		t.Fatalf("playing should score higher than drawing: play=%.1f draw=%.1f", playScore, drawScore)
+	}
+}
+
+// TestSheddingScorerGenomeAwareOffensiveSpecials pins the dd-audit fix for
+// the hardcoded 2/7/10 special-rank heuristic: the scorer must classify
+// offensive specials from the genome's SpecialCards, not from rank folklore.
+//
+// Genome under test: draw-two lives on rank 8; rank 2 has NO effect. The
+// greedy scorer must give the offensive-special blocking bonus to the 8 (as
+// it previously gave to 2s) and must NOT special-case the 2.
+func TestSheddingScorerGenomeAwareOffensiveSpecials(t *testing.T) {
+	g := &genome.Genome{
+		Skeleton: genome.Shedding,
+		Players:  2,
+		SpecialCards: []genome.SpecialCard{
+			{Type: genome.SpecialDrawTwo, ByRank: 8},
+		},
+	}
+	scorer := NewSheddingScorer(g)
+
+	// Opponent is one card from winning, which triggers the blocking bonus
+	// for offensive specials. The three hand cards (8H, 2S, 5D) share no
+	// suit or rank with each other, so every play has zero connections and
+	// any score gap is purely the special-card classification.
+	state := &GameState{
+		Hands: [][]Card{
+			{
+				{Suit: Hearts, Rank: Eight},
+				{Suit: Spades, Rank: Two},
+				{Suit: Diamonds, Rank: Five},
+			},
+			{{Suit: Clubs, Rank: King}},
+		},
+		NumPlayers: 2,
+		Active:     0,
+	}
+
+	score := func(c Card) float64 {
+		return scorer.ScoreMove(Move{Type: MovePlay, Cards: []Card{c}, PlayerID: 0}, state)
+	}
+
+	eightScore := score(Card{Suit: Hearts, Rank: Eight})
+	twoScore := score(Card{Suit: Spades, Rank: Two})
+	fiveScore := score(Card{Suit: Diamonds, Rank: Five})
+
+	// The genome's draw-two (rank 8) must get the blocking bonus.
+	if eightScore <= twoScore {
+		t.Fatalf("genome draw-two on rank 8 must outscore non-special rank 2: eight=%.1f two=%.1f",
+			eightScore, twoScore)
+	}
+	// Rank 2 has no genome effect: it must score exactly like a plain card.
+	if twoScore != fiveScore {
+		t.Fatalf("rank 2 has no genome effect but is scored as special: two=%.1f plain-five=%.1f",
+			twoScore, fiveScore)
+	}
+}
+
+// TestSheddingScorerSuitScopedSpecial verifies the scorer honors the BySuit
+// restriction on SpecialCards: a skip on (rank 7, spades only) must not mark
+// a 7 of hearts as offensive. BySuit uses the genome encoding suit+1.
+func TestSheddingScorerSuitScopedSpecial(t *testing.T) {
+	g := &genome.Genome{
+		Skeleton: genome.Shedding,
+		Players:  2,
+		SpecialCards: []genome.SpecialCard{
+			{Type: genome.SpecialSkip, ByRank: 7, BySuit: uint8(Spades) + 1},
+		},
+	}
+	scorer := NewSheddingScorer(g)
+
+	state := &GameState{
+		Hands: [][]Card{
+			{
+				{Suit: Spades, Rank: Seven},
+				{Suit: Hearts, Rank: Three},
+			},
+			{{Suit: Clubs, Rank: King}},
+		},
+		NumPlayers: 2,
+		Active:     0,
+	}
+
+	sevenSpades := scorer.ScoreMove(Move{Type: MovePlay, Cards: []Card{{Suit: Spades, Rank: Seven}}, PlayerID: 0}, state)
+
+	// Swap the 7S for a 7H in hand (keeps connection counts at zero).
+	state.Hands[0][0] = Card{Suit: Hearts, Rank: Seven}
+	sevenHearts := scorer.ScoreMove(Move{Type: MovePlay, Cards: []Card{{Suit: Hearts, Rank: Seven}}, PlayerID: 0}, state)
+
+	if sevenSpades <= sevenHearts {
+		t.Fatalf("suit-scoped skip: 7S must outscore 7H: spades=%.1f hearts=%.1f",
+			sevenSpades, sevenHearts)
+	}
+}
+
+// TestSheddingScorerNilGenomeNoSpecialBonus verifies the zero-value scorer
+// no longer applies the legacy hardcoded 2/7/10 bonus: with no genome there
+// is no special-card knowledge, so a 2 scores like any plain card.
+func TestSheddingScorerNilGenomeNoSpecialBonus(t *testing.T) {
+	scorer := &SheddingScorer{}
+	state := &GameState{
+		Hands: [][]Card{
+			{
+				{Suit: Spades, Rank: Two},
+				{Suit: Diamonds, Rank: Five},
+			},
+			{{Suit: Clubs, Rank: King}},
+		},
+		NumPlayers: 2,
+		Active:     0,
+	}
+
+	twoScore := scorer.ScoreMove(Move{Type: MovePlay, Cards: []Card{{Suit: Spades, Rank: Two}}, PlayerID: 0}, state)
+	fiveScore := scorer.ScoreMove(Move{Type: MovePlay, Cards: []Card{{Suit: Diamonds, Rank: Five}}, PlayerID: 0}, state)
+
+	if twoScore != fiveScore {
+		t.Fatalf("nil-genome scorer must not special-case rank 2: two=%.1f five=%.1f",
+			twoScore, fiveScore)
 	}
 }
 

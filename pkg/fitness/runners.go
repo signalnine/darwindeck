@@ -26,7 +26,7 @@ func GetRunner(g *genome.Genome) sim.GenericRunner {
 func GetGreedyAI(g *genome.Genome) sim.AIPlayer {
 	switch g.Skeleton {
 	case genome.Shedding:
-		return &sim.GreedyAI{Scorer: &sim.SheddingScorer{}}
+		return &sim.GreedyAI{Scorer: sim.NewSheddingScorer(g)}
 	case genome.TrickTaking:
 		avoidance := g.TrickTaking != nil && g.TrickTaking.TrickScoring == genome.ScoreAvoidance
 		return &sim.GreedyAI{Scorer: &sim.TrickTakingScorer{

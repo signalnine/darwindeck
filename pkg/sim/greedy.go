@@ -1,6 +1,10 @@
 package sim
 
-import "math/rand/v2"
+import (
+	"math/rand/v2"
+
+	"github.com/darwindeck/darwindeck/pkg/genome"
+)
 
 // GreedyAI selects moves using skeleton-aware heuristics.
 // Each move is scored and the highest-scoring move is chosen,
@@ -47,7 +51,20 @@ func (ai *GreedyAI) SelectMove(moves []Move, state *GameState, rng *rand.Rand) M
 // SheddingScorer scores shedding moves.
 // Strategy: play cards that minimize future draws by keeping flexible cards
 // (those that share suit/rank with many others). Time specials strategically.
-type SheddingScorer struct{}
+type SheddingScorer struct {
+	// Genome supplies the SpecialCards rules used to classify offensive
+	// specials (skip/reverse/draw-N). A nil Genome means the scorer has no
+	// special-card knowledge and applies no special-timing bonus -- it does
+	// NOT fall back to the old hardcoded 2/7/10 rank heuristic, which the
+	// 2026-06-11 audit flagged as genome-blind.
+	Genome *genome.Genome
+}
+
+// NewSheddingScorer builds a shedding scorer that classifies special cards
+// from the genome's SpecialCards instead of hardcoded ranks.
+func NewSheddingScorer(g *genome.Genome) *SheddingScorer {
+	return &SheddingScorer{Genome: g}
+}
 
 func (s *SheddingScorer) ScoreMove(move Move, state *GameState) float64 {
 	switch move.Type {
@@ -105,16 +122,29 @@ func (s *SheddingScorer) ScoreMove(move Move, state *GameState) float64 {
 	}
 }
 
-// isOffensiveSpecial checks if a card has a rank commonly used for
-// draw-two (2s), skip (7s/10s), or draw-four effects.
-// This is a heuristic since we don't have access to the genome here.
+// isOffensiveSpecial reports whether the genome assigns this card an effect
+// that disrupts opponents (skip, reverse, draw-two, draw-four). Wild is
+// excluded: it is flexibility for the holder, not an attack. Matching
+// mirrors the shedding runner's cardMatchesSpecial semantics: ByRank 0 = any
+// rank, BySuit 0 = any suit, otherwise BySuit is suit+1.
 func (s *SheddingScorer) isOffensiveSpecial(card Card) bool {
-	switch card.Rank {
-	case Two, Seven, Ten:
-		return true
-	default:
+	if s.Genome == nil {
 		return false
 	}
+	for _, sc := range s.Genome.SpecialCards {
+		if sc.ByRank != 0 && sc.ByRank != uint8(card.Rank) {
+			continue
+		}
+		if sc.BySuit != 0 && sc.BySuit != uint8(card.Suit)+1 {
+			continue
+		}
+		switch sc.Type {
+		case genome.SpecialSkip, genome.SpecialReverse,
+			genome.SpecialDrawTwo, genome.SpecialDrawFour:
+			return true
+		}
+	}
+	return false
 }
 
 // --- Trick-Taking Greedy Scorer ---
