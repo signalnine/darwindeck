@@ -248,6 +248,70 @@ func TestTrickTakingPlayMultipleBorrowRejected(t *testing.T) {
 	}
 }
 
+func TestReservedMechanicsNeverWhitelisted(t *testing.T) {
+	// MechTrump and MechPlayMultiple are reserved enum values with no hook or
+	// runner implementation (dd-lnh; audit remediation Task 23). They must
+	// never appear in the validBorrows whitelist for any skeleton. The enum
+	// values themselves are kept (marked reserved) because MechanicType
+	// serializes as a bare number: renumbering would corrupt every existing
+	// serialized genome.
+	reserved := []MechanicType{MechTrump, MechPlayMultiple}
+	for skel, allowed := range validBorrows {
+		for _, m := range reserved {
+			if allowed[m] {
+				t.Errorf("reserved mechanic %s whitelisted for skeleton %s", m, skel)
+			}
+		}
+	}
+}
+
+func TestValidateRejectsReservedBorrowsOnEverySkeleton(t *testing.T) {
+	hosts := []*Genome{
+		{
+			Skeleton: Shedding,
+			Players:  2,
+			HandSize: 7,
+			Shedding: &SheddingParams{MatchRule: MatchEither, DrawPenalty: 1},
+		},
+		{
+			Skeleton: TrickTaking,
+			Players:  4,
+			HandSize: 13,
+			TrickTaking: &TrickTakingParams{
+				MustFollowSuit:  true,
+				TrickScoring:    ScorePerTrick,
+				LeadRestriction: LeadNone,
+				RoundsPerGame:   1,
+			},
+		},
+		{
+			Skeleton: Rummy,
+			Players:  2,
+			HandSize: 10,
+			Rummy:    &RummyParams{MeldTypes: MeldBoth, MinMeldSize: 3, DrawFrom: DrawEither, KnockThreshold: 10},
+		},
+	}
+
+	for _, host := range hosts {
+		if errs := Validate(host); len(errs) > 0 {
+			t.Fatalf("baseline %s genome should be valid: %v", host.Skeleton, errs)
+		}
+
+		source := Shedding
+		if host.Skeleton == Shedding {
+			source = Rummy
+		}
+
+		for _, m := range []MechanicType{MechTrump, MechPlayMultiple} {
+			g := host.Clone()
+			g.Borrowed = []BorrowedMechanic{{Source: source, Mechanic: m}}
+			if errs := Validate(g); len(errs) == 0 {
+				t.Errorf("Validate accepted reserved mechanic %s on %s skeleton", m, host.Skeleton)
+			}
+		}
+	}
+}
+
 func TestCardPointsScoringRequiresConfig(t *testing.T) {
 	g := &Genome{
 		Skeleton: TrickTaking,

@@ -17,8 +17,9 @@ import (
 // the dd-wfi failure mode (MechDrawPenalty x TrickTaking pre-fix). The 70%
 // completion floor catches that class of bug.
 //
-// MechTrump / MechPlayMultiple are not in BuildHooks (handled structurally),
-// so they are intentionally excluded from this check.
+// MechTrump / MechPlayMultiple are reserved enum values with no hook or
+// runner implementation; validation rejects any genome that borrows them
+// (dd-lnh), so they are intentionally excluded from this check.
 func TestBorrowedHooksFireDuringBatchSim(t *testing.T) {
 	cases := []struct {
 		host     genome.SkeletonType

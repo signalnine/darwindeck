@@ -65,7 +65,7 @@ func TestCloneDeepCopyAllPointers(t *testing.T) {
 	clone.Shedding.DrawPenalty = 99
 	clone.TrickTaking.RoundsPerGame = 99
 	clone.Rummy.KnockThreshold = 99
-	clone.Borrowed[0].Mechanic = MechTrump
+	clone.Borrowed[0].Mechanic = MechKnock
 	clone.SpecialCards[0].ByRank = 99
 	clone.Scoring.CardPoints[0].Points = 999
 	clone.Scoring.TrumpSuit = 4
@@ -85,7 +85,7 @@ func TestCloneDeepCopyAllPointers(t *testing.T) {
 	if original.Rummy.KnockThreshold == 99 {
 		t.Fatal("clone modified original Rummy.KnockThreshold")
 	}
-	if original.Borrowed[0].Mechanic == MechTrump {
+	if original.Borrowed[0].Mechanic == MechKnock {
 		t.Fatal("clone modified original Borrowed mechanic")
 	}
 	if original.SpecialCards[0].ByRank == 99 {

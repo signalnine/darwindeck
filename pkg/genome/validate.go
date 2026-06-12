@@ -115,7 +115,8 @@ func validateRummy(p *RummyParams) []string {
 // validBorrows defines which mechanics can be borrowed by which skeletons.
 // Only mechanics with runner-side implementations belong here -- whitelisting
 // a no-op borrow wastes evolutionary search dimensions and produces rulebooks
-// that lie about behaviour (see dd-lnh).
+// that lie about behaviour (see dd-lnh). MechTrump and MechPlayMultiple are
+// reserved enum values with no implementation and must never be added here.
 var validBorrows = map[SkeletonType]map[MechanicType]bool{
 	Shedding: {
 		MechMeldBonus: true, // Bonus for playing sets/runs (HookEndOfRound)

@@ -22,6 +22,11 @@ type Hook struct {
 }
 
 // BuildHooks creates the hook functions for a genome's borrowed mechanics.
+//
+// Historical note: MechTrump and MechPlayMultiple used to have empty cases
+// here. They never had a hook (or runner-side) implementation, so the borrows
+// were inert; both are now reserved enum values rejected by validation
+// (dd-lnh; audit remediation Task 23).
 func BuildHooks(g *genome.Genome) []Hook {
 	var hooks []Hook
 
@@ -48,19 +53,12 @@ func BuildHooks(g *genome.Genome) []Hook {
 				Apply:    applyDrawPenalty,
 			})
 
-		case genome.MechTrump:
-			// Trump is handled structurally (card comparison), not via hook
-			// The genome's TrumpRule field already controls this
-
 		case genome.MechTrickScoring:
 			hooks = append(hooks, Hook{
 				Point:    HookEndOfRound,
 				Mechanic: genome.MechTrickScoring,
 				Apply:    applyTrickScoring,
 			})
-
-		case genome.MechPlayMultiple:
-			// Handled in move generation, not via hook
 		}
 	}
 

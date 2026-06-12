@@ -259,14 +259,20 @@ func MatchCardPoints(rules []CardScoring, rank, suit uint8) int {
 // MechanicType identifies a borrowable mechanic.
 type MechanicType uint8
 
+// MechTrump and MechPlayMultiple are reserved: they have no hook or
+// runner-side implementation and are not in the validBorrows whitelist
+// (validation rejects any genome carrying them; see dd-lnh). The constants
+// are kept rather than deleted because MechanicType serializes as a bare
+// number -- removing them would renumber later values and silently corrupt
+// every existing serialized genome.
 const (
 	MechTrickScoring MechanicType = iota // Score based on tricks won
 	MechMeldBonus                         // Bonus for forming melds
 	MechDrawPenalty                       // Draw cards as penalty
 	MechKnock                             // Knock to end round
-	MechTrump                             // Trump suit mechanic
+	MechTrump                             // reserved: no implementation, not whitelisted
 	MechAvoidance                         // Points-are-bad scoring
-	MechPlayMultiple                      // Play multiple cards
+	MechPlayMultiple                      // reserved: no implementation, not whitelisted
 	MechFollowSuit                        // Must follow suit restriction
 )
 
