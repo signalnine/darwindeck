@@ -46,6 +46,12 @@ func (s *Session) Run() {
 		s.Genome.Skeleton, s.Genome.Players, s.Genome.HandSize)
 
 	for {
+		// Mirror the simulation loop in sim.RunBatch: Upkeep runs once per
+		// iteration, before CheckEnd. Skipping it here would make human games
+		// diverge from simulated ones (no deck recycling, no round redeals,
+		// no rummy deadwood banking).
+		s.Runner.Upkeep(s.State, s.Genome)
+
 		winner := s.Runner.CheckEnd(s.State, s.Genome)
 		if winner >= 0 {
 			s.printFinalState(winner)

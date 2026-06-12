@@ -300,17 +300,25 @@ func cardPointValue(card sim.Card, g *genome.Genome) int {
 	return genome.MatchCardPoints(g.Scoring.CardPoints, uint8(card.Rank), uint8(card.Suit))
 }
 
-func (r *Runner) CheckEnd(state *sim.GameState, g *genome.Genome) int {
-	// Check if all players have empty hands (round over)
-	allEmpty := true
-	for _, hand := range state.Hands {
-		if len(hand) > 0 {
-			allEmpty = false
-			break
-		}
+// Upkeep performs start-of-turn maintenance: when every hand has been played
+// out the round is over, so advance the round counter and -- if more rounds
+// remain -- redeal fresh hands. This used to live inside CheckEnd; it was
+// moved here so queries stay pure (the redeal shuffles with state.RNG,
+// advancing it). After the final round no redeal happens: hands stay empty
+// and CheckEnd reports the winner.
+func (r *Runner) Upkeep(state *sim.GameState, g *genome.Genome) {
+	if !allHandsEmpty(state) {
+		return
 	}
 
-	if !allEmpty {
+	state.Round++
+	if state.Round < state.MaxRound {
+		redealRound(state, g)
+	}
+}
+
+func (r *Runner) CheckEnd(state *sim.GameState, g *genome.Genome) int {
+	if !allHandsEmpty(state) {
 		// At max turns with hands still in play, return -1 so the batch runner
 		// classifies this as a genuine timeout rather than a completion.
 		// Awarding findWinner here would mask hung trick-taking genomes from
@@ -318,14 +326,22 @@ func (r *Runner) CheckEnd(state *sim.GameState, g *genome.Genome) int {
 		return -1
 	}
 
-	// Round complete
-	state.Round++
+	// Hands are empty and Upkeep has already advanced the round counter. If
+	// the final round just finished, the game is over; otherwise Upkeep
+	// redealt and this branch is unreachable in a well-formed loop.
 	if state.Round >= state.MaxRound {
 		return findWinner(state, g)
 	}
-
-	redealRound(state, g)
 	return -1
+}
+
+func allHandsEmpty(state *sim.GameState) bool {
+	for _, hand := range state.Hands {
+		if len(hand) > 0 {
+			return false
+		}
+	}
+	return true
 }
 
 // redealRound prepares state for the next round of a multi-round game:

@@ -8,26 +8,31 @@ import (
 
 // BatchResult holds aggregated results from running multiple games.
 type BatchResult struct {
-	GamesPlayed  int
-	Completions  int       // Games that ended with a winner
-	Errors       int       // Games that errored
-	Timeouts     int       // Games that hit max turns
-	WinCounts    []int     // Wins per player
-	TotalTurns   int       // Sum of all turns
-	MinTurns     int
-	MaxTurns     int
-	AvgTurns     float64
-	TurnsList    []int     // All turn counts for distribution analysis
-	AllEvents    [][]Event // Events from each game (for fitness analysis)
+	GamesPlayed int
+	Completions int   // Games that ended with a winner
+	Errors      int   // Games that errored
+	Timeouts    int   // Games that hit max turns
+	WinCounts   []int // Wins per player
+	TotalTurns  int   // Sum of all turns
+	MinTurns    int
+	MaxTurns    int
+	AvgTurns    float64
+	TurnsList   []int     // All turn counts for distribution analysis
+	AllEvents   [][]Event // Events from each game (for fitness analysis)
 }
 
 // GenericRunner is the interface all skeleton runners implement.
 // The genome is passed to each method so the runner can read parameters.
 type GenericRunner interface {
 	Setup(g *genome.Genome, rng *rand.Rand) *GameState
-	GenerateMoves(state *GameState, g *genome.Genome) []Move
+	// Upkeep performs start-of-turn state maintenance (deck recycling,
+	// round transitions/redeals). It is the ONLY method besides ApplyMove
+	// allowed to mutate state. Game loops must call it exactly once at the
+	// top of each iteration, before CheckEnd.
+	Upkeep(state *GameState, g *genome.Genome)
+	GenerateMoves(state *GameState, g *genome.Genome) []Move // must be pure
 	ApplyMove(state *GameState, move Move, g *genome.Genome) []Event
-	CheckEnd(state *GameState, g *genome.Genome) int
+	CheckEnd(state *GameState, g *genome.Genome) int // must be pure
 }
 
 // HookFunc is called after each move with the resulting events.
@@ -94,6 +99,8 @@ func runSingleGame(g *genome.Genome, runner GenericRunner, ai AIPlayer, rng *ran
 	iter := 0
 
 	for {
+		runner.Upkeep(state, g)
+
 		winner := runner.CheckEnd(state, g)
 		if winner >= 0 {
 			return GameResult{

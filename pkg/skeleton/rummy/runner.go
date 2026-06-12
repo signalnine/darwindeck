@@ -280,9 +280,23 @@ func (r *Runner) ApplyMove(state *sim.GameState, move sim.Move, g *genome.Genome
 	return events
 }
 
+// Upkeep performs start-of-turn maintenance: when the round has ended
+// (PhaseEnd via knock or gin), bank each player's deadwood into Scores. This
+// used to live inside CheckEnd (scoreRound), which made CheckEnd a mutating
+// query whose second call double-subtracted deadwood (audit Task 3). The
+// game loop calls Upkeep exactly once per iteration and exits at the next
+// CheckEnd, so the banking runs once per game.
+func (r *Runner) Upkeep(state *sim.GameState, g *genome.Genome) {
+	if state.Phase == sim.PhaseEnd {
+		bankDeadwood(state, g)
+	}
+}
+
 func (r *Runner) CheckEnd(state *sim.GameState, g *genome.Genome) int {
 	if state.Phase == sim.PhaseEnd {
-		return scoreRound(state, g)
+		// Upkeep has already banked deadwood into Scores; picking the winner
+		// is a pure read. Highest score (least deadwood) wins.
+		return bestScore(state)
 	}
 
 	// At max turns, return -1 so the batch runner classifies the game as a
@@ -291,23 +305,25 @@ func (r *Runner) CheckEnd(state *sim.GameState, g *genome.Genome) int {
 	return -1
 }
 
-func scoreRound(state *sim.GameState, g *genome.Genome) int {
+// bankDeadwood subtracts each player's deadwood from their score. Use -= so
+// any contributions already written by HookScoring/HookEndOfRound hooks
+// (applyAvoidance, applyTrickScoring, applyMeldBonus) survive. Using = here
+// would clobber them and silently neutralize every borrowed scoring
+// mechanic that targets Rummy (dd-2lq).
+func bankDeadwood(state *sim.GameState, g *genome.Genome) {
 	params := g.Rummy
 	if params == nil {
-		return 0
+		return
 	}
-
-	// Score each player's deadwood. Use -= so any contributions already
-	// written by HookScoring/HookEndOfRound hooks (applyAvoidance,
-	// applyTrickScoring, applyMeldBonus) survive scoreRound. Using = here
-	// would clobber them and silently neutralize every borrowed scoring
-	// mechanic that targets Rummy (dd-2lq).
 	for i := 0; i < state.NumPlayers; i++ {
 		deadwood := calcDeadwood(state.Hands[i], params)
 		state.Scores[i] -= deadwood
 	}
+}
 
-	// Highest score (least deadwood) wins
+// bestScore returns the player with the highest score (lowest index on
+// ties). Pure: reads state.Scores only.
+func bestScore(state *sim.GameState) int {
 	best := 0
 	for i := 1; i < state.NumPlayers; i++ {
 		if state.Scores[i] > state.Scores[best] {
@@ -315,6 +331,17 @@ func scoreRound(state *sim.GameState, g *genome.Genome) int {
 		}
 	}
 	return best
+}
+
+// scoreRound banks deadwood and returns the winner. Kept for callers that
+// need to force-score a round outside the normal Upkeep/CheckEnd loop
+// (e.g. the test helper's max-turns fallback).
+func scoreRound(state *sim.GameState, g *genome.Genome) int {
+	if g.Rummy == nil {
+		return 0
+	}
+	bankDeadwood(state, g)
+	return bestScore(state)
 }
 
 // findMelds returns every valid sub-meld in a hand (sub-sets and sub-runs of

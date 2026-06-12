@@ -40,6 +40,19 @@ func (r *Runner) Setup(g *genome.Genome, rng *rand.Rand) *sim.GameState {
 	return state
 }
 
+// Upkeep performs start-of-turn maintenance: when the deck has emptied and
+// the discard pile still holds recyclable cards, shuffle them back into the
+// deck (minus the top card) so players who cannot play can still draw.
+// Otherwise the game pingpongs MovePass deterministically until MaxTurns and
+// gets misclassified as a degenerate timeout. This used to live inside
+// GenerateMoves; it was moved here so queries stay pure (the recycle
+// shuffles with state.RNG, advancing it).
+func (r *Runner) Upkeep(state *sim.GameState, g *genome.Genome) {
+	if len(state.Deck) == 0 && len(state.Discard) > 1 {
+		refillDeckFromDiscard(state)
+	}
+}
+
 func (r *Runner) GenerateMoves(state *sim.GameState, g *genome.Genome) []sim.Move {
 	hand := state.ActiveHand()
 	if len(hand) == 0 {
@@ -57,8 +70,8 @@ func (r *Runner) GenerateMoves(state *sim.GameState, g *genome.Genome) []sim.Mov
 		for i, card := range hand {
 			if matchesTop(card, *state.TopCard, params.MatchRule) {
 				moves = append(moves, sim.Move{
-					Type:    sim.MovePlay,
-					Cards:   []sim.Card{hand[i]},
+					Type:     sim.MovePlay,
+					Cards:    []sim.Card{hand[i]},
 					PlayerID: state.Active,
 				})
 			}
@@ -69,31 +82,27 @@ func (r *Runner) GenerateMoves(state *sim.GameState, g *genome.Genome) []sim.Mov
 	for i, card := range hand {
 		if isWild(card, g.SpecialCards) && !alreadyInMoves(moves, card) {
 			moves = append(moves, sim.Move{
-				Type:    sim.MovePlay,
-				Cards:   []sim.Card{hand[i]},
+				Type:     sim.MovePlay,
+				Cards:    []sim.Card{hand[i]},
 				PlayerID: state.Active,
 			})
 		}
 	}
 
-	// If no playable cards, must draw. If the deck is empty, recycle the
-	// discard pile (minus the top card) before falling through to Pass --
-	// otherwise the game pingpongs MovePass deterministically until MaxTurns
-	// and gets misclassified as a degenerate timeout. Mirrors the rummy
-	// runner's behavior in ApplyMove around MoveDiscard.
+	// If no playable cards, must draw. The deck is replenished from the
+	// discard pile by Upkeep (start of each loop iteration), never here:
+	// GenerateMoves is a pure query (audit Task 3). If both the deck and
+	// the recyclable discard are exhausted, fall through to Pass.
 	if len(moves) == 0 {
-		if len(state.Deck) == 0 && len(state.Discard) > 1 {
-			refillDeckFromDiscard(state)
-		}
 		if len(state.Deck) > 0 {
 			moves = append(moves, sim.Move{
-				Type:    sim.MoveDraw,
+				Type:     sim.MoveDraw,
 				PlayerID: state.Active,
 			})
 		} else {
 			// No deck and no plays — pass
 			moves = append(moves, sim.Move{
-				Type:    sim.MovePass,
+				Type:     sim.MovePass,
 				PlayerID: state.Active,
 			})
 		}

@@ -1,7 +1,9 @@
 package tricktaking
 
 import (
+	"fmt"
 	"math/rand/v2"
+	"reflect"
 	"testing"
 
 	"github.com/darwindeck/darwindeck/pkg/genome"
@@ -18,6 +20,8 @@ func runGame(g *genome.Genome, seed uint64) sim.GameResult {
 	maxTurns := g.MaxTurns()
 
 	for {
+		runner.Upkeep(state, g)
+
 		winner := runner.CheckEnd(state, g)
 		if winner >= 0 {
 			return sim.GameResult{
@@ -186,6 +190,7 @@ func TestTrumpBeatsOffSuit(t *testing.T) {
 	// Play through some tricks and verify no panics/errors
 	ai := &sim.RandomAI{}
 	for i := 0; i < 52; i++ {
+		runner.Upkeep(state, g)
 		winner := runner.CheckEnd(state, g)
 		if winner >= 0 {
 			break
@@ -325,6 +330,7 @@ func TestMultiRoundReDeals(t *testing.T) {
 	roundsCompleted := 0
 	prevRound := state.Round
 	for state.Turn < maxTurns {
+		runner.Upkeep(state, g)
 		winner := runner.CheckEnd(state, g)
 		if state.Round != prevRound {
 			roundsCompleted++
@@ -480,6 +486,7 @@ func TestTrumpCutRedealAssignsTrumpEvenWhenDeckFullyDealt(t *testing.T) {
 	maxTurns := g.MaxTurns()
 	sawRound1 := false
 	for state.Turn < maxTurns {
+		runner.Upkeep(state, g)
 		winner := runner.CheckEnd(state, g)
 		if state.Round == 1 && !sawRound1 {
 			sawRound1 = true
@@ -515,5 +522,83 @@ func TestAllTrickSeedsValid(t *testing.T) {
 		if len(errs) != 0 {
 			t.Errorf("%s failed validation: %v", g.ID, errs)
 		}
+	}
+}
+
+// stateHash serializes every GameState field except RNG (a pointer; the
+// purity tests pass a nil RNG sentinel so any dereference panics loudly).
+// Used to assert that query methods do not mutate state (audit Task 3).
+func stateHash(s *sim.GameState) string {
+	top := "nil"
+	if s.TopCard != nil {
+		top = s.TopCard.String()
+	}
+	return fmt.Sprintf("deck=%v|hands=%v|discard=%v|tableau=%v|scores=%v|turn=%d|active=%d|phase=%d|np=%d|dir=%d|round=%d|maxround=%d|top=%s|tc=%v|tp=%v|tl=%d|trump=%d|broken=%t|melds=%v|owners=%v|events=%v",
+		s.Deck, s.Hands, s.Discard, s.Tableau, s.Scores, s.Turn, s.Active,
+		s.Phase, s.NumPlayers, s.Direction, s.Round, s.MaxRound, top,
+		s.TrickCards, s.TrickPlayers, s.TrickLeader, s.TrumpSuit, s.TrickBroken,
+		s.Melds, s.MeldOwner, s.Events)
+}
+
+// TestGenerateMovesIsPure pins audit Task 3: GenerateMoves must be a pure
+// query -- calling it any number of times must not change state and must
+// return the same move list.
+func TestGenerateMovesIsPure(t *testing.T) {
+	g := seeds.Whist()
+	runner := &Runner{}
+	state := runner.Setup(g, rand.New(rand.NewPCG(5, 0)))
+	state.RNG = nil // sentinel: pure queries must never touch the RNG
+
+	before := stateHash(state)
+	m1 := runner.GenerateMoves(state, g)
+	after1 := stateHash(state)
+	m2 := runner.GenerateMoves(state, g)
+	after2 := stateHash(state)
+
+	if after1 != before {
+		t.Errorf("first GenerateMoves mutated state:\nbefore: %s\nafter:  %s", before, after1)
+	}
+	if after2 != before {
+		t.Errorf("second GenerateMoves mutated state:\nbefore: %s\nafter:  %s", before, after2)
+	}
+	if !reflect.DeepEqual(m1, m2) {
+		t.Errorf("repeated GenerateMoves returned different moves:\n%v\nvs\n%v", m1, m2)
+	}
+}
+
+// TestCheckEndIsPure pins audit Task 3: CheckEnd must be a pure query. The
+// historical violation: on an all-hands-empty state mid-game it incremented
+// state.Round and redealt fresh hands (advancing state.RNG). That round
+// transition now lives in Upkeep.
+func TestCheckEndIsPure(t *testing.T) {
+	g := seeds.Whist()
+	g.TrickTaking.RoundsPerGame = 3
+	g.HandSize = 4
+	g.Players = 2
+
+	runner := &Runner{}
+	state := runner.Setup(g, rand.New(rand.NewPCG(9, 0)))
+	state.RNG = nil // sentinel: pure queries must never touch the RNG
+
+	// Simulate a finished round: every hand played out into the tableau.
+	for i := range state.Hands {
+		state.Tableau[i] = append(state.Tableau[i], state.Hands[i]...)
+		state.Hands[i] = state.Hands[i][:0]
+	}
+
+	before := stateHash(state)
+	w1 := runner.CheckEnd(state, g)
+	after1 := stateHash(state)
+	w2 := runner.CheckEnd(state, g)
+	after2 := stateHash(state)
+
+	if after1 != before {
+		t.Errorf("first CheckEnd mutated state:\nbefore: %s\nafter:  %s", before, after1)
+	}
+	if after2 != before {
+		t.Errorf("second CheckEnd mutated state:\nbefore: %s\nafter:  %s", before, after2)
+	}
+	if w1 != w2 {
+		t.Errorf("repeated CheckEnd returned different winners: %d vs %d", w1, w2)
 	}
 }

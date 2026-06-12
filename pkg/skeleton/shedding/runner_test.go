@@ -1,7 +1,9 @@
 package shedding
 
 import (
+	"fmt"
 	"math/rand/v2"
+	"reflect"
 	"testing"
 
 	"github.com/darwindeck/darwindeck/pkg/genome"
@@ -19,6 +21,8 @@ func runGame(g *genome.Genome, seed uint64) sim.GameResult {
 	maxTurns := g.MaxTurns()
 
 	for {
+		runner.Upkeep(state, g)
+
 		winner := runner.CheckEnd(state, g)
 		if winner >= 0 {
 			handSizes := make([]int, state.NumPlayers)
@@ -140,6 +144,8 @@ func TestMovesAlwaysExist(t *testing.T) {
 	state := runner.Setup(g, rng)
 
 	for turn := 0; turn < 200; turn++ {
+		runner.Upkeep(state, g)
+
 		winner := runner.CheckEnd(state, g)
 		if winner >= 0 {
 			break
@@ -622,13 +628,14 @@ func TestSetupStoresRNG(t *testing.T) {
 	}
 }
 
-// TestGenerateMovesReshufflesDiscardWhenDeckEmpty constructs a state where
-// the deck is empty and the active player has no playable card, but the
-// discard pile has cards beyond the top. Real-world shedding games (Crazy
-// Eights, Mau-Mau) reshuffle the discard pile back into the deck instead of
-// looping passes. GenerateMoves must perform the reshuffle and offer a Draw
-// rather than a Pass so the game can progress.
-func TestGenerateMovesReshufflesDiscardWhenDeckEmpty(t *testing.T) {
+// TestUpkeepReshufflesDiscardWhenDeckEmpty constructs a state where the deck
+// is empty and the active player has no playable card, but the discard pile
+// has cards beyond the top. Real-world shedding games (Crazy Eights, Mau-Mau)
+// reshuffle the discard pile back into the deck instead of looping passes.
+// Upkeep must perform the reshuffle (GenerateMoves is a pure query and may
+// not -- audit Task 3) so the subsequent GenerateMoves offers a Draw rather
+// than a Pass and the game can progress.
+func TestUpkeepReshufflesDiscardWhenDeckEmpty(t *testing.T) {
 	g := seeds.CrazyEights()
 	runner := &Runner{}
 	rng := rand.New(rand.NewPCG(3, 0))
@@ -650,6 +657,7 @@ func TestGenerateMovesReshufflesDiscardWhenDeckEmpty(t *testing.T) {
 	state.TopCard = &sim.Card{Suit: top.Suit, Rank: top.Rank}
 	state.Hands[state.Active] = []sim.Card{{Suit: sim.Spades, Rank: sim.Three}}
 
+	runner.Upkeep(state, g)
 	moves := runner.GenerateMoves(state, g)
 	if len(moves) == 0 {
 		t.Fatal("expected a move (draw after reshuffle)")
@@ -1020,5 +1028,67 @@ func TestStackedSpecialsTargetOriginalNextPlayer(t *testing.T) {
 	// Player 2 should not have received any cards from the stacked specials.
 	if got := len(state.Hands[2]); got != 1 {
 		t.Fatalf("player 2 hand size = %d, want 1; specials wrongly targeted them after Skip rotated Active", got)
+	}
+}
+
+// stateHash serializes every GameState field except RNG (a pointer; the
+// purity tests pass a nil RNG sentinel so any dereference panics loudly).
+// Used to assert that query methods do not mutate state (audit Task 3).
+func stateHash(s *sim.GameState) string {
+	top := "nil"
+	if s.TopCard != nil {
+		top = s.TopCard.String()
+	}
+	return fmt.Sprintf("deck=%v|hands=%v|discard=%v|tableau=%v|scores=%v|turn=%d|active=%d|phase=%d|np=%d|dir=%d|round=%d|maxround=%d|top=%s|tc=%v|tp=%v|tl=%d|trump=%d|broken=%t|melds=%v|owners=%v|events=%v",
+		s.Deck, s.Hands, s.Discard, s.Tableau, s.Scores, s.Turn, s.Active,
+		s.Phase, s.NumPlayers, s.Direction, s.Round, s.MaxRound, top,
+		s.TrickCards, s.TrickPlayers, s.TrickLeader, s.TrumpSuit, s.TrickBroken,
+		s.Melds, s.MeldOwner, s.Events)
+}
+
+// TestGenerateMovesIsPure pins audit Task 3: GenerateMoves must be a pure
+// query. The historical violation: with an empty deck and no playable card it
+// recycled the discard pile into the deck and advanced state.RNG. That
+// maintenance now lives in Upkeep.
+func TestGenerateMovesIsPure(t *testing.T) {
+	g := seeds.CrazyEights()
+	runner := &Runner{}
+
+	// Scenario A: ordinary post-setup state.
+	fresh := runner.Setup(g, rand.New(rand.NewPCG(3, 0)))
+	fresh.RNG = nil // sentinel: pure queries must never touch the RNG
+
+	// Scenario B: stalled state that used to trigger the in-query recycle --
+	// empty deck, multi-card discard pile, no playable card in hand.
+	stalled := runner.Setup(g, rand.New(rand.NewPCG(3, 0)))
+	stalled.Deck = stalled.Deck[:0]
+	top := sim.Card{Suit: sim.Hearts, Rank: sim.Two}
+	stalled.Discard = []sim.Card{
+		{Suit: sim.Hearts, Rank: sim.Four},
+		{Suit: sim.Diamonds, Rank: sim.Five},
+		{Suit: sim.Clubs, Rank: sim.Six},
+		{Suit: sim.Spades, Rank: sim.Seven},
+		top,
+	}
+	stalled.TopCard = &sim.Card{Suit: top.Suit, Rank: top.Rank}
+	stalled.Hands[stalled.Active] = []sim.Card{{Suit: sim.Spades, Rank: sim.Three}}
+	stalled.RNG = nil
+
+	for name, state := range map[string]*sim.GameState{"fresh": fresh, "stalled": stalled} {
+		before := stateHash(state)
+		m1 := runner.GenerateMoves(state, g)
+		after1 := stateHash(state)
+		m2 := runner.GenerateMoves(state, g)
+		after2 := stateHash(state)
+
+		if after1 != before {
+			t.Errorf("%s: first GenerateMoves mutated state:\nbefore: %s\nafter:  %s", name, before, after1)
+		}
+		if after2 != before {
+			t.Errorf("%s: second GenerateMoves mutated state:\nbefore: %s\nafter:  %s", name, before, after2)
+		}
+		if !reflect.DeepEqual(m1, m2) {
+			t.Errorf("%s: repeated GenerateMoves returned different moves:\n%v\nvs\n%v", name, m1, m2)
+		}
 	}
 }

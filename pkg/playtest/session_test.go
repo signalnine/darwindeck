@@ -13,6 +13,7 @@ import (
 type stubRunner struct{}
 
 func (stubRunner) Setup(g *genome.Genome, rng *rand.Rand) *sim.GameState { return nil }
+func (stubRunner) Upkeep(state *sim.GameState, g *genome.Genome)         {}
 func (stubRunner) GenerateMoves(state *sim.GameState, g *genome.Genome) []sim.Move {
 	return nil
 }

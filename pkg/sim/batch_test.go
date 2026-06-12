@@ -10,8 +10,9 @@ import (
 // stubRunner satisfies GenericRunner but is never invoked when n==0.
 type stubRunner struct{}
 
-func (stubRunner) Setup(g *genome.Genome, rng *rand.Rand) *GameState         { return nil }
-func (stubRunner) GenerateMoves(state *GameState, g *genome.Genome) []Move   { return nil }
+func (stubRunner) Setup(g *genome.Genome, rng *rand.Rand) *GameState       { return nil }
+func (stubRunner) Upkeep(state *GameState, g *genome.Genome)               {}
+func (stubRunner) GenerateMoves(state *GameState, g *genome.Genome) []Move { return nil }
 func (stubRunner) ApplyMove(state *GameState, move Move, g *genome.Genome) []Event {
 	return nil
 }

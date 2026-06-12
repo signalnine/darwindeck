@@ -1,6 +1,7 @@
 package rummy
 
 import (
+	"fmt"
 	"math/rand/v2"
 	"reflect"
 	"testing"
@@ -19,6 +20,8 @@ func runGame(g *genome.Genome, seed uint64) sim.GameResult {
 	maxTurns := g.MaxTurns()
 
 	for {
+		runner.Upkeep(state, g)
+
 		winner := runner.CheckEnd(state, g)
 		if winner >= 0 {
 			return sim.GameResult{
@@ -485,12 +488,13 @@ func TestStockpileReshufflePreservesCards(t *testing.T) {
 	}
 }
 
-// TestScoreRoundPreservesHookContributions verifies that scoreRound uses
-// additive deadwood (-=) instead of assignment (=), so that any prior
-// contributions written by HookScoring/HookEndOfRound hooks survive into the
-// final scores used to pick the winner. dd-2lq regression: when scoreRound
-// used `state.Scores[i] = -deadwood` it clobbered hook output, silently
-// neutralizing every borrowed scoring mechanic that targets Rummy.
+// TestScoreRoundPreservesHookContributions verifies that deadwood banking
+// (Upkeep -> bankDeadwood) uses additive deadwood (-=) instead of assignment
+// (=), so that any prior contributions written by HookScoring/HookEndOfRound
+// hooks survive into the final scores used to pick the winner (CheckEnd).
+// dd-2lq regression: when the banking used `state.Scores[i] = -deadwood` it
+// clobbered hook output, silently neutralizing every borrowed scoring
+// mechanic that targets Rummy.
 func TestScoreRoundPreservesHookContributions(t *testing.T) {
 	g := seeds.GinRummy()
 
@@ -515,16 +519,21 @@ func TestScoreRoundPreservesHookContributions(t *testing.T) {
 			},
 		},
 		// Simulate a HookScoring/HookEndOfRound hook having already awarded
-		// player 1 a large bonus before CheckEnd→scoreRound runs.
+		// player 1 a large bonus before Upkeep banks deadwood.
 		Scores:     []int{0, 1000},
 		NumPlayers: 2,
+		Phase:      sim.PhaseEnd,
 	}
 
-	winner := scoreRound(state, g)
+	// Drive the real loop sequence: Upkeep banks deadwood, CheckEnd picks
+	// the winner from the banked scores.
+	runner := &Runner{}
+	runner.Upkeep(state, g)
+	winner := runner.CheckEnd(state, g)
 
 	if winner != 1 {
 		t.Fatalf("hook gave player 1 a +1000 bonus on identical deadwood; "+
-			"scoreRound clobbered it (winner=%d, scores=%v)", winner, state.Scores)
+			"deadwood banking clobbered it (winner=%d, scores=%v)", winner, state.Scores)
 	}
 	if state.Scores[1] <= state.Scores[0] {
 		t.Fatalf("player 1's hook bonus should survive deadwood subtraction "+
@@ -675,5 +684,86 @@ func TestPhaseProgression(t *testing.T) {
 	runner.ApplyMove(state, sim.Move{Type: sim.MovePass, PlayerID: state.Active}, g)
 	if state.Phase != sim.PhaseDiscard {
 		t.Fatalf("after pass meld, expected PhaseDiscard, got %d", state.Phase)
+	}
+}
+
+// stateHash serializes every GameState field except RNG (a pointer; the
+// purity tests pass a nil RNG sentinel so any dereference panics loudly).
+// Used to assert that query methods do not mutate state (audit Task 3).
+func stateHash(s *sim.GameState) string {
+	top := "nil"
+	if s.TopCard != nil {
+		top = s.TopCard.String()
+	}
+	return fmt.Sprintf("deck=%v|hands=%v|discard=%v|tableau=%v|scores=%v|turn=%d|active=%d|phase=%d|np=%d|dir=%d|round=%d|maxround=%d|top=%s|tc=%v|tp=%v|tl=%d|trump=%d|broken=%t|melds=%v|owners=%v|events=%v",
+		s.Deck, s.Hands, s.Discard, s.Tableau, s.Scores, s.Turn, s.Active,
+		s.Phase, s.NumPlayers, s.Direction, s.Round, s.MaxRound, top,
+		s.TrickCards, s.TrickPlayers, s.TrickLeader, s.TrumpSuit, s.TrickBroken,
+		s.Melds, s.MeldOwner, s.Events)
+}
+
+// TestGenerateMovesIsPure pins audit Task 3: GenerateMoves must be a pure
+// query in every phase -- no state mutation, identical move lists on repeat.
+func TestGenerateMovesIsPure(t *testing.T) {
+	g := seeds.GinRummy()
+	runner := &Runner{}
+
+	for _, phase := range []sim.PhaseType{sim.PhaseDraw, sim.PhaseMeld, sim.PhaseDiscard} {
+		state := runner.Setup(g, rand.New(rand.NewPCG(7, 0)))
+		state.Phase = phase
+		state.RNG = nil // sentinel: pure queries must never touch the RNG
+
+		before := stateHash(state)
+		m1 := runner.GenerateMoves(state, g)
+		after1 := stateHash(state)
+		m2 := runner.GenerateMoves(state, g)
+		after2 := stateHash(state)
+
+		if after1 != before {
+			t.Errorf("phase %d: first GenerateMoves mutated state:\nbefore: %s\nafter:  %s", phase, before, after1)
+		}
+		if after2 != before {
+			t.Errorf("phase %d: second GenerateMoves mutated state:\nbefore: %s\nafter:  %s", phase, before, after2)
+		}
+		if !reflect.DeepEqual(m1, m2) {
+			t.Errorf("phase %d: repeated GenerateMoves returned different moves:\n%v\nvs\n%v", phase, m1, m2)
+		}
+	}
+}
+
+// TestCheckEndIsPure pins audit Task 3: CheckEnd must be a pure query. The
+// historical violation: on PhaseEnd it banked each player's deadwood into
+// state.Scores (scoreRound), so a second call double-subtracted deadwood and
+// could flip the winner. Deadwood banking now lives in Upkeep.
+func TestCheckEndIsPure(t *testing.T) {
+	g := seeds.GinRummy()
+	runner := &Runner{}
+
+	state := sim.NewGameState(2)
+	state.Hands[0] = []sim.Card{
+		{Suit: sim.Hearts, Rank: sim.Two},
+		{Suit: sim.Spades, Rank: sim.Three},
+	}
+	state.Hands[1] = []sim.Card{
+		{Suit: sim.Clubs, Rank: sim.King},
+		{Suit: sim.Diamonds, Rank: sim.Queen},
+	}
+	state.Phase = sim.PhaseEnd
+	state.RNG = nil // sentinel: pure queries must never touch the RNG
+
+	before := stateHash(state)
+	w1 := runner.CheckEnd(state, g)
+	after1 := stateHash(state)
+	w2 := runner.CheckEnd(state, g)
+	after2 := stateHash(state)
+
+	if after1 != before {
+		t.Errorf("first CheckEnd mutated state:\nbefore: %s\nafter:  %s", before, after1)
+	}
+	if after2 != before {
+		t.Errorf("second CheckEnd mutated state:\nbefore: %s\nafter:  %s", before, after2)
+	}
+	if w1 != w2 {
+		t.Errorf("repeated CheckEnd returned different winners: %d vs %d", w1, w2)
 	}
 }
