@@ -1,0 +1,12 @@
+{
+  "non_reproducible": true,
+  "commit_sha": "unknown",
+  "go_version": "unknown",
+  "platform": "unknown",
+  "cli_args": "unknown",
+  "master_seed": "unknown",
+  "calibration_seeds": "unknown",
+  "date": "2026-04-12",
+  "source_path": "output/2026-04-12_19-43-11/ (untracked, never committed)",
+  "notes": "Pre-fix flagship evolution run preserved as evidence of previously published results; predates the Apr-Jun 2026 fitness fixes and is explicitly NOT reproducible. The run directory was never committed, so the producing commit is unknowable from git history. summary.json records start_time 2026-04-12T19:43:11-07:00, duration 15m34.9s, population_size 2000, generations 200, best_fitness 0.9193, top_games_count 30. Only rulebook.md and report.md per game are preserved here."
+}

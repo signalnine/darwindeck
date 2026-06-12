@@ -1,0 +1,12 @@
+{
+  "non_reproducible": true,
+  "commit_sha": "unknown",
+  "go_version": "unknown",
+  "platform": "unknown",
+  "cli_args": "unknown",
+  "master_seed": "unknown",
+  "calibration_seeds": "unknown",
+  "date": "unknown",
+  "source_path": "output/experiments/{full,large}/results.json (untracked, never committed)",
+  "notes": "Pre-fix diversity-experiment results (algorithm comparison runs labeled 'full' and 'large') preserved as evidence of previously published results; predate the Apr-Jun 2026 fitness fixes and are explicitly NOT reproducible. Never committed, so the producing commit, exact CLI invocation, and run dates are unknowable from git history (file mtimes suggest 2026-04-11 for full and 2026-04-12 for large). Per-run config names and seeds are embedded in each results.json entry."
+}

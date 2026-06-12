@@ -1,0 +1,542 @@
+[
+  {
+    "config": "baseline",
+    "seed": 2,
+    "coverage": 0.12,
+    "qd_score": 30.35361942642158,
+    "pairwise_dist": 0.28458271035953164,
+    "median_fitness": 0.8320251254442949,
+    "num_qualified_games": 1749,
+    "duration": "41m19.25s",
+    "per_skeleton": {
+      "rummy": {
+        "coverage": 0.15,
+        "qd_score": 13.238904343909143,
+        "num_games": 1079
+      },
+      "shedding": {
+        "coverage": 0.1,
+        "qd_score": 7.831799304170006,
+        "num_games": 232
+      },
+      "trick_taking": {
+        "coverage": 0.11,
+        "qd_score": 9.282915778342431,
+        "num_games": 438
+      }
+    }
+  },
+  {
+    "config": "baseline",
+    "seed": 1,
+    "coverage": 0.09666666666666666,
+    "qd_score": 24.241248092662406,
+    "pairwise_dist": 0.23109185380522246,
+    "median_fitness": 0.7915685497952372,
+    "num_qualified_games": 1655,
+    "duration": "44m56.56s",
+    "per_skeleton": {
+      "rummy": {
+        "coverage": 0.12,
+        "qd_score": 10.748931068007323,
+        "num_games": 338
+      },
+      "shedding": {
+        "coverage": 0.11,
+        "qd_score": 8.698976686089344,
+        "num_games": 830
+      },
+      "trick_taking": {
+        "coverage": 0.06,
+        "qd_score": 4.79334033856574,
+        "num_games": 487
+      }
+    }
+  },
+  {
+    "config": "hybrid",
+    "seed": 1002,
+    "coverage": 0.25666666666666665,
+    "qd_score": 62.435813113109276,
+    "pairwise_dist": 0.6144799994725849,
+    "median_fitness": 0.7671759615639366,
+    "num_qualified_games": 2366,
+    "duration": "1h0m7.435s",
+    "per_skeleton": {
+      "rummy": {
+        "coverage": 0.19,
+        "qd_score": 16.049775826433873,
+        "num_games": 648
+      },
+      "shedding": {
+        "coverage": 0.22,
+        "qd_score": 17.44153685457514,
+        "num_games": 769
+      },
+      "trick_taking": {
+        "coverage": 0.36,
+        "qd_score": 28.944500432100263,
+        "num_games": 949
+      }
+    }
+  },
+  {
+    "config": "hybrid",
+    "seed": 1001,
+    "coverage": 0.22,
+    "qd_score": 54.38963954824216,
+    "pairwise_dist": 0.5463736454228857,
+    "median_fitness": 0.7666971609597169,
+    "num_qualified_games": 1795,
+    "duration": "1h2m26.699s",
+    "per_skeleton": {
+      "rummy": {
+        "coverage": 0.18,
+        "qd_score": 15.304773165446216,
+        "num_games": 444
+      },
+      "shedding": {
+        "coverage": 0.18,
+        "qd_score": 14.174282806289014,
+        "num_games": 703
+      },
+      "trick_taking": {
+        "coverage": 0.3,
+        "qd_score": 24.91058357650693,
+        "num_games": 648
+      }
+    }
+  },
+  {
+    "config": "baseline",
+    "seed": 3,
+    "coverage": 0.15,
+    "qd_score": 37.75096929384756,
+    "pairwise_dist": 0.257941256874597,
+    "median_fitness": 0.8152897509672608,
+    "num_qualified_games": 1822,
+    "duration": "35m18.196s",
+    "per_skeleton": {
+      "rummy": {
+        "coverage": 0.18,
+        "qd_score": 15.97111013709679,
+        "num_games": 1090
+      },
+      "shedding": {
+        "coverage": 0.1,
+        "qd_score": 7.857769619981127,
+        "num_games": 621
+      },
+      "trick_taking": {
+        "coverage": 0.17,
+        "qd_score": 13.922089536769647,
+        "num_games": 111
+      }
+    }
+  },
+  {
+    "config": "baseline",
+    "seed": 4,
+    "coverage": 0.11666666666666667,
+    "qd_score": 29.593922936094764,
+    "pairwise_dist": 0.2765437848720287,
+    "median_fitness": 0.8318268303992803,
+    "num_qualified_games": 1742,
+    "duration": "37m57.054s",
+    "per_skeleton": {
+      "rummy": {
+        "coverage": 0.14,
+        "qd_score": 12.373344625872262,
+        "num_games": 1105
+      },
+      "shedding": {
+        "coverage": 0.06,
+        "qd_score": 4.676100660905144,
+        "num_games": 129
+      },
+      "trick_taking": {
+        "coverage": 0.15,
+        "qd_score": 12.544477649317358,
+        "num_games": 508
+      }
+    }
+  },
+  {
+    "config": "hybrid",
+    "seed": 1003,
+    "coverage": 0.2633333333333333,
+    "qd_score": 64.42521612338244,
+    "pairwise_dist": 0.5242650264831193,
+    "median_fitness": 0.7579997756987753,
+    "num_qualified_games": 2163,
+    "duration": "58m58.869s",
+    "per_skeleton": {
+      "rummy": {
+        "coverage": 0.19,
+        "qd_score": 15.928059413572067,
+        "num_games": 126
+      },
+      "shedding": {
+        "coverage": 0.23,
+        "qd_score": 18.139905551211093,
+        "num_games": 1066
+      },
+      "trick_taking": {
+        "coverage": 0.37,
+        "qd_score": 30.357251158599276,
+        "num_games": 971
+      }
+    }
+  },
+  {
+    "config": "baseline",
+    "seed": 5,
+    "coverage": 0.10666666666666667,
+    "qd_score": 27.019932713298537,
+    "pairwise_dist": 0.224053621329472,
+    "median_fitness": 0.7971390350646761,
+    "num_qualified_games": 1682,
+    "duration": "44m11.92s",
+    "per_skeleton": {
+      "rummy": {
+        "coverage": 0.11,
+        "qd_score": 9.65453243613481,
+        "num_games": 574
+      },
+      "shedding": {
+        "coverage": 0.11,
+        "qd_score": 8.7131735370483,
+        "num_games": 979
+      },
+      "trick_taking": {
+        "coverage": 0.1,
+        "qd_score": 8.65222674011543,
+        "num_games": 129
+      }
+    }
+  },
+  {
+    "config": "hybrid",
+    "seed": 1004,
+    "coverage": 0.22333333333333333,
+    "qd_score": 55.26345631390005,
+    "pairwise_dist": 0.45501728729583524,
+    "median_fitness": 0.7815602583336618,
+    "num_qualified_games": 2155,
+    "duration": "1h3m7.934s",
+    "per_skeleton": {
+      "rummy": {
+        "coverage": 0.26,
+        "qd_score": 22.45806183699905,
+        "num_games": 1041
+      },
+      "shedding": {
+        "coverage": 0.23,
+        "qd_score": 18.097389954294332,
+        "num_games": 1029
+      },
+      "trick_taking": {
+        "coverage": 0.18,
+        "qd_score": 14.708004522606673,
+        "num_games": 85
+      }
+    }
+  },
+  {
+    "config": "baseline",
+    "seed": 6,
+    "coverage": 0.1,
+    "qd_score": 25.60191295018794,
+    "pairwise_dist": 0.20398546940705267,
+    "median_fitness": 0.7963084559200313,
+    "num_qualified_games": 1769,
+    "duration": "44m36.44s",
+    "per_skeleton": {
+      "rummy": {
+        "coverage": 0.17,
+        "qd_score": 14.963958382547212,
+        "num_games": 520
+      },
+      "shedding": {
+        "coverage": 0.09,
+        "qd_score": 7.264857599116146,
+        "num_games": 1220
+      },
+      "trick_taking": {
+        "coverage": 0.04,
+        "qd_score": 3.373096968524583,
+        "num_games": 29
+      }
+    }
+  },
+  {
+    "config": "hybrid",
+    "seed": 1005,
+    "coverage": 0.20666666666666667,
+    "qd_score": 51.60705506756534,
+    "pairwise_dist": 0.461827135931159,
+    "median_fitness": 0.7655342124949348,
+    "num_qualified_games": 2147,
+    "duration": "1h4m21.83s",
+    "per_skeleton": {
+      "rummy": {
+        "coverage": 0.24,
+        "qd_score": 20.64115386602501,
+        "num_games": 596
+      },
+      "shedding": {
+        "coverage": 0.22,
+        "qd_score": 17.23787255501583,
+        "num_games": 628
+      },
+      "trick_taking": {
+        "coverage": 0.16,
+        "qd_score": 13.728028646524505,
+        "num_games": 923
+      }
+    }
+  },
+  {
+    "config": "baseline",
+    "seed": 7,
+    "coverage": 0.12333333333333334,
+    "qd_score": 31.21669160294168,
+    "pairwise_dist": 0.2903843769071057,
+    "median_fitness": 0.8501936348846039,
+    "num_qualified_games": 1819,
+    "duration": "42m9.175s",
+    "per_skeleton": {
+      "rummy": {
+        "coverage": 0.15,
+        "qd_score": 13.46401698534155,
+        "num_games": 1383
+      },
+      "shedding": {
+        "coverage": 0.06,
+        "qd_score": 4.769209237712641,
+        "num_games": 61
+      },
+      "trick_taking": {
+        "coverage": 0.16,
+        "qd_score": 12.98346537988749,
+        "num_games": 375
+      }
+    }
+  },
+  {
+    "config": "hybrid",
+    "seed": 1006,
+    "coverage": 0.24666666666666667,
+    "qd_score": 60.57872603648635,
+    "pairwise_dist": 0.5256107695963673,
+    "median_fitness": 0.781146433196085,
+    "num_qualified_games": 1836,
+    "duration": "1h1m8.57s",
+    "per_skeleton": {
+      "rummy": {
+        "coverage": 0.23,
+        "qd_score": 19.7587558497274,
+        "num_games": 968
+      },
+      "shedding": {
+        "coverage": 0.18,
+        "qd_score": 14.052021540965567,
+        "num_games": 550
+      },
+      "trick_taking": {
+        "coverage": 0.33,
+        "qd_score": 26.767948645793382,
+        "num_games": 318
+      }
+    }
+  },
+  {
+    "config": "baseline",
+    "seed": 8,
+    "coverage": 0.13,
+    "qd_score": 33.0756451135993,
+    "pairwise_dist": 0.28489425474602237,
+    "median_fitness": 0.8477293818564215,
+    "num_qualified_games": 1777,
+    "duration": "41m14.133s",
+    "per_skeleton": {
+      "rummy": {
+        "coverage": 0.17,
+        "qd_score": 15.124368358895865,
+        "num_games": 1430
+      },
+      "shedding": {
+        "coverage": 0.07,
+        "qd_score": 5.573942400043315,
+        "num_games": 95
+      },
+      "trick_taking": {
+        "coverage": 0.15,
+        "qd_score": 12.37733435466012,
+        "num_games": 252
+      }
+    }
+  },
+  {
+    "config": "hybrid",
+    "seed": 1007,
+    "coverage": 0.25666666666666665,
+    "qd_score": 63.886503097106214,
+    "pairwise_dist": 0.4979821479903033,
+    "median_fitness": 0.7710767175470993,
+    "num_qualified_games": 2301,
+    "duration": "58m19.286s",
+    "per_skeleton": {
+      "rummy": {
+        "coverage": 0.27,
+        "qd_score": 23.320771974078237,
+        "num_games": 604
+      },
+      "shedding": {
+        "coverage": 0.22,
+        "qd_score": 17.612736768342796,
+        "num_games": 1067
+      },
+      "trick_taking": {
+        "coverage": 0.28,
+        "qd_score": 22.952994354685178,
+        "num_games": 630
+      }
+    }
+  },
+  {
+    "config": "hybrid",
+    "seed": 1008,
+    "coverage": 0.23333333333333334,
+    "qd_score": 56.9624816330609,
+    "pairwise_dist": 0.4635780099457097,
+    "median_fitness": 0.7840770466100464,
+    "num_qualified_games": 2067,
+    "duration": "59m10.749s",
+    "per_skeleton": {
+      "rummy": {
+        "coverage": 0.24,
+        "qd_score": 20.92988323380196,
+        "num_games": 1239
+      },
+      "shedding": {
+        "coverage": 0.21,
+        "qd_score": 16.555997883146095,
+        "num_games": 704
+      },
+      "trick_taking": {
+        "coverage": 0.25,
+        "qd_score": 19.476600516112843,
+        "num_games": 124
+      }
+    }
+  },
+  {
+    "config": "baseline",
+    "seed": 9,
+    "coverage": 0.07666666666666666,
+    "qd_score": 19.749783902104717,
+    "pairwise_dist": 0.25292479799215295,
+    "median_fitness": 0.849917580354046,
+    "num_qualified_games": 1826,
+    "duration": "45m11.78s",
+    "per_skeleton": {
+      "rummy": {
+        "coverage": 0.11,
+        "qd_score": 10.057402414257155,
+        "num_games": 1465
+      },
+      "shedding": {
+        "coverage": 0.07,
+        "qd_score": 5.6050092726706495,
+        "num_games": 252
+      },
+      "trick_taking": {
+        "coverage": 0.05,
+        "qd_score": 4.087372215176914,
+        "num_games": 109
+      }
+    }
+  },
+  {
+    "config": "baseline",
+    "seed": 10,
+    "coverage": 0.10333333333333333,
+    "qd_score": 26.504137382339415,
+    "pairwise_dist": 0.27465936778471334,
+    "median_fitness": 0.8131306225836258,
+    "num_qualified_games": 1632,
+    "duration": "36m46.389s",
+    "per_skeleton": {
+      "rummy": {
+        "coverage": 0.13,
+        "qd_score": 11.580159262569909,
+        "num_games": 861
+      },
+      "shedding": {
+        "coverage": 0.08,
+        "qd_score": 6.278663308815487,
+        "num_games": 303
+      },
+      "trick_taking": {
+        "coverage": 0.1,
+        "qd_score": 8.645314810954021,
+        "num_games": 468
+      }
+    }
+  },
+  {
+    "config": "hybrid",
+    "seed": 1009,
+    "coverage": 0.25,
+    "qd_score": 61.86303169260171,
+    "pairwise_dist": 0.5856803412557502,
+    "median_fitness": 0.7848474931848499,
+    "num_qualified_games": 1988,
+    "duration": "47m54.516s",
+    "per_skeleton": {
+      "rummy": {
+        "coverage": 0.19,
+        "qd_score": 16.48617281592047,
+        "num_games": 756
+      },
+      "shedding": {
+        "coverage": 0.21,
+        "qd_score": 16.355810710685812,
+        "num_games": 237
+      },
+      "trick_taking": {
+        "coverage": 0.35,
+        "qd_score": 29.02104816599543,
+        "num_games": 995
+      }
+    }
+  },
+  {
+    "config": "hybrid",
+    "seed": 1010,
+    "coverage": 0.19666666666666666,
+    "qd_score": 48.52971521971227,
+    "pairwise_dist": 0.4762562675803128,
+    "median_fitness": 0.7685785908662577,
+    "num_qualified_games": 2255,
+    "duration": "31m48.165s",
+    "per_skeleton": {
+      "rummy": {
+        "coverage": 0.21,
+        "qd_score": 18.039123012039777,
+        "num_games": 780
+      },
+      "shedding": {
+        "coverage": 0.21,
+        "qd_score": 16.624620831699684,
+        "num_games": 985
+      },
+      "trick_taking": {
+        "coverage": 0.17,
+        "qd_score": 13.86597137597281,
+        "num_games": 490
+      }
+    }
+  }
+]
