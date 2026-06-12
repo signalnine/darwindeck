@@ -620,19 +620,20 @@ func TestInteractionSolitaireLikeIsZero(t *testing.T) {
 
 // TestInteractionDrawTwoHeavySheddingIsHigh: required case 2. A draw-2-heavy
 // shedding game: most moves perturb the next player's options (OptionDelta
-// != 0) and draw_two specials fire. The event stream is dominated by the
-// victims' penalty EventCardDrawn entries, which the old metric scored
-// against (3 specials / 20 events => 0.5); the perturbation metric reads the
-// 6/10 interactive turns instead.
+// != 0) and three of the remaining turns are draw_two attacks (Attack set at
+// record time, audit Wave D fix 3). Union: 9 of 10 turns interactive. The
+// event stream is dominated by the victims' penalty EventCardDrawn entries,
+// which the old event-taxonomy metric scored against (3 specials / 20 events
+// => 0.5); the per-turn metric reads the records instead.
 func TestInteractionDrawTwoHeavySheddingIsHigh(t *testing.T) {
 	records := []sim.TurnRecord{
 		{Player: 0, LegalMoves: 4, OptionDelta: -2},
-		{Player: 1, LegalMoves: 2, OptionDelta: 0},
+		{Player: 1, LegalMoves: 2, OptionDelta: 0, Attack: true},
 		{Player: 0, LegalMoves: 3, OptionDelta: 3},
 		{Player: 1, LegalMoves: 5, OptionDelta: -1},
-		{Player: 0, LegalMoves: 2, OptionDelta: 0},
+		{Player: 0, LegalMoves: 2, OptionDelta: 0, Attack: true},
 		{Player: 1, LegalMoves: 3, OptionDelta: 2},
-		{Player: 0, LegalMoves: 4, OptionDelta: 0},
+		{Player: 0, LegalMoves: 4, OptionDelta: 0, Attack: true},
 		{Player: 1, LegalMoves: 2, OptionDelta: -3},
 		{Player: 0, LegalMoves: 3, OptionDelta: 1},
 		{Player: 1, LegalMoves: 2, OptionDelta: 0},
@@ -647,23 +648,27 @@ func TestInteractionDrawTwoHeavySheddingIsHigh(t *testing.T) {
 
 	got := computeInteraction(interactionFixture(records, events))
 	if got < 0.9 {
-		t.Fatalf("draw-2-heavy fixture (6/10 turns perturb options) must score high (>= 0.9), got %.3f", got)
+		t.Fatalf("draw-2-heavy fixture (9/10 turns interactive) must score high (>= 0.9), got %.3f", got)
 	}
 }
 
-// TestInteractionTrickEventsCountWithoutDeltas: trick-taking records
-// OptionDelta 0 BY DESIGN (follow-suit legality is set by the acting player,
-// so the counterfactual is ill-defined); its interaction signal is the
-// EventTrickWon stream. 2 tricks over 8 card-play turns => ratio 0.25, and
-// with the provisional clamp(ratio/0.5) scale that is exactly 0.5 (Task 14
-// recalibrates the denominator; update this expectation there).
-func TestInteractionTrickEventsCountWithoutDeltas(t *testing.T) {
+// TestInteractionTrickAttackTurnsCount: in trick-taking the interaction
+// signal reaches the records as Attack flags on the trick-completing moves
+// (one per EventTrickWon, set at record time -- audit Wave D fix 3). 2
+// attack-flagged turns over 8 card-play turns => ratio 0.25, and with the
+// provisional clamp(ratio/0.5) scale that is exactly 0.5 (Task 14
+// recalibrates the denominator; update this expectation there). Hand-derived
+// on the new turn-count basis: same value the old event-count basis gave for
+// this shape, because each trick win maps to exactly one move.
+func TestInteractionTrickAttackTurnsCount(t *testing.T) {
 	records := make([]sim.TurnRecord, 8)
 	events := make([]sim.Event, 0, 10)
 	for i := 0; i < 8; i++ {
 		records[i] = sim.TurnRecord{Player: i % 4, LegalMoves: 2, OptionDelta: 0}
 		events = append(events, sim.Event{Type: sim.EventCardPlayed, PlayerID: i % 4})
 	}
+	records[3].Attack = true // 4th card completes trick 1
+	records[7].Attack = true // 8th card completes trick 2
 	events = append(events,
 		sim.Event{Type: sim.EventTrickWon, PlayerID: 2},
 		sim.Event{Type: sim.EventTrickWon, PlayerID: 0},
@@ -671,15 +676,16 @@ func TestInteractionTrickEventsCountWithoutDeltas(t *testing.T) {
 
 	got := computeInteraction(interactionFixture(records, events))
 	if math.Abs(got-0.5) > 1e-9 {
-		t.Fatalf("2 tricks / 8 turns must score exactly 0.5 under the provisional scale, got %.3f", got)
+		t.Fatalf("2 attack turns / 8 turns must score exactly 0.5 under the provisional scale, got %.3f", got)
 	}
 }
 
 // TestInteractionNonAttackEventsDoNotCount: only the opponent-affecting
 // special details emitted by the shedding runner (skip, draw_two, draw_four,
-// reverse) and EventTrickWon are attacks. A hypothetical self-targeted
-// special, a meld, a discard-detail play, and a round end are not -- the old
-// metric counted three of these four.
+// reverse) and EventTrickWon flag a turn as an attack (sim.IsAttackEvent, the
+// single whitelist). A hypothetical self-targeted special, a meld, a
+// discard-detail play, and a round end do not -- the old metric counted three
+// of these four -- so records stay Attack-free and the score is 0.
 func TestInteractionNonAttackEventsDoNotCount(t *testing.T) {
 	records := make([]sim.TurnRecord, 4)
 	for i := range records {
@@ -691,9 +697,65 @@ func TestInteractionNonAttackEventsDoNotCount(t *testing.T) {
 		{Type: sim.EventCardPlayed, PlayerID: 0, Detail: "discard"},
 		{Type: sim.EventRoundEnd, PlayerID: 1, Detail: "gin"},
 	}
+	for _, e := range events {
+		if sim.IsAttackEvent(e) {
+			t.Fatalf("whitelist regression: %v must not be an attack event", e)
+		}
+	}
 
 	if got := computeInteraction(interactionFixture(records, events)); got != 0 {
 		t.Fatalf("non-attack events must not count as interaction, got %.3f", got)
+	}
+}
+
+// TestInteractionUnionCountsDisjointMixedGames (audit Wave D fix 3): a mixed
+// game where 2 turns perturb options and 2 OTHER turns attack has 4
+// interactive turns. The old max(deltaTurns, attackEvents) basis collapsed
+// that to max(2,2) = 2/10 => 0.4, undercounting disjoint mixed games by half;
+// the exact union scores 4/10 => 0.8.
+func TestInteractionUnionCountsDisjointMixedGames(t *testing.T) {
+	records := make([]sim.TurnRecord, 10)
+	for i := range records {
+		records[i] = sim.TurnRecord{Player: i % 2, LegalMoves: 3, OptionDelta: 0}
+	}
+	records[1].OptionDelta = -2
+	records[4].OptionDelta = 1
+	records[6].Attack = true
+	records[8].Attack = true
+
+	got := computeInteraction(interactionFixture(records, nil))
+	if math.Abs(got-0.8) > 1e-9 {
+		t.Fatalf("disjoint union (2 delta + 2 attack turns of 10) must score 0.8, got %.3f", got)
+	}
+
+	// A turn that both perturbs AND attacks is still one interactive turn.
+	records[1].Attack = true
+	got = computeInteraction(interactionFixture(records, nil))
+	if math.Abs(got-0.8) > 1e-9 {
+		t.Fatalf("overlapping delta+attack turn must not double count: want 0.8, got %.3f", got)
+	}
+}
+
+// TestInteractionStackedSpecialTurnCountsOnce (audit Wave D fix 3): one move
+// playing a skip+reverse+draw-two card emits THREE attack events but is ONE
+// interactive turn. The old basis read the event stream and scored 3/10 =>
+// 0.6; the record basis scores 1/10 => 0.2. The three stacked events in the
+// fixture must stay invisible to the metric.
+func TestInteractionStackedSpecialTurnCountsOnce(t *testing.T) {
+	records := make([]sim.TurnRecord, 10)
+	for i := range records {
+		records[i] = sim.TurnRecord{Player: i % 2, LegalMoves: 3, OptionDelta: 0}
+	}
+	records[0].Attack = true // the stacked-special move, recorded once
+	events := []sim.Event{
+		{Type: sim.EventSpecialTriggered, PlayerID: 1, Detail: "draw_two"},
+		{Type: sim.EventSpecialTriggered, PlayerID: 1, Detail: "skip"},
+		{Type: sim.EventSpecialTriggered, Detail: "reverse"},
+	}
+
+	got := computeInteraction(interactionFixture(records, events))
+	if math.Abs(got-0.2) > 1e-9 {
+		t.Fatalf("stacked special is ONE interactive turn (1/10 => 0.2), got %.3f", got)
 	}
 }
 

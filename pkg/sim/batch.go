@@ -249,10 +249,23 @@ func runSingleGame(g *genome.Genome, runner GenericRunner, ai AIPlayer, rng *ran
 			}
 		}
 
+		// Attack flag: true iff THIS move emitted at least one attack event.
+		// Computed per move, not from the batch event stream, so a stacked
+		// special emitting several attack events is one interactive turn
+		// (audit Wave D fix 3).
+		attack := false
+		for _, event := range events {
+			if IsAttackEvent(event) {
+				attack = true
+				break
+			}
+		}
+
 		records = append(records, TurnRecord{
 			Player:      mover,
 			LegalMoves:  capLegalMoves(len(moves)),
 			OptionDelta: clampOptionDelta(delta),
+			Attack:      attack,
 		})
 
 		// Leader after this move: argmax of Progress, -1 on a tie at the

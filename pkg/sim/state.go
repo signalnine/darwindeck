@@ -44,6 +44,13 @@ type TurnRecord struct {
 	// docs/plans/2026-06-11-audit-remediation.md Task 7 and the probe helpers
 	// in batch.go); trick-taking is always 0 by design.
 	OptionDelta int8
+	// Attack is true iff this move emitted at least one attack event
+	// (IsAttackEvent: EventTrickWon, or EventSpecialTriggered with an
+	// opponent-affecting detail). Set at record time by the batch runner so a
+	// stacked special -- one card matching skip+reverse+draw rules emits up
+	// to 3 attack events -- still counts as exactly ONE interactive turn
+	// (audit Wave D fix 3).
+	Attack bool
 }
 
 // EventType identifies game events for logging and fitness analysis.
@@ -64,6 +71,33 @@ type Event struct {
 	PlayerID int
 	Cards    []Card
 	Detail   string
+}
+
+// attackSpecialDetails enumerates the EventSpecialTriggered Detail strings
+// that directly affect an opponent. This is the complete set the shedding
+// runner's applySpecialEffects emits (the only EventSpecialTriggered emitter
+// in the codebase): draw penalties inflicted on the next player, a skip, and
+// a reverse. A future self-targeted special (e.g. a wild-suit choice) must
+// NOT be added here. SINGLE SOURCE OF TRUTH: fitness consumes attacks via
+// TurnRecord.Attack / IsAttackEvent -- do not duplicate this whitelist
+// elsewhere (audit Wave D fix 3).
+var attackSpecialDetails = map[string]bool{
+	"skip":      true,
+	"draw_two":  true,
+	"draw_four": true,
+	"reverse":   true,
+}
+
+// IsAttackEvent reports whether e is a direct attack on an opponent: a trick
+// win, or a special trigger with an opponent-affecting detail.
+func IsAttackEvent(e Event) bool {
+	switch e.Type {
+	case EventTrickWon:
+		return true
+	case EventSpecialTriggered:
+		return attackSpecialDetails[e.Detail]
+	}
+	return false
 }
 
 // GameState holds the complete mutable state of a game in progress.

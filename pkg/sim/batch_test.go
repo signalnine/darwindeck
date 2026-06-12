@@ -343,6 +343,96 @@ func TestBatchLeadersTrackArgmaxProgress(t *testing.T) {
 	}
 }
 
+// TestBatchStackedSpecialsAreOneAttackTurn (audit Wave D fix 3): a single
+// played card can match several special rules at once -- skip + reverse +
+// draw-two here -- and emit up to 3 attack events from ONE applied move.
+// TurnRecord.Attack is set at record time from that move's events, so the
+// stacked special is exactly one attack-flagged turn, never three.
+func TestBatchStackedSpecialsAreOneAttackTurn(t *testing.T) {
+	g := &genome.Genome{
+		Skeleton: genome.Shedding,
+		Players:  3,
+		HandSize: 2,
+		Shedding: &genome.SheddingParams{MatchRule: genome.MatchEither, DrawPenalty: 1},
+		SpecialCards: []genome.SpecialCard{
+			{Type: genome.SpecialSkip, ByRank: uint8(sim.Seven)},
+			{Type: genome.SpecialReverse, ByRank: uint8(sim.Seven)},
+			{Type: genome.SpecialDrawTwo, ByRank: uint8(sim.Seven)},
+		},
+	}
+	runner := fixedSetupRunner{
+		GenericRunner: &shedding.Runner{},
+		build: func() *sim.GameState {
+			st := sim.NewGameState(3)
+			top := card(sim.Hearts, sim.Seven)
+			st.Discard = []sim.Card{top}
+			st.TopCard = &top
+			// P0's only legal play is 7S (rank match); the 2D filler keeps the
+			// hand non-empty so the game continues past the stacked special.
+			st.Hands[0] = []sim.Card{card(sim.Spades, sim.Seven), card(sim.Diamonds, sim.Two)}
+			st.Hands[1] = []sim.Card{card(sim.Hearts, sim.Nine), card(sim.Hearts, sim.Ten)}
+			st.Hands[2] = []sim.Card{card(sim.Clubs, sim.Five), card(sim.Clubs, sim.Six)}
+			st.Deck = []sim.Card{
+				card(sim.Clubs, sim.Three), card(sim.Clubs, sim.Four),
+				card(sim.Diamonds, sim.Five), card(sim.Diamonds, sim.Six),
+			}
+			st.Phase = sim.PhasePlay
+			return st
+		},
+	}
+
+	result := sim.RunBatch(g, runner, &sim.RandomAI{}, 1, 1)
+	events := result.AllEvents[0]
+	attackEvents := 0
+	for _, e := range events {
+		if sim.IsAttackEvent(e) {
+			attackEvents++
+		}
+	}
+	if attackEvents < 3 {
+		t.Fatalf("premise broken: stacked 7S must emit >= 3 attack events (draw_two+skip+reverse), got %d", attackEvents)
+	}
+
+	turns := result.AllTurns[0]
+	if len(turns) == 0 {
+		t.Fatal("no turn records")
+	}
+	if !turns[0].Attack {
+		t.Errorf("stacked-special move must record Attack = true")
+	}
+}
+
+// TestBatchTrickTakingAttackTurnsMatchTrickWins (audit Wave D fix 3): in
+// trick-taking, exactly one applied move completes each trick and emits
+// EventTrickWon, so the number of attack-flagged TurnRecords per game must
+// equal the number of EventTrickWon events; leads and mid-trick follows must
+// record Attack = false.
+func TestBatchTrickTakingAttackTurnsMatchTrickWins(t *testing.T) {
+	g := seeds.Whist()
+	result := sim.RunBatch(g, &tricktaking.Runner{}, &sim.RandomAI{}, 5, 7)
+
+	for i, turns := range result.AllTurns {
+		attackTurns := 0
+		for _, tr := range turns {
+			if tr.Attack {
+				attackTurns++
+			}
+		}
+		trickWins := 0
+		for _, e := range result.AllEvents[i] {
+			if e.Type == sim.EventTrickWon {
+				trickWins++
+			}
+		}
+		if trickWins == 0 {
+			t.Fatalf("game %d: premise broken, whist must win tricks", i)
+		}
+		if attackTurns != trickWins {
+			t.Errorf("game %d: attack-flagged turns = %d, want %d (one per EventTrickWon)", i, attackTurns, trickWins)
+		}
+	}
+}
+
 // timeoutRunner never ends: CheckEnd is always -1 and ApplyMove only bumps
 // state.Turn, so every game exits via max_turns with Winner -1 -- while
 // Progress reports player 0 as a STRICT leader on every sample. This is the

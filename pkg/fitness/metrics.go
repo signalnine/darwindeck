@@ -171,77 +171,42 @@ func tent(x, c float64) float64 {
 	return clamp(1-math.Abs(x-c)/c, 0, 1)
 }
 
-// attackDetails enumerates the EventSpecialTriggered Detail strings that
-// directly affect an opponent. This is the complete set the shedding runner's
-// applySpecialEffects emits (the only EventSpecialTriggered emitter in the
-// codebase): draw penalties inflicted on the next player, a skip, and a
-// reverse. A future self-targeted special (e.g. a wild-suit choice) must NOT
-// be added here.
-var attackDetails = map[string]bool{
-	"skip":      true,
-	"draw_two":  true,
-	"draw_four": true,
-	"reverse":   true,
-}
-
-// computeInteraction: fraction of turns whose move perturbed the next
-// player's legal options (TurnRecord.OptionDelta != 0, audit Task 7) or
-// carried a direct-attack event (EventTrickWon, or EventSpecialTriggered with
-// an opponent-affecting detail). A discard that does not change what the
-// opponent can legally do is NOT interaction -- that was the old
-// event-taxonomy metric's central flaw: it counted every shedding discard and
-// every rummy meld as interactive and pinned hearts-4p at a deterministic
+// computeInteraction: exact fraction of INTERACTIVE TURNS -- turns whose move
+// perturbed the next player's legal options (TurnRecord.OptionDelta != 0,
+// audit Task 7) or carried a direct attack (TurnRecord.Attack, set at record
+// time from the move's own events; the whitelist lives in sim.IsAttackEvent,
+// the single source of truth -- audit Wave D fix 3). A discard that does not
+// change what the opponent can legally do is NOT interaction -- that was the
+// old event-taxonomy metric's central flaw: it counted every shedding discard
+// and every rummy meld as interactive and pinned hearts-4p at a deterministic
 // 0.657 (13 TrickWon / 66 events / 0.3).
 //
-// Events and TurnRecords are parallel per game but not per-turn indexed, so
-// rather than correlating event groups to turn boundaries we count
-// option-perturbing turns and attack events separately and take the larger
-// count over total turns (the plan's "max ratio" option -- the simplest
-// correct approach). Each attack event is emitted by exactly one applied move
-// (= one TurnRecord), so each count is a valid lower bound on the number of
-// interactive turns, and max never double-counts a turn that both perturbed
-// options and attacked. The clamp absorbs the rare move emitting two attack
-// events (a card matching both a draw and a skip rule).
+// The previous max(deltaTurns, attackEvents) approximation undercounted
+// disjoint mixed games (2 delta turns + 2 distinct attack turns scored as 2,
+// not 4) and could multi-count stacked specials (one card matching
+// skip+reverse+draw rules emits up to 3 attack events from a single move).
+// The per-turn union is exact on both: each TurnRecord is one turn, counted
+// once, interactive iff it perturbed options OR attacked.
 //
 // Per-skeleton signal sources (Task 7 table): shedding = OptionDelta from the
-// discard-top perturbation plus skip/draw/reverse specials; rummy =
+// discard-top perturbation plus skip/draw/reverse attack turns; rummy =
 // OptionDelta attached to the turn-passing MoveDiscard; trick-taking =
-// EventTrickWon only (OptionDelta is 0 BY DESIGN -- follow-suit legality is
-// set by the acting player, so the counterfactual is ill-defined).
+// trick-completing attack turns (one per EventTrickWon).
 //
 // Scale: clamp(ratio/0.5) is provisional; Task 14 recalibrates the
 // denominator from the seed-game spread, not assumption.
 func computeInteraction(result sim.BatchResult) float64 {
-	totalTurns, deltaTurns := 0, 0
+	totalTurns, interactive := 0, 0
 	for _, turns := range result.AllTurns {
 		totalTurns += len(turns)
 		for _, tr := range turns {
-			if tr.OptionDelta != 0 {
-				deltaTurns++
+			if tr.OptionDelta != 0 || tr.Attack {
+				interactive++
 			}
 		}
 	}
 	if totalTurns == 0 {
 		return 0
-	}
-
-	attackEvents := 0
-	for _, events := range result.AllEvents {
-		for _, e := range events {
-			switch e.Type {
-			case sim.EventTrickWon:
-				attackEvents++
-			case sim.EventSpecialTriggered:
-				if attackDetails[e.Detail] {
-					attackEvents++
-				}
-			}
-		}
-	}
-
-	interactive := deltaTurns
-	if attackEvents > interactive {
-		interactive = attackEvents
 	}
 	ratio := float64(interactive) / float64(totalTurns)
 	return clamp(ratio/0.5, 0, 1)
