@@ -1,6 +1,9 @@
 package sim
 
-import "math/rand/v2"
+import (
+	"math/rand/v2"
+	"strconv"
+)
 
 // PhaseType identifies the current phase of a game turn.
 type PhaseType uint8
@@ -31,6 +34,31 @@ type Move struct {
 	Type    MoveType
 	Cards   []Card // Cards involved (for play, meld, discard)
 	PlayerID int
+}
+
+// Key returns a canonical string identity for the move (audit Task 19 Step
+// 0). Move contains a Cards slice, so == is not defined on it and it cannot
+// be a map key directly; MCTS aggregates visit statistics for "the same move"
+// across clones and determinizations via this key instead. Two moves have
+// equal keys iff Type, PlayerID, and the exact card sequence match. Card
+// order is part of the identity: move generation is deterministic in hand
+// order (audit Task 1 sorted rummy's map iteration), and the acting player's
+// own hand is preserved by Clone and Determinize, so identical info-states
+// yield identical keys. Separators make the encoding prefix-free ('t2:p0:
+// 2.10' cannot collide with 't2:p0:2.1' + a card).
+func (m Move) Key() string {
+	b := make([]byte, 0, 8+6*len(m.Cards))
+	b = append(b, 't')
+	b = strconv.AppendUint(b, uint64(m.Type), 10)
+	b = append(b, ':', 'p')
+	b = strconv.AppendInt(b, int64(m.PlayerID), 10)
+	for _, c := range m.Cards {
+		b = append(b, ':')
+		b = strconv.AppendUint(b, uint64(c.Suit), 10)
+		b = append(b, '.')
+		b = strconv.AppendUint(b, uint64(c.Rank), 10)
+	}
+	return string(b)
 }
 
 // TurnRecord captures per-turn decision data for fitness analysis (audit
