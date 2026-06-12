@@ -23,6 +23,24 @@ type Session struct {
 	HumanID int // Which player is the human
 }
 
+// NewMCTSAI constructs the ISMCTS opponent for the playtest `mcts`
+// difficulty. Runner and Genome MUST both be set: sim.MCTSAI deliberately
+// degrades to uniform random play when either is nil (batch-safety
+// fallback), which would silently hand the user a random opponent labeled
+// "mcts" — this constructor exists so the session and the CLI cannot
+// half-wire it.
+//
+// Iterations/Determinizations/RolloutCap are left zero, falling back to the
+// production defaults (200/10/200, pkg/sim/mcts.go). Interactive latency
+// budget is sub-second per move (Task 21): at those defaults the
+// worst-case skeleton (rummy movegen dominates MCTS cost, see the
+// BenchmarkMCTSGame notes) measures ~10-30ms per decision, ~30-75x inside
+// budget, so no Iterations tuning is needed; TestMCTSSessionCompletesGame
+// enforces the budget.
+func NewMCTSAI(g *genome.Genome, runner sim.GenericRunner) *sim.MCTSAI {
+	return &sim.MCTSAI{Runner: runner, Genome: g}
+}
+
 // NewSession creates a playtest session.
 func NewSession(g *genome.Genome, runner sim.GenericRunner, ai sim.AIPlayer, seed uint64) *Session {
 	rng := rand.New(rand.NewPCG(seed, 0))

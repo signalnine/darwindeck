@@ -176,13 +176,13 @@ func cmdEvolve(args []string) {
 
 func cmdPlaytest(args []string) {
 	fs := flag.NewFlagSet("playtest", flag.ExitOnError)
-	difficulty := fs.String("difficulty", "greedy", "AI difficulty: random or greedy")
+	difficulty := fs.String("difficulty", "greedy", "AI difficulty: random, greedy, or mcts")
 	seed := fs.Uint64("seed", 0, "random seed (0=random)")
 	fs.Parse(args)
 
 	remaining := fs.Args()
 	if len(remaining) == 0 {
-		fmt.Fprintln(os.Stderr, "usage: darwindeck playtest <genome.json> [--difficulty random|greedy]")
+		fmt.Fprintln(os.Stderr, "usage: darwindeck playtest <genome.json> [--difficulty random|greedy|mcts]")
 		os.Exit(1)
 	}
 
@@ -219,8 +219,10 @@ func cmdPlaytest(args []string) {
 		ai = &sim.RandomAI{}
 	case "greedy":
 		ai = fitness.GetGreedyAI(&g)
+	case "mcts":
+		ai = playtest.NewMCTSAI(&g, runner)
 	default:
-		fmt.Fprintf(os.Stderr, "Unknown difficulty: %s (use random or greedy)\n", *difficulty)
+		fmt.Fprintf(os.Stderr, "Unknown difficulty: %s (use random, greedy, or mcts)\n", *difficulty)
 		os.Exit(1)
 	}
 
