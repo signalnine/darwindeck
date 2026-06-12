@@ -140,6 +140,9 @@ func runSingleGame(g *genome.Genome, runner GenericRunner, ai AIPlayer, rng *ran
 	}
 	records := make([]TurnRecord, 0, 64)
 	leaders := make([]int8, 0, 64)
+	// Reused by the choice-impact probes so the hypothetical top-card swap
+	// never heap-allocates in the hot loop.
+	var scratchCard Card
 
 	for {
 		runner.Upkeep(state, g)
@@ -192,6 +195,11 @@ func runSingleGame(g *genome.Genome, runner GenericRunner, ai AIPlayer, rng *ran
 
 		move := ai.SelectMove(moves, state, rng)
 		mover := state.Active
+
+		// Choice impact (Task 28 round 2): decide BEFORE the move applies
+		// whether this decision point was meaningful -- the probes below
+		// hypothesize against the pre-move state.
+		meaningful := turnIsMeaningful(runner, state, g, moves, mode, &scratchCard)
 
 		// Pre-move option baselines. GenerateMoves is pure (audit Task 3),
 		// so probing other players via an Active swap cannot disturb the game.
@@ -305,6 +313,7 @@ func runSingleGame(g *genome.Genome, runner GenericRunner, ai AIPlayer, rng *ran
 			LegalMoves:  capLegalMoves(len(moves)),
 			OptionDelta: clampOptionDelta(delta),
 			Attack:      attack,
+			Meaningful:  meaningful,
 		})
 
 		// Leader after this move: argmax of Progress, -1 on a tie at the
@@ -380,6 +389,194 @@ func optionDeltaModeFor(g *genome.Genome) optionDeltaMode {
 	default:
 		return deltaModeNone
 	}
+}
+
+// --- Choice-impact sampling (Task 28 round 2, decisions fix) ---
+//
+// A turn with >= 2 legal moves is MEANINGFUL only if the choice plausibly
+// matters. Cheap sampled test: up to maxChoiceSamples legal moves at a
+// deterministic index spread (first/last/two middles -- no RNG, so per-seed
+// traces stay reproducible) are reduced to a choice signature of
+//
+//	(move type, special-effect profile, next-player option-SET probe)
+//
+// and the turn is meaningful iff any two sampled signatures differ. The
+// probe is a hash of the next player's legal-move SET, not its count: two
+// hypothetical tops can leave the opponent the same NUMBER of options while
+// changing WHICH cards are playable, and count-equality misread those real
+// choices as impactless (measured: crazy-eights density fell to 0.125 under
+// a count probe vs 0.28 with the exact set discriminant; the probe already
+// generates the moves, so hashing them costs nothing extra). The probe
+// semantics are per skeleton, mirroring the OptionDelta table:
+//
+//	shedding:     hypothetical top-card swap (the discard top is the entire
+//	              coupling surface), option count of the canonical next
+//	              player (peekNextPlayer; specials may redirect the actual
+//	              next actor, but the profile component already carries the
+//	              skip/draw/reverse differences)
+//	tricktaking:  hypothetical card appended to the open trick for
+//	              non-completing plays; trick-COMPLETING plays keep probe 0 --
+//	              the option-count probe is undefined across trick
+//	              resolution, and post-trick hand sizes are equal anyway
+//	rummy/none:   no probe; meaningful iff >= 2 legal moves (unchanged
+//	              semantics). The cheap probe cannot capture rummy's coupling
+//	              surface: a discard's value to the next player is
+//	              hidden-information-dependent (the known card vs the unknown
+//	              stock), and the next player's own option COUNTS are
+//	              insensitive to WHICH card is discarded -- a count probe
+//	              would collapse gin rummy's core discard decision exactly as
+//	              hard as a degenerate's. Per the Task 7 discipline, do not
+//	              improvise a rummy definition in code; the pair-meld fixture
+//	              is separated by the calibration gate instead.
+//
+// Collapse cases (Task 28 round-2 fixtures): all-wild same-effect shedding
+// hands (A1) and no-follow trick hands (A2) sample identical signatures =>
+// NOT meaningful; real crazy-eights suit choices and must-follow leads
+// produce differing probes => meaningful.
+const maxChoiceSamples = 4
+
+// choiceSignature is the discriminant the sampled moves are compared on.
+// probe is 0 both when no probe applies to the move and when a probe
+// panicked (probeOptionSetHash's recover contract); equal values always mean
+// "no observed difference", so a degraded probe can only make a turn LESS
+// meaningful, never crash a batch worker.
+type choiceSignature struct {
+	moveType MoveType
+	profile  uint8
+	probe    uint64
+}
+
+// choiceSampleIndices fills buf with up to maxChoiceSamples distinct indices
+// spread over [0, n): first, last, and the two third-points.
+func choiceSampleIndices(n int, buf *[maxChoiceSamples]int) []int {
+	candidates := [maxChoiceSamples]int{0, n - 1, n / 3, (2 * n) / 3}
+	out := buf[:0]
+	for _, idx := range candidates {
+		dup := false
+		for _, seen := range out {
+			if seen == idx {
+				dup = true
+				break
+			}
+		}
+		if !dup {
+			out = append(out, idx)
+		}
+	}
+	return out
+}
+
+// specialEffectProfile returns a bitmask of the EFFECT special types (skip,
+// reverse, draw-two, draw-four) the card triggers under g's rules.
+// SpecialWild is excluded: wildness is playability, already reflected in the
+// legal-move count, not an effect of choosing this card over another.
+func specialEffectProfile(g *genome.Genome, c Card) uint8 {
+	var profile uint8
+	for _, sc := range g.SpecialCards {
+		if sc.Type == genome.SpecialWild {
+			continue
+		}
+		if sc.MatchesCard(uint8(c.Rank), uint8(c.Suit)) {
+			profile |= 1 << sc.Type
+		}
+	}
+	return profile
+}
+
+// turnIsMeaningful implements the choice-impact test described above.
+// scratch is a caller-owned Card reused for the hypothetical top-card swap so
+// the hot loop stays allocation-free. All state mutations are swap+restore;
+// GenerateMoves is pure (audit Task 3), so the game is undisturbed.
+func turnIsMeaningful(runner GenericRunner, state *GameState, g *genome.Genome, moves []Move, mode optionDeltaMode, scratch *Card) bool {
+	if len(moves) < 2 {
+		return false
+	}
+	if mode != deltaModeShedding && mode != deltaModeTrickTaking {
+		return true
+	}
+	var buf [maxChoiceSamples]int
+	indices := choiceSampleIndices(len(moves), &buf)
+	var first choiceSignature
+	for i, idx := range indices {
+		sig := choiceSignatureOf(runner, state, g, moves[idx], mode, scratch)
+		if i == 0 {
+			first = sig
+		} else if sig != first {
+			return true
+		}
+	}
+	return false
+}
+
+// choiceSignatureOf computes one sampled move's signature. Only card plays
+// carry a profile/probe; other move types are discriminated by type alone
+// (a knock vs a pass is trivially a different choice).
+func choiceSignatureOf(runner GenericRunner, state *GameState, g *genome.Genome, m Move, mode optionDeltaMode, scratch *Card) choiceSignature {
+	sig := choiceSignature{moveType: m.Type}
+	if m.Type != MovePlay || len(m.Cards) == 0 {
+		return sig
+	}
+	c := m.Cards[0]
+	switch mode {
+	case deltaModeShedding:
+		sig.profile = specialEffectProfile(g, c)
+		// Self-returning plays carry no coupling probe: in a 2-player game
+		// EVERY effect special (skip, reverse, and the draw penalties'
+		// "draw and lose your turn") hands the turn straight back to the
+		// mover, so the opponent never acts against this hypothetical top
+		// card -- probing it measures a counterfactual the effect makes
+		// unreachable (same principle as the OptionDelta self-perturbation
+		// guard, Task 28 round 2). The profile component still discriminates
+		// inflict-vs-plain choices, which ARE real even in 2p.
+		if state.NumPlayers == 2 && sig.profile != 0 {
+			return sig
+		}
+		prevTop := state.TopCard
+		*scratch = c
+		state.TopCard = scratch
+		sig.probe = probeOptionSetHash(runner, state, g, peekNextPlayer(state))
+		state.TopCard = prevTop
+	case deltaModeTrickTaking:
+		if len(state.TrickCards)+1 < state.NumPlayers {
+			n := len(state.TrickCards)
+			state.TrickCards = append(state.TrickCards, c)
+			sig.probe = probeOptionSetHash(runner, state, g, peekNextPlayer(state))
+			state.TrickCards = state.TrickCards[:n]
+		}
+	}
+	return sig
+}
+
+// probeOptionSetHash returns an FNV-1a hash over player p's legal-move set
+// (move types and card sequences, in generation order -- deterministic since
+// audit Task 1) in the given state, by temporarily retargeting state.Active.
+// GenerateMoves is pure (audit Task 3), so swap+restore leaves the state
+// bit-identical. Returns 0 if the runner panics on the out-of-turn probe:
+// per the choiceSignature contract, a degraded probe reads as "no observed
+// difference" -- a batch worker must never crash on instrumentation.
+func probeOptionSetHash(runner GenericRunner, state *GameState, g *genome.Genome, p int) (h uint64) {
+	prevActive := state.Active
+	defer func() {
+		state.Active = prevActive
+		if recover() != nil {
+			h = 0
+		}
+	}()
+	state.Active = p
+	const (
+		fnvOffset64 = 14695981039346656037
+		fnvPrime64  = 1099511628211
+	)
+	h = fnvOffset64
+	for _, m := range runner.GenerateMoves(state, g) {
+		h ^= uint64(m.Type) + 1
+		h *= fnvPrime64
+		for _, c := range m.Cards {
+			h ^= uint64(c.Suit)<<8 | uint64(c.Rank)
+			h *= fnvPrime64
+		}
+	}
+	return h
 }
 
 // probeOptionCount returns how many legal moves player p would have in the

@@ -180,16 +180,99 @@ func TestSessionLengthWhistNotInflatedByPerCardTurns(t *testing.T) {
 }
 
 // turnsFixture builds a single-game AllTurns batch with `forced` records of
-// 1 legal move and `choice` records of >=2 legal moves.
+// 1 legal move and `choice` records of >=2 legal moves whose choice was
+// MEANINGFUL (the batch runner's choice-impact sampling found differing
+// signatures -- Task 28 round 2; before that fix the flag did not exist and
+// density counted raw LegalMoves >= 2).
 func turnsFixture(forced, choice int) sim.BatchResult {
 	records := make([]sim.TurnRecord, 0, forced+choice)
 	for i := 0; i < forced; i++ {
 		records = append(records, sim.TurnRecord{Player: i % 2, LegalMoves: 1})
 	}
 	for i := 0; i < choice; i++ {
-		records = append(records, sim.TurnRecord{Player: i % 2, LegalMoves: 3})
+		records = append(records, sim.TurnRecord{Player: i % 2, LegalMoves: 3, Meaningful: true})
 	}
 	return sim.BatchResult{AllTurns: [][]sim.TurnRecord{records}}
+}
+
+// TestDecisionDensityInflatedCountsDoNotCount (Task 28 round 2): turns with
+// many legal moves but Meaningful = false (all-wild same-effect hands,
+// no-follow trick hands) are NOT decisions. The legal-move COUNT alone was
+// the archetype A1/A2 inflation vector (0.86-0.92 densities for games with
+// near-zero choice impact).
+func TestDecisionDensityInflatedCountsDoNotCount(t *testing.T) {
+	records := make([]sim.TurnRecord, 10)
+	for i := range records {
+		records[i] = sim.TurnRecord{Player: i % 2, LegalMoves: 13} // huge counts...
+	}
+	records[2].Meaningful = true // ...but only one turn's choice mattered
+	batch := sim.BatchResult{AllTurns: [][]sim.TurnRecord{records}}
+	if got := computeDecisionDensity(batch); math.Abs(got-0.1) > 1e-9 {
+		t.Fatalf("10 high-count turns with 1 meaningful must score 0.1, got %.3f", got)
+	}
+}
+
+// TestDecisionDensityNoFollowTrickCollapses (Task 28 round 2, archetype A2
+// integration): the rejected no-follow flagship champion's decision density
+// must collapse to exactly 0 -- every lead leaves the follower's options
+// untouched and every follow completes the trick.
+func TestDecisionDensityNoFollowTrickCollapses(t *testing.T) {
+	g := seeds.NoFollowAvoidanceTrick()
+	result := sim.RunBatch(g, GetRunner(g), &sim.RandomAI{}, 20, 11)
+	if got := computeDecisionDensity(result); got != 0 {
+		t.Fatalf("no-follow avoidance trick density must be exactly 0, got %.3f", got)
+	}
+}
+
+// TestDecisionDensityCatchAllSkipCollapses (Task 28 round 2, archetype A1
+// integration): the catch-all-skip champion measured 0.874 under raw
+// legal-move counting. Under choice-impact sampling the pure wild-count
+// inflation is gone: same-profile self-returning plays (the catch-all skip
+// makes EVERY 2p play self-returning, so no coupling probe applies) collapse
+// to not-meaningful. What honestly REMAINS (measured 0.633) is the fixture's
+// profile mixing: a third of the deck inflicts draw-two/draw-four, and
+// dump-an-attack vs dump-a-plain-card is a real choice even in 2p. The bound
+// pins the inflation removal (0.874 -> below 0.7); the full separation of
+// this archetype from the classics is the calibration gate's job, where its
+// remaining density is weighed against its collapsed interaction.
+func TestDecisionDensityCatchAllSkipCollapses(t *testing.T) {
+	g := seeds.CatchAllSkipShedding()
+	result := sim.RunBatch(g, GetRunner(g), &sim.RandomAI{}, 20, 11)
+	got := computeDecisionDensity(result)
+	t.Logf("catch-all-skip density: %.3f", got)
+	if got >= 0.7 {
+		t.Fatalf("catch-all-skip density must collapse below 0.7 (was 0.874 with raw counts), got %.3f", got)
+	}
+	// The same genome with the wild/attack suits stripped to a SINGLE shared
+	// profile is the pure all-wild inflation case and must fully collapse.
+	pure := &genome.Genome{
+		Skeleton: genome.Shedding,
+		Players:  2,
+		HandSize: 13,
+		Shedding: &genome.SheddingParams{MatchRule: genome.MatchEither, DrawPenalty: 2},
+		SpecialCards: []genome.SpecialCard{
+			{Type: genome.SpecialSkip},
+			{Type: genome.SpecialWild},
+		},
+	}
+	pureResult := sim.RunBatch(pure, GetRunner(pure), &sim.RandomAI{}, 20, 11)
+	if got := computeDecisionDensity(pureResult); got != 0 {
+		t.Fatalf("pure all-wild catch-all-skip density must be exactly 0, got %.3f", got)
+	}
+}
+
+// TestDecisionDensityCrazyEightsWellAboveZero (Task 28 round 2): the
+// choice-impact filter must not destroy the signal for real games -- crazy
+// eights' suit/rank choices change the opponent's options and stay
+// meaningful.
+func TestDecisionDensityCrazyEightsWellAboveZero(t *testing.T) {
+	g := seeds.CrazyEights()
+	result := sim.RunBatch(g, GetRunner(g), &sim.RandomAI{}, 50, 11)
+	got := computeDecisionDensity(result)
+	t.Logf("crazy-eights density: %.3f", got)
+	if got < 0.1 {
+		t.Fatalf("crazy-eights density must stay well above 0 under choice-impact sampling, got %.3f", got)
+	}
 }
 
 func TestDecisionDensityAllForcedIsZero(t *testing.T) {

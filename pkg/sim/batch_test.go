@@ -571,6 +571,207 @@ func TestBatch2PDrawTwoStillAttack(t *testing.T) {
 	}
 }
 
+// --- Choice-impact meaningfulness (Task 28 round 2, decisions fix) ---
+//
+// A turn with >= 2 legal moves is MEANINGFUL only if the choice plausibly
+// matters: up to 4 sampled moves must differ in move type, special-effect
+// profile, or a next-player option-count probe. The five tests below pin the
+// per-case semantics with hand-computed expectations.
+
+// TestMeaningfulAllWildSameEffectCollapses: archetype A1's core inflation --
+// every card wild (always playable), no effect specials, and an opponent
+// whose options cannot depend on the top card (their cards are wild too).
+// LegalMoves is 3 but no sampled move differs in type, profile, or probe:
+// the turn must record Meaningful = false.
+func TestMeaningfulAllWildSameEffectCollapses(t *testing.T) {
+	g := &genome.Genome{
+		Skeleton: genome.Shedding,
+		Players:  2,
+		HandSize: 3,
+		Shedding: &genome.SheddingParams{MatchRule: genome.MatchEither, DrawPenalty: 1},
+		SpecialCards: []genome.SpecialCard{
+			{Type: genome.SpecialWild}, // catch-all wild
+		},
+	}
+	runner := fixedSetupRunner{
+		GenericRunner: &shedding.Runner{},
+		build: func() *sim.GameState {
+			st := sim.NewGameState(2)
+			top := card(sim.Hearts, sim.Seven)
+			st.Discard = []sim.Card{top}
+			st.TopCard = &top
+			st.Hands[0] = []sim.Card{card(sim.Hearts, sim.Two), card(sim.Diamonds, sim.Five), card(sim.Spades, sim.Nine)}
+			st.Hands[1] = []sim.Card{card(sim.Clubs, sim.Three), card(sim.Clubs, sim.Four)}
+			st.Deck = []sim.Card{card(sim.Diamonds, sim.Ten)}
+			st.Phase = sim.PhasePlay
+			return st
+		},
+	}
+
+	result := sim.RunBatch(g, runner, &sim.RandomAI{}, 1, 1)
+	first := result.AllTurns[0][0]
+	if first.LegalMoves != 3 {
+		t.Fatalf("premise broken: all-wild hand must have 3 legal moves, got %d", first.LegalMoves)
+	}
+	if first.Meaningful {
+		t.Errorf("all-wild same-effect turn must record Meaningful = false (choice cannot matter)")
+	}
+}
+
+// TestMeaningfulSuitChoiceStaysMeaningful: the real crazy-eights decision.
+// P0 can play 5H or 5S on 5D (rank matches); the choice of suit changes how
+// many options the opponent has (1 vs 2), so the turn is meaningful.
+func TestMeaningfulSuitChoiceStaysMeaningful(t *testing.T) {
+	g := &genome.Genome{
+		Skeleton: genome.Shedding,
+		Players:  2,
+		HandSize: 3,
+		Shedding: &genome.SheddingParams{MatchRule: genome.MatchEither, DrawPenalty: 1},
+	}
+	runner := fixedSetupRunner{
+		GenericRunner: &shedding.Runner{},
+		build: func() *sim.GameState {
+			st := sim.NewGameState(2)
+			top := card(sim.Diamonds, sim.Five)
+			st.Discard = []sim.Card{top}
+			st.TopCard = &top
+			// 5H and 5S both match rank 5; the spare 2C keeps the hand alive.
+			st.Hands[0] = []sim.Card{card(sim.Hearts, sim.Five), card(sim.Spades, sim.Five), card(sim.Clubs, sim.Two)}
+			// vs top 5H: only 2H matches (suit) => 1 option.
+			// vs top 5S: 9S and QS match (suit) => 2 options.
+			st.Hands[1] = []sim.Card{card(sim.Hearts, sim.Two), card(sim.Spades, sim.Nine), card(sim.Spades, sim.Queen)}
+			st.Deck = []sim.Card{card(sim.Diamonds, sim.Ten), card(sim.Diamonds, sim.Jack)}
+			st.Phase = sim.PhasePlay
+			return st
+		},
+	}
+
+	result := sim.RunBatch(g, runner, &sim.RandomAI{}, 1, 1)
+	first := result.AllTurns[0][0]
+	if first.LegalMoves != 2 {
+		t.Fatalf("premise broken: want 2 legal moves (5H, 5S), got %d", first.LegalMoves)
+	}
+	if !first.Meaningful {
+		t.Errorf("suit choice that changes the opponent's option count must be Meaningful")
+	}
+}
+
+// TestMeaningfulSpecialProfileDifferentiates: all moves probe equal (opponent
+// is all-wild), but one playable card triggers a draw-two and the other does
+// not -- the effect profiles differ, so the choice matters.
+func TestMeaningfulSpecialProfileDifferentiates(t *testing.T) {
+	g := &genome.Genome{
+		Skeleton: genome.Shedding,
+		Players:  2,
+		HandSize: 3,
+		Shedding: &genome.SheddingParams{MatchRule: genome.MatchEither, DrawPenalty: 1},
+		SpecialCards: []genome.SpecialCard{
+			{Type: genome.SpecialWild},                // catch-all wild
+			{Type: genome.SpecialDrawTwo, ByRank: 5},  // 5s inflict draw-two
+		},
+	}
+	runner := fixedSetupRunner{
+		GenericRunner: &shedding.Runner{},
+		build: func() *sim.GameState {
+			st := sim.NewGameState(2)
+			top := card(sim.Hearts, sim.Seven)
+			st.Discard = []sim.Card{top}
+			st.TopCard = &top
+			st.Hands[0] = []sim.Card{card(sim.Hearts, sim.Five), card(sim.Diamonds, sim.Nine)}
+			st.Hands[1] = []sim.Card{card(sim.Clubs, sim.Three), card(sim.Clubs, sim.Four)}
+			st.Deck = []sim.Card{card(sim.Diamonds, sim.Ten), card(sim.Diamonds, sim.Jack)}
+			st.Phase = sim.PhasePlay
+			return st
+		},
+	}
+
+	result := sim.RunBatch(g, runner, &sim.RandomAI{}, 1, 1)
+	first := result.AllTurns[0][0]
+	if first.LegalMoves != 2 {
+		t.Fatalf("premise broken: want 2 legal moves (both wild), got %d", first.LegalMoves)
+	}
+	if !first.Meaningful {
+		t.Errorf("draw-two vs plain play differ in effect profile: turn must be Meaningful")
+	}
+}
+
+// TestMeaningfulNoFollowTrickCollapses: archetype A2's core inflation -- with
+// no follow-suit constraint, the follower's options are their whole hand no
+// matter what is led, so no sampled lead differs in probe and the turn is not
+// meaningful.
+func TestMeaningfulNoFollowTrickCollapses(t *testing.T) {
+	g := &genome.Genome{
+		Skeleton: genome.TrickTaking,
+		Players:  2,
+		HandSize: 3,
+		TrickTaking: &genome.TrickTakingParams{
+			MustFollowSuit: false,
+			TrickScoring:   genome.ScorePerTrick,
+			RoundsPerGame:  1,
+		},
+	}
+	runner := fixedSetupRunner{
+		GenericRunner: &tricktaking.Runner{},
+		build: func() *sim.GameState {
+			st := sim.NewGameState(2)
+			st.Hands[0] = []sim.Card{card(sim.Hearts, sim.Ace), card(sim.Diamonds, sim.Two), card(sim.Spades, sim.Five)}
+			st.Hands[1] = []sim.Card{card(sim.Hearts, sim.King), card(sim.Clubs, sim.Three), card(sim.Clubs, sim.Nine)}
+			st.Phase = sim.PhaseTrick
+			st.TrumpSuit = -1
+			st.TrickCards = make([]sim.Card, 0, 2)
+			st.TrickPlayers = make([]int, 0, 2)
+			return st
+		},
+	}
+
+	result := sim.RunBatch(g, runner, &sim.RandomAI{}, 1, 1)
+	first := result.AllTurns[0][0]
+	if first.LegalMoves != 3 {
+		t.Fatalf("premise broken: no-follow leader must have 3 legal moves, got %d", first.LegalMoves)
+	}
+	if first.Meaningful {
+		t.Errorf("no-follow lead must record Meaningful = false (follower options identical for every lead)")
+	}
+}
+
+// TestMeaningfulMustFollowLeadStaysMeaningful: leading 2H forces the follower
+// into 2 hearts; leading 3S leaves them a single spade. The lead's
+// constraining power differs across choices, so the turn is meaningful.
+func TestMeaningfulMustFollowLeadStaysMeaningful(t *testing.T) {
+	g := &genome.Genome{
+		Skeleton: genome.TrickTaking,
+		Players:  2,
+		HandSize: 3,
+		TrickTaking: &genome.TrickTakingParams{
+			MustFollowSuit: true,
+			TrickScoring:   genome.ScorePerTrick,
+			RoundsPerGame:  1,
+		},
+	}
+	runner := fixedSetupRunner{
+		GenericRunner: &tricktaking.Runner{},
+		build: func() *sim.GameState {
+			st := sim.NewGameState(2)
+			st.Hands[0] = []sim.Card{card(sim.Hearts, sim.Two), card(sim.Spades, sim.Three)}
+			st.Hands[1] = []sim.Card{card(sim.Hearts, sim.Five), card(sim.Hearts, sim.Seven), card(sim.Spades, sim.Nine)}
+			st.Phase = sim.PhaseTrick
+			st.TrumpSuit = -1
+			st.TrickCards = make([]sim.Card, 0, 2)
+			st.TrickPlayers = make([]int, 0, 2)
+			return st
+		},
+	}
+
+	result := sim.RunBatch(g, runner, &sim.RandomAI{}, 1, 1)
+	first := result.AllTurns[0][0]
+	if first.LegalMoves != 2 {
+		t.Fatalf("premise broken: leader must have 2 legal moves, got %d", first.LegalMoves)
+	}
+	if !first.Meaningful {
+		t.Errorf("must-follow lead with differing constraint must be Meaningful")
+	}
+}
+
 // TestBatchTrickTakingAttackTurnsMatchTrickWins (audit Wave D fix 3): in
 // trick-taking, exactly one applied move completes each trick and emits
 // EventTrickWon, so the number of attack-flagged TurnRecords per game must

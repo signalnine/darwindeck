@@ -82,6 +82,15 @@ type TurnRecord struct {
 	// to 3 attack events -- still counts as exactly ONE interactive turn
 	// (audit Wave D fix 3).
 	Attack bool
+	// Meaningful is true iff the acting player had >= 2 legal moves AND the
+	// choice plausibly mattered (Task 28 round 2, the design doc's "did the
+	// choice matter"): up to 4 deterministically sampled moves differ in move
+	// type, special-effect profile, or a next-player option-SET probe (see
+	// turnIsMeaningful in batch.go for the per-skeleton semantics).
+	// computeDecisionDensity counts these, not raw LegalMoves >= 2 -- the raw
+	// count was the archetype A1/A2 inflation vector (all-wild hands and
+	// no-follow trick hands scored 0.86-0.92 with near-zero choice impact).
+	Meaningful bool
 }
 
 // EventType identifies game events for logging and fitness analysis.

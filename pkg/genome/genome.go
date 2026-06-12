@@ -197,6 +197,22 @@ type SpecialCard struct {
 	BySuit   uint8           `json:"by_suit,omitempty"`   // 0 = any suit (1-4 = specific)
 }
 
+// MatchesCard reports whether this special-card rule applies to a card of
+// the given rank and suit. suit is the sim package's 0-indexed value; BySuit
+// uses 1-4 with 0 meaning "any suit", ByRank 0 means "any rank" (so a rule
+// with both zero is a catch-all that matches every card). SINGLE SOURCE OF
+// TRUTH for special-card matching: the shedding runner's effect application
+// and the batch runner's choice-impact profiling both delegate here.
+func (sc SpecialCard) MatchesCard(rank, suit uint8) bool {
+	if sc.ByRank != 0 && sc.ByRank != rank {
+		return false
+	}
+	if sc.BySuit != 0 && sc.BySuit != suit+1 {
+		return false
+	}
+	return true
+}
+
 // ScoringEvent defines when points are awarded.
 type ScoringEvent uint8
 

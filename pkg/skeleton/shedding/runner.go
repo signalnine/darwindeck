@@ -390,16 +390,9 @@ func matchesTop(card, top sim.Card, rule genome.MatchRule) bool {
 // isWild checks if a card is designated as wild.
 func isWild(card sim.Card, specials []genome.SpecialCard) bool {
 	for _, sc := range specials {
-		if sc.Type != genome.SpecialWild {
-			continue
+		if sc.Type == genome.SpecialWild && cardMatchesSpecial(card, sc) {
+			return true
 		}
-		if sc.ByRank != 0 && sc.ByRank != uint8(card.Rank) {
-			continue
-		}
-		if sc.BySuit != 0 && sc.BySuit != uint8(card.Suit)+1 {
-			continue
-		}
-		return true
 	}
 	return false
 }
@@ -534,15 +527,11 @@ func applySpecialEffects(state *sim.GameState, card sim.Card, g *genome.Genome) 
 	return events
 }
 
-// cardMatchesSpecial checks if a card triggers a special effect.
+// cardMatchesSpecial checks if a card triggers a special effect. Matching
+// semantics live in genome.SpecialCard.MatchesCard (the single source of
+// truth, shared with the batch runner's choice-impact profiling).
 func cardMatchesSpecial(card sim.Card, sc genome.SpecialCard) bool {
-	if sc.ByRank != 0 && sc.ByRank != uint8(card.Rank) {
-		return false
-	}
-	if sc.BySuit != 0 && sc.BySuit != uint8(card.Suit)+1 {
-		return false
-	}
-	return true
+	return sc.MatchesCard(uint8(card.Rank), uint8(card.Suit))
 }
 
 // Type alias for sim.Card used in Setup

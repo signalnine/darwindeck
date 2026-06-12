@@ -64,15 +64,24 @@ func ComputeFitnessWithMCTS(
 	return m
 }
 
-// computeDecisionDensity: fraction of decision points where the acting player
-// had >= 2 legal moves. This is the metric CLAUDE.md always claimed.
-// Forced turns (1 legal move) are not decisions regardless of event type.
+// computeDecisionDensity: fraction of decision points whose choice plausibly
+// MATTERED (TurnRecord.Meaningful, Task 28 round 2): the acting player had
+// >= 2 legal moves AND the batch runner's choice-impact sampling found moves
+// differing in type, special-effect profile, or next-player option impact
+// (see turnIsMeaningful in pkg/sim/batch.go for per-skeleton semantics).
+//
+// Forced turns (1 legal move) are never decisions regardless of event type.
+// Raw LegalMoves >= 2 counting -- the previous definition -- was the
+// archetype A1/A2 inflation vector: all-wild shedding hands and no-follow
+// trick hands scored 0.86-0.92 density while their choices had near-zero
+// impact (the rejected flagship champions, now pinned as fixtures in
+// pkg/seeds/degenerate.go).
 func computeDecisionDensity(result sim.BatchResult) float64 {
 	total, meaningful := 0, 0
 	for _, turns := range result.AllTurns {
 		for _, tr := range turns {
 			total++
-			if tr.LegalMoves >= 2 {
+			if tr.Meaningful {
 				meaningful++
 			}
 		}
