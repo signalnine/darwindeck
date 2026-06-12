@@ -29,6 +29,9 @@ func (stubRunner) ApplyMove(state *sim.GameState, move sim.Move, g *genome.Genom
 	return nil
 }
 func (stubRunner) CheckEnd(state *sim.GameState, g *genome.Genome) int { return -1 }
+func (stubRunner) Progress(state *sim.GameState, g *genome.Genome) []float64 {
+	return nil
+}
 
 // TestRunBatchEmptyDoesNotLeakSentinelMinTurns guards against dd-d80:
 // when n==0 the loop never runs, so MinTurns must not surface as the
@@ -94,10 +97,16 @@ func TestBatchRecordsPerTurnData(t *testing.T) {
 			}
 		}
 	}
-	// Leaders is Task 8's job; Task 7 leaves the per-game tracks nil.
+	// Leaders (Task 8): one argmax-of-Progress entry per applied move,
+	// parallel to the TurnRecords, each either a player index or -1 (tie).
 	for i, leaders := range result.AllLeaders {
-		if leaders != nil {
-			t.Errorf("game %d: Leaders = %v, want nil until Task 8 fills it", i, leaders)
+		if len(leaders) != len(result.AllTurns[i]) {
+			t.Errorf("game %d: len(Leaders) = %d, want %d (parallel to TurnRecords)", i, len(leaders), len(result.AllTurns[i]))
+		}
+		for j, l := range leaders {
+			if l < -1 || int(l) >= g.Players {
+				t.Errorf("game %d move %d: leader = %d, want -1..%d", i, j, l, g.Players-1)
+			}
 		}
 	}
 }
@@ -202,9 +211,11 @@ func TestSheddingOptionDeltaHandComputed(t *testing.T) {
 //
 // Hand-computed for P1 = {2H, 2D, 7S} with MeldSets/min 3, DrawEither,
 // knock at 10 (deadwood 2+2+7 = 11, so no knock; no 3-of-a-kind, so no melds):
-//   before P0's discard (discard pile EMPTY): draw 1 (deck only) + meld 1
-//   (pass only) + discard 3 = 5
-//   after P0 discards a card:                 draw 2 (deck + discard) + 1 + 3 = 6
+//
+//	before P0's discard (discard pile EMPTY): draw 1 (deck only) + meld 1
+//	(pass only) + discard 3 = 5
+//	after P0 discards a card:                 draw 2 (deck + discard) + 1 + 3 = 6
+//
 // OptionDelta = 6 - 5 = +1.
 func TestRummyOptionDeltaHandComputed(t *testing.T) {
 	g := &genome.Genome{
@@ -290,6 +301,48 @@ func TestTrickTakingOptionDeltaAlwaysZero(t *testing.T) {
 	}
 }
 
+// TestBatchLeadersTrackArgmaxProgress verifies the Task 8 leader track by
+// hand on the forced-draw fixture (g.HandSize = 1, so shedding Progress is
+// 1 - hand/1 floored at 0):
+//
+//	move 0: P0 forced draw -> P0 holds 2 cards (progress 0, clamped), P1
+//	        holds 1 (progress 0). Tied at the max => leader -1.
+//	move 1: P1 plays 7D on 7H -> P1 empty (progress 1), P0 at 0 => leader 1,
+//	        and P1 wins the game.
+func TestBatchLeadersTrackArgmaxProgress(t *testing.T) {
+	g := &genome.Genome{
+		Skeleton: genome.Shedding,
+		Players:  2,
+		HandSize: 1,
+		Shedding: &genome.SheddingParams{MatchRule: genome.MatchEither, DrawPenalty: 1},
+	}
+	runner := fixedSetupRunner{
+		GenericRunner: &shedding.Runner{},
+		build: func() *sim.GameState {
+			st := sim.NewGameState(2)
+			top := card(sim.Hearts, sim.Seven)
+			st.Discard = []sim.Card{top}
+			st.TopCard = &top
+			// P0 cannot play 9D on 7H: forced draw.
+			st.Hands[0] = []sim.Card{card(sim.Diamonds, sim.Nine)}
+			// P1 holds a rank match and wins on their turn.
+			st.Hands[1] = []sim.Card{card(sim.Diamonds, sim.Seven)}
+			st.Deck = []sim.Card{card(sim.Clubs, sim.Two), card(sim.Clubs, sim.Three)}
+			st.Phase = sim.PhasePlay
+			return st
+		},
+	}
+
+	result := sim.RunBatch(g, runner, &sim.RandomAI{}, 1, 1)
+	want := []int8{-1, 1}
+	if !reflect.DeepEqual(result.AllLeaders[0], want) {
+		t.Errorf("Leaders = %v, want %v (tie after forced draw, then winner leads)", result.AllLeaders[0], want)
+	}
+	if result.WinCounts[1] != 1 {
+		t.Fatalf("WinCounts = %v, want P1 to win (fixture broken)", result.WinCounts)
+	}
+}
+
 // TestSameDerivedSeedSameEventStream is the Execution-notes doc-test: per-game
 // seeds derive as baseSeed+index, so game i of one batch must be byte-identical
 // (events AND turn records) to game 0 of a batch whose baseSeed is shifted by
@@ -313,6 +366,9 @@ func TestSameDerivedSeedSameEventStream(t *testing.T) {
 			}
 			if !reflect.DeepEqual(r1.AllTurns[idx], r2.AllTurns[0]) {
 				t.Errorf("turn records differ between batch position %d (base %d) and position 0 (base %d)", idx, baseSeed, baseSeed+idx)
+			}
+			if !reflect.DeepEqual(r1.AllLeaders[idx], r2.AllLeaders[0]) {
+				t.Errorf("leader tracks differ between batch position %d (base %d) and position 0 (base %d)", idx, baseSeed, baseSeed+idx)
 			}
 		})
 	}

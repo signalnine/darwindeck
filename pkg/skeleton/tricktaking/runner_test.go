@@ -2,6 +2,7 @@ package tricktaking
 
 import (
 	"fmt"
+	"math"
 	"math/rand/v2"
 	"reflect"
 	"testing"
@@ -600,5 +601,118 @@ func TestCheckEndIsPure(t *testing.T) {
 	}
 	if w1 != w2 {
 		t.Errorf("repeated CheckEnd returned different winners: %d vs %d", w1, w2)
+	}
+}
+
+// playOutWithProgress plays a full game with random AI, asserting at every
+// applied move that Progress returns one value per player in [0,1] (audit
+// Task 8). Returns the final state and winner (-1 when the game did not
+// complete naturally).
+func playOutWithProgress(t *testing.T, g *genome.Genome, seed uint64) (*sim.GameState, int) {
+	t.Helper()
+	runner := &Runner{}
+	ai := &sim.RandomAI{}
+	rng := rand.New(rand.NewPCG(seed, 0))
+
+	state := runner.Setup(g, rng)
+	maxTurns := g.MaxTurns()
+
+	for {
+		runner.Upkeep(state, g)
+		if winner := runner.CheckEnd(state, g); winner >= 0 {
+			return state, winner
+		}
+		if state.Turn >= maxTurns {
+			return state, -1
+		}
+		moves := runner.GenerateMoves(state, g)
+		if len(moves) == 0 {
+			return state, -1
+		}
+		move := ai.SelectMove(moves, state, rng)
+		runner.ApplyMove(state, move, g)
+
+		progress := runner.Progress(state, g)
+		if len(progress) != state.NumPlayers {
+			t.Fatalf("seed %d: Progress returned %d values, want %d", seed, len(progress), state.NumPlayers)
+		}
+		for p, v := range progress {
+			if v < 0 || v > 1 {
+				t.Fatalf("seed %d: Progress[%d] = %v, want in [0,1]", seed, p, v)
+			}
+		}
+	}
+}
+
+// TestProgressWinnerIsMaxAcrossSeeds is the Task 8 (b) property for both
+// scoring directions: in a played-out game, the eventual winner's final
+// Progress is the maximum across players (ties allowed). Whist covers
+// highest-score-wins (ScorePerTrick); Hearts covers avoidance, where the
+// share must be inverted so the lowest scorer leads.
+func TestProgressWinnerIsMaxAcrossSeeds(t *testing.T) {
+	cases := []struct {
+		name string
+		g    *genome.Genome
+	}{
+		{"whist", seeds.Whist()},
+		{"hearts-avoidance", seeds.Hearts()},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			runner := &Runner{}
+			completed := 0
+			for seed := uint64(0); seed < 10; seed++ {
+				state, winner := playOutWithProgress(t, tc.g, seed)
+				if winner < 0 {
+					continue
+				}
+				completed++
+				progress := runner.Progress(state, tc.g)
+				for p, v := range progress {
+					if v > progress[winner] {
+						t.Errorf("seed %d: Progress[%d] = %v exceeds winner %d's %v", seed, p, v, winner, progress[winner])
+					}
+				}
+			}
+			if completed == 0 {
+				t.Fatal("no seed completed: winner-max property never exercised")
+			}
+		})
+	}
+}
+
+// TestProgressAvoidanceInversion pins the inversion direction with hand-set
+// scores: under ScoreAvoidance the LOW scorer leads; under ScorePerTrick the
+// HIGH scorer leads. Shares are score/total: with scores {5, 2} the plain
+// shares are {5/7, 2/7} and the avoidance shares are {2/7, 5/7}.
+func TestProgressAvoidanceInversion(t *testing.T) {
+	runner := &Runner{}
+	state := sim.NewGameState(2)
+	state.Scores[0] = 5
+	state.Scores[1] = 2
+
+	plain := &genome.Genome{
+		Skeleton: genome.TrickTaking, Players: 2, HandSize: 13,
+		TrickTaking: &genome.TrickTakingParams{TrickScoring: genome.ScorePerTrick},
+	}
+	avoid := &genome.Genome{
+		Skeleton: genome.TrickTaking, Players: 2, HandSize: 13,
+		TrickTaking: &genome.TrickTakingParams{TrickScoring: genome.ScoreAvoidance},
+	}
+
+	pp := runner.Progress(state, plain)
+	if got, want := pp[0], 5.0/7.0; math.Abs(got-want) > 1e-12 {
+		t.Errorf("plain Progress[0] = %v, want %v", got, want)
+	}
+	if pp[0] <= pp[1] {
+		t.Errorf("plain scoring: high scorer must lead, got %v", pp)
+	}
+
+	pa := runner.Progress(state, avoid)
+	if got, want := pa[1], 1-2.0/7.0; math.Abs(got-want) > 1e-12 {
+		t.Errorf("avoidance Progress[1] = %v, want %v", got, want)
+	}
+	if pa[1] <= pa[0] {
+		t.Errorf("avoidance scoring: low scorer must lead, got %v", pa)
 	}
 }

@@ -1092,3 +1092,130 @@ func TestGenerateMovesIsPure(t *testing.T) {
 		}
 	}
 }
+
+// playOutWithProgress plays a full game with random AI, asserting at every
+// applied move that Progress returns one value per player in [0,1] (audit
+// Task 8). Returns the final state and winner (-1 when the game did not
+// complete naturally).
+func playOutWithProgress(t *testing.T, g *genome.Genome, seed uint64) (*sim.GameState, int) {
+	t.Helper()
+	runner := &Runner{}
+	ai := &sim.RandomAI{}
+	rng := rand.New(rand.NewPCG(seed, 0))
+
+	state := runner.Setup(g, rng)
+	maxTurns := g.MaxTurns()
+
+	for {
+		runner.Upkeep(state, g)
+		if winner := runner.CheckEnd(state, g); winner >= 0 {
+			return state, winner
+		}
+		if state.Turn >= maxTurns {
+			return state, -1
+		}
+		moves := runner.GenerateMoves(state, g)
+		if len(moves) == 0 {
+			return state, -1
+		}
+		move := ai.SelectMove(moves, state, rng)
+		runner.ApplyMove(state, move, g)
+
+		progress := runner.Progress(state, g)
+		if len(progress) != state.NumPlayers {
+			t.Fatalf("seed %d: Progress returned %d values, want %d", seed, len(progress), state.NumPlayers)
+		}
+		for p, v := range progress {
+			if v < 0 || v > 1 {
+				t.Fatalf("seed %d: Progress[%d] = %v, want in [0,1]", seed, p, v)
+			}
+		}
+	}
+}
+
+// TestProgressWinnerIsMaxAcrossSeeds is the Task 8 (b) property: in a
+// played-out game, the eventual winner's final Progress is the maximum
+// across players (ties allowed).
+func TestProgressWinnerIsMaxAcrossSeeds(t *testing.T) {
+	g := seeds.CrazyEights()
+	runner := &Runner{}
+	completed := 0
+	for seed := uint64(0); seed < 10; seed++ {
+		state, winner := playOutWithProgress(t, g, seed)
+		if winner < 0 {
+			continue
+		}
+		completed++
+		progress := runner.Progress(state, g)
+		for p, v := range progress {
+			if v > progress[winner] {
+				t.Errorf("seed %d: Progress[%d] = %v exceeds winner %d's %v", seed, p, v, winner, progress[winner])
+			}
+		}
+	}
+	if completed == 0 {
+		t.Fatal("no seed completed: winner-max property never exercised")
+	}
+}
+
+// TestProgressIncreasesOnShed is the Task 8 (c) property: shedding a card
+// raises the shedder's Progress (1 - hand/initialHandSize grows as the hand
+// shrinks).
+func TestProgressIncreasesOnShed(t *testing.T) {
+	g := &genome.Genome{
+		Skeleton: genome.Shedding,
+		Players:  2,
+		HandSize: 2,
+		Shedding: &genome.SheddingParams{MatchRule: genome.MatchEither, DrawPenalty: 1},
+	}
+	runner := &Runner{}
+
+	state := sim.NewGameState(2)
+	top := sim.Card{Suit: sim.Hearts, Rank: sim.Seven}
+	state.Discard = []sim.Card{top}
+	state.TopCard = &top
+	state.Hands[0] = []sim.Card{{Suit: sim.Spades, Rank: sim.Seven}, {Suit: sim.Diamonds, Rank: sim.Two}}
+	state.Hands[1] = []sim.Card{{Suit: sim.Clubs, Rank: sim.Nine}, {Suit: sim.Clubs, Rank: sim.Ten}}
+	state.Phase = sim.PhasePlay
+
+	before := runner.Progress(state, g)
+	runner.ApplyMove(state, sim.Move{
+		Type:     sim.MovePlay,
+		Cards:    []sim.Card{{Suit: sim.Spades, Rank: sim.Seven}},
+		PlayerID: 0,
+	}, g)
+	after := runner.Progress(state, g)
+
+	if after[0] <= before[0] {
+		t.Errorf("Progress[0] did not increase on shed: before %v, after %v", before[0], after[0])
+	}
+	if after[1] != before[1] {
+		t.Errorf("Progress[1] changed without acting: before %v, after %v", before[1], after[1])
+	}
+}
+
+// TestProgressClampsGrownHands pins the clamp: draw penalties can grow a hand
+// past the initial deal, and Progress must floor at 0 rather than go negative.
+func TestProgressClampsGrownHands(t *testing.T) {
+	g := &genome.Genome{
+		Skeleton: genome.Shedding,
+		Players:  2,
+		HandSize: 2,
+		Shedding: &genome.SheddingParams{MatchRule: genome.MatchEither, DrawPenalty: 1},
+	}
+	runner := &Runner{}
+	state := sim.NewGameState(2)
+	state.Hands[0] = []sim.Card{
+		{Suit: sim.Clubs, Rank: sim.Two}, {Suit: sim.Clubs, Rank: sim.Three},
+		{Suit: sim.Clubs, Rank: sim.Four}, {Suit: sim.Clubs, Rank: sim.Five},
+	}
+	state.Hands[1] = []sim.Card{{Suit: sim.Hearts, Rank: sim.Nine}}
+
+	progress := runner.Progress(state, g)
+	if progress[0] != 0 {
+		t.Errorf("Progress[0] = %v for a hand grown past the deal, want 0 (clamped)", progress[0])
+	}
+	if want := 0.5; progress[1] != want {
+		t.Errorf("Progress[1] = %v, want %v (1 - 1/2)", progress[1], want)
+	}
+}

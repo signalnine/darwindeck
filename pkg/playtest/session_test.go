@@ -22,6 +22,9 @@ func (stubRunner) ApplyMove(state *sim.GameState, move sim.Move, g *genome.Genom
 	return nil
 }
 func (stubRunner) CheckEnd(state *sim.GameState, g *genome.Genome) int { return -1 }
+func (stubRunner) Progress(state *sim.GameState, g *genome.Genome) []float64 {
+	return nil
+}
 
 // stubAI returns a fixed move regardless of state.
 type stubAI struct{ move sim.Move }

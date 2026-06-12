@@ -292,6 +292,39 @@ func (r *Runner) Upkeep(state *sim.GameState, g *genome.Genome) {
 	}
 }
 
+// Progress returns each player's progress toward winning in [0,1] (audit
+// Task 8): clamp(1 - deadwood/initialDeadwoodEstimate, 0, 1). The estimate
+// is HandSize * 10 -- the dealt hand at the maximum per-card deadwood value
+// (see cardValue: 10/J/Q/K are all worth 10), i.e. the worst hand a player
+// can be dealt. Deadwood is computed directly from live hands via
+// calcDeadwood; Scores is deliberately NOT read, because deadwood is only
+// banked there at round end by Upkeep, and bankDeadwood is NOT idempotent --
+// Progress must stay a pure query. Lower deadwood => higher progress, the
+// same ordering bestScore applies to banked scores at round end. Mid-turn
+// hands hold HandSize+1 cards and can exceed the estimate; the clamp floors
+// those at 0. The batch loop calls this after every applied move.
+func (r *Runner) Progress(state *sim.GameState, g *genome.Genome) []float64 {
+	out := make([]float64, state.NumPlayers)
+	params := g.Rummy
+	if params == nil {
+		return out
+	}
+	est := g.HandSize * 10
+	if est < 1 {
+		est = 10
+	}
+	for i := 0; i < state.NumPlayers; i++ {
+		p := 1 - float64(calcDeadwood(state.Hands[i], params))/float64(est)
+		if p < 0 {
+			p = 0
+		} else if p > 1 {
+			p = 1
+		}
+		out[i] = p
+	}
+	return out
+}
+
 func (r *Runner) CheckEnd(state *sim.GameState, g *genome.Genome) int {
 	if state.Phase == sim.PhaseEnd {
 		// Upkeep has already banked deadwood into Scores; picking the winner
@@ -468,6 +501,15 @@ func calcDeadwood(hand []sim.Card, params *genome.RummyParams) int {
 		return totalValue
 	}
 
+	if n <= 20 {
+		// Candidates are disjoint unions of card values, so the deadwood is
+		// total minus the best meld cover -- no need to reconstruct WHICH
+		// cards were covered. Progress (audit Task 8) calls calcDeadwood
+		// after every applied move, so this path skips bestPartitionMasksDP's
+		// two reconstruction arrays and the backtrack.
+		return totalValue - bestPartitionValueDP(candidates, n)
+	}
+
 	used := bestPartition(candidates, n)
 	dead := 0
 	for i, card := range hand {
@@ -487,6 +529,15 @@ type meldCandidate struct {
 // enumerateMeldCandidates returns every valid sub-meld at size >= MinMeldSize.
 // Sub-sets: every k-combination of cards sharing a rank, for k in [min, count].
 // Sub-runs: every contiguous-rank window in a suit, for length in [min, runLen].
+//
+// Hand indices are bucketed by rank (2-14) and suit (0-3) into fixed arrays.
+// This used to use maps with sorted-key iteration; once Progress (audit
+// Task 8) started calling calcDeadwood after every applied move, map hashing
+// dominated the rummy batch profile. Array indexing keeps the exact same
+// deterministic candidate order (ranks/suits ascending, hand order within a
+// rank, rank-ascending within a suit) with zero bucket allocations. Buckets
+// hold 32 entries because meld masks are uint32 -- hands beyond 32 cards were
+// never representable here.
 func enumerateMeldCandidates(hand []sim.Card, params *genome.RummyParams) []meldCandidate {
 	var out []meldCandidate
 	min := params.MinMeldSize
@@ -494,53 +545,63 @@ func enumerateMeldCandidates(hand []sim.Card, params *genome.RummyParams) []meld
 		return out
 	}
 
+	n := len(hand)
+	if n > 32 {
+		n = 32
+	}
+
 	if params.MeldTypes == genome.MeldSets || params.MeldTypes == genome.MeldBoth {
-		byRank := make(map[sim.Rank][]int)
-		for i, c := range hand {
-			byRank[c.Rank] = append(byRank[c.Rank], i)
+		var byRank [15][32]uint8
+		var rankLen [15]uint8
+		for i := 0; i < n; i++ {
+			r := hand[i].Rank
+			if r > 14 {
+				continue // defensive: Rank is 2-14
+			}
+			byRank[r][rankLen[r]] = uint8(i)
+			rankLen[r]++
 		}
-		// Sorted-key iteration for determinism (dd-audit-1): candidate order
-		// feeds findMelds, so map order would randomize meld-move order.
-		ranks := make([]sim.Rank, 0, len(byRank))
-		for r := range byRank {
-			ranks = append(ranks, r)
-		}
-		slices.Sort(ranks)
-		for _, r := range ranks {
-			idxs := byRank[r]
-			if len(idxs) < min {
+		for r := 2; r <= 14; r++ {
+			cnt := int(rankLen[r])
+			if cnt < min {
 				continue
 			}
-			for size := min; size <= len(idxs); size++ {
+			idxs := byRank[r][:cnt]
+			for size := min; size <= cnt; size++ {
 				addCombinations(hand, idxs, size, &out)
 			}
 		}
 	}
 
 	if params.MeldTypes == genome.MeldRuns || params.MeldTypes == genome.MeldBoth {
-		bySuit := make(map[sim.Suit][]int)
-		for i, c := range hand {
-			bySuit[c.Suit] = append(bySuit[c.Suit], i)
+		var bySuit [4][32]uint8
+		var suitLen [4]uint8
+		for i := 0; i < n; i++ {
+			s := hand[i].Suit
+			if s > 3 {
+				continue // defensive: Suit is 0-3
+			}
+			bySuit[s][suitLen[s]] = uint8(i)
+			suitLen[s]++
 		}
-		// Sorted-key iteration for determinism (dd-audit-1).
-		suits := make([]sim.Suit, 0, len(bySuit))
-		for s := range bySuit {
-			suits = append(suits, s)
-		}
-		slices.Sort(suits)
-		for _, s := range suits {
-			idxs := bySuit[s]
-			if len(idxs) < min {
+		for s := 0; s < 4; s++ {
+			cnt := int(suitLen[s])
+			if cnt < min {
 				continue
 			}
-			sort.Slice(idxs, func(i, j int) bool {
-				return hand[idxs[i]].Rank < hand[idxs[j]].Rank
-			})
+			idxs := bySuit[s][:cnt]
+			// Insertion sort by rank (stable, allocation-free; suits hold at
+			// most 13 cards).
+			for a := 1; a < cnt; a++ {
+				for b := a; b > 0 && hand[idxs[b]].Rank < hand[idxs[b-1]].Rank; b-- {
+					idxs[b], idxs[b-1] = idxs[b-1], idxs[b]
+				}
+			}
 			// Walk maximal consecutive-rank segments; equal or non-+1 ranks break.
 			i := 0
-			for i < len(idxs) {
+			for i < cnt {
 				j := i + 1
-				for j < len(idxs) && hand[idxs[j]].Rank == hand[idxs[j-1]].Rank+1 {
+				for j < cnt && hand[idxs[j]].Rank == hand[idxs[j-1]].Rank+1 {
 					j++
 				}
 				segLen := j - i
@@ -564,8 +625,8 @@ func enumerateMeldCandidates(hand []sim.Card, params *genome.RummyParams) []meld
 	return out
 }
 
-func addCombinations(hand []sim.Card, idxs []int, size int, out *[]meldCandidate) {
-	chosen := make([]int, 0, size)
+func addCombinations(hand []sim.Card, idxs []uint8, size int, out *[]meldCandidate) {
+	chosen := make([]uint8, 0, size)
 	var pick func(start int)
 	pick = func(start int) {
 		if len(chosen) == size {
@@ -613,6 +674,31 @@ func bestPartitionMasks(candidates []meldCandidate, handSize int) []uint32 {
 		return bestPartitionMasksDP(candidates, handSize)
 	}
 	return bestPartitionMasksDFS(candidates, handSize)
+}
+
+// bestPartitionValueDP returns only the maximum total value of a disjoint
+// subset of candidates -- the value the full bestPartitionMasksDP would
+// reconstruct, without its pickedMask/pickedFrom arrays or backtrack.
+// calcDeadwood needs just this number, and Progress (audit Task 8) calls
+// calcDeadwood for every player after every applied move.
+func bestPartitionValueDP(candidates []meldCandidate, handSize int) int {
+	full := uint32(1)<<uint(handSize) - 1
+	value := make([]int, int(full)+1)
+	for mask := uint32(1); mask <= full; mask++ {
+		// Best when not using the lowest set bit of mask.
+		lowBit := mask & (^mask + 1)
+		best := value[mask^lowBit]
+		for _, c := range candidates {
+			if c.mask&mask != c.mask {
+				continue
+			}
+			if v := value[mask^c.mask] + c.value; v > best {
+				best = v
+			}
+		}
+		value[mask] = best
+	}
+	return value[full]
 }
 
 func bestPartitionMasksDP(candidates []meldCandidate, handSize int) []uint32 {

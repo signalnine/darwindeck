@@ -193,6 +193,28 @@ func (r *Runner) ApplyMove(state *sim.GameState, move sim.Move, g *genome.Genome
 	return events
 }
 
+// Progress returns each player's progress toward winning in [0,1] (audit
+// Task 8): 1 - hand/initialHandSize, where initialHandSize is the dealt
+// g.HandSize. Draw penalties can grow a hand past the deal, so the value is
+// floored at 0. An empty hand (the win condition) scores exactly 1. Must be
+// pure and allocation-light: the batch loop calls it after every applied
+// move.
+func (r *Runner) Progress(state *sim.GameState, g *genome.Genome) []float64 {
+	out := make([]float64, state.NumPlayers)
+	initial := g.HandSize
+	if initial < 1 {
+		initial = 1
+	}
+	for i := 0; i < state.NumPlayers; i++ {
+		p := 1 - float64(len(state.Hands[i]))/float64(initial)
+		if p < 0 {
+			p = 0
+		}
+		out[i] = p
+	}
+	return out
+}
+
 func (r *Runner) CheckEnd(state *sim.GameState, g *genome.Genome) int {
 	// First player to empty hand wins
 	for i, hand := range state.Hands {

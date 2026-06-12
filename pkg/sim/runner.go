@@ -12,7 +12,7 @@ type GameResult struct {
 	// TurnRecords rather than the plan's "Turns" because the Turns count
 	// field above predates it.
 	TurnRecords []TurnRecord
-	// Leaders is the leader after each applied move, -1 = tie. Left nil by
-	// the batch runner until Task 8 (progress tracking) fills it.
+	// Leaders is the leader after each applied move (argmax of the runner's
+	// Progress snapshot), -1 = tie; parallel to TurnRecords (audit Task 8).
 	Leaders []int8
 }

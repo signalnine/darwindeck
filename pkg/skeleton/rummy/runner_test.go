@@ -2,6 +2,7 @@ package rummy
 
 import (
 	"fmt"
+	"math"
 	"math/rand/v2"
 	"reflect"
 	"testing"
@@ -765,5 +766,137 @@ func TestCheckEndIsPure(t *testing.T) {
 	}
 	if w1 != w2 {
 		t.Errorf("repeated CheckEnd returned different winners: %d vs %d", w1, w2)
+	}
+}
+
+// playOutWithProgress plays a full game with random AI, asserting at every
+// applied move that Progress returns one value per player in [0,1] (audit
+// Task 8). Returns the final state and winner (-1 when the game did not
+// complete naturally). Mirrors runGame but WITHOUT the max-turns scoreRound
+// fallback: Progress assertions need an unbanked, naturally-finished state.
+func playOutWithProgress(t *testing.T, g *genome.Genome, seed uint64) (*sim.GameState, int) {
+	t.Helper()
+	runner := &Runner{}
+	ai := &sim.RandomAI{}
+	rng := rand.New(rand.NewPCG(seed, 0))
+
+	state := runner.Setup(g, rng)
+	maxTurns := g.MaxTurns()
+
+	for {
+		runner.Upkeep(state, g)
+		if winner := runner.CheckEnd(state, g); winner >= 0 {
+			return state, winner
+		}
+		if state.Turn >= maxTurns {
+			return state, -1
+		}
+		moves := runner.GenerateMoves(state, g)
+		if len(moves) == 0 {
+			return state, -1
+		}
+		move := ai.SelectMove(moves, state, rng)
+		runner.ApplyMove(state, move, g)
+
+		progress := runner.Progress(state, g)
+		if len(progress) != state.NumPlayers {
+			t.Fatalf("seed %d: Progress returned %d values, want %d", seed, len(progress), state.NumPlayers)
+		}
+		for p, v := range progress {
+			if v < 0 || v > 1 {
+				t.Fatalf("seed %d: Progress[%d] = %v, want in [0,1]", seed, p, v)
+			}
+		}
+	}
+}
+
+// TestProgressWinnerIsMaxAcrossSeeds is the Task 8 (b) property: in a
+// played-out game, the eventual winner's final Progress is the maximum across
+// players (ties allowed). Rummy's winner is bestScore (least banked
+// deadwood), and Progress ranks by live deadwood, so the two orderings agree
+// at round end.
+func TestProgressWinnerIsMaxAcrossSeeds(t *testing.T) {
+	g := seeds.GinRummy()
+	runner := &Runner{}
+	completed := 0
+	for seed := uint64(0); seed < 10; seed++ {
+		state, winner := playOutWithProgress(t, g, seed)
+		if winner < 0 {
+			continue
+		}
+		completed++
+		progress := runner.Progress(state, g)
+		for p, v := range progress {
+			if v > progress[winner] {
+				t.Errorf("seed %d: Progress[%d] = %v exceeds winner %d's %v", seed, p, v, winner, progress[winner])
+			}
+		}
+	}
+	if completed == 0 {
+		t.Fatal("no seed completed: winner-max property never exercised")
+	}
+}
+
+// TestProgressFromDeadwood pins the Task 8 rummy definition by hand:
+// Progress = clamp(1 - deadwood/(HandSize*10), 0, 1), computed directly from
+// hands (NOT from Scores -- deadwood is only banked there at round end by
+// Upkeep, and bankDeadwood is not idempotent). HandSize 10 => estimate 100.
+// P0 holds {KH, QC, JD}: no melds, deadwood 30 => 0.7. P1 has laid everything
+// down (gin): deadwood 0 => 1.0.
+func TestProgressFromDeadwood(t *testing.T) {
+	g := seeds.GinRummy()
+	runner := &Runner{}
+	state := sim.NewGameState(2)
+	state.Hands[0] = []sim.Card{
+		{Suit: sim.Hearts, Rank: sim.King},
+		{Suit: sim.Clubs, Rank: sim.Queen},
+		{Suit: sim.Diamonds, Rank: sim.Jack},
+	}
+	state.Hands[1] = nil
+
+	progress := runner.Progress(state, g)
+	if got, want := progress[0], 0.7; math.Abs(got-want) > 1e-12 {
+		t.Errorf("Progress[0] = %v, want %v (deadwood 30 of estimate 100)", got, want)
+	}
+	if got := progress[1]; got != 1.0 {
+		t.Errorf("Progress[1] = %v, want 1.0 (empty hand)", got)
+	}
+
+	// Progress must be PURE: it must not bank deadwood into Scores.
+	if state.Scores[0] != 0 || state.Scores[1] != 0 {
+		t.Errorf("Progress mutated Scores = %v, must stay zero", state.Scores)
+	}
+}
+
+// TestProgressClampsExcessDeadwood pins the clamp floor: when live deadwood
+// exceeds the HandSize*10 estimate (mid-turn hands hold HandSize+1 cards),
+// Progress floors at 0 instead of going negative.
+func TestProgressClampsExcessDeadwood(t *testing.T) {
+	g := &genome.Genome{
+		Skeleton: genome.Rummy,
+		Players:  2,
+		HandSize: 1,
+		Rummy: &genome.RummyParams{
+			MeldTypes:      genome.MeldBoth,
+			MinMeldSize:    3,
+			DrawFrom:       genome.DrawEither,
+			KnockThreshold: 10,
+		},
+	}
+	runner := &Runner{}
+	state := sim.NewGameState(2)
+	// Deadwood 20 against an estimate of 10 (HandSize 1).
+	state.Hands[0] = []sim.Card{
+		{Suit: sim.Hearts, Rank: sim.King},
+		{Suit: sim.Clubs, Rank: sim.Queen},
+	}
+	state.Hands[1] = []sim.Card{{Suit: sim.Diamonds, Rank: sim.Two}}
+
+	progress := runner.Progress(state, g)
+	if progress[0] != 0 {
+		t.Errorf("Progress[0] = %v, want 0 (clamped: deadwood 20 > estimate 10)", progress[0])
+	}
+	if got, want := progress[1], 0.8; math.Abs(got-want) > 1e-12 {
+		t.Errorf("Progress[1] = %v, want %v (deadwood 2 of estimate 10)", got, want)
 	}
 }

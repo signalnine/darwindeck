@@ -22,9 +22,9 @@ type BatchResult struct {
 	// AllTurns holds each game's per-move TurnRecords, parallel to AllEvents
 	// (audit Task 7).
 	AllTurns [][]TurnRecord
-	// AllLeaders holds each game's per-move leader track, parallel to
-	// AllEvents. Entries stay nil until Task 8 (progress tracking) fills
-	// GameResult.Leaders.
+	// AllLeaders holds each game's per-move leader track (argmax of the
+	// runner's Progress after each applied move, -1 = tie), parallel to
+	// AllEvents (audit Task 8).
 	AllLeaders [][]int8
 }
 
@@ -40,6 +40,17 @@ type GenericRunner interface {
 	GenerateMoves(state *GameState, g *genome.Genome) []Move // must be pure
 	ApplyMove(state *GameState, move Move, g *genome.Genome) []Event
 	CheckEnd(state *GameState, g *genome.Genome) int // must be pure
+	// Progress returns each player's progress toward winning in [0,1].
+	// Monotonicity is NOT required; it is a snapshot ranking signal the
+	// batch loop turns into a per-move leader track (audit Task 8).
+	// Per-skeleton definitions:
+	//   shedding:     1 - hand/initialHandSize (floored at 0)
+	//   tricktaking:  playerScore / max(1, totalAwardedSoFar); inverted
+	//                 (1 - share) under ScoreAvoidance
+	//   rummy:        clamp(1 - deadwood/(HandSize*10), 0, 1), computed
+	//                 directly from hands -- never from Scores
+	// Must be pure and allocation-light: it runs after every applied move.
+	Progress(state *GameState, g *genome.Genome) []float64
 }
 
 // HookFunc is called after each move with the resulting events.
@@ -118,6 +129,7 @@ func runSingleGame(g *genome.Genome, runner GenericRunner, ai AIPlayer, rng *ran
 		baseline = make([]int, state.NumPlayers)
 	}
 	records := make([]TurnRecord, 0, 64)
+	leaders := make([]int8, 0, 64)
 
 	for {
 		runner.Upkeep(state, g)
@@ -129,6 +141,7 @@ func runSingleGame(g *genome.Genome, runner GenericRunner, ai AIPlayer, rng *ran
 				Turns:       state.Turn,
 				Events:      state.Events,
 				TurnRecords: records,
+				Leaders:     leaders,
 			}
 		}
 
@@ -139,6 +152,7 @@ func runSingleGame(g *genome.Genome, runner GenericRunner, ai AIPlayer, rng *ran
 				Events:      state.Events,
 				Error:       "max_turns",
 				TurnRecords: records,
+				Leaders:     leaders,
 			}
 		}
 
@@ -149,6 +163,7 @@ func runSingleGame(g *genome.Genome, runner GenericRunner, ai AIPlayer, rng *ran
 				Events:      state.Events,
 				Error:       "stuck",
 				TurnRecords: records,
+				Leaders:     leaders,
 			}
 		}
 		iter++
@@ -161,6 +176,7 @@ func runSingleGame(g *genome.Genome, runner GenericRunner, ai AIPlayer, rng *ran
 				Events:      state.Events,
 				Error:       "no_moves",
 				TurnRecords: records,
+				Leaders:     leaders,
 			}
 		}
 
@@ -228,6 +244,11 @@ func runSingleGame(g *genome.Genome, runner GenericRunner, ai AIPlayer, rng *ran
 			LegalMoves:  capLegalMoves(len(moves)),
 			OptionDelta: clampOptionDelta(delta),
 		})
+
+		// Leader after this move: argmax of Progress, -1 on a tie at the
+		// max (audit Task 8). Progress is pure, so the post-move snapshot
+		// cannot disturb the game.
+		leaders = append(leaders, leaderOf(runner.Progress(state, g)))
 
 		// Run hooks after each move
 		for _, event := range events {
@@ -327,6 +348,28 @@ func peekNextPlayer(state *GameState) int {
 		dir = 1
 	}
 	return ((state.Active+dir)%state.NumPlayers + state.NumPlayers) % state.NumPlayers
+}
+
+// leaderOf returns the index holding the strictly greatest progress value,
+// or -1 when the maximum is shared (tie) or the slice is empty.
+func leaderOf(progress []float64) int8 {
+	if len(progress) == 0 {
+		return -1
+	}
+	best := 0
+	tied := false
+	for i := 1; i < len(progress); i++ {
+		if progress[i] > progress[best] {
+			best = i
+			tied = false
+		} else if progress[i] == progress[best] {
+			tied = true
+		}
+	}
+	if tied {
+		return -1
+	}
+	return int8(best)
 }
 
 func capLegalMoves(n int) uint8 {
