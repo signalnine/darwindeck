@@ -263,23 +263,31 @@ func computeSkillGradient(randomResult, greedyResult sim.BatchResult, numPlayers
 // decisions (audit Task 12). TurnRecords give one record per applied move,
 // attributed to the acting player, so the unit is identical across skeletons.
 //
-// Target band: 15-40 decisions per player, linear falloff outside, hard zero
-// below 5 or above 100. The band and falloff shape carry over from the old
-// curve unchanged; only the unit moved. The band is provisional -- Task 14
-// recalibrates it from the measured spread of the 8 classic seeds.
+// Target band: flat 1.0 in [10, 60] decisions per player, linear ramps
+// 4..10 and 60..170, hard zero below 4 or above 170. Calibrated (Task 14)
+// from the measured spread of the 8 classic seeds under random play over
+// the pinned CalibrationSeeds (mean decisions/player, 200 games each):
+//   oh-hell 7.0 | mau-mau 12.2 | whist/hearts/spades 13.0 |
+//   crazy-eights 18.8 | knock-rummy 77.1 | gin-rummy 150.6
+// The previous band (15-40 flat, zero >100) hard-zeroed gin rummy -- a
+// human-validated classic -- while degenerate fixtures sat at 1.0. Every
+// classic now scores > 0; the band intentionally still discounts the
+// random-play-marathon end (gin 0.18) rather than covering it flat, because
+// 150 random-play decision cycles IS a real playability cost (gin's old
+// Tier 1 timeout rate came from the same tail).
 func computeSessionLength(result sim.BatchResult, numPlayers int) float64 {
 	avg := avgDecisionsPerPlayer(result, numPlayers)
-	if avg < 5 || avg > 100 {
+	if avg < 4 || avg > 170 {
 		return 0
 	}
-	if avg >= 15 && avg <= 40 {
+	if avg >= 10 && avg <= 60 {
 		return 1.0
 	}
-	if avg < 15 {
-		return (avg - 5) / 10 // Linear from 5→15
+	if avg < 10 {
+		return (avg - 4) / 6 // Linear from 4→10
 	}
-	// avg > 40
-	return (100 - avg) / 60 // Linear from 40→100
+	// avg > 60
+	return (170 - avg) / 110 // Linear from 60→170
 }
 
 // avgDecisionsPerPlayer returns the batch mean of each game's decisions per

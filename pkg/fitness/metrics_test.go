@@ -32,19 +32,21 @@ func sessionBatch(numPlayers int, perPlayer ...int) sim.BatchResult {
 // ramp 40->100. Shape is unchanged from the old curve; only the unit moved
 // (Task 14 recalibrates the band itself).
 func TestSessionLengthScoring(t *testing.T) {
+	// Band calibrated by Task 14 from the measured classic spread (see
+	// computeSessionLength): flat [10, 60], ramps 4..10 and 60..170.
 	tests := []struct {
 		dpp      int
 		expected float64
 	}{
-		{3, 0},    // Too short (below hard cutoff)
-		{5, 0},    // Minimum (ramp starts at 0 here)
-		{10, 0.5}, // Ramping up
-		{15, 1.0}, // Target start
-		{25, 1.0}, // In range
-		{40, 1.0}, // Target end
-		{70, 0.5}, // Ramping down
-		{100, 0},  // Maximum (ramp reaches 0 here)
-		{150, 0},  // Way too long (above hard cutoff)
+		{3, 0},     // Too short (below hard cutoff)
+		{4, 0},     // Minimum (ramp starts at 0 here)
+		{7, 0.5},   // Ramping up
+		{10, 1.0},  // Target start
+		{25, 1.0},  // In range
+		{60, 1.0},  // Target end
+		{115, 0.5}, // Ramping down
+		{170, 0},   // Maximum (ramp reaches 0 here)
+		{180, 0},   // Way too long (above hard cutoff)
 	}
 
 	for _, tt := range tests {
@@ -80,7 +82,7 @@ func TestSessionLengthDecisionsPerPlayerExact(t *testing.T) {
 		t.Fatalf("decisions/player: want exactly 20.0 (mean of per-game 15 and 25), got %.3f", got)
 	}
 
-	// 20 decisions/player sits inside the 15-40 band => score 1.0.
+	// 20 decisions/player sits inside the [10, 60] band => score 1.0.
 	if score := computeSessionLength(batch, 2); score != 1.0 {
 		t.Fatalf("20 decisions/player is in band, want 1.0, got %.3f", score)
 	}
@@ -100,20 +102,24 @@ func TestSessionLengthEmptyBatchIsZero(t *testing.T) {
 }
 
 // TestSessionLengthUnitIsPerPlayerNotPerTurn: two batches with the SAME total
-// turn count (52 records) but different player counts must score differently:
-// 52 records across 2 players = 26 decisions/player (in band, 1.0); across 4
-// players = 13 decisions/player (low ramp, 0.8). The old unit collapsed both
-// to "52 turns" and scored both 0.8.
+// turn count (280 records) but different player counts must score differently:
+// 280 records across 2 players = 140 decisions/player (high ramp, (170-140)/110
+// = 0.2727..); across 4 players = 70 decisions/player ((170-70)/110 = 0.9090..).
+// A per-turn unit would collapse both to "280 turns" and score them equally.
 func TestSessionLengthUnitIsPerPlayerNotPerTurn(t *testing.T) {
-	twoPlayer := sessionBatch(2, 26)  // 52 records
-	fourPlayer := sessionBatch(4, 13) // 52 records
+	twoPlayer := sessionBatch(2, 140) // 280 records
+	fourPlayer := sessionBatch(4, 70) // 280 records
 
-	if got := computeSessionLength(twoPlayer, 2); got != 1.0 {
-		t.Errorf("52 records / 2 players = 26 decisions/player, want 1.0, got %.3f", got)
+	got2 := computeSessionLength(twoPlayer, 2)
+	if math.Abs(got2-30.0/110.0) > 1e-9 {
+		t.Errorf("280 records / 2 players = 140 decisions/player, want %.4f, got %.4f", 30.0/110.0, got2)
 	}
-	got := computeSessionLength(fourPlayer, 4)
-	if math.Abs(got-0.8) > 1e-9 {
-		t.Errorf("52 records / 4 players = 13 decisions/player, want 0.8, got %.3f", got)
+	got4 := computeSessionLength(fourPlayer, 4)
+	if math.Abs(got4-100.0/110.0) > 1e-9 {
+		t.Errorf("280 records / 4 players = 70 decisions/player, want %.4f, got %.4f", 100.0/110.0, got4)
+	}
+	if got4 <= got2 {
+		t.Errorf("same total records must score differently by player count: 4p %.4f <= 2p %.4f", got4, got2)
 	}
 }
 
@@ -145,8 +151,8 @@ func TestSessionLengthWhistNotInflatedByPerCardTurns(t *testing.T) {
 
 	dpp := avgDecisionsPerPlayer(result, g.Players)
 	t.Logf("whist-2p: old-unit avg turns %.1f (old score %.3f), decisions/player %.1f", result.AvgTurns, oldScore, dpp)
-	if dpp < 15 || dpp > 40 {
-		t.Fatalf("whist-2p decisions/player must land in the 15-40 band, got %.1f", dpp)
+	if dpp < 10 || dpp > 60 {
+		t.Fatalf("whist-2p decisions/player must land in the [10, 60] band, got %.1f", dpp)
 	}
 
 	got := computeSessionLength(result, g.Players)
@@ -159,9 +165,8 @@ func TestSessionLengthWhistNotInflatedByPerCardTurns(t *testing.T) {
 
 	// The 4-player seed whist plays the same 52 cards but only 13 decisions
 	// per player -- the unit must attribute decisions to players, not count
-	// cards. 13 lands on the low ramp (0.8): near the band and far from the
-	// zero region the inflated unit pushed it toward; Task 14 recalibrates
-	// the band from the classics.
+	// cards. 13 sits inside the Task 14 band [10, 60] (calibrated to admit
+	// the trick-taking classics), scoring 1.0.
 	g4 := seeds.Whist()
 	result4 := sim.RunBatch(g4, GetRunner(g4), &sim.RandomAI{}, 50, 0)
 	dpp4 := avgDecisionsPerPlayer(result4, g4.Players)
@@ -169,8 +174,8 @@ func TestSessionLengthWhistNotInflatedByPerCardTurns(t *testing.T) {
 		t.Fatalf("seed whist (4p) must measure exactly 13 decisions/player (52 cards / 4 seats), got %.2f", dpp4)
 	}
 	got4 := computeSessionLength(result4, g4.Players)
-	if math.Abs(got4-0.8) > 1e-9 {
-		t.Fatalf("seed whist (4p) at 13 decisions/player must score 0.8 on the low ramp, got %.3f", got4)
+	if got4 != 1.0 {
+		t.Fatalf("seed whist (4p) at 13 decisions/player is in band, want 1.0, got %.3f", got4)
 	}
 }
 
