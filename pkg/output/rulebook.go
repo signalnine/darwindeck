@@ -66,8 +66,52 @@ func writeSheddingRules(b *strings.Builder, g *genome.Genome) {
 		b.WriteString(fmt.Sprintf("If you cannot play, **draw %d card(s)** from the deck.\n\n", g.Shedding.DrawPenalty))
 	}
 
+	if g.SheddingMultiRound() {
+		writeSheddingRoundStructure(b, g)
+		return
+	}
+
 	b.WriteString("### Winning\n\n")
 	b.WriteString("The first player to play all their cards wins. If no player can play and the deck runs out, the game ends in a draw.\n\n")
+}
+
+// writeSheddingRoundStructure renders the multi-round win rules (Task 22):
+// rounds end on an emptied hand, the borrowed scoring banks points, and after
+// all rounds the highest banked total wins. MechAvoidance banks penalties as
+// negative points, so "highest total" is explained as fewest penalty points.
+func writeSheddingRoundStructure(b *strings.Builder, g *genome.Genome) {
+	rounds := g.Shedding.RoundsPerGame
+
+	b.WriteString("### Rounds\n\n")
+	b.WriteString(fmt.Sprintf("The game is played over **%d rounds**. Playing your last card ends the round: everyone's hand is scored (see Additional Rules), the scores are banked, and all cards are gathered, shuffled, and redealt for the next round.\n\n", rounds))
+
+	b.WriteString("### Winning\n\n")
+	if hasAvoidanceBorrow(g) && !hasMeldBonusBorrow(g) {
+		b.WriteString(fmt.Sprintf("After %d rounds, the player with the **fewest penalty points** across all rounds wins. Going out first protects you: cards still in hand when a round ends count against their holder.\n\n", rounds))
+	} else if hasAvoidanceBorrow(g) {
+		b.WriteString(fmt.Sprintf("After %d rounds, the **highest total score** wins. Meld bonuses add points; penalty cards still in hand subtract them, so the winner is whoever banked the best balance (with avoidance alone, that is the player with the fewest penalty points).\n\n", rounds))
+	} else {
+		b.WriteString(fmt.Sprintf("After %d rounds, the **highest total score** wins. Emptying your hand ends a round, but points come from the banked scoring -- a player can win on points without ending a single round.\n\n", rounds))
+	}
+	b.WriteString("If scores are tied, the tied player holding the fewest cards at the end of the final round wins.\n\n")
+}
+
+func hasAvoidanceBorrow(g *genome.Genome) bool {
+	for _, bm := range g.Borrowed {
+		if bm.Mechanic == genome.MechAvoidance {
+			return true
+		}
+	}
+	return false
+}
+
+func hasMeldBonusBorrow(g *genome.Genome) bool {
+	for _, bm := range g.Borrowed {
+		if bm.Mechanic == genome.MechMeldBonus {
+			return true
+		}
+	}
+	return false
 }
 
 func writeTrickTakingRules(b *strings.Builder, g *genome.Genome) {

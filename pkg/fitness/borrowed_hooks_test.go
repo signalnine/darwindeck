@@ -241,3 +241,77 @@ func buildBorrowingGenome(host, source genome.SkeletonType, mech genome.Mechanic
 
 	return g
 }
+
+// TestMultiRoundScoringBorrowIsFitnessVisible is Task 22's evolvability
+// sub-check (d): run the default Evaluate pipeline on a MeldBonus + 3-rounds
+// shedding genome and on the same genome WITHOUT the borrow, and require a
+// measurable difference in the raw metrics. If the borrow cannot move any
+// metric, it is invisible to selection and still inert from evolution's
+// perspective -- the multi-round design would not be done.
+//
+// The genome mirrors the shedding runner's Task 22 reference fixture:
+// HandSize 13 / DrawPenalty 3 / 3 players keep residual hands large enough
+// that MeldBonus actually banks points at round end.
+func TestMultiRoundScoringBorrowIsFitnessVisible(t *testing.T) {
+	withBorrow := &genome.Genome{
+		ID:       "meldbonus-3rounds",
+		Skeleton: genome.Shedding,
+		Players:  3,
+		HandSize: 13,
+		Shedding: &genome.SheddingParams{
+			MatchRule:     genome.MatchEither,
+			DrawPenalty:   3,
+			RoundsPerGame: 3,
+		},
+		Borrowed: []genome.BorrowedMechanic{
+			{Source: genome.Rummy, Mechanic: genome.MechMeldBonus},
+		},
+	}
+	withoutBorrow := withBorrow.Clone()
+	withoutBorrow.ID = "no-borrow-3rounds"
+	withoutBorrow.Borrowed = nil // RoundsPerGame stays 3 but is inert: single round
+
+	if errs := genome.Validate(withBorrow); len(errs) > 0 {
+		t.Fatalf("with-borrow genome invalid: %v", errs)
+	}
+	if errs := genome.Validate(withoutBorrow); len(errs) > 0 {
+		t.Fatalf("without-borrow genome invalid: %v", errs)
+	}
+
+	const seed = 4242
+	evalWith := Evaluate(withBorrow, seed)
+	evalWithout := Evaluate(withoutBorrow, seed)
+
+	if !evalWith.Valid {
+		t.Fatalf("with-borrow genome failed the pipeline (tier0=%v tier1=%q) -- multi-round games must survive evaluation",
+			evalWith.Tier0Errors, evalWith.Tier1.Reason)
+	}
+	if !evalWithout.Valid {
+		t.Fatalf("without-borrow control failed the pipeline (tier0=%v tier1=%q)",
+			evalWithout.Tier0Errors, evalWithout.Tier1.Reason)
+	}
+
+	a, b := evalWith.Metrics, evalWithout.Metrics
+	diffs := map[string]float64{
+		"decisions": a.MeaningfulDecisions - b.MeaningfulDecisions,
+		"arc":       a.GameArc - b.GameArc,
+		"interact":  a.Interaction - b.Interaction,
+		"skill":     a.SkillGradient - b.SkillGradient,
+		"length":    a.SessionLength - b.SessionLength,
+	}
+	const measurable = 0.02
+	maxName, maxAbs := "", 0.0
+	for name, d := range diffs {
+		if d < 0 {
+			d = -d
+		}
+		if d > maxAbs {
+			maxName, maxAbs = name, d
+		}
+	}
+	t.Logf("metric deltas (with-borrow minus without): %+v; max |delta| = %s %.4f", diffs, maxName, maxAbs)
+	if maxAbs <= measurable {
+		t.Errorf("no metric moved by more than %.2f when the scoring borrow was added (max %s %.4f): the borrow is fitness-invisible and therefore still inert for evolution",
+			measurable, maxName, maxAbs)
+	}
+}

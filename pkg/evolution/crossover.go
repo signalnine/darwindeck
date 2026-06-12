@@ -141,6 +141,9 @@ func crossoverShedding(child *genome.Genome, a, b *genome.Genome, rng *rand.Rand
 	if rng.Float64() < 0.5 {
 		child.Shedding.DrawPenalty = b.Shedding.DrawPenalty
 	}
+	if rng.Float64() < 0.5 {
+		child.Shedding.RoundsPerGame = b.Shedding.RoundsPerGame
+	}
 }
 
 func crossoverTrickTaking(child *genome.Genome, a, b *genome.Genome, rng *rand.Rand) {

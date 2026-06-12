@@ -132,3 +132,82 @@ func TestSheddingRulebookDoesNotClaimFewestCardsTiebreak(t *testing.T) {
 		t.Errorf("shedding rulebook still claims 'fewest cards wins' on deck-out, but the runner returns -1 (timeout)")
 	}
 }
+
+// --- Task 22: multi-round shedding round structure ---
+
+func multiRoundSheddingGenome(borrow genome.MechanicType, source genome.SkeletonType) *genome.Genome {
+	g := &genome.Genome{
+		ID:       "multi-round-shedding",
+		Skeleton: genome.Shedding,
+		Players:  2,
+		HandSize: 7,
+		Shedding: &genome.SheddingParams{
+			MatchRule:     genome.MatchEither,
+			DrawPenalty:   1,
+			RoundsPerGame: 3,
+		},
+		Borrowed: []genome.BorrowedMechanic{{Source: source, Mechanic: borrow}},
+	}
+	if borrow == genome.MechAvoidance {
+		g.Scoring.CardPoints = []genome.CardScoring{{Suit: 3, Points: 1}}
+	}
+	return g
+}
+
+// TestSheddingRulebookRendersRoundStructure (Task 22 test c): a multi-round
+// genome's rulebook must describe the round structure -- rounds played,
+// round end on hand-empty, score banking, and the highest-total win rule.
+func TestSheddingRulebookRendersRoundStructure(t *testing.T) {
+	rb := GenerateRulebook(multiRoundSheddingGenome(genome.MechMeldBonus, genome.Rummy))
+	for _, phrase := range []string{
+		"3 rounds",
+		"ends the round",
+		"highest total score",
+	} {
+		if !strings.Contains(rb, phrase) {
+			t.Errorf("multi-round rulebook missing %q:\n%s", phrase, rb)
+		}
+	}
+	// The single-round win rule must NOT be claimed.
+	if strings.Contains(rb, "The first player to play all their cards wins") {
+		t.Errorf("multi-round rulebook still claims the single-round win rule:\n%s", rb)
+	}
+}
+
+// TestSheddingRulebookAvoidanceExplainsPenalties: under MechAvoidance the
+// banked points are penalties (negative), so "highest total" means fewest
+// penalty points -- the rulebook must say so in player terms.
+func TestSheddingRulebookAvoidanceExplainsPenalties(t *testing.T) {
+	rb := GenerateRulebook(multiRoundSheddingGenome(genome.MechAvoidance, genome.TrickTaking))
+	if !strings.Contains(rb, "fewest penalty points") {
+		t.Errorf("avoidance multi-round rulebook does not explain penalty scoring:\n%s", rb)
+	}
+}
+
+// TestSheddingRulebookSingleRoundUnchanged: no scoring borrow (or
+// RoundsPerGame <= 1) keeps the original single-round text -- the runner's
+// behavior is unchanged there and the rulebook must not invent rounds.
+func TestSheddingRulebookSingleRoundUnchanged(t *testing.T) {
+	cases := []*genome.Genome{
+		seeds.CrazyEights(),
+		func() *genome.Genome { // rounds param without a borrow: inert
+			g := multiRoundSheddingGenome(genome.MechMeldBonus, genome.Rummy)
+			g.Borrowed = nil
+			return g
+		}(),
+		func() *genome.Genome { // borrow without rounds: single round
+			g := multiRoundSheddingGenome(genome.MechMeldBonus, genome.Rummy)
+			g.Shedding.RoundsPerGame = 1
+			return g
+		}(),
+	}
+	for i, g := range cases {
+		rb := GenerateRulebook(g)
+		if !strings.Contains(rb, "The first player to play all their cards wins") {
+			t.Errorf("case %d: single-round rulebook lost the first-to-empty win rule:\n%s", i, rb)
+		}
+		if strings.Contains(rb, "ends the round") || strings.Contains(rb, "highest total score") {
+			t.Errorf("case %d: single-round rulebook advertises multi-round structure:\n%s", i, rb)
+		}
+	}
+}

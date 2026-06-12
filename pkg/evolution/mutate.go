@@ -73,7 +73,16 @@ func tweakParameter(g *genome.Genome, rng *rand.Rand) {
 	switch g.Skeleton {
 	case genome.Shedding:
 		if g.Shedding != nil {
-			g.Shedding.DrawPenalty = clampInt(g.Shedding.DrawPenalty+rng.IntN(3)-1, 1, 3)
+			switch rng.IntN(2) {
+			case 0:
+				g.Shedding.DrawPenalty = clampInt(g.Shedding.DrawPenalty+rng.IntN(3)-1, 1, 3)
+			case 1:
+				// Banked-score rounds (Task 22); >1 only takes effect with a
+				// scoring borrow (see genome.SheddingMultiRound). The clamp
+				// floor also normalizes the legacy 0 ("unset") encoding into
+				// the evolvable 1-5 range.
+				g.Shedding.RoundsPerGame = clampInt(g.Shedding.RoundsPerGame+rng.IntN(3)-1, 1, 5)
+			}
 		}
 	case genome.TrickTaking:
 		if g.TrickTaking != nil {

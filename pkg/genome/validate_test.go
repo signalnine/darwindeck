@@ -335,3 +335,112 @@ func TestCardPointsScoringRequiresConfig(t *testing.T) {
 		t.Fatalf("expected scoring config error, got: %v", errs)
 	}
 }
+
+// --- Task 22: SheddingParams.RoundsPerGame (multi-round shedding) ---
+
+// sheddingGenomeWithRounds builds a minimal valid shedding genome with the
+// given RoundsPerGame value.
+func sheddingGenomeWithRounds(rounds int) *Genome {
+	return &Genome{
+		ID:       "rounds-test",
+		Skeleton: Shedding,
+		Players:  2,
+		HandSize: 7,
+		Shedding: &SheddingParams{
+			MatchRule:     MatchEither,
+			DrawPenalty:   1,
+			RoundsPerGame: rounds,
+		},
+	}
+}
+
+// TestSheddingRoundsPerGameRange: valid values are 0-5. Zero is the legacy
+// "unset" encoding carried by every pre-Task-22 genome (seeds, serialized
+// output, test fixtures) and is treated as 1 round; 1-5 are the evolvable
+// values.
+func TestSheddingRoundsPerGameRange(t *testing.T) {
+	for _, rounds := range []int{0, 1, 3, 5} {
+		if errs := Validate(sheddingGenomeWithRounds(rounds)); len(errs) != 0 {
+			t.Errorf("RoundsPerGame=%d should be valid, got: %v", rounds, errs)
+		}
+	}
+	for _, rounds := range []int{-1, 6, 100} {
+		if errs := Validate(sheddingGenomeWithRounds(rounds)); len(errs) == 0 {
+			t.Errorf("RoundsPerGame=%d should be rejected", rounds)
+		}
+	}
+}
+
+// TestSheddingMultiRoundPredicate pins the activation rule for multi-round
+// shedding: RoundsPerGame > 1 AND a scoring borrow (MechMeldBonus or
+// MechAvoidance) present. Without a scoring borrow nothing ever writes
+// state.Scores, so a multi-round game would have no winner signal -- the
+// rounds parameter is only meaningful with the borrows that bank points.
+func TestSheddingMultiRoundPredicate(t *testing.T) {
+	cases := []struct {
+		name   string
+		mutate func(*Genome)
+		want   bool
+	}{
+		{"no borrow, 3 rounds", func(g *Genome) {}, false},
+		{"meld bonus, 1 round", func(g *Genome) {
+			g.Shedding.RoundsPerGame = 1
+			g.Borrowed = []BorrowedMechanic{{Source: Rummy, Mechanic: MechMeldBonus}}
+		}, false},
+		{"meld bonus, 0 rounds (legacy unset)", func(g *Genome) {
+			g.Shedding.RoundsPerGame = 0
+			g.Borrowed = []BorrowedMechanic{{Source: Rummy, Mechanic: MechMeldBonus}}
+		}, false},
+		{"meld bonus, 3 rounds", func(g *Genome) {
+			g.Borrowed = []BorrowedMechanic{{Source: Rummy, Mechanic: MechMeldBonus}}
+		}, true},
+		{"avoidance, 3 rounds", func(g *Genome) {
+			g.Borrowed = []BorrowedMechanic{{Source: TrickTaking, Mechanic: MechAvoidance}}
+			g.Scoring.CardPoints = []CardScoring{{Suit: 3, Points: 1}}
+		}, true},
+	}
+	for _, tc := range cases {
+		g := sheddingGenomeWithRounds(3)
+		tc.mutate(g)
+		if got := g.SheddingMultiRound(); got != tc.want {
+			t.Errorf("%s: SheddingMultiRound() = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+
+	// Non-shedding skeletons are never multi-round-shedding, even with a
+	// scoring borrow and a rounds param present.
+	tt := &Genome{
+		Skeleton: TrickTaking,
+		Players:  4,
+		HandSize: 13,
+		TrickTaking: &TrickTakingParams{
+			MustFollowSuit: true,
+			RoundsPerGame:  3,
+		},
+		Borrowed: []BorrowedMechanic{{Source: Rummy, Mechanic: MechMeldBonus}},
+	}
+	if tt.SheddingMultiRound() {
+		t.Error("trick-taking genome reported SheddingMultiRound() = true")
+	}
+}
+
+// TestSheddingMultiRoundScalesMaxTurns: a 3-round game needs ~3x the turn
+// budget or every multi-round genome dies as a Tier-1 timeout. Single-round
+// genomes (and rounds without a scoring borrow) keep the original cap so
+// pre-Task-22 timeout detection is unchanged.
+func TestSheddingMultiRoundScalesMaxTurns(t *testing.T) {
+	base := sheddingGenomeWithRounds(0)
+	single := base.MaxTurns()
+
+	multi := sheddingGenomeWithRounds(3)
+	multi.Borrowed = []BorrowedMechanic{{Source: Rummy, Mechanic: MechMeldBonus}}
+	if got, want := multi.MaxTurns(), single*3; got != want {
+		t.Errorf("3-round MaxTurns = %d, want %d (3x single-round %d)", got, want, single)
+	}
+
+	// Rounds WITHOUT a scoring borrow: single-round semantics, single-round cap.
+	inert := sheddingGenomeWithRounds(3)
+	if got := inert.MaxTurns(); got != single {
+		t.Errorf("rounds-without-borrow MaxTurns = %d, want unchanged %d", got, single)
+	}
+}

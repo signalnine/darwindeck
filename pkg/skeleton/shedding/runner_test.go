@@ -2,11 +2,13 @@ package shedding
 
 import (
 	"fmt"
+	"hash/fnv"
 	"math/rand/v2"
 	"reflect"
 	"testing"
 
 	"github.com/darwindeck/darwindeck/pkg/genome"
+	"github.com/darwindeck/darwindeck/pkg/mechanic"
 	"github.com/darwindeck/darwindeck/pkg/seeds"
 	"github.com/darwindeck/darwindeck/pkg/sim"
 )
@@ -1217,5 +1219,524 @@ func TestProgressClampsGrownHands(t *testing.T) {
 	}
 	if want := 0.5; progress[1] != want {
 		t.Errorf("Progress[1] = %v, want %v (1 - 1/2)", progress[1], want)
+	}
+}
+
+// --- Task 22: multi-round shedding (banked-score rounds) ---
+
+// fingerprintBatch folds a batch's winners, turn counts, and full event
+// streams into one FNV-1a hash. Pinned values were captured from the
+// pre-Task-22 runner (commit 8c36b21 work tree) so single-round behavior can
+// be asserted byte-identical.
+func fingerprintBatch(g *genome.Genome, n int, seed uint64) (uint64, sim.BatchResult) {
+	runner := &Runner{}
+	res := sim.RunBatch(g, runner, &sim.RandomAI{}, n, seed)
+	h := fnv.New64a()
+	for gi, events := range res.AllEvents {
+		fmt.Fprintf(h, "game %d winner %d turns %d\n", gi, res.AllWinners[gi], res.TurnsList[gi])
+		for _, e := range events {
+			fmt.Fprintf(h, "%d|%d|%s|", e.Type, e.PlayerID, e.Detail)
+			for _, c := range e.Cards {
+				fmt.Fprintf(h, "%d.%d,", c.Suit, c.Rank)
+			}
+			fmt.Fprintln(h)
+		}
+	}
+	return h.Sum64(), res
+}
+
+// singleRoundBorrowGenome carries both scoring borrows but NO RoundsPerGame,
+// so it must keep pre-Task-22 single-round semantics bit for bit.
+func singleRoundBorrowGenome() *genome.Genome {
+	return &genome.Genome{
+		ID:       "shedding-borrow-single-round",
+		Skeleton: genome.Shedding,
+		Players:  2,
+		HandSize: 7,
+		Shedding: &genome.SheddingParams{
+			MatchRule:   genome.MatchEither,
+			DrawPenalty: 1,
+		},
+		Borrowed: []genome.BorrowedMechanic{
+			{Source: genome.Rummy, Mechanic: genome.MechMeldBonus},
+			{Source: genome.TrickTaking, Mechanic: genome.MechAvoidance},
+		},
+		Scoring: genome.ScoringConfig{
+			CardPoints: []genome.CardScoring{
+				{Suit: uint8(sim.Hearts) + 1, Points: 1},
+			},
+		},
+	}
+}
+
+// TestSingleRoundBehaviorBytePinned pins the no-multi-round paths against
+// event-stream fingerprints captured from the pre-Task-22 runner: classics
+// (no borrows), and a scoring-borrow genome without RoundsPerGame. Any drift
+// here means Task 22 changed single-round semantics -- exactly what the
+// calibration re-baseline rule forbids.
+func TestSingleRoundBehaviorBytePinned(t *testing.T) {
+	cases := []struct {
+		name     string
+		g        *genome.Genome
+		fp       uint64
+		wins     []int
+		turns    int
+		maxTurns int
+	}{
+		{"crazy-eights", seeds.CrazyEights(), 0x380f3d410dfc17c8, []int{24, 26}, 2044, 140},
+		{"mau-mau", seeds.MauMau(), 0x6efc924ad6f62557, []int{20, 12, 18}, 1865, 150},
+		{"borrow-single-round", singleRoundBorrowGenome(), 0x9c1142b653a2cbc1, []int{23, 27}, 2201, 140},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.g.MaxTurns(); got != tc.maxTurns {
+				t.Errorf("MaxTurns = %d, want pre-change %d", got, tc.maxTurns)
+			}
+			fp, res := fingerprintBatch(tc.g, 50, 12345)
+			if fp != tc.fp {
+				t.Errorf("event-stream fingerprint = %#016x, want pre-change %#016x (single-round semantics drifted)", fp, tc.fp)
+			}
+			if !reflect.DeepEqual(res.WinCounts, tc.wins) {
+				t.Errorf("win counts = %v, want pre-change %v", res.WinCounts, tc.wins)
+			}
+			if res.TotalTurns != tc.turns {
+				t.Errorf("total turns = %d, want pre-change %d", res.TotalTurns, tc.turns)
+			}
+			if res.Completions != 50 {
+				t.Errorf("completions = %d, want 50", res.Completions)
+			}
+		})
+	}
+}
+
+// multiRoundMeldGenome is the Task 22 reference genome: shedding host, rummy
+// MeldBonus borrow, 3 banked-score rounds. HandSize 13 / DrawPenalty 3 /
+// 3 players keep residual hands large enough at round end that 3-card melds
+// actually appear (measured: ~22/30 seeded games bank a nonzero score; at
+// DrawPenalty 1 with small hands the bonus almost never fires).
+func multiRoundMeldGenome() *genome.Genome {
+	return &genome.Genome{
+		ID:       "shedding-meldbonus-3rounds",
+		Skeleton: genome.Shedding,
+		Players:  3,
+		HandSize: 13,
+		Shedding: &genome.SheddingParams{
+			MatchRule:     genome.MatchEither,
+			DrawPenalty:   3,
+			RoundsPerGame: 3,
+		},
+		Borrowed: []genome.BorrowedMechanic{
+			{Source: genome.Rummy, Mechanic: genome.MechMeldBonus},
+		},
+	}
+}
+
+// multiRoundAvoidanceGenome: shedding host, trick-taking Avoidance borrow,
+// 3 rounds. Hearts held at round end cost a point each (banked negative).
+func multiRoundAvoidanceGenome() *genome.Genome {
+	return &genome.Genome{
+		ID:       "shedding-avoidance-3rounds",
+		Skeleton: genome.Shedding,
+		Players:  2,
+		HandSize: 7,
+		Shedding: &genome.SheddingParams{
+			MatchRule:     genome.MatchEither,
+			DrawPenalty:   1,
+			RoundsPerGame: 3,
+		},
+		Borrowed: []genome.BorrowedMechanic{
+			{Source: genome.TrickTaking, Mechanic: genome.MechAvoidance},
+		},
+		Scoring: genome.ScoringConfig{
+			CardPoints: []genome.CardScoring{
+				{Suit: uint8(sim.Hearts) + 1, Points: 1},
+			},
+		},
+	}
+}
+
+// scoringHookFuncs adapts mechanic.BuildHooks to sim.HookFunc with the same
+// event-type mapping fitness.buildHookFuncs uses (HookEndOfRound and
+// HookScoring both fire on EventRoundEnd).
+func scoringHookFuncs(g *genome.Genome) []sim.HookFunc {
+	hooks := mechanic.BuildHooks(g)
+	funcs := make([]sim.HookFunc, 0, len(hooks))
+	for _, h := range hooks {
+		hook := h
+		funcs = append(funcs, func(state *sim.GameState, gg *genome.Genome, event sim.Event) {
+			switch hook.Point {
+			case mechanic.HookAfterPlay:
+				if event.Type == sim.EventCardPlayed {
+					hook.Apply(state, gg, event)
+				}
+			case mechanic.HookEndOfRound, mechanic.HookScoring:
+				if event.Type == sim.EventRoundEnd {
+					hook.Apply(state, gg, event)
+				}
+			}
+		})
+	}
+	return funcs
+}
+
+// runMultiRoundGame plays one seeded game with scoring hooks attached
+// (mirroring the batch loop's move/hook ordering) and returns the final
+// state and winner (-1 = no natural completion).
+func runMultiRoundGame(t *testing.T, g *genome.Genome, seed uint64) (*sim.GameState, int) {
+	t.Helper()
+	runner := &Runner{}
+	ai := &sim.RandomAI{}
+	rng := rand.New(rand.NewPCG(seed, 0))
+	hooks := scoringHookFuncs(g)
+
+	state := runner.Setup(g, rng)
+	maxTurns := g.MaxTurns()
+
+	for {
+		runner.Upkeep(state, g)
+		if winner := runner.CheckEnd(state, g); winner >= 0 {
+			return state, winner
+		}
+		if state.Turn >= maxTurns {
+			return state, -1
+		}
+		moves := runner.GenerateMoves(state, g)
+		if len(moves) == 0 {
+			return state, -1
+		}
+		move := ai.SelectMove(moves, state, rng)
+		events := runner.ApplyMove(state, move, g)
+		state.Events = append(state.Events, events...)
+		for _, e := range events {
+			for _, hook := range hooks {
+				hook(state, g, e)
+			}
+		}
+	}
+}
+
+func countRoundEnds(events []sim.Event) (total int, perPlayer map[int]int) {
+	perPlayer = make(map[int]int)
+	for _, e := range events {
+		if e.Type == sim.EventRoundEnd {
+			total++
+			perPlayer[e.PlayerID]++
+		}
+	}
+	return total, perPlayer
+}
+
+func argmaxScores(scores []int) int {
+	best := 0
+	for i := 1; i < len(scores); i++ {
+		if scores[i] > scores[best] {
+			best = i
+		}
+	}
+	return best
+}
+
+// TestMultiRoundPlaysAllRoundsAndScoresDetermineWinner: a MeldBonus +
+// 3-rounds genome plays exactly 3 banked rounds and the winner is the
+// highest banked total in state.Scores -- the borrow DETERMINES the outcome,
+// it does not merely mutate state (Task 22 test b).
+func TestMultiRoundPlaysAllRoundsAndScoresDetermineWinner(t *testing.T) {
+	g := multiRoundMeldGenome()
+	if errs := genome.Validate(g); len(errs) > 0 {
+		t.Fatalf("genome should be valid: %v", errs)
+	}
+
+	completed := 0
+	scored := 0
+	for seed := uint64(0); seed < 20; seed++ {
+		state, winner := runMultiRoundGame(t, g, seed)
+		if winner < 0 {
+			continue
+		}
+		completed++
+
+		rounds, _ := countRoundEnds(state.Events)
+		if rounds != 3 {
+			t.Errorf("seed %d: %d EventRoundEnd events, want 3 (one per round)", seed, rounds)
+		}
+		if state.Round != 3 {
+			t.Errorf("seed %d: final state.Round = %d, want 3", seed, state.Round)
+		}
+		if state.Scores[winner] != state.Scores[argmaxScores(state.Scores)] {
+			t.Errorf("seed %d: winner %d (Scores=%v) is not a banked-total maximizer -- banked scores do not determine the winner",
+				seed, winner, state.Scores)
+		}
+		for _, s := range state.Scores {
+			if s != 0 {
+				scored++
+				break
+			}
+		}
+	}
+	if completed == 0 {
+		t.Fatal("no seed completed a multi-round game")
+	}
+	if scored == 0 {
+		t.Error("no completed game banked a nonzero score: MeldBonus never affected the outcome signal")
+	}
+}
+
+// TestMultiRoundPointsCanBeatRoundCount is Task 22 test (a): with MechMeldBonus
+// and 3 rounds, a player can win on points WITHOUT winning the most rounds
+// (rounds won = hands emptied = EventRoundEnd.PlayerID). Found via seeded
+// play; deterministic.
+func TestMultiRoundPointsCanBeatRoundCount(t *testing.T) {
+	g := multiRoundMeldGenome()
+	for seed := uint64(0); seed < 300; seed++ {
+		state, winner := runMultiRoundGame(t, g, seed)
+		if winner < 0 {
+			continue
+		}
+		// The winner must have won ON POINTS (strictly outscored someone),
+		// not via the all-tied hand-size tie-break.
+		wonOnPoints := false
+		for _, s := range state.Scores {
+			if state.Scores[winner] > s {
+				wonOnPoints = true
+				break
+			}
+		}
+		if !wonOnPoints {
+			continue
+		}
+		_, perPlayer := countRoundEnds(state.Events)
+		for p, roundWins := range perPlayer {
+			if p != winner && roundWins > perPlayer[winner] {
+				t.Logf("seed %d: player %d won on points (Scores=%v) with %d round wins vs player %d's %d",
+					seed, winner, state.Scores, perPlayer[winner], p, roundWins)
+				return
+			}
+		}
+	}
+	t.Fatal("no seed in 0-299 produced a points winner with fewer round wins: scoring borrow may not be outcome-affecting")
+}
+
+// TestMultiRoundAvoidanceFewestPenaltiesWins: MechAvoidance banks penalties as
+// NEGATIVE score (applyAvoidance subtracts), so argmax(Scores) is the player
+// holding the fewest penalty points -- Mau-Mau scoring. The winner must be a
+// maximizer of the banked total in every completed game, and at least one
+// game must separate the players' scores so the assertion bites.
+func TestMultiRoundAvoidanceFewestPenaltiesWins(t *testing.T) {
+	g := multiRoundAvoidanceGenome()
+	if errs := genome.Validate(g); len(errs) > 0 {
+		t.Fatalf("genome should be valid: %v", errs)
+	}
+
+	completed, separated := 0, 0
+	for seed := uint64(0); seed < 20; seed++ {
+		state, winner := runMultiRoundGame(t, g, seed)
+		if winner < 0 {
+			continue
+		}
+		completed++
+		if state.Scores[winner] < state.Scores[argmaxScores(state.Scores)] {
+			t.Errorf("seed %d: winner %d Scores=%v is not a banked-total maximizer", seed, winner, state.Scores)
+		}
+		for _, s := range state.Scores {
+			if s != state.Scores[winner] {
+				separated++
+				break
+			}
+		}
+		for _, s := range state.Scores {
+			if s > 0 {
+				t.Errorf("seed %d: avoidance banked a positive score (%v); penalties must be negative", seed, state.Scores)
+				break
+			}
+		}
+	}
+	if completed == 0 {
+		t.Fatal("no seed completed")
+	}
+	if separated == 0 {
+		t.Error("no completed game separated the players' banked penalties")
+	}
+}
+
+// TestRoundsWithoutScoringBorrowStaySingleRound: RoundsPerGame=3 with NO
+// scoring borrow must keep single-round semantics -- nothing banks scores, so
+// extra rounds would have no winner signal. First empty hand wins, exactly
+// one round is played.
+func TestRoundsWithoutScoringBorrowStaySingleRound(t *testing.T) {
+	g := multiRoundMeldGenome()
+	g.Borrowed = nil
+	if errs := genome.Validate(g); len(errs) > 0 {
+		t.Fatalf("genome should be valid: %v", errs)
+	}
+
+	completed := 0
+	for seed := uint64(0); seed < 5; seed++ {
+		state, winner := runMultiRoundGame(t, g, seed)
+		if winner < 0 {
+			continue
+		}
+		completed++
+		if len(state.Hands[winner]) != 0 {
+			t.Errorf("seed %d: winner %d has %d cards in hand; single-round shedding winner must have emptied it",
+				seed, winner, len(state.Hands[winner]))
+		}
+		rounds, _ := countRoundEnds(state.Events)
+		if rounds != 1 {
+			t.Errorf("seed %d: %d EventRoundEnd events, want exactly 1 (single round)", seed, rounds)
+		}
+	}
+	if completed == 0 {
+		t.Fatal("no seed completed")
+	}
+}
+
+// TestMultiRoundUpkeepRedeals unit-tests the round transition: a mid-game
+// empty hand advances Round and redeals fresh HandSize hands (cards
+// conserved, new top card flipped); the FINAL round's empty hand advances
+// Round without redealing so CheckEnd can report the banked-score winner.
+// A second Upkeep on the finished state must be a no-op (the guard makes the
+// shedding transition idempotent at game end, unlike mid-game redeals).
+func TestMultiRoundUpkeepRedeals(t *testing.T) {
+	g := multiRoundAvoidanceGenome()
+	runner := &Runner{}
+	rng := rand.New(rand.NewPCG(7, 0))
+	state := runner.Setup(g, rng)
+
+	if state.MaxRound != 3 {
+		t.Fatalf("Setup MaxRound = %d, want 3", state.MaxRound)
+	}
+
+	// Empty player 1's hand back into the deck: round over.
+	state.Deck = append(state.Deck, state.Hands[1]...)
+	state.Hands[1] = state.Hands[1][:0]
+	state.Scores[0] = -4
+	state.Scores[1] = -1
+
+	runner.Upkeep(state, g)
+
+	if state.Round != 1 {
+		t.Fatalf("after round-1 Upkeep: Round = %d, want 1", state.Round)
+	}
+	total := len(state.Deck) + len(state.Discard)
+	for i, hand := range state.Hands {
+		if len(hand) != g.HandSize {
+			t.Errorf("after redeal: hand %d has %d cards, want %d", i, len(hand), g.HandSize)
+		}
+		total += len(hand)
+	}
+	if total != 52 {
+		t.Errorf("after redeal: %d cards in play, want 52", total)
+	}
+	if state.TopCard == nil || len(state.Discard) == 0 {
+		t.Error("after redeal: no discard top card flipped")
+	}
+	if w := runner.CheckEnd(state, g); w != -1 {
+		t.Errorf("CheckEnd after mid-game redeal = %d, want -1 (game continues)", w)
+	}
+	// Banked scores must survive the redeal.
+	if state.Scores[0] != -4 || state.Scores[1] != -1 {
+		t.Errorf("redeal clobbered banked scores: %v", state.Scores)
+	}
+
+	// Fast-forward to the final round and end it.
+	state.Round = 2
+	state.Deck = append(state.Deck, state.Hands[0]...)
+	state.Hands[0] = state.Hands[0][:0]
+
+	runner.Upkeep(state, g)
+
+	if state.Round != 3 {
+		t.Fatalf("after final-round Upkeep: Round = %d, want 3", state.Round)
+	}
+	if len(state.Hands[0]) != 0 {
+		t.Error("final round redealt; hands must stay as played out")
+	}
+	// Player 1 banked fewer penalties (-1 > -4): highest total wins.
+	if w := runner.CheckEnd(state, g); w != 1 {
+		t.Errorf("CheckEnd after final round = %d, want 1 (highest banked total, Scores=%v)", w, state.Scores)
+	}
+
+	// Idempotence at game end + CheckEnd purity.
+	before := stateHash(state)
+	runner.Upkeep(state, g)
+	if state.Round != 3 {
+		t.Errorf("Upkeep on finished state advanced Round to %d", state.Round)
+	}
+	w1 := runner.CheckEnd(state, g)
+	w2 := runner.CheckEnd(state, g)
+	if w1 != w2 {
+		t.Errorf("repeated CheckEnd returned %d then %d", w1, w2)
+	}
+	if after := stateHash(state); after != before {
+		t.Errorf("Upkeep/CheckEnd on finished state mutated it:\nbefore: %s\nafter:  %s", before, after)
+	}
+}
+
+// TestMultiRoundProgressTracksBankedScores pins the multi-round Progress
+// definition: min-max normalization of state.Scores ((s-min)/(max-min)), all
+// zeros when every score is equal. The winner rule is argmax(Scores), so the
+// winner's final Progress is 1.0 -- the Task 8 winner-max property by
+// construction. Negative avoidance totals normalize the same way.
+func TestMultiRoundProgressTracksBankedScores(t *testing.T) {
+	g := multiRoundMeldGenome()
+	runner := &Runner{}
+	state := sim.NewGameState(3)
+	state.Hands[0] = []sim.Card{{Suit: sim.Hearts, Rank: sim.Two}}
+	state.Hands[1] = []sim.Card{{Suit: sim.Clubs, Rank: sim.Three}}
+	state.Hands[2] = []sim.Card{{Suit: sim.Spades, Rank: sim.Four}}
+	g.Players = 3
+
+	state.Scores = []int{10, 4, 7}
+	got := runner.Progress(state, g)
+	want := []float64{1.0, 0.0, 0.5}
+	for i := range want {
+		if diff := got[i] - want[i]; diff > 1e-9 || diff < -1e-9 {
+			t.Errorf("Progress[%d] = %v, want %v (Scores=%v)", i, got[i], want[i], state.Scores)
+		}
+	}
+
+	// Avoidance-style negative totals.
+	state.Scores = []int{-6, -2, -4}
+	got = runner.Progress(state, g)
+	want = []float64{0.0, 1.0, 0.5}
+	for i := range want {
+		if diff := got[i] - want[i]; diff > 1e-9 || diff < -1e-9 {
+			t.Errorf("negative Scores: Progress[%d] = %v, want %v", i, got[i], want[i])
+		}
+	}
+
+	// All equal (e.g. before any banking): everyone ties at 0.
+	state.Scores = []int{0, 0, 0}
+	for i, v := range runner.Progress(state, g) {
+		if v != 0 {
+			t.Errorf("equal Scores: Progress[%d] = %v, want 0", i, v)
+		}
+	}
+}
+
+// TestMultiRoundProgressWinnerIsMax extends the Task 8 winner-max property to
+// multi-round games: played out with scoring hooks, the banked-score winner's
+// final Progress is the maximum across players.
+func TestMultiRoundProgressWinnerIsMax(t *testing.T) {
+	runner := &Runner{}
+	for _, g := range []*genome.Genome{multiRoundMeldGenome(), multiRoundAvoidanceGenome()} {
+		completed := 0
+		for seed := uint64(0); seed < 10; seed++ {
+			state, winner := runMultiRoundGame(t, g, seed)
+			if winner < 0 {
+				continue
+			}
+			completed++
+			progress := runner.Progress(state, g)
+			for p, v := range progress {
+				if v > progress[winner] {
+					t.Errorf("%s seed %d: Progress[%d] = %v exceeds winner %d's %v (Scores=%v)",
+						g.ID, seed, p, v, winner, progress[winner], state.Scores)
+				}
+			}
+		}
+		if completed == 0 {
+			t.Fatalf("%s: no seed completed", g.ID)
+		}
 	}
 }

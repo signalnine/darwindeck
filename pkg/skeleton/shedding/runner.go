@@ -10,6 +10,18 @@ import (
 // Runner implements the shedding game skeleton.
 // Shedding games: play cards matching the top of the discard pile by suit/rank.
 // If you can't play, draw. First to empty hand wins.
+//
+// Multi-round mode (audit remediation Task 22, Mau-Mau scoring): when the
+// genome has a scoring borrow (MechMeldBonus or MechAvoidance) AND
+// Shedding.RoundsPerGame > 1 (genome.SheddingMultiRound), emptying a hand
+// ends the ROUND instead of the game. The EventRoundEnd emitted by ApplyMove
+// triggers the scoring hooks, which bank points into state.Scores (the batch
+// loop runs hooks after each move); on the next loop iteration Upkeep
+// advances state.Round and redeals. After RoundsPerGame rounds the highest
+// banked total wins (MechAvoidance banks penalties as NEGATIVE points, so
+// "highest" is "fewest penalties"). Without a scoring borrow or with
+// RoundsPerGame <= 1, behavior is byte-identical to the single-round game
+// (TestSingleRoundBehaviorBytePinned).
 type Runner struct{}
 
 func (r *Runner) Setup(g *genome.Genome, rng *rand.Rand) *sim.GameState {
@@ -37,6 +49,15 @@ func (r *Runner) Setup(g *genome.Genome, rng *rand.Rand) *sim.GameState {
 	state.Deck = deck
 	state.Phase = sim.PhasePlay
 	state.RNG = rng
+
+	// Round bookkeeping. MaxRound stays 1 unless multi-round mode is active
+	// (RoundsPerGame > 1 AND a scoring borrow -- see the Runner doc comment),
+	// so single-round genomes never enter the round-transition paths.
+	state.Round = 0
+	state.MaxRound = 1
+	if g.SheddingMultiRound() {
+		state.MaxRound = g.Shedding.RoundsPerGame
+	}
 	return state
 }
 
@@ -47,10 +68,73 @@ func (r *Runner) Setup(g *genome.Genome, rng *rand.Rand) *sim.GameState {
 // gets misclassified as a degenerate timeout. This used to live inside
 // GenerateMoves; it was moved here so queries stay pure (the recycle
 // shuffles with state.RNG, advancing it).
+//
+// In multi-round mode Upkeep also owns the round transition (Task 3's home
+// for redeals): an empty hand means the round is over -- the scoring hooks
+// already banked it via the EventRoundEnd that ApplyMove emitted -- so
+// advance Round and, if rounds remain, redeal. After the final round no
+// redeal happens: the empty hand stays and CheckEnd reports the banked-score
+// winner. The Round < MaxRound guard makes the transition a no-op on a
+// finished state; mid-game, Upkeep is NOT idempotent (the redeal shuffles
+// with state.RNG) -- game loops must call it exactly once per iteration.
 func (r *Runner) Upkeep(state *sim.GameState, g *genome.Genome) {
+	if g.SheddingMultiRound() && state.Round < state.MaxRound && anyHandEmpty(state) {
+		state.Round++
+		if state.Round < state.MaxRound {
+			redealRound(state, g)
+		}
+	}
 	if len(state.Deck) == 0 && len(state.Discard) > 1 {
 		refillDeckFromDiscard(state)
 	}
+}
+
+func anyHandEmpty(state *sim.GameState) bool {
+	for _, hand := range state.Hands {
+		if len(hand) == 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// redealRound prepares the next round of a multi-round game: gather every
+// card back (deck, discard, all remaining hands), shuffle, deal fresh
+// HandSize hands, and flip a new discard top. Banked Scores carry across
+// rounds untouched. The round starter rotates with Round (mirroring the
+// trick-taking redeal) and play direction resets to forward -- each round is
+// a fresh deal.
+func redealRound(state *sim.GameState, g *genome.Genome) {
+	deck := make([]sim.Card, 0, 52)
+	deck = append(deck, state.Deck...)
+	deck = append(deck, state.Discard...)
+	for i := range state.Hands {
+		deck = append(deck, state.Hands[i]...)
+		state.Hands[i] = state.Hands[i][:0]
+	}
+	state.Discard = state.Discard[:0]
+	state.TopCard = nil
+
+	if state.RNG != nil {
+		sim.ShuffleDeck(deck, state.RNG)
+	}
+
+	for i := 0; i < g.Players; i++ {
+		hand, rest := sim.DrawN(deck, g.HandSize)
+		state.Hands[i] = append(state.Hands[i][:0], hand...)
+		deck = rest
+	}
+
+	if len(deck) > 0 {
+		top := deck[0]
+		deck = deck[1:]
+		state.Discard = append(state.Discard, top)
+		state.TopCard = &sim.Card{Suit: top.Suit, Rank: top.Rank}
+	}
+	state.Deck = deck
+
+	state.Direction = 1
+	state.Active = state.Round % state.NumPlayers
 }
 
 func (r *Runner) GenerateMoves(state *sim.GameState, g *genome.Genome) []sim.Move {
@@ -194,13 +278,43 @@ func (r *Runner) ApplyMove(state *sim.GameState, move sim.Move, g *genome.Genome
 }
 
 // Progress returns each player's progress toward winning in [0,1] (audit
-// Task 8): 1 - hand/initialHandSize, where initialHandSize is the dealt
-// g.HandSize. Draw penalties can grow a hand past the deal, so the value is
-// floored at 0. An empty hand (the win condition) scores exactly 1. Must be
-// pure and allocation-light: the batch loop calls it after every applied
-// move.
+// Task 8). Single-round: 1 - hand/initialHandSize, where initialHandSize is
+// the dealt g.HandSize. Draw penalties can grow a hand past the deal, so the
+// value is floored at 0. An empty hand (the win condition) scores exactly 1.
+//
+// Multi-round: the win condition is the banked total, not the hand, so
+// Progress is the min-max normalization of state.Scores ((s-min)/(max-min);
+// all zeros while every score is equal). argmax(Scores) is the winner rule,
+// so the winner's final Progress is 1.0 -- the Task 8 winner-max property by
+// construction. Hand sizes are deliberately excluded: any hand component
+// could outrank a strictly higher banked total and break that property.
+// Note the known sampling skew (audit checkpoint, carried finding c): the
+// batch loop samples Progress after each move but runs scoring hooks after
+// the sample, so the round-ending move's banking shows up one move late in
+// the leader track. AllWinners (the real CheckEnd winner) is unaffected.
+//
+// Must be pure and allocation-light: the batch loop calls it after every
+// applied move.
 func (r *Runner) Progress(state *sim.GameState, g *genome.Genome) []float64 {
 	out := make([]float64, state.NumPlayers)
+	if g.SheddingMultiRound() {
+		lo, hi := state.Scores[0], state.Scores[0]
+		for _, s := range state.Scores[1:] {
+			if s < lo {
+				lo = s
+			}
+			if s > hi {
+				hi = s
+			}
+		}
+		if hi == lo {
+			return out // all tied (e.g. nothing banked yet)
+		}
+		for i, s := range state.Scores {
+			out[i] = float64(s-lo) / float64(hi-lo)
+		}
+		return out
+	}
 	initial := g.HandSize
 	if initial < 1 {
 		initial = 1
@@ -216,6 +330,34 @@ func (r *Runner) Progress(state *sim.GameState, g *genome.Genome) []float64 {
 }
 
 func (r *Runner) CheckEnd(state *sim.GameState, g *genome.Genome) int {
+	if g.SheddingMultiRound() {
+		// Round transitions live in Upkeep. The game is over once Upkeep has
+		// advanced Round past the final round (no redeal happens then, so the
+		// round-ending empty hand is still in place). Winner: highest banked
+		// total in state.Scores -- the scoring hooks bank MeldBonus points as
+		// positive and Avoidance penalties as negative, so argmax is correct
+		// for both ("fewest penalties wins" under avoidance). Banked-total
+		// ties break to the FEWEST cards left in hand, then lowest seat: when
+		// the hooks banked nothing all game (possible for MeldBonus when
+		// residual hands never hold a meld), the game degrades to "winner of
+		// the final round" (empty hand) instead of a structural seat-0 win.
+		if state.Round >= state.MaxRound && anyHandEmpty(state) {
+			winner := 0
+			for i := 1; i < state.NumPlayers; i++ {
+				if state.Scores[i] > state.Scores[winner] ||
+					(state.Scores[i] == state.Scores[winner] &&
+						len(state.Hands[i]) < len(state.Hands[winner])) {
+					winner = i
+				}
+			}
+			return winner
+		}
+		// Mid-game (including the instant after a round-ending move, before
+		// Upkeep has advanced Round): keep playing. At max turns the batch
+		// runner classifies the game as a timeout, same as single-round.
+		return -1
+	}
+
 	// First player to empty hand wins
 	for i, hand := range state.Hands {
 		if len(hand) == 0 {

@@ -16,12 +16,23 @@ package genome
 //
 // "Appears as selector" is deliberately narrow and cheap: any
 // ast.SelectorExpr whose Sel.Name equals the field name, in any non-test
-// file of the consuming packages. Field names are unique across the three
-// param structs (TestParamFieldNamesUniqueAcrossParamStructs verifies this;
-// if two ever collide, qualify the colliding fields by struct type via
-// go/types -- only for those). This proves "read somewhere", not
-// "semantically affects outcomes"; the calibration/evolvability checks are
-// the semantic complement.
+// file of the consuming packages. For a field name owned by a SINGLE param
+// struct that bare match is sound. When two param structs share a field name
+// (RoundsPerGame lives in both SheddingParams and TrickTakingParams since
+// Task 22), a bare match could credit one struct's read to the other, so
+// colliding fields are qualified by their access chain instead: each owner
+// must be read through its unique Genome accessor field --
+// `.Shedding.RoundsPerGame` for SheddingParams, `.TrickTaking.RoundsPerGame`
+// for TrickTakingParams. The chain pins the receiver type without go/types
+// machinery because Genome.Shedding/.TrickTaking/.Rummy are the only fields
+// with those names anywhere in the consuming packages
+// (TestGenomeAccessorsMatchGenome anchors the accessor map to the real
+// Genome struct). The one cost: consuming code must read a colliding field
+// through the full chain at least once (params := g.Shedding;
+// params.RoundsPerGame alone will not register) -- an acceptable discipline
+// for a tripwire. This proves "read somewhere", not "semantically affects
+// outcomes"; the calibration/evolvability checks are the semantic
+// complement.
 
 import (
 	"go/ast"
@@ -93,36 +104,54 @@ func paramStructTypes() []reflect.Type {
 	}
 }
 
-// TestParamFieldNamesUniqueAcrossParamStructs verifies the assumption that
-// makes the cheap selector match sound: no field name appears in more than
-// one of the three param structs. If this ever fails, do NOT weaken the
-// guard -- resolve the colliding fields' receivers by struct type using
-// go/types (only for the collisions).
-func TestParamFieldNamesUniqueAcrossParamStructs(t *testing.T) {
-	seen := map[string]string{} // field name -> struct that owns it
+// genomeAccessor maps each param struct to the Genome field through which all
+// consuming code reaches it. Used to qualify field names that collide across
+// param structs (see the package comment). TestGenomeAccessorsMatchGenome
+// keeps this map anchored to the real Genome struct.
+var genomeAccessor = map[string]string{
+	"SheddingParams":    "Shedding",
+	"TrickTakingParams": "TrickTaking",
+	"RummyParams":       "Rummy",
+}
+
+// TestGenomeAccessorsMatchGenome verifies the qualification anchor: every
+// param struct has exactly the Genome accessor field genomeAccessor claims,
+// with the matching pointer type. If Genome is ever restructured so param
+// structs are reached another way, the chain-qualified matching below is no
+// longer sound and must be reworked (go/types is the heavyweight fallback).
+func TestGenomeAccessorsMatchGenome(t *testing.T) {
+	gt := reflect.TypeOf(Genome{})
 	for _, st := range paramStructTypes() {
-		for i := 0; i < st.NumField(); i++ {
-			f := st.Field(i)
-			if !f.IsExported() {
-				continue
-			}
-			if owner, dup := seen[f.Name]; dup {
-				t.Errorf("field %q appears in both %s and %s: bare-name selector matching is no longer sound for it; qualify by struct type via go/types for the colliding fields",
-					f.Name, owner, st.Name())
-			}
-			seen[f.Name] = st.Name()
+		accessor, ok := genomeAccessor[st.Name()]
+		if !ok {
+			t.Errorf("param struct %s has no genomeAccessor entry", st.Name())
+			continue
+		}
+		f, ok := gt.FieldByName(accessor)
+		if !ok {
+			t.Errorf("Genome has no field %q (claimed accessor for %s)", accessor, st.Name())
+			continue
+		}
+		if f.Type.Kind() != reflect.Ptr || f.Type.Elem() != st {
+			t.Errorf("Genome.%s has type %s, want *%s", accessor, f.Type, st.Name())
 		}
 	}
 }
 
 // collectConsumedSelectors parses every non-test Go file under the consuming
-// package trees and returns the set of all ast.SelectorExpr Sel names.
+// package trees and returns two sets:
+//
+//   - bare: all ast.SelectorExpr Sel names ("RoundsPerGame")
+//   - qualified: two-step chains where X is itself a selector
+//     ("Shedding.RoundsPerGame" for g.Shedding.RoundsPerGame)
+//
 // Test files are excluded: a parameter read only by a test is still inert
 // in production.
-func collectConsumedSelectors(t *testing.T) map[string]bool {
+func collectConsumedSelectors(t *testing.T) (bare, qualified map[string]bool) {
 	t.Helper()
 	fset := token.NewFileSet()
-	selectors := make(map[string]bool)
+	bare = make(map[string]bool)
+	qualified = make(map[string]bool)
 	for _, dir := range consumingDirs {
 		parsed := 0
 		err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, walkErr error) error {
@@ -138,8 +167,13 @@ func collectConsumedSelectors(t *testing.T) map[string]bool {
 			}
 			parsed++
 			ast.Inspect(file, func(n ast.Node) bool {
-				if sel, ok := n.(*ast.SelectorExpr); ok {
-					selectors[sel.Sel.Name] = true
+				sel, ok := n.(*ast.SelectorExpr)
+				if !ok {
+					return true
+				}
+				bare[sel.Sel.Name] = true
+				if x, ok := sel.X.(*ast.SelectorExpr); ok {
+					qualified[x.Sel.Name+"."+sel.Sel.Name] = true
 				}
 				return true
 			})
@@ -152,7 +186,7 @@ func collectConsumedSelectors(t *testing.T) map[string]bool {
 			t.Fatalf("no non-test Go files found under %s -- if the package moved, update consumingDirs; an empty scan would make this guard vacuous", dir)
 		}
 	}
-	return selectors
+	return bare, qualified
 }
 
 // TestEvolvableParamsAreConsumed is the guard: every exported field of
@@ -170,7 +204,9 @@ func TestEvolvableParamsAreConsumed(t *testing.T) {
 		}
 	}
 
-	// Build the required-field set.
+	// Build the required-field set. Param-struct fields track their owning
+	// structs so name collisions across structs switch to qualified matching.
+	fieldOwners := map[string][]string{} // field name -> owning param structs
 	required := []string{}
 	requiredSet := map[string]bool{}
 	addRequired := func(name string) {
@@ -183,6 +219,7 @@ func TestEvolvableParamsAreConsumed(t *testing.T) {
 		for i := 0; i < st.NumField(); i++ {
 			if f := st.Field(i); f.IsExported() {
 				addRequired(f.Name)
+				fieldOwners[f.Name] = append(fieldOwners[f.Name], st.Name())
 			}
 		}
 	}
@@ -198,12 +235,30 @@ func TestEvolvableParamsAreConsumed(t *testing.T) {
 		}
 	}
 
-	consumed := collectConsumedSelectors(t)
+	bare, qualified := collectConsumedSelectors(t)
 	for _, field := range required {
 		if _, exempt := inertAllowlist[field]; exempt {
 			continue
 		}
-		if !consumed[field] {
+		owners := fieldOwners[field]
+		if len(owners) > 1 {
+			// Colliding field name: a bare match could credit one struct's
+			// read to the other, so EVERY owner must be read through its
+			// unique Genome accessor chain (e.g. g.Shedding.RoundsPerGame).
+			for _, owner := range owners {
+				accessor := genomeAccessor[owner]
+				if accessor == "" {
+					t.Errorf("param struct %q has no genomeAccessor entry; cannot qualify colliding field %q", owner, field)
+					continue
+				}
+				if !qualified[accessor+"."+field] {
+					t.Errorf("evolvable parameter %s.%s is never read via .%s.%s in pkg/skeleton, pkg/sim, pkg/fitness, or pkg/mechanic (non-test files): it is inert for %s -- evolution mutates it but gameplay ignores it (dd-027 class). Wire it into a runner/fitness or delete it (colliding field names require the full accessor chain at least once)",
+						owner, field, accessor, field, owner)
+				}
+			}
+			continue
+		}
+		if !bare[field] {
 			t.Errorf("evolvable parameter %q is never read in pkg/skeleton, pkg/sim, pkg/fitness, or pkg/mechanic (non-test files): it is inert -- evolution mutates it but gameplay ignores it (dd-027 class). Wire it into a runner/fitness or delete it", field)
 		}
 	}

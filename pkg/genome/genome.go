@@ -45,6 +45,16 @@ func (m MatchRule) String() string {
 type SheddingParams struct {
 	MatchRule   MatchRule `json:"match_rule"`
 	DrawPenalty int       `json:"draw_penalty"` // Cards drawn on no match (1-3)
+	// RoundsPerGame plays the game as a series of banked-score rounds
+	// (Mau-Mau scoring, audit remediation Task 22): emptying a hand ends the
+	// ROUND (the scoring borrows bank state.Scores via EventRoundEnd) and the
+	// game redeals; after all rounds the highest banked total wins.
+	// Range 1-5; 0 is the legacy "unset" encoding (pre-Task-22 genomes) and
+	// means 1. Values > 1 only take effect with a scoring borrow present
+	// (MechMeldBonus or MechAvoidance -- see Genome.SheddingMultiRound):
+	// without one, nothing writes Scores and the game stays single-round
+	// (first empty hand wins), exactly the pre-Task-22 behavior.
+	RoundsPerGame int `json:"rounds_per_game,omitempty"`
 }
 
 // --- Trick-Taking Parameters ---
@@ -353,12 +363,44 @@ func (g *Genome) Clone() *Genome {
 	return &cp
 }
 
+// HasScoringBorrow reports whether g carries a borrowed scoring mechanic
+// (MechMeldBonus or MechAvoidance) -- the two hooks that bank points into
+// state.Scores on EventRoundEnd.
+func (g *Genome) HasScoringBorrow() bool {
+	for _, b := range g.Borrowed {
+		if b.Mechanic == MechMeldBonus || b.Mechanic == MechAvoidance {
+			return true
+		}
+	}
+	return false
+}
+
+// SheddingMultiRound reports whether g plays shedding as a series of
+// banked-score rounds (audit remediation Task 22): the shedding skeleton with
+// RoundsPerGame > 1 AND a scoring borrow present. Without a scoring borrow
+// nothing writes state.Scores, so multiple rounds would have no winner
+// signal; such genomes stay single-round (first empty hand wins).
+func (g *Genome) SheddingMultiRound() bool {
+	return g.Skeleton == Shedding &&
+		g.Shedding != nil &&
+		g.Shedding.RoundsPerGame > 1 &&
+		g.HasScoringBorrow()
+}
+
 // MaxTurns returns the computed maximum turns based on skeleton and params.
 func (g *Genome) MaxTurns() int {
 	switch g.Skeleton {
 	case Shedding:
 		// Worst case: cycling through deck multiple times
-		return g.HandSize * g.Players * 10
+		turns := g.HandSize * g.Players * 10
+		// Multi-round games play RoundsPerGame hands back to back; without
+		// the scale every multi-round genome dies as a Tier-1 timeout. The
+		// cap stays unscaled when rounds are inert (no scoring borrow) so
+		// pre-Task-22 timeout detection is unchanged.
+		if g.SheddingMultiRound() {
+			turns *= g.Shedding.RoundsPerGame
+		}
+		return turns
 	case TrickTaking:
 		if g.TrickTaking != nil {
 			return g.TrickTaking.RoundsPerGame * g.Players * g.HandSize

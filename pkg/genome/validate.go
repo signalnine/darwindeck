@@ -78,6 +78,11 @@ func validateShedding(p *SheddingParams) []string {
 	if p.DrawPenalty < 1 || p.DrawPenalty > 3 {
 		errs = append(errs, fmt.Sprintf("draw_penalty must be 1-3, got %d", p.DrawPenalty))
 	}
+	// 0 is the legacy "unset" encoding (pre-Task-22 genomes carry it) and is
+	// treated as 1 round; mutation only produces 1-5.
+	if p.RoundsPerGame < 0 || p.RoundsPerGame > 5 {
+		errs = append(errs, fmt.Sprintf("rounds_per_game must be 0-5 (0 = unset/1), got %d", p.RoundsPerGame))
+	}
 	return errs
 }
 

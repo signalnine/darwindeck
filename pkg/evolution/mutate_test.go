@@ -170,3 +170,59 @@ func TestAddSpecialCardCanProduceRankZero(t *testing.T) {
 		t.Errorf("addSpecialCard never produced a specific rank in 1000 trials")
 	}
 }
+
+// TestTweakParameterReachesSheddingRounds (Task 22): RoundsPerGame is an
+// evolvable shedding parameter -- tweakParameter must be able to move it,
+// always landing in 1-5 (never back to the legacy 0 encoding, which would
+// make a mutated multi-round genome silently single-round).
+func TestTweakParameterReachesSheddingRounds(t *testing.T) {
+	seen := map[int]bool{}
+	for seed := uint64(0); seed < 500; seed++ {
+		rng := rand.New(rand.NewPCG(seed, 0))
+		g := &genome.Genome{
+			Skeleton: genome.Shedding,
+			Players:  2,
+			HandSize: 7,
+			Shedding: &genome.SheddingParams{
+				MatchRule:     genome.MatchEither,
+				DrawPenalty:   2,
+				RoundsPerGame: 3,
+			},
+		}
+		tweakParameter(g, rng)
+		r := g.Shedding.RoundsPerGame
+		if r < 1 || r > 5 {
+			t.Fatalf("seed %d: tweakParameter produced RoundsPerGame %d, want 1-5", seed, r)
+		}
+		seen[r] = true
+	}
+	for _, want := range []int{2, 3, 4} {
+		if !seen[want] {
+			t.Errorf("RoundsPerGame %d never produced from 3 across 500 tweaks (param unreachable by mutation)", want)
+		}
+	}
+
+	// A legacy genome carrying the 0 encoding must normalize into 1-5 when
+	// the tweak touches the field.
+	reachedOne := false
+	for seed := uint64(0); seed < 200; seed++ {
+		rng := rand.New(rand.NewPCG(seed, 0))
+		g := &genome.Genome{
+			Skeleton: genome.Shedding,
+			Players:  2,
+			HandSize: 7,
+			Shedding: &genome.SheddingParams{MatchRule: genome.MatchEither, DrawPenalty: 1},
+		}
+		tweakParameter(g, rng)
+		r := g.Shedding.RoundsPerGame
+		if r < 0 || r > 5 {
+			t.Fatalf("seed %d: RoundsPerGame %d out of range", seed, r)
+		}
+		if r >= 1 {
+			reachedOne = true
+		}
+	}
+	if !reachedOne {
+		t.Error("tweakParameter never normalized a legacy RoundsPerGame=0 genome into 1-5")
+	}
+}
