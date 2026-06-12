@@ -214,6 +214,7 @@ func meanFit(t *testing.T, g *genome.Genome) calResult {
 // analysis.
 func TestDegenerateFixturesAreTier0Valid(t *testing.T) {
 	all := append(seeds.All(), seeds.InstantKnockRummy(), seeds.ForcedShedding())
+	all = append(all, seeds.RejectedChampions()...)
 	for _, g := range all {
 		if errs := genome.Validate(g); len(errs) > 0 {
 			t.Errorf("%s: tier-0 violations: %v", g.ID, errs)
@@ -261,6 +262,63 @@ func TestCalibrationClassicsBeatDegenerates(t *testing.T) {
 	}
 	if worstClassic <= bestDegen {
 		t.Errorf("survivor-conditioned ordering inverted: worst classic %s %.3f <= best degenerate %s %.3f",
+			worstName, worstClassic, bestName, bestDegen)
+	}
+}
+
+// TestCalibrationRejectedChampionsBelowClassics extends the core gate to the
+// Task 28 step-4 failed-review fixtures (round 2): the three archetypes that
+// owned the ENTIRE top 30 of the post-fix flagship
+// (output/2026-06-12-flagship-postfix) and were rejected at designer review.
+// Same two-view semantics as TestCalibrationClassicsBeatDegenerates. This
+// test is the round's falsification on record: it MUST fail before the
+// metric fixes land (the metrics promoted these genomes to champions) and
+// MUST pass after recalibration.
+func TestCalibrationRejectedChampionsBelowClassics(t *testing.T) {
+	// RED ON RECORD (fixtures commit, 2026-06-12) -- this skip is the Task 14
+	// round-2 falsification: measured with the pre-fix metric stack, the gate
+	// FAILS with survivor means catch-all-skip-shedding 0.879 (sd 0.003,
+	// n 10/10), no-follow-avoidance-trick 0.854 (sd 0.003, n 10/10),
+	// pair-meld-knock-rummy 0.673 (sd 0.003, n 10/10) vs worst classic
+	// crazy-eights 0.474 -- two fixtures above EVERY classic, the third above
+	// both rummy classics (gin 0.548, knock 0.578). Pipeline-effective view
+	// identical (all three pass Tier 1 on 10/10 seeds). TRACKING: this skip
+	// MUST be removed by the round-2 recalibration commit (interaction +
+	// choice-impact fixes, Task 28 step 4); a green build with this skip
+	// still present is not a passing gate.
+	t.Skip("red on record: rejected-champion fixtures outscore classics with the pre-fix metric stack (see comment); un-skipped by the round-2 recalibration commit")
+
+	classics := seeds.All()
+	degens := seeds.RejectedChampions()
+
+	worstClassic, worstEff := 1.0, 1.0
+	bestDegen, bestEff := 0.0, 0.0
+	worstName, bestName := "", ""
+	for _, c := range classics {
+		r := meanFit(t, c)
+		if r.mean < worstClassic {
+			worstClassic, worstName = r.mean, c.ID
+		}
+		if r.eff < worstEff {
+			worstEff = r.eff
+		}
+	}
+	for _, d := range degens {
+		r := meanFit(t, d)
+		if r.mean > bestDegen {
+			bestDegen, bestName = r.mean, d.ID
+		}
+		if r.eff > bestEff {
+			bestEff = r.eff
+		}
+	}
+
+	if worstEff < bestEff+0.05 {
+		t.Errorf("pipeline-effective gate failed: worst classic %.3f vs best rejected champion %.3f (need +0.05 margin)",
+			worstEff, bestEff)
+	}
+	if worstClassic <= bestDegen {
+		t.Errorf("survivor-conditioned ordering inverted: worst classic %s %.3f <= best rejected champion %s %.3f",
 			worstName, worstClassic, bestName, bestDegen)
 	}
 }

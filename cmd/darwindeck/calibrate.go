@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/darwindeck/darwindeck/pkg/fitness"
+	"github.com/darwindeck/darwindeck/pkg/genome"
 	"github.com/darwindeck/darwindeck/pkg/seeds"
 )
 
@@ -107,12 +108,15 @@ func cmdCalibrate(args []string) {
 	fs := flag.NewFlagSet("calibrate", flag.ExitOnError)
 	fs.Parse(args)
 
-	genomes := append(seeds.All(), seeds.InstantKnockRummy(), seeds.ForcedShedding())
+	classics := seeds.All()
+	degens := append([]*genome.Genome{seeds.InstantKnockRummy(), seeds.ForcedShedding()},
+		seeds.RejectedChampions()...)
+	genomes := append(classics, degens...)
 	pinned := fitness.CalibrationSeeds
 
 	fmt.Printf("DarwinDeck calibration report (raw metric means, no weighting)\n")
-	fmt.Printf("%d genomes (8 classics + 2 degenerate fixtures) x %d pinned seeds %v\n\n",
-		len(genomes), len(pinned), pinned)
+	fmt.Printf("%d genomes (%d classics + %d degenerate fixtures) x %d pinned seeds %v\n\n",
+		len(genomes), len(classics), len(degens), len(pinned), pinned)
 
 	start := time.Now()
 	totalGames := 0

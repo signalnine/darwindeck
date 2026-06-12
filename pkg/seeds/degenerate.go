@@ -61,3 +61,118 @@ func ForcedShedding() *genome.Genome {
 		},
 	}
 }
+
+// --- Task 28 step 4 failed-review fixtures (round 2, 2026-06-12) ---
+//
+// The three constructors below are byte-faithful clones (IDs/fitness/
+// generation stripped) of the post-fix flagship champions rejected at
+// designer review (output/2026-06-12-flagship-postfix). Top 30 of that run
+// collapsed to exactly these three gamed archetypes; per the failed-review
+// loop they are now permanent negative ground truth.
+
+// CatchAllSkipShedding reproduces archetype A1 (flagship ranks 1-10, cloned
+// from rank01_gen200_97457): a 2-player, 13-card shedding game whose first
+// special rule is a CATCH-ALL skip ({Type: SpecialSkip} with ByRank=0 and
+// BySuit=0 matches every card in cardMatchesSpecial), with three of the four
+// suits wild (39/52 cards always playable). In 2-player, skip == play-again,
+// so one player plays until stuck while the opponent spectates (live
+// playtest: 13 consecutive plays, opponent acted 0 times). Gamed metrics:
+// interaction pinned 1.00 (every play emitted a "skip" attack event) and
+// decisions 0.86-0.88 (legal-move COUNT inflated by wilds whose choice has
+// near-zero impact).
+func CatchAllSkipShedding() *genome.Genome {
+	return &genome.Genome{
+		ID:       "catch-all-skip-shedding",
+		Skeleton: genome.Shedding,
+		Players:  2,
+		HandSize: 13,
+		Shedding: &genome.SheddingParams{
+			MatchRule:     genome.MatchEither,
+			DrawPenalty:   2,
+			RoundsPerGame: 1,
+		},
+		Borrowed: []genome.BorrowedMechanic{
+			{Source: genome.TrickTaking, Mechanic: genome.MechAvoidance},
+			{Source: genome.Rummy, Mechanic: genome.MechMeldBonus},
+		},
+		SpecialCards: []genome.SpecialCard{
+			{Type: genome.SpecialSkip},                // catch-all: matches EVERY card
+			{Type: genome.SpecialWild, BySuit: 2},     // suit 2 wild
+			{Type: genome.SpecialWild, BySuit: 3},     // suit 3 wild
+			{Type: genome.SpecialDrawTwo, BySuit: 3},  // suit 3 also draw-two
+			{Type: genome.SpecialWild, BySuit: 4},     // suit 4 wild
+			{Type: genome.SpecialDrawFour, ByRank: 7}, // 7s draw-four
+		},
+		Scoring: genome.ScoringConfig{
+			CardPoints: []genome.CardScoring{
+				{Rank: 0, Suit: 2, Points: 6, Event: genome.ScoreOnTrickWin},
+			},
+		},
+	}
+}
+
+// NoFollowAvoidanceTrick reproduces archetype A2 (flagship ranks 11-20,
+// cloned from rank11_gen200_23872): a 2-player, 12-card trick-taking game
+// with no follow-suit constraint, flat avoidance scoring (every card worth 6
+// penalty points via the catch-all card_points rule), and winner-leads. With
+// no trump and no follow requirement, an off-suit card can never win a trick
+// (resolveTrick), so the follower always ducks; perfect play reduces to seat
+// parity. Gamed metric: decisions 0.92 -- no follow constraint means maximum
+// legal moves every turn, all of them equivalent.
+func NoFollowAvoidanceTrick() *genome.Genome {
+	return &genome.Genome{
+		ID:       "no-follow-avoidance-trick",
+		Skeleton: genome.TrickTaking,
+		Players:  2,
+		HandSize: 12,
+		TrickTaking: &genome.TrickTakingParams{
+			MustFollowSuit:  false,
+			TrickScoring:    genome.ScoreAvoidance,
+			LeadRestriction: genome.LeadWinnerLeads,
+			RoundsPerGame:   2,
+		},
+		Scoring: genome.ScoringConfig{
+			CardPoints: []genome.CardScoring{
+				{Rank: 0, Suit: 0, Points: 6, Event: genome.ScoreOnTrickWin},
+			},
+			TrumpSuit: 4, // inert: TrumpRule is TrumpNone
+		},
+	}
+}
+
+// PairMeldKnockRummy reproduces archetype A3 (flagship ranks 21-29, cloned
+// from rank21_gen200_52056): a 5-player, 10-card rummy game with
+// min_meld_size 2 (two-card runs count as melds) and knock threshold 15 --
+// a pair-meld knock race over a ~1-card stock (5x10 dealt + upcard leaves 1
+// in stock). Milder than A1/A2 but scored 0.688-0.696, ABOVE the rummy
+// classics (gin 0.548, knock 0.578).
+func PairMeldKnockRummy() *genome.Genome {
+	return &genome.Genome{
+		ID:       "pair-meld-knock-rummy",
+		Skeleton: genome.Rummy,
+		Players:  5,
+		HandSize: 10,
+		Rummy: &genome.RummyParams{
+			MeldTypes:      genome.MeldRuns,
+			MinMeldSize:    2,
+			DrawFrom:       genome.DrawEither,
+			KnockThreshold: 15,
+		},
+		Scoring: genome.ScoringConfig{
+			CardPoints: []genome.CardScoring{
+				{Rank: 14, Suit: 4, Points: 3, Event: genome.ScoreOnTrickWin},
+			},
+		},
+	}
+}
+
+// RejectedChampions returns the Task 28 round-2 failed-review fixtures as a
+// group, in flagship rank order. The calibration gate and the calibrate
+// subcommand both consume this list so the two can never drift.
+func RejectedChampions() []*genome.Genome {
+	return []*genome.Genome{
+		CatchAllSkipShedding(),
+		NoFollowAvoidanceTrick(),
+		PairMeldKnockRummy(),
+	}
+}
