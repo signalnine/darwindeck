@@ -3,25 +3,35 @@ package evolution
 import (
 	"math"
 
+	"github.com/darwindeck/darwindeck/pkg/fitness"
 	"github.com/darwindeck/darwindeck/pkg/sim"
 )
 
 // BehaviorDescriptor is a 2D point in behavior space.
-// X = normalized average turns, Y = win entropy.
+// X = decision density, Y = interaction.
 type BehaviorDescriptor [2]float64
 
 // ComputeBehavior extracts the behavior descriptor from simulation results.
-// X-axis: AvgTurns normalized to [0, 1] over range [5, 100].
-// Y-axis: WinEntropy (Shannon entropy of win distribution, normalized by max entropy).
+// X-axis: decision density (fraction of turns where the acting player had
+// >= 2 legal moves). Y-axis: interaction (fraction of turns that perturbed
+// the next player's options or carried a direct attack).
+//
+// These replace the original axes (normalized AvgTurns x win entropy): win
+// entropy under random play is ~1.0 for almost any non-broken game, so 91%
+// of mutants landed in the top grid row and only 16/100 MAP-Elites cells
+// were reachable (audit Task 17). Decision density and interaction are real
+// per-genome variables with measured within-skeleton spread (post Tasks 9/11),
+// enforced by TestDescriptorSpread.
+//
+// Both axes are computed by the canonical pkg/fitness implementations via
+// the exported ComputeFitness -- a single source of truth, so the descriptor
+// can never drift from the fitness metrics. The empty greedy batch and zero
+// player count zero out the metrics this descriptor does not read (skill
+// gradient, session length); decision density and interaction depend only on
+// the random batch's TurnRecords.
 func ComputeBehavior(result sim.BatchResult) BehaviorDescriptor {
-	// X: normalize AvgTurns to [0, 1]
-	x := (result.AvgTurns - 5.0) / 95.0 // maps [5, 100] -> [0, 1]
-	x = clamp(x, 0, 1)
-
-	// Y: win entropy
-	y := computeWinEntropy(result)
-
-	return BehaviorDescriptor{x, y}
+	m := fitness.ComputeFitness(result, sim.BatchResult{}, 0)
+	return BehaviorDescriptor{m.MeaningfulDecisions, m.Interaction}
 }
 
 // GridCell returns the (row, col) cell indices for a given grid size.
@@ -48,45 +58,4 @@ func (b BehaviorDescriptor) Distance(other BehaviorDescriptor) float64 {
 	dx := b[0] - other[0]
 	dy := b[1] - other[1]
 	return math.Sqrt(dx*dx + dy*dy)
-}
-
-func computeWinEntropy(result sim.BatchResult) float64 {
-	numPlayers := len(result.WinCounts)
-	if numPlayers <= 1 {
-		return 0
-	}
-
-	totalWins := 0
-	for _, w := range result.WinCounts {
-		totalWins += w
-	}
-	if totalWins == 0 {
-		return 0
-	}
-
-	maxEntropy := math.Log2(float64(numPlayers))
-	if maxEntropy == 0 {
-		return 0
-	}
-
-	entropy := 0.0
-	for _, w := range result.WinCounts {
-		if w == 0 {
-			continue
-		}
-		p := float64(w) / float64(totalWins)
-		entropy -= p * math.Log2(p)
-	}
-
-	return entropy / maxEntropy
-}
-
-func clamp(v, min, max float64) float64 {
-	if v < min {
-		return min
-	}
-	if v > max {
-		return max
-	}
-	return v
 }
