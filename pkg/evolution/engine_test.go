@@ -1,6 +1,7 @@
 package evolution
 
 import (
+	"math"
 	"math/rand/v2"
 	"testing"
 
@@ -261,6 +262,210 @@ func TestRunUpdatesBestFitnessFromFinalEvaluation(t *testing.T) {
 	if engine.BestFitness != maxFit {
 		t.Fatalf("BestFitness=%.6f, want %.6f (max valid TotalFitness in final population)",
 			engine.BestFitness, maxFit)
+	}
+}
+
+// engineSeedFor replicates the engine's per-individual seed derivation so
+// tests can re-run fitness.Evaluate with the exact seeds the engine used.
+func engineSeedFor(cfg Config, gen, idx int) uint64 {
+	return cfg.BaseSeed + uint64(gen)*10000 + uint64(idx)
+}
+
+// TestEliteRunningMeanFitness pins Task 13.3 (winner's curse): an individual
+// kept in the population across 5 generations is re-evaluated each
+// generation with a fresh seed, and its reported TotalFitness is the MEAN of
+// the 5 evaluations, not the max (and not the first).
+func TestEliteRunningMeanFitness(t *testing.T) {
+	cfg := Config{
+		PopulationSize: 1,
+		EliteSize:      1,
+		TournamentSize: 1,
+		Workers:        1,
+		BaseSeed:       42,
+	}
+	engine := NewEngine(cfg, allSeeds())
+	g := seeds.CrazyEights()
+	ind := &Individual{Genome: g}
+	engine.Population = []*Individual{ind}
+
+	var raws []float64
+	for gen := 0; gen < 5; gen++ {
+		engine.Generation = gen
+		engine.EvaluatePopulation()
+
+		r := fitness.Evaluate(g, engineSeedFor(cfg, gen, 0))
+		if !r.Valid {
+			t.Fatalf("gen %d: reference evaluation invalid", gen)
+		}
+		raws = append(raws, r.Metrics.TotalFitness)
+	}
+
+	if ind.EvalCount != 5 {
+		t.Fatalf("EvalCount = %d after 5 evaluations, want 5", ind.EvalCount)
+	}
+
+	sum, max := 0.0, raws[0]
+	for _, v := range raws {
+		sum += v
+		if v > max {
+			max = v
+		}
+	}
+	mean := sum / float64(len(raws))
+
+	if math.Abs(ind.Fitness.TotalFitness-mean) > 1e-9 {
+		t.Fatalf("TotalFitness = %.6f, want mean of 5 evals %.6f (raws=%v)",
+			ind.Fitness.TotalFitness, mean, raws)
+	}
+	if max > mean+1e-9 && ind.Fitness.TotalFitness >= max {
+		t.Fatalf("TotalFitness = %.6f reports max %.6f, not mean %.6f (winner's curse)",
+			ind.Fitness.TotalFitness, max, mean)
+	}
+}
+
+// TestBestFitnessConvergesToMeanNotMax pins Task 13.3 for the engine-level
+// stat: with a noisy constant-genome population evaluated across 10
+// generations, BestFitness must converge toward the true mean fitness of
+// that genome -- within 1 sd of the 10-eval mean -- rather than locking onto
+// the max single evaluation as the old sticky-max bookkeeping did.
+func TestBestFitnessConvergesToMeanNotMax(t *testing.T) {
+	cfg := Config{
+		PopulationSize: 1,
+		EliteSize:      1,
+		TournamentSize: 1,
+		Workers:        1,
+		BaseSeed:       42, // verified: 10/10 valid CrazyEights evals; sd ~0.02
+	}
+	engine := NewEngine(cfg, allSeeds())
+	g := seeds.CrazyEights()
+	engine.Population = []*Individual{{Genome: g}}
+
+	const gens = 10
+	var raws []float64
+	for gen := 0; gen < gens; gen++ {
+		engine.Generation = gen
+		engine.EvaluatePopulation()
+		engine.updateBestFitness()
+
+		r := fitness.Evaluate(g, engineSeedFor(cfg, gen, 0))
+		if !r.Valid {
+			// The engine drops the running mean when a re-evaluation comes
+			// back invalid (flaky genome); mirror that policy so the
+			// reference mean tracks the engine's post-reset window.
+			t.Logf("gen %d: evaluation invalid; running mean reset", gen)
+			raws = raws[:0]
+			continue
+		}
+		raws = append(raws, r.Metrics.TotalFitness)
+	}
+	if len(raws) < 5 {
+		t.Fatalf("only %d consecutive valid evals at tail of run; pick a BaseSeed with stabler evals", len(raws))
+	}
+
+	sum, max := 0.0, raws[0]
+	for _, v := range raws {
+		sum += v
+		if v > max {
+			max = v
+		}
+	}
+	mean := sum / float64(len(raws))
+	variance := 0.0
+	for _, v := range raws {
+		variance += (v - mean) * (v - mean)
+	}
+	sd := math.Sqrt(variance / float64(len(raws)))
+
+	if math.Abs(engine.BestFitness-mean) > sd+1e-9 {
+		t.Fatalf("BestFitness = %.6f not within 1 sd (%.6f) of 10-eval mean %.6f (raws=%v)",
+			engine.BestFitness, sd, mean, raws)
+	}
+	if max > mean+1e-9 && engine.BestFitness >= max {
+		t.Fatalf("BestFitness = %.6f equals max single eval %.6f instead of converging to mean %.6f",
+			engine.BestFitness, max, mean)
+	}
+	if sd == 0 {
+		t.Logf("note: zero eval noise across %d seeds (raws=%v); max assertion vacuous", gens, raws)
+	}
+}
+
+// TestSelectCarriesEvalStateToElitesOnly verifies elites carry their
+// running-mean bookkeeping (EvalCount/FitnessSum) into the next generation,
+// while mutated/crossed-over offspring start from zero -- their genome
+// changed, so prior evaluations are meaningless.
+func TestSelectCarriesEvalStateToElitesOnly(t *testing.T) {
+	engine := NewEngine(Config{
+		PopulationSize: 3,
+		EliteSize:      1,
+		TournamentSize: 1,
+		Workers:        1,
+		BaseSeed:       1,
+	}, allSeeds())
+
+	gA := seeds.CrazyEights()
+	gA.ID = "elite"
+	gB := seeds.Whist()
+	gB.ID = "mid"
+	gC := seeds.GinRummy()
+	gC.ID = "low"
+
+	engine.Population = []*Individual{
+		{Genome: gA, Valid: true, EvalCount: 4, FitnessSum: 2.0,
+			Fitness: fitness.Metrics{TotalFitness: 0.5, SharedFitness: 0.9}},
+		{Genome: gB, Valid: true, EvalCount: 2, FitnessSum: 0.8,
+			Fitness: fitness.Metrics{TotalFitness: 0.4, SharedFitness: 0.6}},
+		{Genome: gC, Valid: true, EvalCount: 1, FitnessSum: 0.3,
+			Fitness: fitness.Metrics{TotalFitness: 0.3, SharedFitness: 0.3}},
+	}
+
+	nextGen := engine.Select()
+
+	elite := nextGen[0]
+	if elite.Genome.ID != "elite" {
+		t.Fatalf("nextGen[0].Genome.ID = %q, want elite (highest SharedFitness)", elite.Genome.ID)
+	}
+	if elite.EvalCount != 4 || elite.FitnessSum != 2.0 {
+		t.Fatalf("elite must carry running-mean state: EvalCount=%d FitnessSum=%.2f, want 4/2.00",
+			elite.EvalCount, elite.FitnessSum)
+	}
+
+	for i := 1; i < len(nextGen); i++ {
+		if nextGen[i].EvalCount != 0 || nextGen[i].FitnessSum != 0 {
+			t.Errorf("offspring %d must start with zero eval state, got EvalCount=%d FitnessSum=%.2f",
+				i, nextGen[i].EvalCount, nextGen[i].FitnessSum)
+		}
+		if nextGen[i].Valid {
+			t.Errorf("offspring %d must start invalid (needs evaluation)", i)
+		}
+	}
+}
+
+// TestDedupResetsEvalState verifies that when dedup replaces a duplicate
+// genome with a fresh mutation, the running-mean bookkeeping is zeroed: the
+// new genome has never been evaluated.
+func TestDedupResetsEvalState(t *testing.T) {
+	g := seeds.CrazyEights()
+	pop := []*Individual{
+		{Genome: cloneGenome(g), Valid: true, EvalCount: 3, FitnessSum: 1.5},
+		{Genome: cloneGenome(g), Valid: true, EvalCount: 3, FitnessSum: 1.5},
+	}
+
+	engine := NewEngine(Config{BaseSeed: 7, Workers: 1}, allSeeds())
+	engine.dedup(pop)
+
+	replaced := 0
+	for i, ind := range pop {
+		if ind.Valid {
+			continue
+		}
+		replaced++
+		if ind.EvalCount != 0 || ind.FitnessSum != 0 {
+			t.Errorf("replaced individual %d kept stale eval state: EvalCount=%d FitnessSum=%.2f",
+				i, ind.EvalCount, ind.FitnessSum)
+		}
+	}
+	if replaced == 0 {
+		t.Fatal("dedup did not replace the duplicate; cannot exercise reset")
 	}
 }
 

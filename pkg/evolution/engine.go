@@ -40,10 +40,24 @@ func DefaultConfig() Config {
 }
 
 // Individual wraps a genome with its fitness evaluation.
+//
+// EvalCount/FitnessSum implement the running-mean fitness scheme (Task 13.3
+// of the 2026-06-11 audit remediation): elites are re-evaluated every
+// generation with a fresh seed, and Fitness.TotalFitness holds the mean of
+// all evaluations of this exact genome. This kills the winner's curse, where
+// a single lucky evaluation was carried forward as `Valid: true` forever.
+// Both fields reset to zero whenever the genome changes (mutation,
+// crossover, dedup replacement) -- prior evaluations describe a different
+// game.
 type Individual struct {
 	Genome  *genome.Genome
 	Fitness fitness.Metrics
 	Valid   bool
+
+	// EvalCount is the number of valid evaluations of this exact genome.
+	EvalCount int
+	// FitnessSum is the sum of raw TotalFitness over those evaluations.
+	FitnessSum float64
 }
 
 // Engine runs the evolutionary algorithm.
@@ -88,15 +102,17 @@ func (e *Engine) Initialize() {
 
 // EvaluatePopulation runs fitness evaluation on all individuals in parallel,
 // then applies fitness sharing to reward niche diversity.
+//
+// Every individual is evaluated every generation -- including elites, which
+// previously skipped re-evaluation via `Valid: true` and so carried a single
+// (possibly lucky) estimate forever. The per-generation seed term in the
+// derivation below guarantees each re-evaluation samples fresh games, and
+// TotalFitness becomes the running mean over all evaluations of the genome.
 func (e *Engine) EvaluatePopulation() {
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, e.Config.Workers)
 
 	for i, ind := range e.Population {
-		if ind.Valid {
-			continue // Already evaluated (elite carried forward)
-		}
-
 		wg.Add(1)
 		sem <- struct{}{} // Acquire worker slot
 
@@ -109,9 +125,19 @@ func (e *Engine) EvaluatePopulation() {
 
 			ind.Valid = result.Valid
 			ind.Fitness = result.Metrics
-			if result.Valid {
-				ind.Genome.Fitness = result.Metrics.TotalFitness
+			if !result.Valid {
+				// A genome that fails Tier 0/1 on re-evaluation is flaky
+				// (e.g. degenerate under some seeds). Drop its history so
+				// it must re-qualify from scratch if it ever passes again.
+				ind.EvalCount = 0
+				ind.FitnessSum = 0
+				return
 			}
+
+			ind.FitnessSum += result.Metrics.TotalFitness
+			ind.EvalCount++
+			ind.Fitness.TotalFitness = ind.FitnessSum / float64(ind.EvalCount)
+			ind.Genome.Fitness = ind.Fitness.TotalFitness
 		}(i, ind)
 	}
 
@@ -182,18 +208,28 @@ func (e *Engine) applyFitnessSharing() {
 	}
 }
 
-// updateBestFitness scans the current Population and updates BestFitness /
-// BestGenome whenever a valid individual's raw TotalFitness exceeds the
-// current record. Called after every EvaluatePopulation so that genomes
-// produced by the final Select() round (which are evaluated by Run's
-// post-loop EvaluatePopulation but never feed back into a subsequent
-// Select) are still recorded.
+// updateBestFitness recomputes BestFitness/BestGenome from the CURRENT
+// population's (running-mean) TotalFitness. It deliberately does NOT keep a
+// sticky historical max: with elite re-evaluation an elite's mean drifts
+// toward its true value, and freezing the highest-ever noisy estimate would
+// reintroduce the winner's curse this scheme exists to kill. Elitism keeps
+// the best genome in the population, so the current best is the honest
+// best. Expect BestFitness to move down as well as up across generations --
+// that is the correction working. If no valid individual exists, the
+// previous best is retained.
 func (e *Engine) updateBestFitness() {
+	var best *Individual
 	for _, ind := range e.Population {
-		if ind.Valid && ind.Fitness.TotalFitness > e.BestFitness {
-			e.BestFitness = ind.Fitness.TotalFitness
-			e.BestGenome = ind.Genome
+		if !ind.Valid {
+			continue
 		}
+		if best == nil || ind.Fitness.TotalFitness > best.Fitness.TotalFitness {
+			best = ind
+		}
+	}
+	if best != nil {
+		e.BestFitness = best.Fitness.TotalFitness
+		e.BestGenome = best.Genome
 	}
 }
 
@@ -212,13 +248,18 @@ func (e *Engine) Select() []*Individual {
 
 	nextGen := make([]*Individual, e.Config.PopulationSize)
 
-	// Elitism: top N carry forward
+	// Elitism: top N carry forward, including their running-mean state.
+	// Elites are re-evaluated with a fresh seed every generation (see
+	// EvaluatePopulation); carrying EvalCount/FitnessSum is what turns the
+	// next evaluation into a running mean instead of a fresh point estimate.
 	elite := min(e.Config.EliteSize, len(e.Population))
 	for i := 0; i < elite; i++ {
 		nextGen[i] = &Individual{
-			Genome:  e.Population[i].Genome,
-			Fitness: e.Population[i].Fitness,
-			Valid:   true, // Skip re-evaluation
+			Genome:     e.Population[i].Genome,
+			Fitness:    e.Population[i].Fitness,
+			Valid:      true,
+			EvalCount:  e.Population[i].EvalCount,
+			FitnessSum: e.Population[i].FitnessSum,
 		}
 	}
 
@@ -276,6 +317,9 @@ func (e *Engine) dedup(pop []*Individual) {
 				child := Mutate(parent, e.rng, e.Seeds)
 				pop[i].Genome = child
 				pop[i].Valid = false
+				// The genome changed: prior evaluations are meaningless.
+				pop[i].EvalCount = 0
+				pop[i].FitnessSum = 0
 				hash = genomeHash(child)
 			}
 		}
@@ -423,7 +467,10 @@ func (e *Engine) Run(progress func(gen int, best float64, avg float64)) {
 
 	// Final evaluation. Select never runs on this population, so update
 	// BestFitness directly to capture any post-final-Select offspring whose
-	// raw fitness beats the prior best.
+	// raw fitness beats the prior best. Bump Generation past the loop range
+	// so elites get a fresh seed here too instead of repeating the last
+	// generation's evaluation.
+	e.Generation = e.Config.Generations
 	e.EvaluatePopulation()
 	e.updateBestFitness()
 }
