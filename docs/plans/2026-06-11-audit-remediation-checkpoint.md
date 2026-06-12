@@ -61,3 +61,11 @@ Per-column sanity verdicts (does the metric VARY within every skeleton?):
 Throughput: 33,700 games in 4.245s = **7,939 games/sec single-threaded**, vs the pre-Task-7 baseline ~5,400 games/sec/core-equivalent. No regression (gate: >3x drop, i.e. <1,800/sec); the baseline figure included evolution-engine overhead so the comparison is conservative in both directions, but the instrumentation hot path is clearly fine.
 
 Verdict: no column is a within-skeleton constant for the metrics' own tasks; the two flagged compressions (rummy interaction floor, trick-taking interaction near-saturation) and the two ordering inversions (instant-knock arc + length) are Task 14 scale/weight work, not Phase 2 rework. Proceed to Task 14.
+
+## Phase 3 complete: THE CALIBRATION GATE PASSES (2026-06-11)
+
+Wave D.1 review fixes (68a9ccf, f0d3e93, 941f5e5, 22872f4) + Task 16 reordered first (bf2a513: Tier 1 10 games, completed-games avg-turns basis at cutoff 5 -- classics 29-30/30, instant-knock killed 23/30) + Task 14 (233174c: session band [4,10,60,170] from measured classic DPP, weights unchanged, two-view gate semantics per exit condition (b)) + Task 15 (db83815: floor 0.70 -> 0.42 derived).
+
+Final survivor-conditioned means (n=10/10 for all classics): crazy-eights 0.475, mau-mau 0.490, whist 0.633, hearts 0.650, spades 0.652, oh-hell 0.549, gin 0.584, knock 0.609; degenerates instant-knock 0.434 (n=1/10, pipeline-effective 0.043), forced-shedding 0.428 (n=4/10, effective 0.171). Every classic beats every degenerate on both views; gin beats instant-knock by 0.150. The audit's falsification finding is inverted; the suite now runs untagged as a permanent regression gate.
+
+Remaining for Task 18 besides archive semantics: drop FitnessFloor from MAP-Elites archive admission; remove winner's-curse Valid skip in novelty.go (carried finding a).
