@@ -28,3 +28,36 @@ Falsification confirmed numerically: the instant-knock degenerate outscores ever
 - Wave C (Tasks 7, 8): done 2026-06-11 -- commits fe3635e, 78ece7d. Rummy OptionDelta implemented analytically (full-union probe was 4.15x; cancellation argument documented in batch.go with invalidation condition: lay-off-style mechanics break it). Rummy hot path optimized (fixed-array buckets + value-only deadwood DP) after Progress pushed it to 2.96x baseline; now 1.006x.
 - Wave D (Tasks 9-13): done 2026-06-11 -- commits 47b1e03, 4aff683, 3fa2ecd, ac77034, 5989c2f, d2c1dcc, f882a67. Metrics un-pinned: whist density 0.775 (was 1.0), arc varies 0.418-0.864 across seeds (was ~1.0), hearts-4p interaction off the old 0.657 pin. Code review: FIX-REQUIRED (narrow) -> Wave D.1 fixes in flight (phantom winners in arc, short-track resolution freebie, TurnRecord.Attack union semantics, TT lead-constraint OptionDelta -- plan table amended in a7fe81c).
 - CARRIED FINDINGS: (a) Task 18 must also remove the winner's-curse skip in novelty.go:109 and MAP-Elites best-ever cells (engine.go got the fix in f882a67; the other two engines did not). (b) Phase 7 docs: Individual.Fitness components are last-eval values while TotalFitness is a running mean -- champion metric breakdowns will not reconcile with weights; document when publishing. (c) Hook effects (e.g. DrawPenalty borrow) are invisible to OptionDelta/leader sampling (recorded pre-hook) -- relevant to Task 22's evolvability sub-check.
+
+## Task 13.5 per-metric table (post Wave D.1)
+
+Command: `./bin/darwindeck calibrate` (commit 22872f4 + calibrate subcommand; single-threaded; raw metrics, no weighting; tier1 = evals reaching Tier 2 over the 10 pinned CalibrationSeeds).
+
+```
+genome                 skeleton      tier1  decisions       arc             interact        skill           length
+---------------------------------------------------------------------------------------------------------------------------
+crazy-eights           shedding      10/10  0.300 sd 0.003  0.866 sd 0.015  0.385 sd 0.003  0.033 sd 0.033  1.000 sd 0.000
+mau-mau                shedding      9/10   0.288 sd 0.002  0.798 sd 0.020  0.564 sd 0.005  0.030 sd 0.026  0.728 sd 0.021
+whist                  trick_taking  10/10  0.776 sd 0.000  0.609 sd 0.007  0.844 sd 0.002  0.091 sd 0.020  0.800 sd 0.000
+hearts                 trick_taking  10/10  0.777 sd 0.001  0.359 sd 0.009  0.844 sd 0.001  0.484 sd 0.017  0.800 sd 0.000
+spades                 trick_taking  10/10  0.769 sd 0.001  0.631 sd 0.021  0.835 sd 0.001  0.176 sd 0.022  0.800 sd 0.000
+oh-hell                trick_taking  9/10   0.634 sd 0.001  0.634 sd 0.033  0.783 sd 0.003  0.125 sd 0.041  0.200 sd 0.000
+gin-rummy              rummy         8/10   0.690 sd 0.000  0.858 sd 0.010  0.022 sd 0.000  0.905 sd 0.011  0.000 sd 0.000
+knock-rummy            rummy         9/10   0.687 sd 0.000  0.814 sd 0.009  0.021 sd 0.000  0.764 sd 0.019  0.239 sd 0.020
+instant-knock-rummy    rummy         7/10   0.355 sd 0.002  0.915 sd 0.014  0.000 sd 0.000  0.056 sd 0.035  1.000 sd 0.000
+forced-shedding        shedding      1/10   0.182 sd 0.000  0.712 sd 0.000  0.231 sd 0.000  0.289 sd 0.000  1.000 sd 0.000
+```
+
+Tier 1 kills: 17 total -- forced-shedding 9/10 (timeouts, the Task 16 false-reject item), instant-knock 3/10, gin 2/10, mau-mau/oh-hell/knock-rummy 1/10 each. Kill shape matches the Task 2 baseline.
+
+Per-column sanity verdicts (does the metric VARY within every skeleton?):
+
+- **decisions: PASS.** Varies within all three skeletons (shedding 0.182-0.300, trick-taking 0.634-0.777, rummy 0.355-0.690). The audit's structural pins (1.0 for all trick-taking) are gone; whist/hearts/spades cluster within 0.008 of each other (same follow-suit structure) but oh-hell separates, so it is not a constant. Watch item "trick-taking decision density" cleared.
+- **arc: PASS with a direction flag.** Varies within all skeletons (shedding 0.712-0.866, trick-taking 0.359-0.634, rummy 0.814-0.915). Gin vs instant-knock DO differ (0.858 vs 0.915) -- but instant-knock is the table's HIGHEST arc: 3-card coin-flip games produce cheap lead changes + clean resolution. Separation of that pair must come from decisions/interact/skill/length (all of which point the right way); a Task 14 scale/weight concern, not a Task 10 constant.
+- **interact: PASS for shedding/trick-taking; FLAG rummy as an effective skeleton constant.** Shedding varies 0.231-0.564. Trick-taking is off the old 2/N closed form and varies 0.783-0.844, though compressed and sitting at ratio ~0.39-0.42 against the 0.5-ratio clamp denominator -- near-saturated, not clamped; Task 14's denominator recalibration should widen it. Rummy: gin 0.022, knock 0.021 (classic spread 0.001, sd 0.000), instant-knock 0.000 -- the discard-OptionDelta signal barely fires; column is floor-pinned for rummy and gives Task 14 almost no within-skeleton gradient. Revisit under Task 11/14 if rummy separation needs it.
+- **skill: PASS.** Strong variation within every skeleton (shedding 0.030-0.289, trick-taking 0.091-0.484, rummy 0.056-0.905). Gin 0.905 vs instant-knock 0.056 is the single strongest classic-vs-degenerate signal in the table.
+- **length: PASS with two flags.** Varies within all skeletons (shedding 0.728-1.000, trick-taking 0.200-0.800, rummy 0.000-1.000). Flags: (1) whist/hearts/spades are deterministically 0.800 (fixed 13 decisions/player by deal -- structural, expected, not a bug); (2) gin-rummy hard-zeros (decisions/player > 100 cap) while instant-knock banks a free 1.000 -- the 15-40 band recalibration is squarely Task 14's first item.
+
+Throughput: 33,700 games in 4.245s = **7,939 games/sec single-threaded**, vs the pre-Task-7 baseline ~5,400 games/sec/core-equivalent. No regression (gate: >3x drop, i.e. <1,800/sec); the baseline figure included evolution-engine overhead so the comparison is conservative in both directions, but the instrumentation hot path is clearly fine.
+
+Verdict: no column is a within-skeleton constant for the metrics' own tasks; the two flagged compressions (rummy interaction floor, trick-taking interaction near-saturation) and the two ordering inversions (instant-knock arc + length) are Task 14 scale/weight work, not Phase 2 rework. Proceed to Task 14.

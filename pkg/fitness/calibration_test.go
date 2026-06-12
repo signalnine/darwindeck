@@ -21,10 +21,10 @@ import (
 	"github.com/darwindeck/darwindeck/pkg/seeds"
 )
 
-// CalibrationSeeds is the canonical pinned seed list for ALL calibration
-// evaluations. Every task that measures seed-game fitness uses this list --
-// never ad-hoc seeds -- so numbers are comparable across the whole plan.
-var CalibrationSeeds = []uint64{11, 22, 33, 44, 55, 66, 77, 88, 99, 110}
+// The canonical pinned seed list lives in fitness.CalibrationSeeds
+// (calibration.go, outside this build tag) so the `calibrate` subcommand can
+// import it; this suite and that command must always measure over the same
+// seeds.
 
 // BASELINE (measured at the Task 2 commit, BEFORE any metric fixes; means
 // over CalibrationSeeds, sd in parens, n = evaluations of 10 that passed
@@ -65,7 +65,7 @@ var CalibrationSeeds = []uint64{11, 22, 33, 44, 55, 66, 77, 88, 99, 110}
 type calResult struct {
 	mean  float64
 	sd    float64
-	valid int // evaluations that passed Tier 1 (of len(CalibrationSeeds))
+	valid int // evaluations that passed Tier 1 (of len(fitness.CalibrationSeeds))
 }
 
 // calCache memoizes per-genome measurements so the three gate tests share one
@@ -87,7 +87,7 @@ func meanFit(t *testing.T, g *genome.Genome) calResult {
 	}
 
 	var fits []float64
-	for _, seed := range CalibrationSeeds {
+	for _, seed := range fitness.CalibrationSeeds {
 		res := fitness.Evaluate(g, seed)
 		if len(res.Tier0Errors) > 0 {
 			t.Fatalf("%s: tier-0 errors (fixture must be statically valid): %v", g.ID, res.Tier0Errors)
@@ -113,7 +113,7 @@ func meanFit(t *testing.T, g *genome.Genome) calResult {
 		r.sd = math.Sqrt(sq / float64(len(fits)))
 	}
 	calCache[g.ID] = r
-	t.Logf("%s: mean %.3f (sd %.3f, n %d/%d)", g.ID, r.mean, r.sd, r.valid, len(CalibrationSeeds))
+	t.Logf("%s: mean %.3f (sd %.3f, n %d/%d)", g.ID, r.mean, r.sd, r.valid, len(fitness.CalibrationSeeds))
 	return r
 }
 

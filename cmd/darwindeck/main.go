@@ -34,6 +34,8 @@ func main() {
 		cmdEvolve(os.Args[2:])
 	case "experiment":
 		cmdExperiment(os.Args[2:])
+	case "calibrate":
+		cmdCalibrate(os.Args[2:])
 	case "playtest":
 		cmdPlaytest(os.Args[2:])
 	case "describe":
@@ -55,6 +57,7 @@ func printUsage() {
 Commands:
   evolve      Run evolutionary search for novel card games
   experiment  Run diversity comparison experiments
+  calibrate   Report raw fitness metrics for classics + degenerate fixtures
   playtest    Play a game interactively against AI
   describe    Show details of a genome JSON file
   version     Print version info
