@@ -302,7 +302,7 @@ type GameResult struct {
 |---|---|---|---|
 | shedding | legal plays+draw for next player against the discard top | pre-move state with same next player | discard top is the entire coupling surface |
 | rummy | legal draws+melds+discards for next player | pre-move state | discard top + table melds are the coupling surface |
-| tricktaking | NOT move-count based: `OptionDelta = 0` always; interaction comes from `EventTrickWon` and special events only | n/a | follow-suit legality depends on the led card, which the *acting* player sets; "what could the next player have done otherwise" is counterfactually ill-defined mid-trick |
+| tricktaking | defined for trick-LEADING plays only: `OptionDelta = legalMoves(next, post-lead) - len(hand(next))` (the constraint the lead imposes; <= 0, nonzero only when follow rules bind). Follows and trick-completing plays: 0 | next player's unconstrained hand size | mid-trick counterfactuals are ill-defined (the leader sets follow legality), but the lead's constraining power IS well-defined and genome-linked: MustFollowSuit genomes produce negative deltas, free-play genomes produce 0 -- a real within-skeleton gradient. AMENDED 2026-06-11 after Wave D review found the original always-0 rule made Interaction a closed-form constant (2/N) for trick-taking, recreating the audit's skeleton-constant pathology |
 
 If during implementation a skeleton's definition proves incoherent, STOP and update this table first -- do not improvise in code. Each skeleton's definition gets its own unit test with a hand-constructed state where the delta is computed by hand.
 
