@@ -24,7 +24,7 @@ type EvaluationResult struct {
 
 // Evaluate runs the full tiered evaluation pipeline for a genome.
 // Tier 0: static validation
-// Tier 1: 5 quick games
+// Tier 1: 10 quick games
 // Tier 2: 200 random + 200 greedy games → fitness metrics
 func Evaluate(g *genome.Genome, baseSeed uint64) EvaluationResult {
 	result := EvaluationResult{}
@@ -41,17 +41,19 @@ func Evaluate(g *genome.Genome, baseSeed uint64) EvaluationResult {
 		return result
 	}
 
-	// Tier 1: Quick simulation (5 games)
-	result.Tier1 = RunTier1(g, runner, baseSeed)
+	// Build hooks for borrowed mechanics ONCE, before Tier 1: both tiers
+	// must simulate the same game (audit Task 16). buildHookFuncs is the
+	// single shared constructor -- never hand Tier 1 a different hook set.
+	hooks := buildHookFuncs(g)
+
+	// Tier 1: Quick simulation (10 games)
+	result.Tier1 = RunTier1(g, runner, baseSeed, hooks...)
 	if !result.Tier1.Passed {
 		return result
 	}
 
 	// Tier 2: Full simulation
 	result.Valid = true
-
-	// Build hooks for borrowed mechanics
-	hooks := buildHookFuncs(g)
 
 	// Games with random AI
 	randomAI := &sim.RandomAI{}

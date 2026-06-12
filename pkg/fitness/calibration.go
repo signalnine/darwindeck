@@ -12,9 +12,12 @@ package fitness
 // (plan "Seed discipline" note).
 var CalibrationSeeds = []uint64{11, 22, 33, 44, 55, 66, 77, 88, 99, 110}
 
-// tier1Games mirrors the function-local numGames constant in RunTier1
-// (tier1.go); Task 16 changes both when the Tier 1 batch grows to 10.
-const tier1Games = 5
+// tier1Games is the Tier 1 quick-batch size, consumed directly by RunTier1
+// (tier1.go) and by GamesPerEvaluation below -- a single constant so the
+// throughput accounting can never drift from the pipeline. Raised from 5 to
+// 10 in Task 16: at 5 games a kill-on-single-timeout gate rejected healthy
+// rummy seeds 13-20% of the time.
+const tier1Games = 10
 
 // GamesPerEvaluation returns the number of simulated games one Evaluate call
 // plays: the Tier 1 quick batch always runs; Tier 2's random + greedy batches

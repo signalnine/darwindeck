@@ -11,43 +11,70 @@ import (
 	"github.com/darwindeck/darwindeck/pkg/skeleton/tricktaking"
 )
 
-func getRunner(g *genome.Genome) sim.GenericRunner {
-	switch g.Skeleton {
-	case genome.Shedding:
-		return &shedding.Runner{}
-	case genome.TrickTaking:
-		return &tricktaking.Runner{}
-	case genome.Rummy:
-		return &rummy.Runner{}
-	default:
-		return nil
-	}
+// tier1Trials is the number of independent Tier 1 runs (distinct baseSeeds)
+// used by the acceptance/rejection tests below. Base seeds are spaced 1000
+// apart so the per-game seed ranges (baseSeed..baseSeed+numGames-1) never
+// overlap between trials.
+const tier1Trials = 30
+
+func tier1TrialSeed(trial int) uint64 {
+	return uint64(trial) * 1000
 }
 
-func TestTier1AllSeedsPass(t *testing.T) {
-	allSeeds := []*genome.Genome{
-		seeds.CrazyEights(),
-		seeds.MauMau(),
-		seeds.Whist(),
-		seeds.Hearts(),
-		seeds.Spades(),
-		seeds.OhHell(),
-		seeds.GinRummy(),
-		seeds.KnockRummy(),
-	}
-
-	for _, g := range allSeeds {
-		runner := getRunner(g)
+// TestTier1AcceptsClassics: every classic seed game must pass Tier 1 on at
+// least 28 of 30 base seeds. This is the false-reject budget for the gate
+// (audit Task 16): the old 5-game kill-on-single-timeout gate rejected
+// healthy rummy seeds 13-20% of the time.
+func TestTier1AcceptsClassics(t *testing.T) {
+	for _, g := range seeds.All() {
+		runner := GetRunner(g)
 		if runner == nil {
 			t.Fatalf("%s: no runner for skeleton %s", g.ID, g.Skeleton)
 		}
 
-		result := RunTier1(g, runner, 0)
-		if !result.Passed {
-			t.Errorf("%s FAILED Tier 1: %s", g.ID, result.Reason)
-		} else {
-			t.Logf("%s: passed (avg turns=%.1f, wins=%v)", g.ID, result.AvgTurns, result.Winners)
+		passes := 0
+		for trial := 0; trial < tier1Trials; trial++ {
+			result := RunTier1(g, runner, tier1TrialSeed(trial))
+			if result.Passed {
+				passes++
+			} else {
+				t.Logf("%s trial %d failed: %s", g.ID, trial, result.Reason)
+			}
 		}
+
+		if passes < 28 {
+			t.Errorf("%s: passed only %d/%d Tier 1 trials (need >= 28)", g.ID, passes, tier1Trials)
+		} else {
+			t.Logf("%s: passed %d/%d trials", g.ID, passes, tier1Trials)
+		}
+	}
+}
+
+// TestTier1KillsInstantKnock: the degenerate instant-knock fixture (the
+// rank01_gen200_70015 flagship reproduction) must fail Tier 1 on a majority
+// of base seeds. Tier 1's job is "kill if degenerate"; a gate that waves this
+// through on most seeds is not doing it.
+func TestTier1KillsInstantKnock(t *testing.T) {
+	g := seeds.InstantKnockRummy()
+	runner := GetRunner(g)
+	if runner == nil {
+		t.Fatalf("no runner for skeleton %s", g.Skeleton)
+	}
+
+	fails := 0
+	for trial := 0; trial < tier1Trials; trial++ {
+		result := RunTier1(g, runner, tier1TrialSeed(trial))
+		if !result.Passed {
+			fails++
+		} else {
+			t.Logf("trial %d passed (avg turns=%.1f, wins=%v)", trial, result.AvgTurns, result.Winners)
+		}
+	}
+
+	if fails <= tier1Trials/2 {
+		t.Errorf("instant-knock-rummy failed only %d/%d trials; Tier 1 must kill it on a majority", fails, tier1Trials)
+	} else {
+		t.Logf("instant-knock-rummy killed on %d/%d trials", fails, tier1Trials)
 	}
 }
 
