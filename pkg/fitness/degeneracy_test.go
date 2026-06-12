@@ -284,3 +284,77 @@ func TestGreedyDegeneracyTempoAndSeats(t *testing.T) {
 		t.Fatalf("greedy batch must not apply the non_agentic floor, got %q", reason)
 	}
 }
+
+// TestDegeneracyDeadMatchRule (round 3): the DYNAMIC twin of the Tier-0
+// catch-all rule. The r2 flagship's shedding champions carried a catch-all
+// wild; with that encoding statically rejected, the same semantics remain
+// reachable as a UNION (four suit wilds cover the deck). When (nearly) every
+// turn offers the whole hand as legal plays, the skeleton's match/draw rules
+// are dead genes dynamically -- whatever the encoding.
+func TestDegeneracyDeadMatchRule(t *testing.T) {
+	g := &genome.Genome{Skeleton: genome.Shedding, Players: 2}
+
+	mk := func(allPlayableEvery int) []sim.TurnRecord {
+		records := make([]sim.TurnRecord, 60)
+		for i := range records {
+			records[i] = sim.TurnRecord{Player: i % 2, HandSize: 7, LegalMoves: 3, Meaningful: true}
+			if allPlayableEvery > 0 && i%allPlayableEvery == 0 {
+				records[i].LegalMoves = 7 // whole hand playable
+			}
+		}
+		return records
+	}
+
+	if reason := CheckDegeneracy(degBatch(mk(1)), g); reason != "dead_match_rule" {
+		t.Fatalf("every-turn-all-playable must flag dead_match_rule, got %q", reason)
+	}
+	if reason := CheckDegeneracy(degBatch(mk(4)), g); reason != "" {
+		t.Fatalf("1/4 all-playable turns (real wilds in hand) must pass, got %q", reason)
+	}
+
+	// Trivial hands cannot witness a dead match rule: a 1-card playable hand
+	// is "all playable" vacuously, so HandSize < 2 records are excluded.
+	tiny := make([]sim.TurnRecord, 40)
+	for i := range tiny {
+		tiny[i] = sim.TurnRecord{Player: i % 2, HandSize: 1, LegalMoves: 1, Meaningful: true}
+	}
+	if reason := CheckDegeneracy(degBatch(tiny), g); reason != "" {
+		t.Fatalf("1-card hands must not witness dead_match_rule, got %q", reason)
+	}
+
+	// Non-shedding skeletons have no match rule to kill: trick-taking leads
+	// legitimately offer the whole hand.
+	gt := &genome.Genome{Skeleton: genome.TrickTaking, Players: 2}
+	if reason := CheckDegeneracy(degBatch(mk(1)), gt); reason != "" {
+		t.Fatalf("dead_match_rule must be shedding-only, got %q", reason)
+	}
+}
+
+// TestDegeneracyKillsRound3Champions: the round-3 failed-review fixtures are
+// killed by the pipeline -- the wild-union shedding pair by dead_match_rule
+// (the union bypass of the static catch-all rule), the pair-meld-stock
+// cousin by the tightened draw-supply churn.
+func TestDegeneracyKillsRound3Champions(t *testing.T) {
+	cases := []struct {
+		g      *genome.Genome
+		reason string
+	}{
+		{seeds.ReverseLockoutShedding(), "dead_match_rule"},
+		{seeds.HeartEngineShedding(), "dead_match_rule"},
+		{seeds.PairMeldStockRummy(), "draw_supply_churn"},
+	}
+	for _, tc := range cases {
+		res := Evaluate(tc.g, 11)
+		if !res.Tier1.Passed {
+			t.Errorf("%s: expected a Tier 2 degeneracy kill, but Tier 1 already killed it", tc.g.ID)
+			continue
+		}
+		if res.Valid {
+			t.Errorf("%s: rejected champion must be invalid (degeneracy veto), but Valid = true", tc.g.ID)
+			continue
+		}
+		if res.DegenerateReason != tc.reason {
+			t.Errorf("%s: degenerate reason = %q, want %q", tc.g.ID, res.DegenerateReason, tc.reason)
+		}
+	}
+}

@@ -185,6 +185,60 @@ import (
 // gin 0.548 vs instant-knock 0.431 (+0.117 >= 0.10). FitnessFloor
 // re-derived 0.42 -> 0.40 (= 0.451 - 0.05, Task 15 rule).
 
+// ROUND 3 RESULT (Task 28 step 4 failed-review loop, round 3 of 3,
+// 2026-06-12). The r2 flagship (output/2026-06-12-flagship-r2) was
+// designer-reviewed; publication HARD-BLOCKED again: shedding ranks 1-10
+// were catch-all-wild profile-mixing engines (greedy skill 0.00, one cycling
+// to the 390-turn cap under greedy), rank03 locked 2 of 4 seats out via
+// reverse ping-pong, rummy ranks 21-30 were the PREDICTED pair-meld
+// count-density archetype. Round-3 changes, in commit order:
+//
+//  1. TIER-0 CATCH-ALL LIVENESS: a special card with ByRank=0 AND BySuit=0
+//     matches every card and is statically rejected; mutation can no longer
+//     generate the encoding. Fixture restructure: Tier-0-rejected fixtures
+//     are negative Tier-0 specimens (seeds.CatchAllChampions,
+//     TestTier0RejectsCatchAllChampions), NOT metric ground truth.
+//  2. GREEDY-BATCH VETOES: tempo_monopoly + new seat_participation run on
+//     BOTH Tier 2 batches; new greedy_timeout (> 0.10 share). Side effect on
+//     the record: instant-knock and forced-shedding lose their last
+//     surviving seeds to greedy_timeout (0.110 / 0.141) -- both now read 0
+//     on all ten seeds.
+//  3. RUMMY DEADWOOD-CONSEQUENCE DENSITY (the count exception is dead): gin
+//     0.690 -> 0.369, knock 0.687 -> 0.377 (their real discard decisions
+//     survive; option-count inflation does not).
+//  4. ROUND-3 FIXTURES + RECALIBRATION (this block): ReverseLockoutShedding
+//     and HeartEngineShedding (rank03/rank04, catch-all wild re-encoded as
+//     the four-suit-wild UNION -- semantically identical, statically valid)
+//     and PairMeldStockRummy (rank22, churn parked at 0.088 under the old
+//     0.10 cliff). RED on record: before this round's detectors the three
+//     measured survivor means 0.775 / 0.787 / 0.484 vs worst classic 0.451
+//     -- two Pareto-dominate every classic. Killing them needed (a)
+//     dead_match_rule, the DYNAMIC twin of the Tier-0 catch-all rule (share
+//     of whole-hand-playable shedding records > 0.70; wild-union fixtures
+//     1.000 flat, classic max 0.033 -- the union encoding bypasses the
+//     static rule, the dynamic detector closes the class), and (b) the
+//     pre-sanctioned churn tightening 0.10 -> 0.05 from the new measured
+//     table (classics 0.011, the parked cousin 0.088).
+//
+// Survivor-conditioned means after round 3 (n=10/10 classics; weights
+// FROZEN at 0.25/0.25/0.20/0.20/0.10, session band/interaction denominator/
+// skillScale all unchanged -- the only constant that moved this round is the
+// churn VETO threshold, justified above):
+//
+//	classics: crazy-eights 0.451 | mau-mau 0.476 | whist 0.486 |
+//	          hearts 0.486 | spades 0.500 | oh-hell 0.478 |
+//	          gin-rummy 0.468 | knock-rummy 0.500
+//	degens:   ALL SEVEN Tier-2 fixtures at 0/10 -- every evaluation is
+//	          killed by Tier 1 or a degeneracy veto on every calibration
+//	          seed (survivor mean 0, pipeline-effective 0). The survivor
+//	          view is therefore vacuously strict this round; it remains
+//	          asserted so any fixture that ever survives again must beat no
+//	          classic.
+//
+// FitnessFloor: worst classic is still crazy-eights 0.451 -> floor stays
+// 0.40 (Task 15 rule). Throughput: 45,500 games in 2.79s (calibrate,
+// Wave I game-parallel batches) -- no regression vs the round-2 checkpoint.
+
 // Ground truth: the 8 classic seeds are the only human-validated "fun" games
 // in the repo. Any fitness function that scores a classic below a degenerate
 // fixture is falsified. Evaluations are averaged over the pinned seed list

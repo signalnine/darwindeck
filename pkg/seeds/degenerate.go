@@ -216,6 +216,120 @@ func CatchAllWildShedding() *genome.Genome {
 	}
 }
 
+// --- Task 28 step 4 failed-review fixtures (round 3, 2026-06-12) ---
+//
+// The three constructors below encode the round-2 flagship champions
+// (output/2026-06-12-flagship-r2) rejected at the round-3 designer review.
+// They are clones of the published genomes with ONE deliberate re-encoding:
+// each carried the catch-all wild ({type:4}, ByRank=0/BySuit=0), which is
+// Tier-0 rejected since round-3 commit 1 -- here it is re-encoded as FOUR
+// suit-bound wilds (BySuit 1-4), a SEMANTICALLY IDENTICAL union (every card
+// is wild either way; isWild ranges over all rules) that keeps the fixture
+// statically valid. That bypass is exactly why these fixtures matter: they
+// prove the DYNAMIC vetoes catch the archetype even when the static
+// catch-all rule is evaded by encoding.
+
+// ReverseLockoutShedding reproduces r2 rank03 (gen200_44517): a 4-player,
+// 11-card shedding game with every card wild and ~18 reverse cards (suit 4,
+// all Jacks, Q of clubs, 10 of hearts). Adjacent-pair reverse ping-pong
+// locks 2 of the 4 seats out of the game almost entirely (same-player runs
+// stay ~1, invisible to tempo_monopoly -- the round-3 seat_participation
+// detector encodes exactly this designer rejection).
+func ReverseLockoutShedding() *genome.Genome {
+	return &genome.Genome{
+		ID:       "reverse-lockout-shedding",
+		Skeleton: genome.Shedding,
+		Players:  4,
+		HandSize: 11,
+		Shedding: &genome.SheddingParams{
+			MatchRule:     genome.MatchEither,
+			DrawPenalty:   3,
+			RoundsPerGame: 1,
+		},
+		SpecialCards: []genome.SpecialCard{
+			// Catch-all wild, re-encoded as the four suit wilds (see above).
+			{Type: genome.SpecialWild, BySuit: 1},
+			{Type: genome.SpecialWild, BySuit: 2},
+			{Type: genome.SpecialWild, BySuit: 3},
+			{Type: genome.SpecialWild, BySuit: 4},
+			{Type: genome.SpecialDrawFour, BySuit: 1},             // clubs draw-four
+			{Type: genome.SpecialReverse, ByRank: 10, BySuit: 3},  // 10 of hearts reverses
+			{Type: genome.SpecialReverse, BySuit: 4},              // all spades reverse
+			{Type: genome.SpecialReverse, ByRank: 12, BySuit: 1},  // Q of clubs reverses
+			{Type: genome.SpecialReverse, ByRank: 11},             // all Jacks reverse
+		},
+		Scoring: genome.ScoringConfig{
+			CardPoints: []genome.CardScoring{
+				{Rank: 11, Suit: 1, Points: 15, Event: genome.ScoreOnTrickWin},
+			},
+		},
+	}
+}
+
+// HeartEngineShedding reproduces r2 rank04 (gen192_87771): a 2-player,
+// 6-card shedding game with every card wild, two draw-two suits, and a skip
+// suit. In 2-player, the draw-penalty-skip (shedding/runner.go: drawCount>0
+// advances past the victim) makes every attack card a play-again -- skilled
+// play chains attacks into tempo monopolies the random batch never finds
+// (greedy-batch detectors, round 3). Published density 0.86-0.98 via
+// inflict-vs-plain profile mixing with greedy skill 0.00.
+func HeartEngineShedding() *genome.Genome {
+	return &genome.Genome{
+		ID:       "heart-engine-shedding",
+		Skeleton: genome.Shedding,
+		Players:  2,
+		HandSize: 6,
+		Shedding: &genome.SheddingParams{
+			MatchRule:     genome.MatchEither,
+			DrawPenalty:   3,
+			RoundsPerGame: 1,
+		},
+		SpecialCards: []genome.SpecialCard{
+			// Catch-all wild, re-encoded as the four suit wilds (see above);
+			// the champion also carried an explicit suit-1 wild, subsumed.
+			{Type: genome.SpecialWild, BySuit: 1},
+			{Type: genome.SpecialWild, BySuit: 2},
+			{Type: genome.SpecialWild, BySuit: 3},
+			{Type: genome.SpecialWild, BySuit: 4},
+			{Type: genome.SpecialDrawTwo, BySuit: 2},  // diamonds draw-two
+			{Type: genome.SpecialDrawTwo, BySuit: 3},  // hearts draw-two
+			{Type: genome.SpecialSkip, BySuit: 3},     // hearts also skip
+		},
+		Scoring: genome.ScoringConfig{
+			CardPoints: []genome.CardScoring{
+				{Rank: 11, Suit: 1, Points: 15, Event: genome.ScoreOnTrickWin},
+			},
+		},
+	}
+}
+
+// PairMeldStockRummy reproduces r2 rank22 (gen200_56926): a 4-player,
+// 12-card pair-meld rummy (min_meld_size 2, DrawEither, knock 21) over a
+// 3-card stock -- the veto-adjacent cousin of round 2's PairMeldKnockRummy
+// (A3): where A3's 1-card stock pushed draw-supply churn to 0.292 (vetoed),
+// this one parks churn just UNDER the 0.10 cliff and instead rode the
+// count-based density exception (pinned 0.80 > gin 0.69). The round-3
+// deadwood-consequence probe is what kills the archetype's score.
+func PairMeldStockRummy() *genome.Genome {
+	return &genome.Genome{
+		ID:       "pair-meld-stock-rummy",
+		Skeleton: genome.Rummy,
+		Players:  4,
+		HandSize: 12,
+		Rummy: &genome.RummyParams{
+			MeldTypes:      genome.MeldSets,
+			MinMeldSize:    2,
+			DrawFrom:       genome.DrawEither,
+			KnockThreshold: 21,
+		},
+		Scoring: genome.ScoringConfig{
+			CardPoints: []genome.CardScoring{
+				{Rank: 11, Suit: 3, Points: 10, Event: genome.ScoreOnTrickWin},
+			},
+		},
+	}
+}
+
 // RejectedChampions returns the failed-review fixtures that are TIER-2 METRIC
 // ground truth: statically valid genomes the dynamic pipeline (Tier 1 +
 // degeneracy vetoes + metrics) must rank below every classic. The calibration
@@ -225,11 +339,15 @@ func CatchAllWildShedding() *genome.Genome {
 // RESTRUCTURED in round 3: fixtures whose degeneracy is now STATICALLY
 // rejected at Tier 0 (the catch-all specials) moved to CatchAllChampions --
 // a Tier-0-rejected genome never reaches the metrics, so it cannot serve as
-// metric ground truth.
+// metric ground truth. The round-3 fixtures (reverse-lockout, heart-engine,
+// pair-meld-stock) joined in flagship rank order.
 func RejectedChampions() []*genome.Genome {
 	return []*genome.Genome{
 		NoFollowAvoidanceTrick(),
 		PairMeldKnockRummy(),
+		ReverseLockoutShedding(),
+		HeartEngineShedding(),
+		PairMeldStockRummy(),
 	}
 }
 

@@ -334,6 +334,7 @@ func runSingleGame(g *genome.Genome, runner GenericRunner, ai AIPlayer, rng *ran
 
 		move := ai.SelectMove(moves, state, rng)
 		mover := state.Active
+		moverHandSize := len(state.Hands[mover])
 
 		// Choice impact (Task 28 round 2): decide BEFORE the move applies
 		// whether this decision point was meaningful -- the probes below
@@ -453,6 +454,7 @@ func runSingleGame(g *genome.Genome, runner GenericRunner, ai AIPlayer, rng *ran
 			OptionDelta: clampOptionDelta(delta),
 			Attack:      attack,
 			Meaningful:  meaningful,
+			HandSize:    capLegalMoves(moverHandSize),
 		})
 
 		// Leader after this move: argmax of Progress, -1 on a tie at the

@@ -91,6 +91,14 @@ type TurnRecord struct {
 	// count was the archetype A1/A2 inflation vector (all-wild hands and
 	// no-follow trick hands scored 0.86-0.92 with near-zero choice impact).
 	Meaningful bool
+	// HandSize is the acting player's hand size at the decision point,
+	// capped at 255 (Task 28 round 3). Together with LegalMoves it exposes
+	// rule LIVENESS to the degeneracy detectors: a shedding record with
+	// LegalMoves >= HandSize means every card in hand was playable -- when
+	// that holds on nearly every turn, the genome's match/draw rules are
+	// dynamically dead (the wild-union encodings of the r2 flagship's
+	// shedding champions; see dead_match_rule in pkg/fitness/degeneracy.go).
+	HandSize uint8
 }
 
 // EventType identifies game events for logging and fitness analysis.

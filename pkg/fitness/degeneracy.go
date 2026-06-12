@@ -59,9 +59,29 @@ const (
 	// preserving the ~2x margin on both batches.
 	degTempoMonopolyMeanRun = 6.0
 	// degRummyChurnMax: maximum share of moves with nonzero OptionDelta,
-	// rummy skeleton only. Classics 0.010 = 10x margin below; the pair-meld
-	// champion's 0.292 = 2.9x margin above.
-	degRummyChurnMax = 0.10
+	// rummy skeleton only. ROUND 3 TIGHTENING 0.10 -> 0.05, the move the
+	// round-2 hazard note pre-sanctioned ("if the next flagship's champions
+	// are veto-adjacent cousins ... tighten ONLY from new measured tables"):
+	// the r2 rank22 cousin (PairMeldStockRummy, 3-card stock) parked at a
+	// measured churn of 0.088 -- just under the old 0.10 cliff -- while the
+	// classics measure 0.011 (gin/knock, sd ~0). At 0.05 the margins are
+	// 4.5x below (classics) and 1.8x above (the parked cousin); A3's 0.293
+	// stays 5.9x above.
+	degRummyChurnMax = 0.05
+	// degDeadMatchRuleShare (round 3): maximum share of shedding decision
+	// records (HandSize >= 2) in which the WHOLE hand was legal to play
+	// (LegalMoves >= HandSize). The dynamic twin of the Tier-0 catch-all
+	// rule: a wild UNION covering the deck (e.g. four suit wilds -- the r2
+	// flagship's rank03/rank04 encodings, semantically identical to the
+	// statically rejected {ByRank:0,BySuit:0}) deletes match_rule and
+	// draw_penalty as dead genes whatever the encoding. Measured over
+	// CalibrationSeeds (calibrate r_allplay column): wild-union fixtures
+	// 1.000 flat; classic shedding maximum crazy-eights 0.033 (mau-mau
+	// 0.030, forced-shedding 0.025) -- 21x below the threshold, fixtures
+	// 1.43x above. At 0.70 the matching game must bind on at least 30% of
+	// real decision turns; genuinely wild-heavy but alive designs have
+	// enormous headroom.
+	degDeadMatchRuleShare = 0.70
 	// degSeatShareFraction (round 3): minimum mean min-seat share of turns,
 	// as a fraction of the fair share 1/numPlayers -- vetoed strictly below
 	// 0.5/numPlayers on EITHER batch. Encodes the r2 rank03 designer
@@ -112,6 +132,9 @@ func CheckDegeneracy(result sim.BatchResult, g *genome.Genome) string {
 	}
 	if meanMinSeatShare(result, g.Players) < degSeatShareFraction/float64(g.Players) {
 		return "seat_participation"
+	}
+	if g.Skeleton == genome.Shedding && allPlayableShare(result) > degDeadMatchRuleShare {
+		return "dead_match_rule"
 	}
 	if g.Skeleton == genome.Rummy && optionDeltaShare(result) > degRummyChurnMax {
 		return "draw_supply_churn"
@@ -227,6 +250,31 @@ func meanMinSeatShare(result sim.BatchResult, numPlayers int) float64 {
 		return 1
 	}
 	return sum / float64(games)
+}
+
+// allPlayableShare returns the fraction of decision records (HandSize >= 2;
+// a 1-card playable hand is "all playable" vacuously) in which the acting
+// player's whole hand was legal to play (LegalMoves >= HandSize). Shedding
+// move generation emits one MovePlay per playable card and a draw/pass only
+// when nothing is playable, so LegalMoves >= HandSize iff every card matched
+// or was wild. Records with no qualifying hands return 0 (vacuously alive).
+func allPlayableShare(result sim.BatchResult) float64 {
+	total, all := 0, 0
+	for _, turns := range result.AllTurns {
+		for _, tr := range turns {
+			if tr.HandSize < 2 {
+				continue
+			}
+			total++
+			if tr.LegalMoves >= tr.HandSize {
+				all++
+			}
+		}
+	}
+	if total == 0 {
+		return 0
+	}
+	return float64(all) / float64(total)
 }
 
 // optionDeltaShare returns the fraction of all recorded moves carrying a

@@ -50,16 +50,17 @@ type calRow struct {
 // matching vetoStats below (audit Task 28 round 3: detector thresholds are
 // derived from these numbers measured on the classics, so the calibrate
 // command must print them per genome).
-var vetoStatNames = [6]string{"r_meanrun", "r_minseat", "r_churn", "g_meanrun", "g_minseat", "g_timeout"}
+var vetoStatNames = [7]string{"r_meanrun", "r_minseat", "r_churn", "r_allplay", "g_meanrun", "g_minseat", "g_timeout"}
 
 // vetoStats extracts the detector statistics from one evaluation. The greedy
 // columns are only present when the greedy batch ran (greedyRan false on
 // random-batch vetoes and Tier 1 kills).
-func vetoStats(d fitness.DegeneracyStats) [6]float64 {
-	return [6]float64{
+func vetoStats(d fitness.DegeneracyStats) [7]float64 {
+	return [7]float64{
 		d.RandomMeanRun,
 		d.RandomMinSeatShare,
 		d.RandomDeltaShare,
+		d.RandomAllPlayable,
 		d.GreedyMeanRun,
 		d.GreedyMinSeatShare,
 		d.GreedyTimeoutShare,
@@ -74,7 +75,7 @@ type vetoRow struct {
 	players       int
 	randomSamples int
 	greedySamples int
-	means         [6]float64
+	means         [7]float64
 }
 
 // aggregateVetoRow averages each statistic over its available samples
@@ -91,22 +92,22 @@ func aggregateVetoRow(id string, players int, stats []fitness.DegeneracyStats) v
 	row.greedySamples = len(greedy)
 	for _, d := range stats {
 		s := vetoStats(d)
-		for k := 0; k < 3; k++ {
+		for k := 0; k < 4; k++ {
 			row.means[k] += s[k]
 		}
 	}
-	for k := 0; k < 3; k++ {
+	for k := 0; k < 4; k++ {
 		if len(stats) > 0 {
 			row.means[k] /= float64(len(stats))
 		}
 	}
 	for _, d := range greedy {
 		s := vetoStats(d)
-		for k := 3; k < 6; k++ {
+		for k := 4; k < 7; k++ {
 			row.means[k] += s[k]
 		}
 	}
-	for k := 3; k < 6; k++ {
+	for k := 4; k < 7; k++ {
 		if len(greedy) > 0 {
 			row.means[k] /= float64(len(greedy))
 		}
@@ -123,7 +124,7 @@ func printVetoTable(w io.Writer, rows []vetoRow) {
 		fmt.Fprintf(w, " %-14s", name)
 	}
 	fmt.Fprintln(w)
-	fmt.Fprintln(w, strings.Repeat("-", 22+1+7+1+9+6*15))
+	fmt.Fprintln(w, strings.Repeat("-", 22+1+7+1+9+7*15))
 	for _, r := range rows {
 		fmt.Fprintf(w, "%-22s %-7s %-9d", r.id,
 			fmt.Sprintf("%d/%d", r.randomSamples, r.greedySamples), r.players)
@@ -131,7 +132,7 @@ func printVetoTable(w io.Writer, rows []vetoRow) {
 		for k, name := range vetoStatNames {
 			cell := "n/a"
 			n := r.randomSamples
-			if k >= 3 {
+			if k >= 4 {
 				n = r.greedySamples
 			}
 			if n > 0 {
@@ -258,8 +259,8 @@ func cmdCalibrate(args []string) {
 	printCalibrationTable(os.Stdout, rows)
 
 	fmt.Printf("\nDegeneracy-detector statistics (means over evals reaching Tier 2; vetoed evals included).\n")
-	fmt.Printf("Thresholds: meanrun > 6 vetoes; minseat < 0.50x fair share vetoes; churn > 0.10 vetoes (rummy);\n")
-	fmt.Printf("g_timeout > 0.10 vetoes. r_ = random batch, g_ = greedy batch.\n\n")
+	fmt.Printf("Thresholds: meanrun > 6 vetoes; minseat < 0.50x fair share vetoes; churn > 0.05 vetoes (rummy);\n")
+	fmt.Printf("allplay > 0.70 vetoes (shedding); g_timeout > 0.10 vetoes. r_ = random, g_ = greedy batch.\n\n")
 	printVetoTable(os.Stdout, vetoRows)
 
 	if len(kills) > 0 {
@@ -269,6 +270,6 @@ func cmdCalibrate(args []string) {
 		}
 	}
 
-	fmt.Printf("\nThroughput: %d games in %s = %.0f games/sec (single-threaded)\n",
+	fmt.Printf("\nThroughput: %d games in %s = %.0f games/sec (one calibrate process; batches use Wave I game-parallelism)\n",
 		totalGames, elapsed.Round(time.Millisecond), float64(totalGames)/elapsed.Seconds())
 }

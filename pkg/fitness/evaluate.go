@@ -54,6 +54,7 @@ type DegeneracyStats struct {
 	RandomMeanRun      float64 // mean consecutive same-player run, random batch
 	RandomMinSeatShare float64 // mean min-seat turn share, random batch
 	RandomDeltaShare   float64 // share of moves with nonzero OptionDelta (rummy churn)
+	RandomAllPlayable  float64 // share of HandSize>=2 records with the whole hand playable (shedding dead_match_rule)
 	GreedyMeanRun      float64 // mean consecutive same-player run, greedy batch
 	GreedyMinSeatShare float64 // mean min-seat turn share, greedy batch
 	GreedyTimeoutShare float64 // share of greedy-batch games hitting the turn cap
@@ -132,6 +133,7 @@ func evaluate(g *genome.Genome, baseSeed uint64, mcts *MCTSEvalConfig) Evaluatio
 	result.Degeneracy.RandomMeanRun = meanConsecutiveRun(randomResult)
 	result.Degeneracy.RandomMinSeatShare = meanMinSeatShare(randomResult, g.Players)
 	result.Degeneracy.RandomDeltaShare = optionDeltaShare(randomResult)
+	result.Degeneracy.RandomAllPlayable = allPlayableShare(randomResult)
 	if reason := CheckDegeneracy(randomResult, g); reason != "" {
 		result.DegenerateReason = reason
 		// No greedy batch for a dead genome: metrics are reported for
