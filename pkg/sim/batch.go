@@ -19,6 +19,13 @@ type BatchResult struct {
 	AvgTurns    float64
 	TurnsList   []int     // All turn counts for distribution analysis
 	AllEvents   [][]Event // Events from each game (for fitness analysis)
+	// AllTurns holds each game's per-move TurnRecords, parallel to AllEvents
+	// (audit Task 7).
+	AllTurns [][]TurnRecord
+	// AllLeaders holds each game's per-move leader track, parallel to
+	// AllEvents. Entries stay nil until Task 8 (progress tracking) fills
+	// GameResult.Leaders.
+	AllLeaders [][]int8
 }
 
 // GenericRunner is the interface all skeleton runners implement.
@@ -45,6 +52,9 @@ func RunBatch(g *genome.Genome, runner GenericRunner, ai AIPlayer, n int, baseSe
 		GamesPlayed: n,
 		WinCounts:   make([]int, g.Players),
 		TurnsList:   make([]int, 0, n),
+		AllEvents:   make([][]Event, 0, n),
+		AllTurns:    make([][]TurnRecord, 0, n),
+		AllLeaders:  make([][]int8, 0, n),
 	}
 
 	maxTurns := g.MaxTurns()
@@ -75,6 +85,8 @@ func RunBatch(g *genome.Genome, runner GenericRunner, ai AIPlayer, n int, baseSe
 		}
 
 		result.AllEvents = append(result.AllEvents, gr.Events)
+		result.AllTurns = append(result.AllTurns, gr.TurnRecords)
+		result.AllLeaders = append(result.AllLeaders, gr.Leaders)
 	}
 
 	if n > 0 {
@@ -98,33 +110,45 @@ func runSingleGame(g *genome.Genome, runner GenericRunner, ai AIPlayer, rng *ran
 	}
 	iter := 0
 
+	// Per-turn decision recording (audit Task 7). The baseline slice is
+	// reused across the whole game to keep the hot loop allocation-free.
+	mode := optionDeltaModeFor(g)
+	var baseline []int
+	if mode == deltaModeShedding {
+		baseline = make([]int, state.NumPlayers)
+	}
+	records := make([]TurnRecord, 0, 64)
+
 	for {
 		runner.Upkeep(state, g)
 
 		winner := runner.CheckEnd(state, g)
 		if winner >= 0 {
 			return GameResult{
-				Winner: winner,
-				Turns:  state.Turn,
-				Events: state.Events,
+				Winner:      winner,
+				Turns:       state.Turn,
+				Events:      state.Events,
+				TurnRecords: records,
 			}
 		}
 
 		if state.Turn >= maxTurns {
 			return GameResult{
-				Winner: -1,
-				Turns:  state.Turn,
-				Events: state.Events,
-				Error:  "max_turns",
+				Winner:      -1,
+				Turns:       state.Turn,
+				Events:      state.Events,
+				Error:       "max_turns",
+				TurnRecords: records,
 			}
 		}
 
 		if iter >= iterCap {
 			return GameResult{
-				Winner: -1,
-				Turns:  state.Turn,
-				Events: state.Events,
-				Error:  "stuck",
+				Winner:      -1,
+				Turns:       state.Turn,
+				Events:      state.Events,
+				Error:       "stuck",
+				TurnRecords: records,
 			}
 		}
 		iter++
@@ -132,16 +156,78 @@ func runSingleGame(g *genome.Genome, runner GenericRunner, ai AIPlayer, rng *ran
 		moves := runner.GenerateMoves(state, g)
 		if len(moves) == 0 {
 			return GameResult{
-				Winner: -1,
-				Turns:  state.Turn,
-				Events: state.Events,
-				Error:  "no_moves",
+				Winner:      -1,
+				Turns:       state.Turn,
+				Events:      state.Events,
+				Error:       "no_moves",
+				TurnRecords: records,
 			}
 		}
 
 		move := ai.SelectMove(moves, state, rng)
+		mover := state.Active
+
+		// Pre-move option baselines. GenerateMoves is pure (audit Task 3),
+		// so probing other players via an Active swap cannot disturb the game.
+		var rummyNext, rummyBaseline int
+		switch mode {
+		case deltaModeShedding:
+			// Specials (skip/reverse/draw) make the next actor unpredictable
+			// before ApplyMove, so capture every player's baseline. The
+			// mover's baseline is the move list already in hand.
+			for p := 0; p < state.NumPlayers; p++ {
+				if p == mover {
+					baseline[p] = len(moves)
+					continue
+				}
+				baseline[p] = probeOptionCount(runner, state, g, p)
+			}
+		case deltaModeRummy:
+			// Only MoveDiscard hands the turn to a next player (draw/meld/
+			// pass stay with the mover, and self-perturbation is not
+			// coupling), so only discards can carry a nonzero delta. The
+			// discard leaves the next player's hand untouched, so the meld
+			// and discard components of their option union cancel exactly:
+			// the union delta reduces to the draw-phase difference, which is
+			// all we probe (a full union probe per move runs meld generation
+			// and was a 4x batch slowdown).
+			rummyNext = -1
+			if move.Type == MoveDiscard {
+				rummyNext = peekNextPlayer(state)
+				rummyBaseline = probePhaseOptionCount(runner, state, g, rummyNext, PhaseDraw)
+			}
+		}
+
 		events := runner.ApplyMove(state, move, g)
 		state.Events = append(state.Events, events...)
+
+		// Post-move option count for the actual next actor. Skipped when the
+		// move ended the game (CheckEnd is pure): there is no next turn to
+		// perturb, and probing terminal states is meaningless.
+		delta := 0
+		if mode != deltaModeNone && runner.CheckEnd(state, g) < 0 {
+			next := state.Active
+			switch mode {
+			case deltaModeShedding:
+				after := probeOptionCount(runner, state, g, next)
+				if after >= 0 && baseline[next] >= 0 {
+					delta = after - baseline[next]
+				}
+			case deltaModeRummy:
+				if next == rummyNext && rummyBaseline >= 0 {
+					after := probePhaseOptionCount(runner, state, g, next, PhaseDraw)
+					if after >= 0 {
+						delta = after - rummyBaseline
+					}
+				}
+			}
+		}
+
+		records = append(records, TurnRecord{
+			Player:      mover,
+			LegalMoves:  capLegalMoves(len(moves)),
+			OptionDelta: clampOptionDelta(delta),
+		})
 
 		// Run hooks after each move
 		for _, event := range events {
@@ -150,4 +236,112 @@ func runSingleGame(g *genome.Genome, runner GenericRunner, ai AIPlayer, rng *ran
 			}
 		}
 	}
+}
+
+// optionDeltaMode selects the per-skeleton OptionDelta semantics. The
+// definitions are fixed by the table in
+// docs/plans/2026-06-11-audit-remediation.md (Task 7); do not improvise new
+// ones in code.
+type optionDeltaMode uint8
+
+const (
+	// deltaModeNone: OptionDelta is always 0. Trick-taking BY DESIGN:
+	// follow-suit legality depends on the led card, which the *acting*
+	// player sets, so "what could the next player have done otherwise" is
+	// counterfactually ill-defined mid-trick. Interaction signal for
+	// trick-taking comes from EventTrickWon and special events instead.
+	// Unknown skeletons also record 0 (never crash, never guess).
+	deltaModeNone optionDeltaMode = iota
+	// deltaModeShedding: options(p) = legal plays+draw for p against the
+	// discard top (one pure GenerateMoves probe; the discard top is the
+	// entire coupling surface).
+	deltaModeShedding
+	// deltaModeRummy: options(p) = legal draws + melds + discards for p, the
+	// union across the three turn phases (per the Task 7 table; a
+	// single-phase reading would compare counts across different phases and
+	// every discard would score drawOptions-discardOptions of pure phase
+	// noise). Deltas attach only to the turn-passing move (MoveDiscard):
+	// draw/meld/pass keep the mover acting, and self-perturbation is not
+	// coupling -- the coupling surface is the discard top + table melds.
+	// Implementation note: a discard does not touch the next player's hand,
+	// and the meld + discard components of their union depend only on that
+	// hand, so before/after they cancel exactly and the union delta equals
+	// the draw-phase delta. The loop therefore probes only PhaseDraw. If a
+	// future mechanic lets a discard change the next player's meld or
+	// discard options (e.g. laying off on table melds), this cancellation
+	// no longer holds and the probe must widen back to the full union.
+	deltaModeRummy
+)
+
+func optionDeltaModeFor(g *genome.Genome) optionDeltaMode {
+	switch g.Skeleton {
+	case genome.Shedding:
+		return deltaModeShedding
+	case genome.Rummy:
+		return deltaModeRummy
+	default:
+		return deltaModeNone
+	}
+}
+
+// probeOptionCount returns how many legal moves player p would have in the
+// given state, by temporarily retargeting state.Active. GenerateMoves is pure
+// (audit Task 3), so swap+restore leaves the state bit-identical. Returns -1
+// if the runner panics on an out-of-turn probe: per Task 7, a skeleton whose
+// move generation cannot be probed degrades to OptionDelta 0 -- a batch
+// worker must never crash on instrumentation.
+func probeOptionCount(runner GenericRunner, state *GameState, g *genome.Genome, p int) (n int) {
+	prevActive := state.Active
+	defer func() {
+		state.Active = prevActive
+		if recover() != nil {
+			n = -1
+		}
+	}()
+	state.Active = p
+	return len(runner.GenerateMoves(state, g))
+}
+
+// probePhaseOptionCount returns how many legal moves player p would have in
+// the given state at the given phase (rummy's GenerateMoves switches on
+// state.Phase). Swap+restore is safe because GenerateMoves is pure; returns
+// -1 on probe panic, like probeOptionCount.
+func probePhaseOptionCount(runner GenericRunner, state *GameState, g *genome.Genome, p int, phase PhaseType) (n int) {
+	prevActive, prevPhase := state.Active, state.Phase
+	defer func() {
+		state.Active, state.Phase = prevActive, prevPhase
+		if recover() != nil {
+			n = -1
+		}
+	}()
+	state.Active = p
+	state.Phase = phase
+	return len(runner.GenerateMoves(state, g))
+}
+
+// peekNextPlayer returns the player after Active in the current play
+// direction without mutating state (mirrors GameState.NextPlayer).
+func peekNextPlayer(state *GameState) int {
+	dir := state.Direction
+	if dir == 0 {
+		dir = 1
+	}
+	return ((state.Active+dir)%state.NumPlayers + state.NumPlayers) % state.NumPlayers
+}
+
+func capLegalMoves(n int) uint8 {
+	if n > 255 {
+		return 255
+	}
+	return uint8(n)
+}
+
+func clampOptionDelta(d int) int8 {
+	if d > 127 {
+		return 127
+	}
+	if d < -128 {
+		return -128
+	}
+	return int8(d)
 }

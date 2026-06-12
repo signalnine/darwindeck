@@ -33,6 +33,19 @@ type Move struct {
 	PlayerID int
 }
 
+// TurnRecord captures per-turn decision data for fitness analysis (audit
+// Task 7). The batch runner appends exactly one record per applied move.
+type TurnRecord struct {
+	Player     int   // Acting player at the decision point
+	LegalMoves uint8 // Legal moves available to the acting player, capped at 255
+	// OptionDelta is the change in the next actor's legal-move count caused
+	// by this move: options(next, post-move) - options(next, pre-move).
+	// Semantics are defined PER SKELETON (see the table in
+	// docs/plans/2026-06-11-audit-remediation.md Task 7 and the probe helpers
+	// in batch.go); trick-taking is always 0 by design.
+	OptionDelta int8
+}
+
 // EventType identifies game events for logging and fitness analysis.
 type EventType uint8
 
