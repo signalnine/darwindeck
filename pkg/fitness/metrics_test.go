@@ -685,6 +685,44 @@ func TestInteractionTrickAttackTurnsCount(t *testing.T) {
 	}
 }
 
+// TestInteractionCollapsesOnTwoPlayerSelfSkip (Task 28 round 2, interaction
+// fix): the archetype-A1 engine distilled -- a 2-player shedding genome where
+// every card is wild AND every play skips. The mover plays their entire hand
+// while the opponent spectates; nothing any player does ever touches the
+// other. Hand-computed expectation: every turn is a self-skip play (no
+// attack at 2p, next actor == mover so no coupling delta) => interaction is
+// EXACTLY 0. Before the fix this shape scored 1.00 (every play emitted a
+// "skip" attack event and the self-probe registered the mover's own hand
+// shrinking).
+func TestInteractionCollapsesOnTwoPlayerSelfSkip(t *testing.T) {
+	g := &genome.Genome{
+		Skeleton: genome.Shedding,
+		Players:  2,
+		HandSize: 5,
+		Shedding: &genome.SheddingParams{MatchRule: genome.MatchEither, DrawPenalty: 1},
+		SpecialCards: []genome.SpecialCard{
+			{Type: genome.SpecialSkip}, // catch-all skip
+			{Type: genome.SpecialWild}, // catch-all wild
+		},
+	}
+	result := sim.RunBatch(g, GetRunner(g), &sim.RandomAI{}, 20, 11)
+	if result.Completions == 0 {
+		t.Fatal("premise broken: all-wild shedding games must complete")
+	}
+	if got := computeInteraction(result); got != 0 {
+		t.Fatalf("2p self-skip game must score interaction 0 (self-tempo, no coupling), got %.3f", got)
+	}
+
+	// Same genome at 4 players: skips now cost real turns, every play is an
+	// attack, so interaction must saturate, not collapse.
+	g4 := *g
+	g4.Players = 4
+	result4 := sim.RunBatch(&g4, GetRunner(&g4), &sim.RandomAI{}, 20, 11)
+	if got := computeInteraction(result4); got < 0.9 {
+		t.Fatalf("4p catch-all skip must stay highly interactive, got %.3f", got)
+	}
+}
+
 // TestInteractionNonAttackEventsDoNotCount: only the opponent-affecting
 // special details emitted by the shedding runner (skip, draw_two, draw_four,
 // reverse) and EventTrickWon flag a turn as an attack (sim.IsAttackEvent, the
@@ -703,7 +741,7 @@ func TestInteractionNonAttackEventsDoNotCount(t *testing.T) {
 		{Type: sim.EventRoundEnd, PlayerID: 1, Detail: "gin"},
 	}
 	for _, e := range events {
-		if sim.IsAttackEvent(e) {
+		if sim.IsAttackEvent(e, 4) {
 			t.Fatalf("whitelist regression: %v must not be an attack event", e)
 		}
 	}

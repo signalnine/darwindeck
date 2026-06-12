@@ -75,9 +75,10 @@ type TurnRecord struct {
 	// lead imposes on the follower (<= 0).
 	OptionDelta int8
 	// Attack is true iff this move emitted at least one attack event
-	// (IsAttackEvent: EventTrickWon, or EventSpecialTriggered with an
-	// opponent-affecting detail). Set at record time by the batch runner so a
-	// stacked special -- one card matching skip+reverse+draw rules emits up
+	// (IsAttackEvent: EventTrickWon, a draw-penalty special at any player
+	// count, or a skip/reverse with more than 2 players -- in 2p those are
+	// self-tempo, Task 28 round 2). Set at record time by the batch runner so
+	// a stacked special -- one card matching skip+reverse+draw rules emits up
 	// to 3 attack events -- still counts as exactly ONE interactive turn
 	// (audit Wave D fix 3).
 	Attack bool
@@ -103,29 +104,34 @@ type Event struct {
 	Detail   string
 }
 
-// attackSpecialDetails enumerates the EventSpecialTriggered Detail strings
-// that directly affect an opponent. This is the complete set the shedding
-// runner's applySpecialEffects emits (the only EventSpecialTriggered emitter
-// in the codebase): draw penalties inflicted on the next player, a skip, and
-// a reverse. A future self-targeted special (e.g. a wild-suit choice) must
-// NOT be added here. SINGLE SOURCE OF TRUTH: fitness consumes attacks via
-// TurnRecord.Attack / IsAttackEvent -- do not duplicate this whitelist
-// elsewhere (audit Wave D fix 3).
-var attackSpecialDetails = map[string]bool{
-	"skip":      true,
-	"draw_two":  true,
-	"draw_four": true,
-	"reverse":   true,
-}
-
 // IsAttackEvent reports whether e is a direct attack on an opponent: a trick
-// win, or a special trigger with an opponent-affecting detail.
-func IsAttackEvent(e Event) bool {
+// win, a draw-penalty special, or -- with more than 2 players -- a skip or
+// reverse. The Detail whitelist is the complete set the shedding runner's
+// applySpecialEffects emits (the only EventSpecialTriggered emitter in the
+// codebase); a future self-targeted special (e.g. a wild-suit choice) must
+// NOT be added. SINGLE SOURCE OF TRUTH: fitness consumes attacks via
+// TurnRecord.Attack, set at record time from this predicate -- do not
+// duplicate the whitelist elsewhere (audit Wave D fix 3).
+//
+// numPlayers gates the tempo specials (Task 28 round 2, archetype A1): in a
+// 2-player game skip and reverse both collapse to "the mover plays again" --
+// pure self-tempo. The nominal victim loses nothing: no cards, no score, and
+// the game state they eventually act on is exactly the one the mover leaves
+// behind either way. Counting those as attacks pinned the catch-all-skip
+// champion's interaction at 1.00 while its opponent literally spectated.
+// Draw penalties (draw_two/draw_four) mutate the victim's hand and remain
+// attacks at every player count.
+func IsAttackEvent(e Event, numPlayers int) bool {
 	switch e.Type {
 	case EventTrickWon:
 		return true
 	case EventSpecialTriggered:
-		return attackSpecialDetails[e.Detail]
+		switch e.Detail {
+		case "draw_two", "draw_four":
+			return true
+		case "skip", "reverse":
+			return numPlayers > 2
+		}
 	}
 	return false
 }

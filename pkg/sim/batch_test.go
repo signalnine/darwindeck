@@ -468,7 +468,7 @@ func TestBatchStackedSpecialsAreOneAttackTurn(t *testing.T) {
 	events := result.AllEvents[0]
 	attackEvents := 0
 	for _, e := range events {
-		if sim.IsAttackEvent(e) {
+		if sim.IsAttackEvent(e, 3) {
 			attackEvents++
 		}
 	}
@@ -482,6 +482,92 @@ func TestBatchStackedSpecialsAreOneAttackTurn(t *testing.T) {
 	}
 	if !turns[0].Attack {
 		t.Errorf("stacked-special move must record Attack = true")
+	}
+}
+
+// catchAllSkipWild returns a shedding genome whose specials are a CATCH-ALL
+// skip plus a catch-all wild: every card is always playable and every play
+// skips the next player. At 2 players that means the mover simply plays
+// again until their hand empties -- the archetype-A1 self-tempo engine
+// (Task 28 round-2 fixture CatchAllSkipShedding, distilled).
+func catchAllSkipWild(players int) *genome.Genome {
+	return &genome.Genome{
+		Skeleton: genome.Shedding,
+		Players:  players,
+		HandSize: 3,
+		Shedding: &genome.SheddingParams{MatchRule: genome.MatchEither, DrawPenalty: 1},
+		SpecialCards: []genome.SpecialCard{
+			{Type: genome.SpecialSkip}, // ByRank 0 / BySuit 0: matches EVERY card
+			{Type: genome.SpecialWild},
+		},
+	}
+}
+
+// TestBatch2PSelfSkipIsNotAttackAndNoSelfDelta (Task 28 round 2, interaction
+// fix): in a 2-player game a skip is self-tempo -- the mover plays again and
+// the "victim" loses nothing -- so it must NOT set TurnRecord.Attack, and the
+// post-move option probe lands on the MOVER (the next actor), which is
+// self-perturbation, not coupling: OptionDelta must stay 0. Before the fix
+// this exact shape pinned interaction at 1.00 (flagship ranks 1-10).
+func TestBatch2PSelfSkipIsNotAttackAndNoSelfDelta(t *testing.T) {
+	result := sim.RunBatch(catchAllSkipWild(2), &shedding.Runner{}, &sim.RandomAI{}, 10, 1)
+	if result.Completions == 0 {
+		t.Fatal("premise broken: all-wild shedding games must complete")
+	}
+	for i, turns := range result.AllTurns {
+		for j, tr := range turns {
+			if tr.Attack {
+				t.Fatalf("game %d turn %d: 2p skip recorded Attack = true (self-tempo is not an attack)", i, j)
+			}
+			if tr.OptionDelta != 0 {
+				t.Fatalf("game %d turn %d: OptionDelta = %d, want 0 (next actor is the mover; self-perturbation is not coupling)",
+					i, j, tr.OptionDelta)
+			}
+		}
+	}
+}
+
+// TestBatch4PSkipStillAttack: with more than 2 players a skip genuinely costs
+// the victim a turn while play moves on without them -- it stays an attack.
+func TestBatch4PSkipStillAttack(t *testing.T) {
+	result := sim.RunBatch(catchAllSkipWild(4), &shedding.Runner{}, &sim.RandomAI{}, 5, 1)
+	attacks := 0
+	for _, turns := range result.AllTurns {
+		for _, tr := range turns {
+			if tr.Attack {
+				attacks++
+			}
+		}
+	}
+	if attacks == 0 {
+		t.Fatal("4p skip must still record Attack = true on skip-playing turns")
+	}
+}
+
+// TestBatch2PDrawTwoStillAttack: draw penalties mutate the victim's hand at
+// ANY player count -- a 2-player draw-two is a real attack, unlike a skip.
+func TestBatch2PDrawTwoStillAttack(t *testing.T) {
+	g := &genome.Genome{
+		Skeleton: genome.Shedding,
+		Players:  2,
+		HandSize: 3,
+		Shedding: &genome.SheddingParams{MatchRule: genome.MatchEither, DrawPenalty: 1},
+		SpecialCards: []genome.SpecialCard{
+			{Type: genome.SpecialDrawTwo}, // catch-all: every play inflicts draw-two
+			{Type: genome.SpecialWild},
+		},
+	}
+	result := sim.RunBatch(g, &shedding.Runner{}, &sim.RandomAI{}, 5, 1)
+	attacks := 0
+	for _, turns := range result.AllTurns {
+		for _, tr := range turns {
+			if tr.Attack {
+				attacks++
+			}
+		}
+	}
+	if attacks == 0 {
+		t.Fatal("2p draw-two must still record Attack = true (the victim's hand grows)")
 	}
 }
 

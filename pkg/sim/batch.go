@@ -253,9 +253,19 @@ func runSingleGame(g *genome.Genome, runner GenericRunner, ai AIPlayer, rng *ran
 			next := state.Active
 			switch mode {
 			case deltaModeShedding:
-				after := probeOptionCount(runner, state, g, next)
-				if after >= 0 && baseline[next] >= 0 {
-					delta = after - baseline[next]
+				// Self-perturbation is not coupling (the rummy mode's rule,
+				// applied here too -- Task 28 round 2, archetype A1): when a
+				// skip/reverse hands the turn straight back to the mover, the
+				// probe would measure the mover's own hand shrinking, which
+				// pinned the catch-all-skip champion's interaction at 1.00.
+				// The opponent's coupling delta is still measured on the move
+				// that finally passes them the turn (their baseline refreshes
+				// every iteration).
+				if next != mover {
+					after := probeOptionCount(runner, state, g, next)
+					if after >= 0 && baseline[next] >= 0 {
+						delta = after - baseline[next]
+					}
 				}
 			case deltaModeRummy:
 				if next == rummyNext && rummyBaseline >= 0 {
@@ -284,7 +294,7 @@ func runSingleGame(g *genome.Genome, runner GenericRunner, ai AIPlayer, rng *ran
 		// (audit Wave D fix 3).
 		attack := false
 		for _, event := range events {
-			if IsAttackEvent(event) {
+			if IsAttackEvent(event, state.NumPlayers) {
 				attack = true
 				break
 			}
