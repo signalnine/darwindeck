@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"runtime"
+	"sort"
 	"sync"
 
 	"github.com/darwindeck/darwindeck/pkg/fitness"
@@ -353,11 +354,20 @@ func (e *MAPElitesEngine) totalStats() (int, float64) {
 // AllQualified returns the archive occupants that meet the FitnessFloor.
 // Admission is floor-free (see insert), so the archive may hold sub-floor
 // stepping stones; output keeps the floor so they are never published.
+//
+// Byte-identical genomes occupying multiple cells are deduplicated by
+// genomeHash, keeping the best-fitness occupant (Task 28 round 2: the
+// flagship published clone groups under distinct IDs).
 func (e *MAPElitesEngine) AllQualified() []*Individual {
 	// Iterate skeletons in a stable order so seeded runs are reproducible;
 	// Go map iteration order is randomized per process and would otherwise
 	// shuffle the output across runs with the same seed.
-	var result []*Individual
+	type entry struct {
+		ind   *Individual
+		order int
+	}
+	best := make(map[string]*entry)
+	order := 0
 	for _, skel := range []genome.SkeletonType{genome.Shedding, genome.TrickTaking, genome.Rummy} {
 		archive, ok := e.Archives[skel]
 		if !ok {
@@ -365,11 +375,31 @@ func (e *MAPElitesEngine) AllQualified() []*Individual {
 		}
 		for r := 0; r < GridSize; r++ {
 			for c := 0; c < GridSize; c++ {
-				if cell := archive.Cells[r][c]; cell != nil && cell.Individual.Fitness.TotalFitness >= FitnessFloor {
-					result = append(result, cell.Individual)
+				cell := archive.Cells[r][c]
+				if cell == nil || cell.Individual.Fitness.TotalFitness < FitnessFloor {
+					continue
 				}
+				hash := genomeHash(cell.Individual.Genome)
+				if cur, ok := best[hash]; ok {
+					if cell.Individual.Fitness.TotalFitness > cur.ind.Fitness.TotalFitness {
+						cur.ind = cell.Individual // keep first-seen order
+					}
+					continue
+				}
+				best[hash] = &entry{ind: cell.Individual, order: order}
+				order++
 			}
 		}
+	}
+
+	entries := make([]*entry, 0, len(best))
+	for _, en := range best {
+		entries = append(entries, en)
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].order < entries[j].order })
+	result := make([]*Individual, 0, len(entries))
+	for _, en := range entries {
+		result = append(result, en.ind)
 	}
 	return result
 }

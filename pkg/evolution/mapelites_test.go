@@ -23,9 +23,14 @@ func TestAllQualifiedDeterministicOrder(t *testing.T) {
 	// so we can observe ordering. Use cells in different (r, c) positions
 	// to also exercise the inner row-major iteration. Fixtures carry an
 	// above-floor fitness because AllQualified now floor-filters output
-	// (archive ADMISSION is floor-free; see TestInsertAdmitsBelowFloor).
+	// (archive ADMISSION is floor-free; see TestInsertAdmitsBelowFloor),
+	// and CONTENT-DISTINCT genomes (varying HandSize) because AllQualified
+	// also dedups byte-identical genomes by hash (Task 28 round 2) -- this
+	// test is about ordering, not the dedup.
+	handSize := 3
 	populate := func(skel genome.SkeletonType, r, c int, id string) {
-		g := &genome.Genome{ID: id, Skeleton: skel}
+		g := &genome.Genome{ID: id, Skeleton: skel, HandSize: handSize}
+		handSize++
 		e.Archives[skel].Cells[r][c] = &ArchiveCell{
 			Individual: &Individual{Genome: g, Valid: true,
 				Fitness: fitness.Metrics{TotalFitness: FitnessFloor + 0.1}},
@@ -95,8 +100,11 @@ func TestAllQualifiedRowMajorWithinArchive(t *testing.T) {
 		{0, 0, "a"},
 		{2, 5, "b"},
 	}
-	for _, c := range cells {
-		g := &genome.Genome{ID: c.id, Skeleton: genome.Shedding}
+	// Content-distinct genomes (varying HandSize): AllQualified dedups
+	// byte-identical genomes by hash (Task 28 round 2), and this test is
+	// about row-major ordering, not the dedup.
+	for i, c := range cells {
+		g := &genome.Genome{ID: c.id, Skeleton: genome.Shedding, HandSize: 3 + i}
 		e.Archives[genome.Shedding].Cells[c.r][c.c] = &ArchiveCell{
 			Individual: &Individual{Genome: g, Valid: true,
 				Fitness: fitness.Metrics{TotalFitness: FitnessFloor + 0.1}},

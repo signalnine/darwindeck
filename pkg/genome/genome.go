@@ -327,7 +327,15 @@ type Genome struct {
 	ID         string       `json:"id"`
 	Generation int          `json:"generation"`
 	Skeleton   SkeletonType `json:"skeleton"`
-	Fitness    float64      `json:"fitness,omitempty"`
+	// Fitness is the RAW TotalFitness (the value report.md shows). It must
+	// never hold a sharing/novelty-blended score: the published genome.json
+	// used to store SharedFitness here while report.md showed raw fitness,
+	// and the two contradicted each other (0.41 vs 0.94 -- Task 28 round 2).
+	Fitness float64 `json:"fitness,omitempty"`
+	// SharedFitness is the niche-sharing/novelty-blended selection score, an
+	// explicit separate field so the blend is visible without ever
+	// masquerading as fitness.
+	SharedFitness float64 `json:"shared_fitness,omitempty"`
 
 	// Shared parameters
 	Players  int `json:"players"`   // 2-6

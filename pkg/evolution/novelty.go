@@ -369,7 +369,13 @@ func (e *NoveltyEngine) computeNovelty() {
 		}
 
 		ind.Fitness.SharedFitness = combined
-		ind.Genome.Fitness = ind.Fitness.SharedFitness
+		// genome.json contract (Task 28 round 2): Fitness stays the RAW
+		// TotalFitness report.md shows; the novelty-blended selection score
+		// goes to the explicit SharedFitness field. The flagship published
+		// genome.json files whose blended 0.41-class "fitness" contradicted
+		// their own report.md's 0.94-class raw value.
+		ind.Genome.Fitness = ind.Fitness.TotalFitness
+		ind.Genome.SharedFitness = ind.Fitness.SharedFitness
 	}
 
 	// Archive admission (audit Task 18): absolute distance threshold,
@@ -501,30 +507,54 @@ func (e *NoveltyEngine) tournament() *NoveltyIndividual {
 }
 
 // AllQualified returns all individuals meeting the fitness floor.
+//
+// Byte-identical genomes are deduplicated by genomeHash, keeping each clone
+// group's best-fitness member (Task 28 round 2: ID-only dedup let the
+// flagship publish a 6-way clone group under distinct IDs). Behaviors stay
+// parallel to individuals throughout.
 func (e *NoveltyEngine) AllQualified() ([]*Individual, []BehaviorDescriptor) {
-	var individuals []*Individual
-	var behaviors []BehaviorDescriptor
+	type entry struct {
+		ind      *Individual
+		behavior BehaviorDescriptor
+		order    int // first-seen position, for stable output order
+	}
+	best := make(map[string]*entry)
+	order := 0
 
-	// From population
+	add := func(ind *Individual, b BehaviorDescriptor) {
+		hash := genomeHash(ind.Genome)
+		if cur, ok := best[hash]; ok {
+			if ind.Fitness.TotalFitness > cur.ind.Fitness.TotalFitness {
+				cur.ind, cur.behavior = ind, b // keep first-seen order
+			}
+			return
+		}
+		best[hash] = &entry{ind: ind, behavior: b, order: order}
+		order++
+	}
+
 	for _, ind := range e.Population {
 		if ind.Valid && ind.Fitness.TotalFitness >= FitnessFloor {
-			individuals = append(individuals, &ind.Individual)
-			behaviors = append(behaviors, ind.Behavior)
+			add(&ind.Individual, ind.Behavior)
 		}
-	}
-
-	// From archive (deduplicate by genome ID)
-	seen := make(map[string]bool)
-	for _, ind := range individuals {
-		seen[ind.Genome.ID] = true
 	}
 	for _, arch := range e.Archive {
-		if !seen[arch.Genome.ID] && arch.Fitness.TotalFitness >= FitnessFloor {
-			individuals = append(individuals, &arch.Individual)
-			behaviors = append(behaviors, arch.Behavior)
-			seen[arch.Genome.ID] = true
+		if arch.Fitness.TotalFitness >= FitnessFloor {
+			add(&arch.Individual, arch.Behavior)
 		}
 	}
 
+	entries := make([]*entry, 0, len(best))
+	for _, en := range best {
+		entries = append(entries, en)
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].order < entries[j].order })
+
+	individuals := make([]*Individual, 0, len(entries))
+	behaviors := make([]BehaviorDescriptor, 0, len(entries))
+	for _, en := range entries {
+		individuals = append(individuals, en.ind)
+		behaviors = append(behaviors, en.behavior)
+	}
 	return individuals, behaviors
 }

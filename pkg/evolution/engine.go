@@ -334,6 +334,7 @@ func (e *Engine) applyFitnessSharing() {
 		for _, ind := range e.Population {
 			if ind.Valid {
 				ind.Fitness.SharedFitness = ind.Fitness.TotalFitness
+				ind.Genome.SharedFitness = ind.Fitness.SharedFitness
 			}
 		}
 		return
@@ -362,7 +363,11 @@ func (e *Engine) applyFitnessSharing() {
 		} else {
 			ind.Fitness.SharedFitness = ind.Fitness.TotalFitness / ratio
 		}
-		ind.Genome.Fitness = ind.Fitness.SharedFitness
+		// genome.json contract (Task 28 round 2): Fitness stays the RAW
+		// TotalFitness report.md shows; the blended selection score goes to
+		// the explicit SharedFitness field.
+		ind.Genome.Fitness = ind.Fitness.TotalFitness
+		ind.Genome.SharedFitness = ind.Fitness.SharedFitness
 	}
 }
 
@@ -640,6 +645,12 @@ func (e *Engine) Run(progress func(gen int, best float64, avg float64)) {
 
 // TopN returns the top N genomes ensuring skeleton diversity.
 // Reserves slots per skeleton proportionally, then fills remaining with best overall.
+//
+// Byte-identical genomes are deduplicated by genomeHash (Task 28 round 2):
+// the flagship's published top 30 contained clone groups under different IDs
+// (ranks 2/3 identical, a 6-way group in 11-20). The population is sorted by
+// fitness first, so the kept member of each clone group is its best and the
+// freed slots flow to the next-best DISTINCT genomes.
 func (e *Engine) TopN(n int) []*Individual {
 	sort.Slice(e.Population, func(i, j int) bool {
 		return e.Population[i].Fitness.TotalFitness > e.Population[j].Fitness.TotalFitness
@@ -652,6 +663,7 @@ func (e *Engine) TopN(n int) []*Individual {
 	}
 
 	used := make(map[int]bool)
+	seen := make(map[string]bool)
 	var result []*Individual
 
 	// First pass: take top perSkeleton from each skeleton
@@ -662,9 +674,12 @@ func (e *Engine) TopN(n int) []*Individual {
 		}
 		skel := ind.Genome.Skeleton
 		if skeletonCounts[skel] < perSkeleton {
-			result = append(result, ind)
-			used[i] = true
-			skeletonCounts[skel]++
+			if hash := genomeHash(ind.Genome); !seen[hash] {
+				seen[hash] = true
+				result = append(result, ind)
+				used[i] = true
+				skeletonCounts[skel]++
+			}
 		}
 		if len(result) >= n {
 			break
@@ -676,7 +691,11 @@ func (e *Engine) TopN(n int) []*Individual {
 		if len(result) >= n {
 			break
 		}
-		if !used[i] && ind.Valid && ind.Genome != nil {
+		if used[i] || !ind.Valid || ind.Genome == nil {
+			continue
+		}
+		if hash := genomeHash(ind.Genome); !seen[hash] {
+			seen[hash] = true
 			result = append(result, ind)
 		}
 	}
