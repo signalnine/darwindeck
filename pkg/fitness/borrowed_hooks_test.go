@@ -1,12 +1,75 @@
 package fitness
 
 import (
+	"sort"
 	"testing"
 
 	"github.com/darwindeck/darwindeck/pkg/genome"
 	"github.com/darwindeck/darwindeck/pkg/mechanic"
 	"github.com/darwindeck/darwindeck/pkg/sim"
 )
+
+// borrowCase is one whitelisted (host, mechanic) combination plus a legal
+// source skeleton to record on the genome's BorrowedMechanic.
+type borrowCase struct {
+	host     genome.SkeletonType
+	source   genome.SkeletonType
+	mechanic genome.MechanicType
+}
+
+// borrowCases derives the integration-test case list from the validBorrows
+// whitelist via genome.ValidBorrows() instead of a hand-copied table, so a
+// newly whitelisted borrow is automatically covered here -- and fails until
+// its hook actually behaves (audit remediation Task 26).
+//
+// MechTrump / MechPlayMultiple need no explicit exclusion: they are reserved
+// enum values that validation keeps out of the whitelist (dd-lnh), so they
+// can never appear in the derived list.
+func borrowCases() []borrowCase {
+	whitelist := genome.ValidBorrows()
+
+	hosts := make([]genome.SkeletonType, 0, len(whitelist))
+	for host := range whitelist {
+		hosts = append(hosts, host)
+	}
+	sort.Slice(hosts, func(i, j int) bool { return hosts[i] < hosts[j] })
+
+	var cases []borrowCase
+	for _, host := range hosts {
+		for _, mech := range whitelist[host] {
+			cases = append(cases, borrowCase{
+				host:     host,
+				source:   borrowSource(host, mech),
+				mechanic: mech,
+			})
+		}
+	}
+	return cases
+}
+
+// borrowSource picks the source skeleton recorded on the BorrowedMechanic.
+// BuildHooks keys on Mechanic alone; Source only has to satisfy validation's
+// "cannot borrow from own skeleton" rule. Prefer the mechanic's semantic home
+// skeleton, fall back to any other skeleton when that home IS the host (or
+// when a newly whitelisted mechanic has no entry yet -- the case must still
+// run rather than be silently skipped).
+func borrowSource(host genome.SkeletonType, mech genome.MechanicType) genome.SkeletonType {
+	semanticHome := map[genome.MechanicType]genome.SkeletonType{
+		genome.MechTrickScoring: genome.TrickTaking,
+		genome.MechMeldBonus:    genome.Rummy,
+		genome.MechDrawPenalty:  genome.Shedding,
+		genome.MechAvoidance:    genome.TrickTaking,
+	}
+	if home, ok := semanticHome[mech]; ok && home != host {
+		return home
+	}
+	for _, s := range []genome.SkeletonType{genome.Shedding, genome.TrickTaking, genome.Rummy} {
+		if s != host {
+			return s
+		}
+	}
+	return host // unreachable: three skeletons exist, host is only one of them
+}
 
 // TestBorrowedHooksFireDuringBatchSim asserts that every whitelisted
 // (skeleton, mechanic) borrow combination produces hook invocations during
@@ -16,22 +79,10 @@ import (
 // fires the hook AND breaks the host runner so ~all games timeout is exactly
 // the dd-wfi failure mode (MechDrawPenalty x TrickTaking pre-fix). The 70%
 // completion floor catches that class of bug.
-//
-// MechTrump / MechPlayMultiple are reserved enum values with no hook or
-// runner implementation; validation rejects any genome that borrows them
-// (dd-lnh), so they are intentionally excluded from this check.
 func TestBorrowedHooksFireDuringBatchSim(t *testing.T) {
-	cases := []struct {
-		host     genome.SkeletonType
-		source   genome.SkeletonType
-		mechanic genome.MechanicType
-	}{
-		{genome.Shedding, genome.Rummy, genome.MechMeldBonus},
-		{genome.Shedding, genome.TrickTaking, genome.MechAvoidance},
-		{genome.TrickTaking, genome.Rummy, genome.MechMeldBonus},
-		{genome.Rummy, genome.TrickTaking, genome.MechTrickScoring},
-		{genome.Rummy, genome.Shedding, genome.MechDrawPenalty},
-		{genome.Rummy, genome.TrickTaking, genome.MechAvoidance},
+	cases := borrowCases()
+	if len(cases) == 0 {
+		t.Fatal("derived zero borrow cases from genome.ValidBorrows() -- whitelist empty or accessor broken")
 	}
 
 	const games = 50
@@ -105,17 +156,9 @@ func TestBorrowedHooksFireDuringBatchSim(t *testing.T) {
 // during the batch -- a hook that never moves state across 50 games is
 // effectively unwired.
 func TestBorrowedHooksMutateStateDuringBatchSim(t *testing.T) {
-	cases := []struct {
-		host     genome.SkeletonType
-		source   genome.SkeletonType
-		mechanic genome.MechanicType
-	}{
-		{genome.Shedding, genome.Rummy, genome.MechMeldBonus},
-		{genome.Shedding, genome.TrickTaking, genome.MechAvoidance},
-		{genome.TrickTaking, genome.Rummy, genome.MechMeldBonus},
-		{genome.Rummy, genome.TrickTaking, genome.MechTrickScoring},
-		{genome.Rummy, genome.Shedding, genome.MechDrawPenalty},
-		{genome.Rummy, genome.TrickTaking, genome.MechAvoidance},
+	cases := borrowCases()
+	if len(cases) == 0 {
+		t.Fatal("derived zero borrow cases from genome.ValidBorrows() -- whitelist empty or accessor broken")
 	}
 
 	const games = 50

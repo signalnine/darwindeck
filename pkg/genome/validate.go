@@ -1,6 +1,9 @@
 package genome
 
-import "fmt"
+import (
+	"fmt"
+	"sort"
+)
 
 // Validate performs Tier 0 static analysis on a genome.
 // Returns a list of violations, or nil if valid.
@@ -139,6 +142,28 @@ var validBorrows = map[SkeletonType]map[MechanicType]bool{
 		MechDrawPenalty:  true, // Extra draw penalty
 		MechAvoidance:    true, // Certain cards are penalties
 	},
+}
+
+// ValidBorrows returns the borrow whitelist as a fresh copy: for each host
+// skeleton, the mechanics it may borrow, sorted by enum value so iteration is
+// deterministic. It is the single source of truth for downstream consumers --
+// the borrow integration tests in pkg/fitness derive their case lists from it
+// so coverage cannot drift from validation (audit remediation Task 26), and
+// any CLI tooling that needs the table should call this rather than re-encode
+// the map. Mutating the returned value does not affect validation.
+func ValidBorrows() map[SkeletonType][]MechanicType {
+	out := make(map[SkeletonType][]MechanicType, len(validBorrows))
+	for skel, mechs := range validBorrows {
+		list := make([]MechanicType, 0, len(mechs))
+		for m, ok := range mechs {
+			if ok {
+				list = append(list, m)
+			}
+		}
+		sort.Slice(list, func(i, j int) bool { return list[i] < list[j] })
+		out[skel] = list
+	}
+	return out
 }
 
 func validateBorrowed(g *Genome) []string {
