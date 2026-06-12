@@ -329,3 +329,34 @@ func TestNoveltyEngineThreeGenerationSmoke(t *testing.T) {
 			e.Generation, cfg.Generations)
 	}
 }
+
+// TestNoveltyArchiveSnapshotsGenome (round 3 commit 5a, the r2 rank04
+// publication bug): an archive entry is a frozen record of the individual AT
+// ADMISSION. The old admission shared the live genome POINTER, so a later
+// re-evaluation of the still-evolving elite overwrote the archived genome's
+// Fitness while the archived metrics stayed frozen -- report.md (archived
+// metrics, 0.847) contradicted genome.json (shared pointer's later mean,
+// 0.808). Admission must clone.
+func TestNoveltyArchiveSnapshotsGenome(t *testing.T) {
+	e := NewNoveltyEngine(Config{Workers: 1, BaseSeed: 1}, allSeeds())
+	live := synthNovelty(genome.Shedding, "live", 0.9, BehaviorDescriptor{0.2, 0.2})
+	live.Genome.Fitness = 0.9
+	e.Population = []*NoveltyIndividual{live}
+
+	e.computeNovelty()
+
+	if len(e.Archive) != 1 {
+		t.Fatalf("expected 1 archive entry, got %d", len(e.Archive))
+	}
+	arch := e.Archive[0]
+	if arch.Genome == live.Genome {
+		t.Fatal("archive entry shares the live genome pointer; admission must snapshot (clone)")
+	}
+
+	// A later re-evaluation of the live individual must not bleed into the
+	// archived snapshot.
+	live.Genome.Fitness = 0.5
+	if arch.Genome.Fitness == 0.5 {
+		t.Errorf("archived genome fitness changed with the live genome (%.3f); the snapshot is not frozen", arch.Genome.Fitness)
+	}
+}

@@ -393,8 +393,17 @@ func (e *NoveltyEngine) computeNovelty() {
 			continue
 		}
 		if e.nearestArchiveDistance(ind.Genome.Skeleton, ind.Behavior) > e.addThreshold {
+			// SNAPSHOT the genome (round 3 commit 5a): an archive entry is a
+			// frozen record of the individual AT ADMISSION. Sharing the live
+			// genome pointer let later re-evaluations of the still-evolving
+			// elite overwrite the archived genome's Fitness while the
+			// archived metrics stayed frozen -- the r2 flagship published a
+			// report.md (0.847, from the archived metrics) contradicting its
+			// own genome.json (0.808, from the shared pointer's later mean).
+			archived := ind.Individual
+			archived.Genome = ind.Genome.Clone()
 			e.Archive = append(e.Archive, &NoveltyIndividual{
-				Individual: ind.Individual,
+				Individual: archived,
 				Behavior:   ind.Behavior,
 				Novelty:    ind.Novelty,
 			})

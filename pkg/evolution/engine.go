@@ -113,6 +113,21 @@ func (ind *Individual) publishedFitness() float64 {
 	return ind.greedyMean()
 }
 
+// GreedyMean exposes the greedy-only running mean to publication code
+// (pkg/output): report.md prints it next to the published fitness so the
+// MCTS-mode uplift is explicit instead of silent (round 3 commit 5c).
+func (ind *Individual) GreedyMean() float64 { return ind.greedyMean() }
+
+// MCTSMean returns the MCTS-mode running mean and whether any two-tier
+// evaluations exist. When ok is false the published fitness IS the greedy
+// mean and reports must not claim an MCTS-mode number.
+func (ind *Individual) MCTSMean() (mean float64, ok bool) {
+	if ind.MctsCount == 0 {
+		return 0, false
+	}
+	return ind.MctsSum / float64(ind.MctsCount), true
+}
+
 // Engine runs the evolutionary algorithm.
 type Engine struct {
 	Config     Config

@@ -4,9 +4,39 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/darwindeck/darwindeck/pkg/evolution"
 	"github.com/darwindeck/darwindeck/pkg/fitness"
 	"github.com/darwindeck/darwindeck/pkg/genome"
 )
+
+// GenerateIndividualReport produces the published per-genome report,
+// including the fitness provenance section (round 3 commit 5c): the
+// published fitness of a decile-granted genome is the MCTS-mode running
+// mean, which can exceed the weighted sum of the displayed (last-eval)
+// component metrics by a large margin -- the r2 flagship published +0.177
+// of silent uplift on skill-0.00 champions. Both means and the gap are
+// therefore explicit.
+func GenerateIndividualReport(g *genome.Genome, ind *evolution.Individual) string {
+	report := GenerateReport(g, ind.Fitness)
+
+	var b strings.Builder
+	b.WriteString(report)
+	b.WriteString("**Fitness provenance:**\n")
+	if mctsMean, ok := ind.MCTSMean(); ok {
+		greedy := ind.GreedyMean()
+		b.WriteString(fmt.Sprintf("- Published fitness %.3f is the MCTS-mode mean (%d two-tier evals)\n",
+			mctsMean, ind.MctsCount))
+		b.WriteString(fmt.Sprintf("- Greedy-only mean: %.3f (%d evals -- the selection/decile ranking key)\n",
+			greedy, ind.EvalCount))
+		b.WriteString(fmt.Sprintf("- MCTS uplift: %+.3f (the second skill tier and fresh batches; large gaps on low-skill games are the knock-timing hazard -- see pkg/fitness)\n",
+			mctsMean-greedy))
+	} else {
+		b.WriteString(fmt.Sprintf("- Published fitness %.3f is the greedy-only mean (%d evals); no MCTS tier was granted\n",
+			ind.Fitness.TotalFitness, ind.EvalCount))
+	}
+	b.WriteString("- Component metrics above are last-evaluation values while the published fitness is a running mean over all evaluations: the weighted component sum will NOT reconcile exactly with the headline number\n\n")
+	return b.String()
+}
 
 // GenerateReport produces a playtest analysis report.
 func GenerateReport(g *genome.Genome, m fitness.Metrics) string {

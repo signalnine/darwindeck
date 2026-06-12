@@ -111,6 +111,22 @@ const (
 	degGreedyTimeoutShare = 0.10
 )
 
+// DegeneracyThresholds returns the veto thresholds as a name -> value map for
+// publication metadata (meta.json must record the validity rules a results
+// bundle was produced under -- Task 28 / round 3 commit 5b). Names match the
+// DegenerateReason strings; seat_participation is the fair-share FRACTION
+// (the per-genome threshold is value/numPlayers).
+func DegeneracyThresholds() map[string]float64 {
+	return map[string]float64{
+		"non_agentic_min_density":          degAgencyFloor,
+		"tempo_monopoly_max_mean_run":      degTempoMonopolyMeanRun,
+		"seat_participation_min_fair_frac": degSeatShareFraction,
+		"draw_supply_churn_max_share":      degRummyChurnMax,
+		"dead_match_rule_max_share":        degDeadMatchRuleShare,
+		"greedy_timeout_max_share":         degGreedyTimeoutShare,
+	}
+}
+
 // CheckDegeneracy inspects the RANDOM batch's turn records for the degeneracy
 // signatures above. Returns "" for a healthy game or the failed detector's
 // reason string. The empty batch is vacuously healthy: batch-size sanity is
