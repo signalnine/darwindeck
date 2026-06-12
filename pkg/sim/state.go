@@ -39,10 +39,12 @@ type TurnRecord struct {
 	Player     int   // Acting player at the decision point
 	LegalMoves uint8 // Legal moves available to the acting player, capped at 255
 	// OptionDelta is the change in the next actor's legal-move count caused
-	// by this move: options(next, post-move) - options(next, pre-move).
-	// Semantics are defined PER SKELETON (see the table in
-	// docs/plans/2026-06-11-audit-remediation.md Task 7 and the probe helpers
-	// in batch.go); trick-taking is always 0 by design.
+	// by this move: options(next, post-move) - options(next, pre-move
+	// reference). Semantics are defined PER SKELETON (see the table in
+	// docs/plans/2026-06-11-audit-remediation.md Task 7 and the
+	// optionDeltaMode constants in batch.go); for trick-taking the delta
+	// attaches to trick-leading plays only, measuring the constraint the
+	// lead imposes on the follower (<= 0).
 	OptionDelta int8
 	// Attack is true iff this move emitted at least one attack event
 	// (IsAttackEvent: EventTrickWon, or EventSpecialTriggered with an

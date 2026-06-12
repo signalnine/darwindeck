@@ -271,33 +271,116 @@ func TestRummyOptionDeltaHandComputed(t *testing.T) {
 	}
 }
 
-// TestTrickTakingOptionDeltaAlwaysZero pins the Task 7 table BY DESIGN:
-// trick-taking OptionDelta is not move-count based, because follow-suit
-// legality depends on the led card, which the acting player sets. It is 0 on
-// every record; interaction signal comes from EventTrickWon/specials instead.
-func TestTrickTakingOptionDeltaAlwaysZero(t *testing.T) {
-	g := seeds.Whist()
-	result := sim.RunBatch(g, &tricktaking.Runner{}, &sim.RandomAI{}, 5, 7)
+// TestTrickTakingLeadDeltaHandComputed verifies the AMENDED Task 7 table
+// (2026-06-11, Wave D review): for trick-LEADING plays only -- the trick was
+// empty when the move was chosen -- OptionDelta = legalMoves(next, post-lead)
+// - len(next player's hand): the constraint the lead imposes on the follower.
+// Follows and trick-completing plays stay 0.
+//
+// Hand-computed, 2 players, MustFollowSuit: P0 = {7H}, P1 = {9H, 5S}.
+//
+//	move 1: P0 LEADS 7H. P1 must follow hearts: only 9H is legal => 1 option
+//	        against a 2-card hand. OptionDelta = 1 - 2 = -1.
+//	move 2: P1 follows 9H, completing the trick (9H beats 7H, P1 wins it).
+//	        Trick-completing play => OptionDelta 0 (and Attack = true).
+//	move 3: P1 leads 5S. The "follower" P0 has an empty hand: 0 legal moves
+//	        minus 0 cards => OptionDelta 0.
+func TestTrickTakingLeadDeltaHandComputed(t *testing.T) {
+	g := &genome.Genome{
+		Skeleton: genome.TrickTaking,
+		Players:  2,
+		HandSize: 2,
+		TrickTaking: &genome.TrickTakingParams{
+			MustFollowSuit:  true,
+			TrickScoring:    genome.ScorePerTrick,
+			LeadRestriction: genome.LeadNone,
+			RoundsPerGame:   1,
+		},
+		TrumpRule: genome.TrumpNone,
+	}
+	runner := fixedSetupRunner{
+		GenericRunner: &tricktaking.Runner{},
+		build: func() *sim.GameState {
+			st := sim.NewGameState(2)
+			st.Hands[0] = []sim.Card{card(sim.Hearts, sim.Seven)}
+			st.Hands[1] = []sim.Card{card(sim.Hearts, sim.Nine), card(sim.Spades, sim.Five)}
+			st.Phase = sim.PhaseTrick
+			st.TrumpSuit = -1 // no trump (zero value would mean suit 0!)
+			st.MaxRound = 1
+			st.TrickCards = make([]sim.Card, 0, 2)
+			st.TrickPlayers = make([]int, 0, 2)
+			return st
+		},
+	}
 
-	sawChoice := false
-	for i, turns := range result.AllTurns {
-		if len(turns) == 0 {
-			t.Errorf("game %d: no turn records", i)
-		}
+	result := sim.RunBatch(g, runner, &sim.RandomAI{}, 1, 1)
+	if result.Completions != 1 {
+		t.Fatalf("fixture broken: want 1 completion, got %d (errors=%d timeouts=%d)",
+			result.Completions, result.Errors, result.Timeouts)
+	}
+	turns := result.AllTurns[0]
+	if len(turns) != 3 {
+		t.Fatalf("fixture broken: want 3 turn records, got %d: %+v", len(turns), turns)
+	}
+	if turns[0].Player != 0 || turns[0].LegalMoves != 1 {
+		t.Fatalf("move 1 = %+v, want P0 with 1 legal lead", turns[0])
+	}
+	if turns[0].OptionDelta != -1 {
+		t.Errorf("lead OptionDelta = %d, want -1 (P1: 1 legal follow vs 2-card hand)", turns[0].OptionDelta)
+	}
+	if turns[1].OptionDelta != 0 {
+		t.Errorf("trick-completing play OptionDelta = %d, want 0", turns[1].OptionDelta)
+	}
+	if !turns[1].Attack {
+		t.Errorf("trick-completing play must record Attack = true")
+	}
+	if turns[2].OptionDelta != 0 {
+		t.Errorf("lead into an empty hand OptionDelta = %d, want 0", turns[2].OptionDelta)
+	}
+}
+
+// TestTrickTakingLeadDeltaGenomeLinked is the genome-linked gradient test
+// (audit Wave D fix 4) on real whist batches: with MustFollowSuit=true, leads
+// constrain followers, so nonzero (strictly negative) deltas must appear, and
+// ONLY on lead positions (a record is a lead iff it is the game's first move
+// or follows a trick-completing Attack record -- whist has no specials, so
+// Attack marks exactly the trick completions). The same genome with
+// MustFollowSuit=false and LeadRestriction=LeadNone has no follow rules left
+// to bind, so every delta must be 0.
+func TestTrickTakingLeadDeltaGenomeLinked(t *testing.T) {
+	strict := seeds.Whist() // MustFollowSuit: true
+	result := sim.RunBatch(strict, &tricktaking.Runner{}, &sim.RandomAI{}, 10, 11)
+
+	nonzero := 0
+	for gi, turns := range result.AllTurns {
 		for j, tr := range turns {
+			isLead := j == 0 || turns[j-1].Attack
+			if !isLead && tr.OptionDelta != 0 {
+				t.Fatalf("game %d turn %d: non-lead play has OptionDelta %d, want 0", gi, j, tr.OptionDelta)
+			}
+			if tr.OptionDelta > 0 {
+				t.Fatalf("game %d turn %d: lead delta = +%d; lead constraints are never positive", gi, j, tr.OptionDelta)
+			}
 			if tr.OptionDelta != 0 {
-				t.Fatalf("game %d turn %d: OptionDelta = %d, want 0 always for trick-taking", i, j, tr.OptionDelta)
-			}
-			if tr.LegalMoves < 1 {
-				t.Errorf("game %d turn %d: LegalMoves = %d, want >= 1", i, j, tr.LegalMoves)
-			}
-			if tr.LegalMoves > 1 {
-				sawChoice = true
+				nonzero++
 			}
 		}
 	}
-	if !sawChoice {
-		t.Error("no record with LegalMoves > 1: recording looks dead (whist leads offer a full hand)")
+	if nonzero == 0 {
+		t.Fatal("MustFollowSuit=true whist must produce nonzero lead deltas (the genome-linked gradient)")
+	}
+
+	free := seeds.Whist()
+	free.TrickTaking.MustFollowSuit = false
+	free.TrickTaking.LeadRestriction = genome.LeadNone // no lead restriction either
+	freeResult := sim.RunBatch(free, &tricktaking.Runner{}, &sim.RandomAI{}, 10, 11)
+	for gi, turns := range freeResult.AllTurns {
+		for j, tr := range turns {
+			if tr.OptionDelta != 0 {
+				t.Fatalf("game %d turn %d: free-play genome (no follow rules) has OptionDelta %d, want all-zero",
+					gi, j, tr.OptionDelta)
+			}
+		}
 	}
 }
 

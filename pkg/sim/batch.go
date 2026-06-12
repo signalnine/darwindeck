@@ -196,7 +196,13 @@ func runSingleGame(g *genome.Genome, runner GenericRunner, ai AIPlayer, rng *ran
 		// Pre-move option baselines. GenerateMoves is pure (audit Task 3),
 		// so probing other players via an Active swap cannot disturb the game.
 		var rummyNext, rummyBaseline int
+		wasLead := false
 		switch mode {
+		case deltaModeTrickTaking:
+			// A lead is a play chosen while the trick was empty. The
+			// follower's pre-move reference is their unconstrained hand
+			// size, so no pre-move probe is needed.
+			wasLead = move.Type == MovePlay && len(state.TrickCards) == 0
 		case deltaModeShedding:
 			// Specials (skip/reverse/draw) make the next actor unpredictable
 			// before ApplyMove, so capture every player's baseline. The
@@ -246,6 +252,17 @@ func runSingleGame(g *genome.Genome, runner GenericRunner, ai AIPlayer, rng *ran
 						delta = after - rummyBaseline
 					}
 				}
+			case deltaModeTrickTaking:
+				// Lead-constraint delta. The len(TrickCards) == 1 guard
+				// confirms the lead is still on the table awaiting the
+				// follower (always true for >= 2 players, but a runner bug
+				// must degrade to 0, never misattribute).
+				if wasLead && len(state.TrickCards) == 1 {
+					after := probeOptionCount(runner, state, g, next)
+					if after >= 0 {
+						delta = after - len(state.Hands[next])
+					}
+				}
 			}
 		}
 
@@ -289,12 +306,8 @@ func runSingleGame(g *genome.Genome, runner GenericRunner, ai AIPlayer, rng *ran
 type optionDeltaMode uint8
 
 const (
-	// deltaModeNone: OptionDelta is always 0. Trick-taking BY DESIGN:
-	// follow-suit legality depends on the led card, which the *acting*
-	// player sets, so "what could the next player have done otherwise" is
-	// counterfactually ill-defined mid-trick. Interaction signal for
-	// trick-taking comes from EventTrickWon and special events instead.
-	// Unknown skeletons also record 0 (never crash, never guess).
+	// deltaModeNone: OptionDelta is always 0. Unknown skeletons record 0
+	// (never crash, never guess).
 	deltaModeNone optionDeltaMode = iota
 	// deltaModeShedding: options(p) = legal plays+draw for p against the
 	// discard top (one pure GenerateMoves probe; the discard top is the
@@ -315,6 +328,23 @@ const (
 	// discard options (e.g. laying off on table melds), this cancellation
 	// no longer holds and the probe must widen back to the full union.
 	deltaModeRummy
+	// deltaModeTrickTaking: deltas attach to trick-LEADING plays only (the
+	// trick was empty when the move was chosen):
+	//
+	//	OptionDelta = legalMoves(next, post-lead) - len(next player's hand)
+	//
+	// i.e. the constraint the lead imposes on the follower, measured against
+	// the follower's unconstrained hand size as the pre-move reference.
+	// Always <= 0; nonzero only when follow rules bind (MustFollowSuit with
+	// a partially-matching hand). Follows and trick-completing plays record
+	// 0: mid-trick counterfactuals are ill-defined -- the leader sets follow
+	// legality -- but the lead's constraining power IS well-defined and
+	// genome-linked: MustFollowSuit genomes produce negative lead deltas,
+	// free-play genomes produce all zeros, a real within-skeleton gradient.
+	// AMENDED per the Task 7 table (2026-06-11, Wave D review): the original
+	// always-0 rule made Interaction a closed-form constant (2/N) for
+	// trick-taking, recreating the audit's skeleton-constant pathology.
+	deltaModeTrickTaking
 )
 
 func optionDeltaModeFor(g *genome.Genome) optionDeltaMode {
@@ -323,6 +353,8 @@ func optionDeltaModeFor(g *genome.Genome) optionDeltaMode {
 		return deltaModeShedding
 	case genome.Rummy:
 		return deltaModeRummy
+	case genome.TrickTaking:
+		return deltaModeTrickTaking
 	default:
 		return deltaModeNone
 	}

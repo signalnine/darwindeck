@@ -191,7 +191,10 @@ func tent(x, c float64) float64 {
 // Per-skeleton signal sources (Task 7 table): shedding = OptionDelta from the
 // discard-top perturbation plus skip/draw/reverse attack turns; rummy =
 // OptionDelta attached to the turn-passing MoveDiscard; trick-taking =
-// trick-completing attack turns (one per EventTrickWon).
+// trick-completing attack turns (one per EventTrickWon) plus lead-constraint
+// OptionDelta on trick-leading plays (audit Wave D fix 4: nonzero when
+// MustFollowSuit binds the follower, so trick-taking interaction is no longer
+// the closed-form constant 2/N).
 //
 // Scale: clamp(ratio/0.5) is provisional; Task 14 recalibrates the
 // denominator from the seed-game spread, not assumption.

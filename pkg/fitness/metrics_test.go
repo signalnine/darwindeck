@@ -775,6 +775,41 @@ func TestInteractionHearts4pNotPinnedToOldConstant(t *testing.T) {
 	}
 }
 
+// TestInteractionTrickTakingNoLongerSkeletonConstant (audit Wave D fix 4):
+// with OptionDelta defined as always-0 for trick-taking, Interaction was the
+// closed-form constant 2/N for EVERY trick-taking genome (= 0.5 at 4 players:
+// one trick-completing attack turn per N card-play turns, doubled by the
+// /0.5 scale), recreating the audit's skeleton-constant pathology. With
+// lead-constraint deltas the measured values (50 random games, seed 0) are
+// hearts 0.8485, whist 0.8423, oh-hell 0.7571 -- all far from the old
+// constant. The ROBUST genome gradient is whist (13-card hands) vs oh-hell
+// (7-card hands): a >= 0.02 gap stable across seeds. Hearts vs whist differ
+// only at noise scale (~0.006; their order flips across seeds), so this test
+// pins their exact inequality at the fixed seed but does NOT claim a robust
+// hearts/whist gap -- measured honestly, their lead-constraint profiles
+// coincide at 13-card hands.
+func TestInteractionTrickTakingNoLongerSkeletonConstant(t *testing.T) {
+	measure := func(g *genome.Genome) float64 {
+		return computeInteraction(sim.RunBatch(g, GetRunner(g), &sim.RandomAI{}, 50, 0))
+	}
+	whist := measure(seeds.Whist())
+	hearts := measure(seeds.Hearts())
+	ohHell := measure(seeds.OhHell())
+	t.Logf("trick-taking interaction: whist=%.4f hearts=%.4f oh-hell=%.4f (old constant: 0.5)", whist, hearts, ohHell)
+
+	for name, v := range map[string]float64{"whist": whist, "hearts": hearts, "oh-hell": ohHell} {
+		if math.Abs(v-0.5) < 0.2 {
+			t.Errorf("%s interaction %.4f still sits near the closed-form 2/N constant 0.5", name, v)
+		}
+	}
+	if whist == hearts {
+		t.Errorf("whist and hearts interaction identical (%.4f): per-genome variation lost", whist)
+	}
+	if math.Abs(whist-ohHell) < 0.02 {
+		t.Errorf("whist (%.4f) vs oh-hell (%.4f) must separate by >= 0.02 (hand-size gradient)", whist, ohHell)
+	}
+}
+
 func TestSkillGradientUsesEmpiricalBaseline(t *testing.T) {
 	// Greedy always plays seat 0. A game with first-player advantage gives seat 0
 	// a high random win rate; comparing greedy's seat-0 rate against the theoretical
