@@ -216,3 +216,107 @@ func TestSheddingRulebookSingleRoundUnchanged(t *testing.T) {
 		}
 	}
 }
+
+// --- Task 28 round 3, commit 6: dead-rule text ---
+
+// TestRulebookOmitsCardPointTableWhenDead (round 3 commit 6a): the card
+// point table renders ONLY when something actually consumes
+// Scoring.CardPoints -- trick-taking under card_points/avoidance scoring, or
+// a LIVE MechAvoidance borrow (rummy host, or multi-round shedding host).
+// The r2 flagship printed point tables under ScorePerTrick and on rummy
+// genomes with no consumer at all: rules text describing zero behavior.
+func TestRulebookOmitsCardPointTableWhenDead(t *testing.T) {
+	deadCases := []*genome.Genome{
+		// Trick-taking, per-trick scoring: CardPoints never read.
+		{
+			ID: "tt-per-trick-with-points", Skeleton: genome.TrickTaking, Players: 4, HandSize: 13,
+			TrickTaking: &genome.TrickTakingParams{MustFollowSuit: true, TrickScoring: genome.ScorePerTrick, RoundsPerGame: 1},
+			Scoring:     genome.ScoringConfig{CardPoints: []genome.CardScoring{{Rank: 11, Suit: 1, Points: 15}}},
+		},
+		// Rummy with no borrow: nothing reads CardPoints.
+		seeds.PairMeldStockRummy(),
+		// Single-round shedding with a scoring borrow: the borrow itself is
+		// inert (nothing reads banked Scores), so the table is dead too.
+		seeds.CatchAllSkipShedding(),
+	}
+	for _, g := range deadCases {
+		rb := GenerateRulebook(g)
+		if strings.Contains(rb, "Card Point Values") {
+			t.Errorf("%s: rulebook prints a card-point table no rule consumes:\n%s", g.ID, rb)
+		}
+	}
+
+	liveCases := []*genome.Genome{
+		seeds.Hearts(),                  // TT avoidance scoring
+		seeds.NoFollowAvoidanceTrick(),  // TT avoidance scoring (fixture)
+	}
+	for _, g := range liveCases {
+		rb := GenerateRulebook(g)
+		if !strings.Contains(rb, "Card Point Values") {
+			t.Errorf("%s: live card-point table missing:\n%s", g.ID, rb)
+		}
+	}
+}
+
+// TestRulebookOmitsInertScoringBorrowAd (round 3 commit 6b): a scoring
+// borrow on SINGLE-round shedding banks Scores nothing reads (the game ends
+// at the first empty hand) -- the r2 rank05 advertised 'meld bonuses' that
+// could never matter. The rulebook must not advertise it; the multi-round
+// case keeps the advertisement.
+func TestRulebookOmitsInertScoringBorrowAd(t *testing.T) {
+	inert := multiRoundSheddingGenome(genome.MechMeldBonus, genome.Rummy)
+	inert.ID = "single-round-meld-borrow"
+	inert.Shedding.RoundsPerGame = 1
+	rb := GenerateRulebook(inert)
+	if strings.Contains(rb, "bonus points for forming sets or runs") || strings.Contains(rb, "Additional Rules") {
+		t.Errorf("single-round shedding rulebook advertises an inert scoring borrow:\n%s", rb)
+	}
+
+	live := multiRoundSheddingGenome(genome.MechMeldBonus, genome.Rummy)
+	rbLive := GenerateRulebook(live)
+	if !strings.Contains(rbLive, "bonus points for forming sets or runs") {
+		t.Errorf("multi-round shedding rulebook lost its live borrow text:\n%s", rbLive)
+	}
+}
+
+// TestRulebookNoDeadRuleTextAcrossAllFixtures (round 3 commit 6c): render
+// every seed and every fixture rulebook and assert no dead-rule text, with
+// the assertions derived from each genome's own liveness properties --
+// extending TestRulebookOmitsUnsupportedMechanics' pattern from two banned
+// phrases to the genome-conditional ones.
+func TestRulebookNoDeadRuleTextAcrossAllFixtures(t *testing.T) {
+	all := seeds.All()
+	all = append(all, seeds.InstantKnockRummy(), seeds.ForcedShedding())
+	all = append(all, seeds.RejectedChampions()...)
+	all = append(all, seeds.CatchAllChampions()...)
+
+	for _, g := range all {
+		rb := GenerateRulebook(g)
+
+		// Card-point table only with a live consumer.
+		ttPoints := g.Skeleton == genome.TrickTaking && g.TrickTaking != nil &&
+			(g.TrickTaking.TrickScoring == genome.ScoreCardPoints || g.TrickTaking.TrickScoring == genome.ScoreAvoidance)
+		avoidanceLive := false
+		for _, bm := range g.Borrowed {
+			if bm.Mechanic == genome.MechAvoidance && len(g.Scoring.CardPoints) > 0 &&
+				(g.Skeleton == genome.Rummy || g.SheddingMultiRound()) {
+				avoidanceLive = true
+			}
+		}
+		if !ttPoints && !avoidanceLive && strings.Contains(rb, "Card Point Values") {
+			t.Errorf("%s: dead card-point table rendered", g.ID)
+		}
+
+		// Scoring borrows advertised only when they can affect the outcome.
+		if g.Skeleton == genome.Shedding && !g.SheddingMultiRound() {
+			for _, phrase := range []string{
+				"bonus points for forming sets or runs",
+				"penalty points — avoid collecting",
+			} {
+				if strings.Contains(rb, phrase) {
+					t.Errorf("%s: single-round shedding rulebook advertises inert scoring borrow text %q", g.ID, phrase)
+				}
+			}
+		}
+	}
+}

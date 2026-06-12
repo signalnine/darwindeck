@@ -82,10 +82,10 @@ func quickTake(g *genome.Genome) string {
 	}
 
 	modifiers := []string{}
-	if len(g.Borrowed) > 0 {
-		for _, bm := range g.Borrowed {
-			modifiers = append(modifiers, borrowedQuickDesc(bm))
-		}
+	// Only LIVE borrows are advertised (round 3 commit 6b): a scoring borrow
+	// on single-round shedding banks scores nothing reads.
+	for _, bm := range liveBorrows(g) {
+		modifiers = append(modifiers, borrowedQuickDesc(bm))
 	}
 	if g.Skeleton == genome.Shedding && len(g.SpecialCards) > 0 {
 		modifiers = append(modifiers, fmt.Sprintf("%d special card effects", len(g.SpecialCards)))
@@ -146,7 +146,7 @@ func generateInsights(g *genome.Genome, m fitness.Metrics) []string {
 		insights = append(insights, "Game length outside target range (too short or too long)")
 	}
 
-	for _, bm := range g.Borrowed {
+	for _, bm := range liveBorrows(g) {
 		insights = append(insights, fmt.Sprintf("Borrows %s from %s skeleton",
 			borrowedQuickDesc(bm), bm.Source))
 	}

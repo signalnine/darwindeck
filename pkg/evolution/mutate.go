@@ -88,10 +88,13 @@ func tweakParameter(g *genome.Genome, rng *rand.Rand) {
 			case 0:
 				g.Shedding.DrawPenalty = clampInt(g.Shedding.DrawPenalty+rng.IntN(3)-1, 1, 3)
 			case 1:
-				// Banked-score rounds (Task 22). The clamp floor also
-				// normalizes the legacy 0 ("unset") encoding into the
-				// evolvable 1-5 range.
-				g.Shedding.RoundsPerGame = clampInt(g.Shedding.RoundsPerGame+rng.IntN(3)-1, 1, 5)
+				// Banked-score rounds (Task 22). Floor 2, not 1: this branch
+				// is only reachable with a scoring borrow present, and a
+				// scoring borrow at RoundsPerGame 1 is the inert rank05
+				// combination (round 3 commit 6b) -- the same coupling
+				// addBorrowedMechanic enforces. The clamp also normalizes
+				// the legacy 0 ("unset") encoding.
+				g.Shedding.RoundsPerGame = clampInt(g.Shedding.RoundsPerGame+rng.IntN(3)-1, 2, 5)
 			}
 		}
 	case genome.TrickTaking:
@@ -266,6 +269,25 @@ func addBorrowedMechanic(g *genome.Genome, rng *rand.Rand) {
 	}
 
 	g.Borrowed = append(g.Borrowed, pick)
+
+	// Coherent-mutation coupling (round 3 commit 6b): a mechanic's
+	// supporting infrastructure lands in the same mutation.
+	//   - A scoring borrow on shedding banks Scores at ROUND end; with
+	//     RoundsPerGame < 2 nothing ever reads them (the game ends at the
+	//     first empty hand) -- the r2 rank05 inert combination. Force
+	//     multi-round play.
+	//   - MechAvoidance's hook no-ops without CardPoints; seed a default
+	//     rule (the changeEnum convention: Hearts worth 1 penalty point).
+	if g.Skeleton == genome.Shedding && g.Shedding != nil &&
+		(pick.Mechanic == genome.MechMeldBonus || pick.Mechanic == genome.MechAvoidance) &&
+		g.Shedding.RoundsPerGame < 2 {
+		g.Shedding.RoundsPerGame = 2
+	}
+	if pick.Mechanic == genome.MechAvoidance && len(g.Scoring.CardPoints) == 0 {
+		g.Scoring.CardPoints = []genome.CardScoring{
+			{Suit: uint8(3), Points: 1}, // Hearts carry 1 penalty point
+		}
+	}
 }
 
 func removeBorrowedMechanic(g *genome.Genome, rng *rand.Rand) {

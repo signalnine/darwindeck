@@ -171,11 +171,13 @@ func TestAddSpecialCardCanProduceRankZero(t *testing.T) {
 	}
 }
 
-// TestTweakParameterReachesSheddingRounds (Task 22): RoundsPerGame is an
-// evolvable shedding parameter -- tweakParameter must be able to move it,
-// always landing in 1-5 (never back to the legacy 0 encoding, which would
-// make a mutated multi-round genome silently single-round). The field is
-// only LIVE when the genome carries a scoring borrow
+// TestTweakParameterReachesSheddingRounds (Task 22; floor raised in round 3
+// commit 6b): RoundsPerGame is an evolvable shedding parameter --
+// tweakParameter must be able to move it, always landing in 2-5: the branch
+// is only reachable with a scoring borrow present, and a scoring borrow at
+// RoundsPerGame < 2 is the inert rank05 combination (scores banked at round
+// end that nothing reads). Never back to the legacy 0 encoding either. The
+// field is only LIVE when the genome carries a scoring borrow
 // (genome.SheddingMultiRound), so the fixtures carry MechMeldBonus; the
 // borrow-less case is pinned separately below.
 func TestTweakParameterReachesSheddingRounds(t *testing.T) {
@@ -199,8 +201,8 @@ func TestTweakParameterReachesSheddingRounds(t *testing.T) {
 		}
 		tweakParameter(g, rng)
 		r := g.Shedding.RoundsPerGame
-		if r < 1 || r > 5 {
-			t.Fatalf("seed %d: tweakParameter produced RoundsPerGame %d, want 1-5", seed, r)
+		if r < 2 || r > 5 {
+			t.Fatalf("seed %d: tweakParameter produced RoundsPerGame %d, want 2-5 (borrow present)", seed, r)
 		}
 		seen[r] = true
 	}
@@ -227,12 +229,15 @@ func TestTweakParameterReachesSheddingRounds(t *testing.T) {
 		if r < 0 || r > 5 {
 			t.Fatalf("seed %d: RoundsPerGame %d out of range", seed, r)
 		}
-		if r >= 1 {
+		if r == 1 {
+			t.Fatalf("seed %d: tweak left a scoring-borrow genome at RoundsPerGame 1 (inert combination)", seed)
+		}
+		if r >= 2 {
 			reachedOne = true
 		}
 	}
 	if !reachedOne {
-		t.Error("tweakParameter never normalized a legacy RoundsPerGame=0 genome into 1-5")
+		t.Error("tweakParameter never normalized a legacy RoundsPerGame=0 genome into 2-5")
 	}
 }
 
@@ -281,5 +286,46 @@ func TestAddSpecialCardNeverCatchAll(t *testing.T) {
 		if sc.ByRank == 0 && sc.BySuit == 0 {
 			t.Fatalf("seed %d: addSpecialCard produced a catch-all special %+v (Tier-0 rejected encoding)", seed, sc)
 		}
+	}
+}
+
+// TestAddScoringBorrowForcesMultiRound (round 3 commit 6b, the
+// coherent-mutation principle: a mutation that adds a mechanic must add its
+// supporting infrastructure). A scoring borrow on SINGLE-round shedding
+// banks scores nothing reads -- the r2 rank05 advertised exactly that inert
+// combination. Adding MechMeldBonus/MechAvoidance to a shedding genome must
+// force RoundsPerGame >= 2, and MechAvoidance must come with the CardPoints
+// its hook needs (applyAvoidance no-ops on an empty table).
+func TestAddScoringBorrowForcesMultiRound(t *testing.T) {
+	sawMeld, sawAvoid := false, false
+	for seed := uint64(0); seed < 500; seed++ {
+		rng := rand.New(rand.NewPCG(seed, 0))
+		g := &genome.Genome{
+			Skeleton: genome.Shedding,
+			Players:  2,
+			HandSize: 7,
+			Shedding: &genome.SheddingParams{MatchRule: genome.MatchEither, DrawPenalty: 1, RoundsPerGame: 1},
+		}
+		addBorrowedMechanic(g, rng)
+		if !g.HasScoringBorrow() {
+			continue
+		}
+		if g.Shedding.RoundsPerGame < 2 {
+			t.Fatalf("seed %d: scoring borrow added with RoundsPerGame %d (inert combination)", seed, g.Shedding.RoundsPerGame)
+		}
+		for _, bm := range g.Borrowed {
+			switch bm.Mechanic {
+			case genome.MechMeldBonus:
+				sawMeld = true
+			case genome.MechAvoidance:
+				sawAvoid = true
+				if len(g.Scoring.CardPoints) == 0 {
+					t.Fatalf("seed %d: MechAvoidance added without CardPoints (hook no-ops)", seed)
+				}
+			}
+		}
+	}
+	if !sawMeld || !sawAvoid {
+		t.Fatalf("coverage: both scoring borrows must be reachable (meld=%v avoid=%v)", sawMeld, sawAvoid)
 	}
 }

@@ -108,6 +108,38 @@ func repairCrossoverInvariants(child, a, b *genome.Genome, rng *rand.Rand) {
 		}
 	}
 
+	// A scoring borrow on shedding requires multi-round play (round 3
+	// commit 6b): the Borrowed and RoundsPerGame coin flips are independent,
+	// so a child can take a scoring borrow from one parent and single-round
+	// play from the other -- the inert rank05 combination (scores banked at
+	// round end that nothing ever reads). Same coupling as
+	// addBorrowedMechanic; an avoidance borrow additionally needs the
+	// CardPoints its hook reads.
+	if child.Skeleton == genome.Shedding && child.Shedding != nil && child.HasScoringBorrow() {
+		if child.Shedding.RoundsPerGame < 2 {
+			switch {
+			case a.Shedding != nil && a.Shedding.RoundsPerGame >= 2:
+				child.Shedding.RoundsPerGame = a.Shedding.RoundsPerGame
+			case b.Shedding != nil && b.Shedding.RoundsPerGame >= 2:
+				child.Shedding.RoundsPerGame = b.Shedding.RoundsPerGame
+			default:
+				child.Shedding.RoundsPerGame = 2
+			}
+		}
+	}
+	for _, bm := range child.Borrowed {
+		if bm.Mechanic == genome.MechAvoidance && len(child.Scoring.CardPoints) == 0 {
+			switch {
+			case len(a.Scoring.CardPoints) > 0:
+				child.Scoring.CardPoints = append([]genome.CardScoring(nil), a.Scoring.CardPoints...)
+			case len(b.Scoring.CardPoints) > 0:
+				child.Scoring.CardPoints = append([]genome.CardScoring(nil), b.Scoring.CardPoints...)
+			default:
+				child.Scoring.CardPoints = []genome.CardScoring{{Suit: 3, Points: 1}}
+			}
+		}
+	}
+
 	// ScoreCardPoints / ScoreAvoidance require non-empty CardPoints.
 	// The TrickScoring coin flip lives in crossoverTrickTaking; the
 	// CardPoints coin flip lives in the Scoring block above. They can
