@@ -859,9 +859,11 @@ func removeCard(hand []sim.Card, card sim.Card) []sim.Card {
 // END-AT-WILL VOIDING (draw + discard): when the acting player's hand
 // already satisfies the knock condition (deadwood <= KnockThreshold), the
 // round continues only at their pleasure -- the one live decision left is
-// knock/no-knock, and it is counted exactly once, at the meld phase.
+// knock/no-knock, which density deliberately does NOT count at all (the
+// meld phase is never meaningful; knock timing is the SKILL metric's
+// domain, pinned by TestMCTSTierRewardsDegenKnockTiming in pkg/fitness).
 // Counting every draw/discard made in that state as meaningful would
-// double-count that single decision N times per cycle; this was the
+// multiply that single non-density decision N times per cycle; this was the
 // pair-meld archetype's residual inflation (loose thresholds over trivially
 // melding hands keep every seat end-at-will from the second cycle, measured
 // discard rate 0.996 while the game is a knock race). Gin-shaped genomes
@@ -893,7 +895,7 @@ func (r *Runner) ChoiceMatters(state *sim.GameState, g *genome.Genome, moves []s
 		if base <= params.KnockThreshold {
 			// END-AT-WILL VOIDING (see the type doc): the hand already
 			// satisfies the knock condition; the live decision is
-			// knock/no-knock, counted once at the meld phase.
+			// knock/no-knock, which belongs to the skill metric, not density.
 			return false
 		}
 		// Structural gain of a candidate card at two tiers: full melds
