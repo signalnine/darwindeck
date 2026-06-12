@@ -336,6 +336,9 @@ func bestScore(state *sim.GameState) int {
 // scoreRound banks deadwood and returns the winner. Kept for callers that
 // need to force-score a round outside the normal Upkeep/CheckEnd loop
 // (e.g. the test helper's max-turns fallback).
+// MUST NOT be called on a state Upkeep has already banked (Phase == PhaseEnd
+// after the loop's Upkeep): bankDeadwood is not idempotent and a second call
+// double-subtracts deadwood, which can flip the winner.
 func scoreRound(state *sim.GameState, g *genome.Genome) int {
 	if g.Rummy == nil {
 		return 0
