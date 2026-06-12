@@ -23,6 +23,8 @@ const tier1Games = 10
 // plays: the Tier 1 quick batch always runs; Tier 2's random + greedy batches
 // run only when Tier 1 passes. The calibrate subcommand uses this for
 // throughput accounting so the count cannot drift from the pipeline.
+// DEFAULT MODE ONLY (Task 20): EvaluateWithMCTS plays tier2MCTSGames more
+// when Tier 1 passes; no throughput-accounting caller uses that path.
 func GamesPerEvaluation(tier1Passed bool) int {
 	games := tier1Games
 	if tier1Passed {

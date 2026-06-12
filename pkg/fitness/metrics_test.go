@@ -815,32 +815,146 @@ func TestInteractionTrickTakingNoLongerSkeletonConstant(t *testing.T) {
 	}
 }
 
+// mkWins builds an n-game batch where seat 0 won seat0Wins games -- the
+// shared fixture for the skill-gradient unit tests below.
+func mkWins(seat0Wins, n int) sim.BatchResult {
+	return sim.BatchResult{Completions: n, WinCounts: []int{seat0Wins, n - seat0Wins}}
+}
+
+// twoTierExpected mirrors the metric's final scaling so expected values in
+// tests track the calibrated skillScale constant instead of hardcoding it.
+func twoTierExpected(raw float64) float64 {
+	return clamp(raw/skillScale, 0, 1)
+}
+
 func TestSkillGradientUsesEmpiricalBaseline(t *testing.T) {
 	// Greedy always plays seat 0. A game with first-player advantage gives seat 0
 	// a high random win rate; comparing greedy's seat-0 rate against the theoretical
 	// 1/N rather than the *measured* seat-0 random rate miscredits that structural
 	// edge as skill. The baseline must come from randomResult, not 1/numPlayers.
-	mk := func(seat0Wins int) sim.BatchResult {
-		return sim.BatchResult{Completions: 100, WinCounts: []int{seat0Wins, 100 - seat0Wins}}
-	}
+	mk := func(seat0Wins int) sim.BatchResult { return mkWins(seat0Wins, 100) }
 
 	// Zero true skill (greedy == random seat-0 rate) must score 0, regardless of
 	// how strong the first-player advantage is.
-	if got := computeSkillGradient(mk(60), mk(60), 2); got != 0 {
+	if got := computeSkillGradient(mk(60), mk(60), sim.BatchResult{}, 2); got != 0 {
 		t.Errorf("FPA game with greedy==random seat-0 rate (60%%) must score 0, got %.3f", got)
 	}
-	if got := computeSkillGradient(mk(50), mk(50), 2); got != 0 {
+	if got := computeSkillGradient(mk(50), mk(50), sim.BatchResult{}, 2); got != 0 {
 		t.Errorf("fair game with greedy==random seat-0 rate (50%%) must score 0, got %.3f", got)
 	}
 
 	// A genuine skill edge over the empirical baseline still scores positive.
-	if got := computeSkillGradient(mk(50), mk(60), 2); got <= 0 {
+	if got := computeSkillGradient(mk(50), mk(60), sim.BatchResult{}, 2); got <= 0 {
 		t.Errorf("greedy seat-0 rate (60%%) above random baseline (50%%) must score >0, got %.3f", got)
 	}
 
 	// Greedy worse than the empirical baseline clamps to 0.
-	if got := computeSkillGradient(mk(60), mk(40), 2); got != 0 {
+	if got := computeSkillGradient(mk(60), mk(40), sim.BatchResult{}, 2); got != 0 {
 		t.Errorf("greedy seat-0 rate (40%%) below random baseline (60%%) must score 0, got %.3f", got)
+	}
+}
+
+// TestTwoTierSkillZeroSkillGame pins the Task 20 requirement: a zero-skill
+// game (greedy == random == mcts seat-0 rates) scores EXACTLY 0 regardless of
+// first-player advantage. Both tiers use empirical seat-0 baselines (dd-qt7):
+// the greedy term baselines on the random batch, the MCTS term on the greedy
+// batch, so a structural seat edge cancels out of both differences.
+func TestTwoTierSkillZeroSkillGame(t *testing.T) {
+	for _, rate := range []int{50, 60, 75, 90} {
+		got := computeSkillGradient(mkWins(rate, 100), mkWins(rate, 100), mkWins(rate/5, 20), 2)
+		if got != 0 {
+			t.Errorf("zero-skill game at seat-0 rate %d%% must score 0, got %.3f", rate, got)
+		}
+	}
+}
+
+// TestTwoTierSkillGreedyOnlyCapped pins the cap: a game whose skill is fully
+// greedy-detectable but where MCTS does NO better than greedy is capped at
+// the 0.4 greedy term -- the top 0.6 of the raw scale is reachable only by
+// outplaying greedy. The cap must hold identically whether the MCTS batch
+// ties greedy, loses to greedy, or is absent (greedy-only mode).
+func TestTwoTierSkillGreedyOnlyCapped(t *testing.T) {
+	random, greedy := mkWins(50, 100), mkWins(100, 100) // t1 = (1.0-0.5)/0.5 = 1.0
+	want := twoTierExpected(0.4)
+
+	cases := map[string]sim.BatchResult{
+		"absent (greedy-only mode)": {},
+		"ties greedy":               mkWins(20, 20),
+		"below greedy":              mkWins(10, 20),
+	}
+	for name, mcts := range cases {
+		if got := computeSkillGradient(random, greedy, mcts, 2); math.Abs(got-want) > 1e-9 {
+			t.Errorf("MCTS %s: greedy-only-detectable skill must equal the scaled 0.4 term %.3f, got %.3f",
+				name, want, got)
+		}
+	}
+
+	// Same cap below saturation: greedy 80% over a 50% baseline (t1 = 0.6),
+	// MCTS exactly matching greedy adds nothing.
+	want = twoTierExpected(0.4 * 0.6)
+	if got := computeSkillGradient(mkWins(50, 100), mkWins(80, 100), mkWins(16, 20), 2); math.Abs(got-want) > 1e-9 {
+		t.Errorf("partial greedy-only skill must equal scaled 0.4*0.6 = %.3f, got %.3f", want, got)
+	}
+}
+
+// TestTwoTierSkillMCTSTermAddsAboveGreedy verifies the verbatim plan formula
+// on hand-computed values, and that supplying MCTS data can only raise skill
+// relative to greedy-only mode (the second max(0, ...) term is nonnegative).
+func TestTwoTierSkillMCTSTermAddsAboveGreedy(t *testing.T) {
+	// random 50%, greedy 75%, mcts 90%:
+	//   t1 = 0.4*(0.75-0.50)/(1-0.50) = 0.4*0.5 = 0.20
+	//   t2 = 0.6*(0.90-0.75)/(1-0.75) = 0.6*0.6 = 0.36
+	//   raw = 0.56
+	want := twoTierExpected(0.56)
+	got := computeSkillGradient(mkWins(50, 100), mkWins(75, 100), mkWins(18, 20), 2)
+	if math.Abs(got-want) > 1e-9 {
+		t.Errorf("two-tier formula: want scaled 0.56 = %.3f, got %.3f", want, got)
+	}
+
+	greedyOnly := computeSkillGradient(mkWins(50, 100), mkWins(75, 100), sim.BatchResult{}, 2)
+	if got < greedyOnly {
+		t.Errorf("two-tier skill %.3f below greedy-only skill %.3f: MCTS term went negative", got, greedyOnly)
+	}
+}
+
+// TestTwoTierSkillWarLikeFixture: a war-like game has no decisions, so no AI
+// can beat any other -- all three seat-0 rates sit at the same coin-flip
+// value (modulo sampling noise) and skill must be ~0.
+func TestTwoTierSkillWarLikeFixture(t *testing.T) {
+	if got := computeSkillGradient(mkWins(50, 100), mkWins(50, 100), mkWins(10, 20), 2); got != 0 {
+		t.Errorf("war-like fixture with identical rates must score exactly 0, got %.3f", got)
+	}
+	// With realistic sampling noise (greedy 52%, mcts 50%) it stays near 0.
+	if got := computeSkillGradient(mkWins(50, 100), mkWins(52, 100), mkWins(10, 20), 2); got > 0.05 {
+		t.Errorf("war-like fixture with noise-level greedy edge must score ~0 (<= 0.05), got %.3f", got)
+	}
+}
+
+// TestTwoTierSkillPerfectGreedyNoNaN: greedyWR == 1.0 zeroes the MCTS term's
+// denominator; the term must drop to 0 (nothing left to detect), never NaN.
+func TestTwoTierSkillPerfectGreedyNoNaN(t *testing.T) {
+	got := computeSkillGradient(mkWins(50, 100), mkWins(100, 100), mkWins(20, 20), 2)
+	if math.IsNaN(got) {
+		t.Fatal("perfect greedy + perfect mcts produced NaN")
+	}
+	if want := twoTierExpected(0.4); math.Abs(got-want) > 1e-9 {
+		t.Errorf("perfect greedy caps at the scaled 0.4 term %.3f, got %.3f", want, got)
+	}
+}
+
+// TestComputeFitnessWrapperEquivalence: the 3-arg ComputeFitness (kept for
+// callers that have no MCTS batch, e.g. pkg/evolution/behavior.go) must be
+// exactly the 4-arg version with an empty MCTS result.
+func TestComputeFitnessWrapperEquivalence(t *testing.T) {
+	g := seeds.CrazyEights()
+	runner := GetRunner(g)
+	random := sim.RunBatch(g, runner, &sim.RandomAI{}, 20, 7)
+	greedy := runGreedyBatch(g, runner, 20, 507)
+
+	a := ComputeFitness(random, greedy, g.Players)
+	b := ComputeFitnessWithMCTS(random, greedy, sim.BatchResult{}, g.Players)
+	if a != b {
+		t.Errorf("ComputeFitness diverged from ComputeFitnessWithMCTS with empty MCTS batch:\n  %+v\n  %+v", a, b)
 	}
 }
 
@@ -854,7 +968,7 @@ func TestSkillGradient(t *testing.T) {
 	randomResult := sim.RunBatch(g, runner, randomAI, 100, 0)
 	greedyResult := runGreedyBatch(g, runner, 100, 500)
 
-	skill := computeSkillGradient(randomResult, greedyResult, g.Players)
+	skill := computeSkillGradient(randomResult, greedyResult, sim.BatchResult{}, g.Players)
 	t.Logf("Whist skill gradient: %.3f (random wins=%v, greedy wins=%v)",
 		skill, randomResult.WinCounts, greedyResult.WinCounts)
 

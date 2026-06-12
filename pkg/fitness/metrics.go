@@ -25,17 +25,33 @@ const (
 	WeightLength    = 0.10
 )
 
-// ComputeFitness calculates all 5 metrics from simulation results.
+// ComputeFitness calculates all 5 metrics from simulation results, with no
+// MCTS batch: the skill gradient is greedy-only (capped at the scaled 0.4
+// term, see computeSkillGradient). This is the default-mode entry point --
+// kept at the 3-argument signature for callers that never run MCTS
+// (pkg/evolution/behavior.go, the default Evaluate path).
 func ComputeFitness(
 	randomResult sim.BatchResult,
 	greedyResult sim.BatchResult,
+	numPlayers int,
+) Metrics {
+	return ComputeFitnessWithMCTS(randomResult, greedyResult, sim.BatchResult{}, numPlayers)
+}
+
+// ComputeFitnessWithMCTS calculates all 5 metrics including the two-tier
+// skill gradient (audit Task 20). mctsResult may be the zero value when no
+// MCTS batch was run; the MCTS skill term is then 0.
+func ComputeFitnessWithMCTS(
+	randomResult sim.BatchResult,
+	greedyResult sim.BatchResult,
+	mctsResult sim.BatchResult,
 	numPlayers int,
 ) Metrics {
 	m := Metrics{
 		MeaningfulDecisions: computeDecisionDensity(randomResult),
 		GameArc:             computeGameArc(randomResult),
 		Interaction:         computeInteraction(randomResult),
-		SkillGradient:       computeSkillGradient(randomResult, greedyResult, numPlayers),
+		SkillGradient:       computeSkillGradient(randomResult, greedyResult, mctsResult, numPlayers),
 		SessionLength:       computeSessionLength(randomResult, numPlayers),
 	}
 
@@ -215,9 +231,48 @@ func computeInteraction(result sim.BatchResult) float64 {
 	return clamp(ratio/0.5, 0, 1)
 }
 
-// computeSkillGradient measures whether better play leads to better results.
-// Compares greedy AI win rate vs random AI expected win rate.
-func computeSkillGradient(randomResult, greedyResult sim.BatchResult, numPlayers int) float64 {
+// Two-tier skill constants (audit Task 20, the v2 design's formula):
+//
+//	raw = 0.4*max(0, greedyWR - randomBaselineWR)/(1-randomBaselineWR)
+//	    + 0.6*max(0, mctsWR  - greedyWR)         /(1-greedyWR)
+//
+// The 0.4/0.6 split is plan-fixed: skill a 1-ply greedy can detect saturates
+// at 0.4 of the raw scale; the top 0.6 is reachable only by ISMCTS outplaying
+// greedy. skillScale is the metric's raw-to-[0,1] divisor -- the ONE constant
+// Task 20 may adjust (weights stay at 0.25/0.25/0.20/0.20/0.10).
+//
+// skillScale = 0.5, justified by the measured classic spread over
+// CalibrationSeeds (post-Task-20 block in calibration_test.go): the
+// strongest classic greedy term is gin rummy's 0.905 (greedyWR 0.945 over a
+// 0.484 empirical baseline at seed 44), i.e. raw ~0.36 with its MCTS term 0
+// (greedy outplays 20-determinization ISMCTS at gin: mctsWR 0.900). At raw
+// scale (1.0) every real game would compress below ~0.45 and gin would lose
+// its calibration margin over the instant-knock fixture (measured: gin
+// total 0.475 vs the required 0.527); /0.5 restores the gate's Task 14
+// margins while preserving the cap structure: greedy-only-detectable skill
+// tops out at 0.4/0.5 = 0.8, and the top 20% of the metric is reachable
+// only through the MCTS tier. A scale of 0.4 or lower would let greedy-only
+// games saturate the metric at 1.0, neutering the second tier.
+const (
+	skillGreedyWeight = 0.4
+	skillMCTSWeight   = 0.6
+	skillScale        = 0.5
+)
+
+// computeSkillGradient measures whether better play leads to better results,
+// on two tiers: greedy AI over the empirical random baseline, and ISMCTS
+// over the empirical greedy baseline (audit Task 20). All win rates are
+// seat-0 rates; every baseline is EMPIRICAL from the paired batch run on the
+// same seeds (dd-qt7) -- a structural first-player advantage appears in all
+// three rates and cancels out of both difference terms, so a zero-skill game
+// scores 0 regardless of FPA.
+//
+// mctsResult is the zero value in default (greedy-only) mode -- Task 19's
+// 2s/genome MCTS budget FAILED (~14.5s measured, see pkg/sim/mcts.go), so
+// the 20-game MCTS batch runs only for selected genomes (EvaluateWithMCTS;
+// MCTS-for-top-decile is the plan's production fallback). Without MCTS data
+// the second term is 0 and skill is capped at the scaled 0.4 greedy term.
+func computeSkillGradient(randomResult, greedyResult, mctsResult sim.BatchResult, numPlayers int) float64 {
 	if greedyResult.Completions == 0 || numPlayers == 0 {
 		return 0
 	}
@@ -235,24 +290,30 @@ func computeSkillGradient(randomResult, greedyResult sim.BatchResult, numPlayers
 	// In greedy games, player 0 uses greedy AI, rest use random.
 	// Greedy win rate = player 0's wins / total completions.
 	greedyWR := 0.0
-	if greedyResult.Completions > 0 && len(greedyResult.WinCounts) > 0 {
+	if len(greedyResult.WinCounts) > 0 {
 		greedyWR = float64(greedyResult.WinCounts[0]) / float64(greedyResult.Completions)
 	}
 
-	// Skill = how much better greedy does vs the measured random baseline.
-	skillDiff := greedyWR - baselineWR
-	if skillDiff < 0 {
-		skillDiff = 0 // Greedy no better than random seat 0 = no skill signal
+	raw := 0.0
+
+	// Tier 1: greedy over the empirical random seat-0 baseline. Degenerate
+	// denominator (random seat 0 already wins 100%) leaves no detectable
+	// greedy headroom: term is 0.
+	if maxDiff := 1.0 - baselineWR; maxDiff > 0 {
+		raw += skillGreedyWeight * math.Max(0, greedyWR-baselineWR) / maxDiff
 	}
 
-	// Normalize linearly from the baseline (0.0) to a 100% greedy win rate (1.0).
-	// Saturates only when greedy wins every game.
-	maxDiff := 1.0 - baselineWR
-	if maxDiff == 0 {
-		return 0
+	// Tier 2: ISMCTS over the empirical greedy seat-0 baseline, same shape.
+	// Skipped when no MCTS batch ran (greedy-only mode) or when greedy
+	// already wins every game (no headroom left to detect, never NaN).
+	if mctsResult.Completions > 0 && len(mctsResult.WinCounts) > 0 {
+		mctsWR := float64(mctsResult.WinCounts[0]) / float64(mctsResult.Completions)
+		if maxDiff := 1.0 - greedyWR; maxDiff > 0 {
+			raw += skillMCTSWeight * math.Max(0, mctsWR-greedyWR) / maxDiff
+		}
 	}
 
-	return clamp(skillDiff/maxDiff, 0, 1)
+	return clamp(raw/skillScale, 0, 1)
 }
 
 // computeSessionLength scores game length measured in DECISIONS PER PLAYER
