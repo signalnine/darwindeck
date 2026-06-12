@@ -154,3 +154,133 @@ func TestDegeneracyPassesAllClassics(t *testing.T) {
 		}
 	}
 }
+
+// --- Round 3: seat participation + greedy-batch detectors ---
+
+// TestDegeneracySeatParticipation: a game where one seat barely ever acts is
+// a lockout (the r2 rank03 reverse ping-pong locked 2 of 4 seats out
+// entirely). min-seat share of turns, averaged over games, must clear
+// 0.5/numPlayers on the random batch.
+func TestDegeneracySeatParticipation(t *testing.T) {
+	g := &genome.Genome{Skeleton: genome.Shedding, Players: 4}
+
+	// Seats 0 and 1 ping-pong; seats 2 and 3 get one token move each in 42
+	// records: min share 1/42 << 0.5/4.
+	lockout := make([]sim.TurnRecord, 0, 42)
+	for i := 0; i < 40; i++ {
+		lockout = append(lockout, sim.TurnRecord{Player: i % 2, LegalMoves: 3, Meaningful: true})
+	}
+	lockout = append(lockout,
+		sim.TurnRecord{Player: 2, LegalMoves: 3, Meaningful: true},
+		sim.TurnRecord{Player: 3, LegalMoves: 3, Meaningful: true})
+	if reason := CheckDegeneracy(degBatch(lockout), g); reason != "seat_participation" {
+		t.Fatalf("2-of-4-seat lockout must flag seat_participation, got %q", reason)
+	}
+
+	// Fair rotation: every seat at exactly 1/4 share passes.
+	fair := make([]sim.TurnRecord, 40)
+	for i := range fair {
+		fair[i] = sim.TurnRecord{Player: i % 4, LegalMoves: 3, Meaningful: true}
+	}
+	if reason := CheckDegeneracy(degBatch(fair), g); reason != "" {
+		t.Fatalf("fair 4-seat rotation must pass, got %q", reason)
+	}
+
+	// Mild imbalance (a seat at 1/8 share in a 4p game = exactly the 0.5/N
+	// boundary) must NOT veto: the threshold is strict-below.
+	mild := make([]sim.TurnRecord, 0, 40)
+	for i := 0; i < 35; i++ {
+		mild = append(mild, sim.TurnRecord{Player: i % 3, LegalMoves: 3, Meaningful: true})
+	}
+	for i := 0; i < 5; i++ {
+		mild = append(mild, sim.TurnRecord{Player: 3, LegalMoves: 3, Meaningful: true})
+	}
+	if reason := CheckDegeneracy(degBatch(mild), g); reason != "" {
+		t.Fatalf("seat at 1/8 share (= 0.5/N boundary) must pass, got %q", reason)
+	}
+}
+
+// greedyBatch builds a single-game batch shaped like a Tier 2 greedy batch.
+func greedyBatch(records []sim.TurnRecord, games, timeouts int) sim.BatchResult {
+	res := sim.BatchResult{GamesPlayed: games, Timeouts: timeouts}
+	for i := 0; i < games; i++ {
+		res.AllTurns = append(res.AllTurns, records)
+	}
+	return res
+}
+
+// TestGreedyDegeneracyTimeout: greedy-batch timeout share > 0.10 is a veto.
+// The r2 rank01 class cycled to the 390-turn cap under greedy play while
+// completing fine under random -- non-termination that random Tier 1 cannot
+// see. Classic greedy batches measure 0 timeouts (margins documented on the
+// threshold constant).
+func TestGreedyDegeneracyTimeout(t *testing.T) {
+	g := &genome.Genome{Skeleton: genome.Shedding, Players: 2}
+	healthy := []sim.TurnRecord{{Player: 0, LegalMoves: 3, Meaningful: true}, {Player: 1, LegalMoves: 3, Meaningful: true}}
+
+	if reason := CheckGreedyDegeneracy(greedyBatch(healthy, 20, 3), g); reason != "greedy_timeout" {
+		t.Fatalf("15%% greedy timeouts must flag greedy_timeout, got %q", reason)
+	}
+	if reason := CheckGreedyDegeneracy(greedyBatch(healthy, 20, 2), g); reason != "" {
+		t.Fatalf("10%% greedy timeouts (= boundary) must pass, got %q", reason)
+	}
+	if reason := CheckGreedyDegeneracy(greedyBatch(healthy, 20, 0), g); reason != "" {
+		t.Fatalf("clean greedy batch must pass, got %q", reason)
+	}
+}
+
+// TestGreedyDegeneracyTempoAndSeats: tempo_monopoly and seat_participation
+// run on the greedy batch too -- the round-2 blind spot (all detectors saw
+// only random play) is closed: a genome whose monopoly only skilled play
+// discovers is vetoed by the same thresholds, under greedy-prefixed reasons.
+func TestGreedyDegeneracyTempoAndSeats(t *testing.T) {
+	g := &genome.Genome{Skeleton: genome.Shedding, Players: 2}
+
+	long := make([]sim.TurnRecord, 0, 40)
+	for seg := 0; seg < 4; seg++ {
+		for i := 0; i < 10; i++ {
+			long = append(long, sim.TurnRecord{Player: seg % 2, LegalMoves: 3, Meaningful: true})
+		}
+	}
+	if reason := CheckGreedyDegeneracy(greedyBatch(long, 5, 0), g); reason != "greedy_tempo_monopoly" {
+		t.Fatalf("greedy-batch mean run 10 must flag greedy_tempo_monopoly, got %q", reason)
+	}
+
+	g4 := &genome.Genome{Skeleton: genome.Shedding, Players: 4}
+	lockout := make([]sim.TurnRecord, 0, 42)
+	for i := 0; i < 40; i++ {
+		lockout = append(lockout, sim.TurnRecord{Player: i % 2, LegalMoves: 3, Meaningful: true})
+	}
+	lockout = append(lockout,
+		sim.TurnRecord{Player: 2, LegalMoves: 3, Meaningful: true},
+		sim.TurnRecord{Player: 3, LegalMoves: 3, Meaningful: true})
+	// Interleave so the run length stays short: rebuild as alternating pairs
+	// to isolate the seat detector from the tempo detector.
+	alt := make([]sim.TurnRecord, 0, 42)
+	for i := 0; i < 20; i++ {
+		alt = append(alt, sim.TurnRecord{Player: 0, LegalMoves: 3}, sim.TurnRecord{Player: 1, LegalMoves: 3})
+	}
+	alt = append(alt, sim.TurnRecord{Player: 2, LegalMoves: 3}, sim.TurnRecord{Player: 3, LegalMoves: 3})
+	if reason := CheckGreedyDegeneracy(greedyBatch(alt, 5, 0), g4); reason != "greedy_seat_participation" {
+		t.Fatalf("greedy-batch seat lockout must flag greedy_seat_participation, got %q", reason)
+	}
+
+	fair := make([]sim.TurnRecord, 40)
+	for i := range fair {
+		fair[i] = sim.TurnRecord{Player: i % 2, LegalMoves: 3, Meaningful: true}
+	}
+	if reason := CheckGreedyDegeneracy(greedyBatch(fair, 5, 0), g); reason != "" {
+		t.Fatalf("healthy greedy batch must pass, got %q", reason)
+	}
+
+	// Greedy batch never applies the agency floor or churn: meaningfulness
+	// under a deterministic AI is not the metric's semantics, and churn is a
+	// random-supply economy statistic.
+	forced := make([]sim.TurnRecord, 40)
+	for i := range forced {
+		forced[i] = sim.TurnRecord{Player: i % 2, LegalMoves: 5} // no Meaningful
+	}
+	if reason := CheckGreedyDegeneracy(greedyBatch(forced, 5, 0), g); reason != "" {
+		t.Fatalf("greedy batch must not apply the non_agentic floor, got %q", reason)
+	}
+}

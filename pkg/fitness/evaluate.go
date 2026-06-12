@@ -35,9 +35,29 @@ type EvaluationResult struct {
 	Valid       bool
 	// DegenerateReason is non-empty when the Tier 2 degeneracy veto rejected
 	// the genome (see degeneracy.go): the game passed Tier 1 and produced
-	// metrics, but its random batch carries a degeneracy signature
-	// (non_agentic, tempo_monopoly, draw_supply_churn). Valid is false.
+	// metrics, but one of its Tier 2 batches carries a degeneracy signature.
+	// Random-batch reasons: non_agentic, tempo_monopoly, seat_participation,
+	// draw_supply_churn. Greedy-batch reasons (round 3, greedy_ prefix):
+	// greedy_timeout, greedy_tempo_monopoly, greedy_seat_participation.
+	// Valid is false either way.
 	DegenerateReason string
+	// Degeneracy carries the raw detector statistics behind the veto
+	// decision, for diagnosis and the calibrate command's threshold table
+	// (round 3: thresholds are derived from these numbers measured on the
+	// classics). Zero-valued for tiers that never ran.
+	Degeneracy DegeneracyStats
+}
+
+// DegeneracyStats are the per-batch detector inputs (see degeneracy.go for
+// each statistic's definition and threshold).
+type DegeneracyStats struct {
+	RandomMeanRun      float64 // mean consecutive same-player run, random batch
+	RandomMinSeatShare float64 // mean min-seat turn share, random batch
+	RandomDeltaShare   float64 // share of moves with nonzero OptionDelta (rummy churn)
+	GreedyMeanRun      float64 // mean consecutive same-player run, greedy batch
+	GreedyMinSeatShare float64 // mean min-seat turn share, greedy batch
+	GreedyTimeoutShare float64 // share of greedy-batch games hitting the turn cap
+	GreedyRan          bool    // false when a random-batch veto skipped the greedy batch
 }
 
 // Evaluate runs the default tiered evaluation pipeline for a genome.
@@ -102,16 +122,16 @@ func evaluate(g *genome.Genome, baseSeed uint64, mcts *MCTSEvalConfig) Evaluatio
 	randomAI := &sim.RandomAI{}
 	randomResult := sim.RunBatch(g, runner, randomAI, tier2RandomGames, baseSeed+100, hooks...)
 
-	// Degeneracy veto (Task 28 round 2): the random batch's turn records are
-	// checked for game-shaped non-game signatures BEFORE the genome is
-	// declared valid. A vetoed genome's metrics are still computed into
-	// EvaluationResult.Metrics (the calibrate subcommand, however, prints
-	// n/a for vetoed evals) but it is fitness 0 in the pipeline, exactly
-	// like a Tier 1 kill. Both modes share this path, so an MCTS grant can
-	// never resurrect a vetoed genome. KNOWN GAP (round-3 hazard): all
-	// three detectors see only RANDOM play -- a genome healthy under random
-	// play but degenerate under skilled play escapes the veto; designer
-	// review is the backstop.
+	// Degeneracy veto, random batch (Task 28 round 2): the random batch's
+	// turn records are checked for game-shaped non-game signatures BEFORE
+	// the genome is declared valid. A vetoed genome's metrics are still
+	// computed into EvaluationResult.Metrics (the calibrate subcommand,
+	// however, prints n/a for vetoed evals) but it is fitness 0 in the
+	// pipeline, exactly like a Tier 1 kill. Both modes share this path, so
+	// an MCTS grant can never resurrect a vetoed genome.
+	result.Degeneracy.RandomMeanRun = meanConsecutiveRun(randomResult)
+	result.Degeneracy.RandomMinSeatShare = meanMinSeatShare(randomResult, g.Players)
+	result.Degeneracy.RandomDeltaShare = optionDeltaShare(randomResult)
 	if reason := CheckDegeneracy(randomResult, g); reason != "" {
 		result.DegenerateReason = reason
 		// No greedy batch for a dead genome: metrics are reported for
@@ -120,10 +140,29 @@ func evaluate(g *genome.Genome, baseSeed uint64, mcts *MCTSEvalConfig) Evaluatio
 		return result
 	}
 
-	result.Valid = true
-
 	// Games with greedy AI (player 0) vs random opponents
 	greedyResult := runGreedyBatch(g, runner, tier2GreedyGames, baseSeed+1000, hooks...)
+
+	// Degeneracy veto, greedy batch (Task 28 round 3): the round-2 detectors
+	// ran on random play only -- the documented blind spot the r2 flagship
+	// exploited (skilled-play-only tempo monopolies, greedy-play cycles to
+	// the turn cap). The greedy batch already exists for the skill gradient;
+	// it now also feeds tempo/seat/timeout detectors. Same contract as the
+	// random veto: metrics survive for diagnosis, fitness 0 in the pipeline,
+	// no MCTS resurrection.
+	result.Degeneracy.GreedyRan = true
+	result.Degeneracy.GreedyMeanRun = meanConsecutiveRun(greedyResult)
+	result.Degeneracy.GreedyMinSeatShare = meanMinSeatShare(greedyResult, g.Players)
+	if greedyResult.GamesPlayed > 0 {
+		result.Degeneracy.GreedyTimeoutShare = float64(greedyResult.Timeouts) / float64(greedyResult.GamesPlayed)
+	}
+	if reason := CheckGreedyDegeneracy(greedyResult, g); reason != "" {
+		result.DegenerateReason = reason
+		result.Metrics = ComputeFitness(randomResult, sim.BatchResult{}, g.Players)
+		return result
+	}
+
+	result.Valid = true
 
 	// Optional MCTS batch (player 0) vs random opponents. Seed offset +2000
 	// keeps the tier-1 (+0), random (+100), and greedy (+1000) batches

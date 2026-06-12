@@ -19,13 +19,15 @@ var reducedMCTS = fitness.MCTSEvalConfig{Iterations: 50, Determinizations: 5}
 // running mean) and publish its fitness as the MCTS running mean, while
 // below-decile individuals keep their greedy-only published fitness.
 //
-// InstantKnockRummy is the repo's pinned large-MCTS-vs-greedy-gap genome
-// (TestMCTSTierRewardsDegenKnockTiming, pkg/fitness): on seed 44 ISMCTS
-// discovers the knock-timing strategy the greedy scorer misses entirely, so
+// Whist at seed 44 is the gap genome: ISMCTS outplays the greedy scorer there
+// (measured: skill 0.065 greedy-only vs 0.206 two-tier at these knobs), so
 // EvaluateWithMCTS produces a visibly different TotalFitness than the
-// greedy-only Evaluate at the same seed. BaseSeed is chosen so the decile
-// pass's derived seed for population index 0 lands exactly on 44 (uint64
-// wrap-around is well-defined).
+// greedy-only Evaluate at the same seed. (ROUND 3: the previous gap genome,
+// InstantKnockRummy at seed 44, is now killed by the greedy_timeout veto
+// before the MCTS tier -- see TestMCTSTierRewardsDegenKnockTiming -- so a
+// VALID classic carries this plumbing test instead.) BaseSeed is chosen so
+// the decile pass's derived seed for population index 0 lands exactly on 44
+// (uint64 wrap-around is well-defined).
 func TestTopDecileMCTSPublishesGapGenome(t *testing.T) {
 	// Runtime subtraction so the uint64 wrap is legal (a constant expression
 	// would be rejected at compile time).
@@ -41,24 +43,24 @@ func TestTopDecileMCTSPublishesGapGenome(t *testing.T) {
 	}
 	e := NewEngine(cfg, allSeeds())
 
-	gap := &Individual{Genome: seeds.InstantKnockRummy(), Valid: true, EvalCount: 1, FitnessSum: 0.9}
+	gap := &Individual{Genome: seeds.Whist(), Valid: true, EvalCount: 1, FitnessSum: 0.9}
 	gap.Fitness.TotalFitness = 0.9
 	mid := &Individual{Genome: seeds.CrazyEights(), Valid: true, EvalCount: 2, FitnessSum: 1.0}
 	mid.Fitness.TotalFitness = 0.5
-	low := &Individual{Genome: seeds.Whist(), Valid: true, EvalCount: 1, FitnessSum: 0.4}
+	low := &Individual{Genome: seeds.MauMau(), Valid: true, EvalCount: 1, FitnessSum: 0.4}
 	low.Fitness.TotalFitness = 0.4
 	e.Population = []*Individual{gap, mid, low}
 	e.Generation = 0
 
 	e.runMCTSTopDecile()
 
-	full := fitness.EvaluateWithMCTS(seeds.InstantKnockRummy(), 44, reducedMCTS)
+	full := fitness.EvaluateWithMCTS(seeds.Whist(), 44, reducedMCTS)
 	if !full.Valid {
-		t.Fatal("reference EvaluateWithMCTS(instant-knock, 44) must pass tiers 0-1 (pinned by the hazard test)")
+		t.Fatal("reference EvaluateWithMCTS(whist, 44) must pass tiers 0-2")
 	}
-	base := fitness.Evaluate(seeds.InstantKnockRummy(), 44)
+	base := fitness.Evaluate(seeds.Whist(), 44)
 	if !base.Valid {
-		t.Fatal("reference Evaluate(instant-knock, 44) must pass tiers 0-1")
+		t.Fatal("reference Evaluate(whist, 44) must pass tiers 0-2")
 	}
 	// Precondition for "includes the MCTS term": the two-tier eval differs
 	// from the greedy-only eval at the same seed via the skill gradient.

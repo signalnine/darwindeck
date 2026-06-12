@@ -46,6 +46,108 @@ type calRow struct {
 	means, sds  [5]float64
 }
 
+// vetoStatNames are the degeneracy-detector statistics in report order,
+// matching vetoStats below (audit Task 28 round 3: detector thresholds are
+// derived from these numbers measured on the classics, so the calibrate
+// command must print them per genome).
+var vetoStatNames = [6]string{"r_meanrun", "r_minseat", "r_churn", "g_meanrun", "g_minseat", "g_timeout"}
+
+// vetoStats extracts the detector statistics from one evaluation. The greedy
+// columns are only present when the greedy batch ran (greedyRan false on
+// random-batch vetoes and Tier 1 kills).
+func vetoStats(d fitness.DegeneracyStats) [6]float64 {
+	return [6]float64{
+		d.RandomMeanRun,
+		d.RandomMinSeatShare,
+		d.RandomDeltaShare,
+		d.GreedyMeanRun,
+		d.GreedyMinSeatShare,
+		d.GreedyTimeoutShare,
+	}
+}
+
+// vetoRow is one genome's aggregated veto-statistics measurement, over every
+// evaluation that reached Tier 2 (vetoed evaluations included: the
+// statistics are exactly what the veto decided on).
+type vetoRow struct {
+	id            string
+	players       int
+	randomSamples int
+	greedySamples int
+	means         [6]float64
+}
+
+// aggregateVetoRow averages each statistic over its available samples
+// (greedy columns only over evaluations whose greedy batch ran).
+func aggregateVetoRow(id string, players int, stats []fitness.DegeneracyStats) vetoRow {
+	row := vetoRow{id: id, players: players}
+	var greedy []fitness.DegeneracyStats
+	for _, d := range stats {
+		if d.GreedyRan {
+			greedy = append(greedy, d)
+		}
+	}
+	row.randomSamples = len(stats)
+	row.greedySamples = len(greedy)
+	for _, d := range stats {
+		s := vetoStats(d)
+		for k := 0; k < 3; k++ {
+			row.means[k] += s[k]
+		}
+	}
+	for k := 0; k < 3; k++ {
+		if len(stats) > 0 {
+			row.means[k] /= float64(len(stats))
+		}
+	}
+	for _, d := range greedy {
+		s := vetoStats(d)
+		for k := 3; k < 6; k++ {
+			row.means[k] += s[k]
+		}
+	}
+	for k := 3; k < 6; k++ {
+		if len(greedy) > 0 {
+			row.means[k] /= float64(len(greedy))
+		}
+	}
+	return row
+}
+
+// printVetoTable renders the degeneracy-detector statistics table. minseat
+// columns print both the raw share and its multiple of the fair share 1/N
+// (the threshold is 0.5x fair share).
+func printVetoTable(w io.Writer, rows []vetoRow) {
+	fmt.Fprintf(w, "%-22s %-7s %-9s", "genome", "n(r/g)", "players")
+	for _, name := range vetoStatNames {
+		fmt.Fprintf(w, " %-14s", name)
+	}
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, strings.Repeat("-", 22+1+7+1+9+6*15))
+	for _, r := range rows {
+		fmt.Fprintf(w, "%-22s %-7s %-9d", r.id,
+			fmt.Sprintf("%d/%d", r.randomSamples, r.greedySamples), r.players)
+		fair := 1.0 / float64(r.players)
+		for k, name := range vetoStatNames {
+			cell := "n/a"
+			n := r.randomSamples
+			if k >= 3 {
+				n = r.greedySamples
+			}
+			if n > 0 {
+				switch name {
+				case "r_minseat", "g_minseat":
+					cell = fmt.Sprintf("%.3f (%.2fx)", r.means[k], r.means[k]/fair)
+				default:
+					cell = fmt.Sprintf("%.3f", r.means[k])
+				}
+			}
+			fmt.Fprintf(w, " %-14s", cell)
+		}
+		fmt.Fprintln(w)
+	}
+}
+
 // aggregateRow computes per-metric mean and sd over the samples (one sample
 // per evaluation that passed Tier 1).
 func aggregateRow(id, skeleton string, evals int, samples [][5]float64) calRow {
@@ -121,10 +223,12 @@ func cmdCalibrate(args []string) {
 	start := time.Now()
 	totalGames := 0
 	rows := make([]calRow, 0, len(genomes))
+	vetoRows := make([]vetoRow, 0, len(genomes))
 	var kills []string
 
 	for _, g := range genomes {
 		var samples [][5]float64
+		var detectorStats []fitness.DegeneracyStats
 		for _, seed := range pinned {
 			res := fitness.Evaluate(g, seed)
 			if len(res.Tier0Errors) > 0 {
@@ -133,6 +237,9 @@ func cmdCalibrate(args []string) {
 				os.Exit(1)
 			}
 			totalGames += fitness.GamesPerEvaluation(res)
+			if res.Tier1.Passed {
+				detectorStats = append(detectorStats, res.Degeneracy)
+			}
 			if !res.Valid {
 				reason := res.Tier1.Reason
 				if res.DegenerateReason != "" {
@@ -144,10 +251,16 @@ func cmdCalibrate(args []string) {
 			samples = append(samples, rawMetrics(res.Metrics))
 		}
 		rows = append(rows, aggregateRow(g.ID, g.Skeleton.String(), len(pinned), samples))
+		vetoRows = append(vetoRows, aggregateVetoRow(g.ID, g.Players, detectorStats))
 	}
 	elapsed := time.Since(start)
 
 	printCalibrationTable(os.Stdout, rows)
+
+	fmt.Printf("\nDegeneracy-detector statistics (means over evals reaching Tier 2; vetoed evals included).\n")
+	fmt.Printf("Thresholds: meanrun > 6 vetoes; minseat < 0.50x fair share vetoes; churn > 0.10 vetoes (rummy);\n")
+	fmt.Printf("g_timeout > 0.10 vetoes. r_ = random batch, g_ = greedy batch.\n\n")
+	printVetoTable(os.Stdout, vetoRows)
 
 	if len(kills) > 0 {
 		fmt.Printf("\nPipeline kills (%d):\n", len(kills))

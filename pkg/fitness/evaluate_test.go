@@ -5,6 +5,7 @@ import (
 
 	"github.com/darwindeck/darwindeck/pkg/genome"
 	"github.com/darwindeck/darwindeck/pkg/seeds"
+	"github.com/darwindeck/darwindeck/pkg/sim"
 )
 
 // TestTier2BatchSizes pins the Tier 2 sample sizes (Task 13.2,
@@ -73,18 +74,45 @@ func TestEvaluateWithMCTSGinSkillAtLeastGreedyOnly(t *testing.T) {
 // gate measures the greedy-only pipeline. If this test ever fails because
 // the gap closed, the hazard is gone -- update the calibration block and
 // reconsider full-MCTS gate measurement.
+//
+// ROUND 3 RESTRUCTURE: the fixture's single Tier-2-surviving seed (44) is
+// now killed BEFORE the MCTS tier by the greedy_timeout veto (greedy play
+// cycles 11% of its games to the turn cap), so the hazard's only pipeline
+// carrier is dead -- Evaluate/EvaluateWithMCTS both return invalid and the
+// MCTS tier is unreachable for it (asserted below as the defense-in-depth
+// claim). The METRIC-level mechanism is still pinned by running the three
+// Tier 2 batches directly through computeSkillGradient: a future veto or
+// threshold change that resurrects the genome must not silently un-pin the
+// hazard.
 func TestMCTSTierRewardsDegenKnockTiming(t *testing.T) {
 	g := seeds.InstantKnockRummy()
-	// Seed 44 is the fixture's single Tier-1-surviving calibration seed.
+
+	// Pipeline level (round 3): the degeneracy veto kills seed 44 before the
+	// MCTS tier in BOTH modes -- an MCTS grant can never resurrect it.
 	base := Evaluate(g, 44)
 	full := EvaluateWithMCTS(g, 44, MCTSEvalConfig{Iterations: 50, Determinizations: 5})
-	if !base.Valid || !full.Valid {
-		t.Fatalf("instant-knock must pass tiers 0-1 on seed 44: base=%v full=%v (tier1: %q / %q)",
-			base.Valid, full.Valid, base.Tier1.Reason, full.Tier1.Reason)
+	if base.Valid || full.Valid {
+		t.Fatalf("instant-knock seed 44 must be vetoed in both modes (round 3 greedy_timeout): base=%v full=%v",
+			base.Valid, full.Valid)
 	}
-	gap := full.Metrics.SkillGradient - base.Metrics.SkillGradient
+	if base.DegenerateReason != "greedy_timeout" || full.DegenerateReason != "greedy_timeout" {
+		t.Errorf("expected greedy_timeout veto in both modes, got %q / %q",
+			base.DegenerateReason, full.DegenerateReason)
+	}
+
+	// Metric level: the knock-timing skill gap the MCTS term would award if
+	// the genome ever reached it. Batches are shaped exactly like the
+	// pipeline's (same seed offsets and seat assignments).
+	runner := GetRunner(g)
+	randomBatch := sim.RunBatch(g, runner, &sim.RandomAI{}, tier2RandomGames, 44+100)
+	greedyBatch := runGreedyBatch(g, runner, tier2GreedyGames, 44+1000)
+	mctsBatch := runMCTSBatch(g, runner, tier2MCTSGames, 44+2000, MCTSEvalConfig{Iterations: 50, Determinizations: 5})
+
+	greedyOnly := computeSkillGradient(randomBatch, greedyBatch, sim.BatchResult{}, g.Players)
+	twoTier := computeSkillGradient(randomBatch, greedyBatch, mctsBatch, g.Players)
+	gap := twoTier - greedyOnly
 	t.Logf("instant-knock seed 44: greedy-only skill %.3f, two-tier skill %.3f (gap %.3f)",
-		base.Metrics.SkillGradient, full.Metrics.SkillGradient, gap)
+		greedyOnly, twoTier, gap)
 	if gap < 0.2 {
 		t.Errorf("expected the MCTS term to fire hard on instant-knock (gap >= 0.2), got %.3f", gap)
 	}
