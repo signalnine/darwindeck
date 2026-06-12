@@ -2,6 +2,7 @@ package fitness
 
 import (
 	"sort"
+	"sync/atomic"
 	"testing"
 
 	"github.com/darwindeck/darwindeck/pkg/genome"
@@ -103,7 +104,10 @@ func TestBorrowedHooksFireDuringBatchSim(t *testing.T) {
 					tc.host, tc.mechanic)
 			}
 
-			counters := make([]int, len(hooks))
+			// Atomic: RunBatch plays the batch's games concurrently (Wave I)
+			// and these instrumentation hooks aggregate ACROSS games, unlike
+			// production hooks (stateless, per-game state only).
+			counters := make([]atomic.Int64, len(hooks))
 			funcs := make([]sim.HookFunc, len(hooks))
 			for i := range hooks {
 				i := i
@@ -112,11 +116,11 @@ func TestBorrowedHooksFireDuringBatchSim(t *testing.T) {
 					switch h.Point {
 					case mechanic.HookAfterPlay:
 						if event.Type == sim.EventCardPlayed {
-							counters[i]++
+							counters[i].Add(1)
 						}
 					case mechanic.HookEndOfRound, mechanic.HookScoring:
 						if event.Type == sim.EventRoundEnd {
-							counters[i]++
+							counters[i].Add(1)
 						}
 					}
 				}
@@ -130,8 +134,8 @@ func TestBorrowedHooksFireDuringBatchSim(t *testing.T) {
 			ai := &sim.RandomAI{}
 			result := sim.RunBatch(g, runner, ai, games, 42, funcs...)
 
-			for i, count := range counters {
-				if count == 0 {
+			for i := range counters {
+				if counters[i].Load() == 0 {
 					t.Errorf("hook %d (point=%d) for %s borrowing %s never fired across %d games",
 						i, hooks[i].Point, tc.host, tc.mechanic, games)
 				}
@@ -185,7 +189,10 @@ func TestBorrowedHooksMutateStateDuringBatchSim(t *testing.T) {
 				t.Fatalf("expected at least one hook")
 			}
 
-			mutations := 0
+			// Atomic for the same Wave I reason as the fire counters above;
+			// the state reads/writes inside the hook stay race-free because
+			// each game owns its state.
+			var mutations atomic.Int64
 			funcs := make([]sim.HookFunc, len(hooks))
 			for i := range hooks {
 				h := hooks[i]
@@ -211,13 +218,13 @@ func TestBorrowedHooksMutateStateDuringBatchSim(t *testing.T) {
 
 					for k, v := range state.Scores {
 						if k >= len(scoresBefore) || v != scoresBefore[k] {
-							mutations++
+							mutations.Add(1)
 							return
 						}
 					}
 					for k, hand := range state.Hands {
 						if k >= len(handSizesBefore) || len(hand) != handSizesBefore[k] {
-							mutations++
+							mutations.Add(1)
 							return
 						}
 					}
@@ -231,7 +238,7 @@ func TestBorrowedHooksMutateStateDuringBatchSim(t *testing.T) {
 
 			sim.RunBatch(g, runner, &sim.RandomAI{}, games, 42, funcs...)
 
-			if mutations == 0 {
+			if mutations.Load() == 0 {
 				t.Errorf("%s borrowing %s: hook never mutated state across %d games -- borrow is silently a no-op",
 					tc.host, tc.mechanic, games)
 			}

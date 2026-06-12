@@ -2,6 +2,9 @@ package sim
 
 import (
 	"math/rand/v2"
+	"runtime"
+	"sync"
+	"sync/atomic"
 
 	"github.com/darwindeck/darwindeck/pkg/genome"
 )
@@ -64,9 +67,145 @@ type GenericRunner interface {
 // HookFunc is called after each move with the resulting events.
 type HookFunc func(state *GameState, g *genome.Genome, event Event)
 
+// BatchGameParallelism caps how many of a batch's games one RunBatch call
+// plays concurrently (Wave I). It is deliberately a SMALL bounded factor, not
+// NumCPU: the evolution engines already fan out across genomes (cfg.Workers
+// goroutines -- 256 on the flagship EPYC), so RunBatch's internal parallelism
+// is NESTED under that fan-out and exists to shorten long serial poles (the
+// 20-game MCTS grants above all), not to claim the machine. The effective
+// worker count is min(BatchGameParallelism, GOMAXPROCS, n); see
+// batchWorkerCount. Pinned by TestRunBatchWorkerBoundIsBounded -- change
+// deliberately, with the engine-level fan-out in mind.
+const BatchGameParallelism = 8
+
+// batchWorkerCount returns the bounded worker count for an n-game batch:
+// min(BatchGameParallelism, runtime.GOMAXPROCS(0), n).
+func batchWorkerCount(n int) int {
+	w := BatchGameParallelism
+	if p := runtime.GOMAXPROCS(0); p < w {
+		w = p
+	}
+	if n < w {
+		w = n
+	}
+	return w
+}
+
 // RunBatch plays n games with the given genome, runner, and AI.
 // Returns aggregated statistics.
+//
+// PARALLELISM CONTRACT (Wave I): games are embarrassingly parallel -- each
+// derives its own PCG stream from baseSeed+i and owns its GameState -- so
+// they are played by a bounded worker pool (batchWorkerCount goroutines, the
+// pool itself being the concurrency semaphore: exactly that many goroutines
+// exist and each plays one game at a time). Per-game results land in
+// index-addressed slots and EVERY aggregate (WinCounts, TotalTurns,
+// Min/Max/AvgTurns, TurnsList, AllEvents/AllTurns/AllLeaders/AllWinners,
+// error counters) is reduced SEQUENTIALLY in game order afterwards, so the
+// result is BIT-IDENTICAL to the serial reference (runBatchSerial, kept
+// below; golden test TestRunBatchMatchesSerialGolden).
+//
+// SHARED-VALUE SAFETY (audited 2026-06-12, Wave I): everything the workers
+// share is read-only or stateless under SelectMove/hook calls --
+//   - g is never mutated by runners, AIs, hooks, or the probes;
+//   - all three skeleton runners are stateless empty structs;
+//   - RandomAI/GreedyAI(+scorers)/PerPlayerAI/MCTSAI carry only read-only
+//     configuration fields (see the concurrency note on MCTSAI);
+//   - hook closures from mechanic.HooksFor are stateless functions of
+//     (state, g, event) (see the guard comment on HooksFor).
+//
+// If any of those gain mutable per-game state, construct them PER GAME inside
+// the worker loop instead of sharing; the -race tests in parallel_test.go are
+// the tripwire.
 func RunBatch(g *genome.Genome, runner GenericRunner, ai AIPlayer, n int, baseSeed uint64, hooks ...HookFunc) BatchResult {
+	maxTurns := g.MaxTurns()
+	slots := make([]GameResult, n)
+
+	if workers := batchWorkerCount(n); workers > 1 {
+		var next atomic.Int64
+		var wg sync.WaitGroup
+		for w := 0; w < workers; w++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for {
+					i := int(next.Add(1)) - 1
+					if i >= n {
+						return
+					}
+					rng := rand.New(rand.NewPCG(baseSeed+uint64(i), 0))
+					slots[i] = runSingleGame(g, runner, ai, rng, maxTurns, hooks...)
+				}
+			}()
+		}
+		wg.Wait()
+	} else {
+		for i := 0; i < n; i++ {
+			rng := rand.New(rand.NewPCG(baseSeed+uint64(i), 0))
+			slots[i] = runSingleGame(g, runner, ai, rng, maxTurns, hooks...)
+		}
+	}
+
+	return reduceBatch(g, n, slots)
+}
+
+// reduceBatch aggregates per-game results sequentially in game order. It must
+// mirror runBatchSerial's fused loop exactly -- the golden test compares the
+// two implementations end to end.
+func reduceBatch(g *genome.Genome, n int, slots []GameResult) BatchResult {
+	result := BatchResult{
+		GamesPlayed: n,
+		WinCounts:   make([]int, g.Players),
+		TurnsList:   make([]int, 0, n),
+		AllEvents:   make([][]Event, 0, n),
+		AllTurns:    make([][]TurnRecord, 0, n),
+		AllLeaders:  make([][]int8, 0, n),
+		AllWinners:  make([]int, 0, n),
+	}
+
+	for i := 0; i < n; i++ {
+		gr := slots[i]
+
+		result.TurnsList = append(result.TurnsList, gr.Turns)
+		result.TotalTurns += gr.Turns
+
+		if i == 0 || gr.Turns < result.MinTurns {
+			result.MinTurns = gr.Turns
+		}
+		if gr.Turns > result.MaxTurns {
+			result.MaxTurns = gr.Turns
+		}
+
+		if gr.Error != "" {
+			if gr.Error == "max_turns" {
+				result.Timeouts++
+			} else {
+				result.Errors++
+			}
+		} else if gr.Winner >= 0 && gr.Winner < g.Players {
+			result.Completions++
+			result.WinCounts[gr.Winner]++
+		}
+
+		result.AllEvents = append(result.AllEvents, gr.Events)
+		result.AllTurns = append(result.AllTurns, gr.TurnRecords)
+		result.AllLeaders = append(result.AllLeaders, gr.Leaders)
+		result.AllWinners = append(result.AllWinners, gr.Winner)
+	}
+
+	if n > 0 {
+		result.AvgTurns = float64(result.TotalTurns) / float64(n)
+	}
+
+	return result
+}
+
+// runBatchSerial is the pre-Wave-I serial implementation, kept VERBATIM as
+// the golden reference for TestRunBatchMatchesSerialGolden (permanent, not
+// scaffolding): the parallel RunBatch must stay bit-identical to it. Do not
+// "simplify" it to share code with reduceBatch -- its value is being an
+// independent second implementation.
+func runBatchSerial(g *genome.Genome, runner GenericRunner, ai AIPlayer, n int, baseSeed uint64, hooks ...HookFunc) BatchResult {
 	result := BatchResult{
 		GamesPlayed: n,
 		WinCounts:   make([]int, g.Players),

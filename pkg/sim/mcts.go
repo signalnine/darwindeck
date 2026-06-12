@@ -60,6 +60,16 @@ const (
 // &MCTSAI{Runner: r, Genome: g} runs at production settings. A nil Runner or
 // Genome degrades to a uniform random choice -- a batch worker must never
 // crash on a misconfigured AI.
+//
+// CONCURRENCY (Wave I): one MCTSAI instance IS shared across all games of a
+// parallel RunBatch (fitness.runMCTSBatch builds exactly one for the 20-game
+// Tier 2 skill batch). That is safe because every field here is read-only
+// configuration during SelectMove: all per-decision mutable structures
+// (determinizations, trees, visit maps, the rollout state) are locals of the
+// call. Do not add mutable fields that SelectMove writes (caches, counters,
+// "last move" memos) without moving construction into RunBatch's per-game
+// worker loop first. Tripwire: TestRunBatchSharedMCTSAIRaceClean
+// (parallel_test.go) under -race.
 type MCTSAI struct {
 	Runner GenericRunner
 	Genome *genome.Genome

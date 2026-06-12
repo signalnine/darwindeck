@@ -76,6 +76,21 @@ func BuildHooks(g *genome.Genome) []Hook {
 // always playtest exactly the game fitness evaluated. Do not hand-roll the
 // HookPoint->event mapping anywhere else; the grep-test
 // TestHooksForIsSingleConstructionSite (pkg/playtest) enforces this.
+//
+// CONCURRENCY GUARD (Wave I, audited 2026-06-12): sim.RunBatch plays a
+// batch's games in parallel and shares ONE HooksFor result across all of
+// them. That is safe because every hook here is STATELESS: each closure
+// captures only its Hook value (immutable after construction), and all four
+// Apply implementations (applyAvoidance, applyMeldBonus, applyDrawPenalty,
+// applyTrickScoring) are pure functions of (state, g, event) that mutate
+// nothing but the per-game *state* they are handed -- no closure-captured
+// counters, maps, or other cross-call mutable state. If you add a hook that
+// carries per-game mutable state (e.g. a once-per-round latch or a running
+// counter), it CANNOT live in a shared closure: hooks would then have to be
+// constructed per game inside RunBatch's worker loop. Keep new hooks
+// stateless, or redesign that call site first. Tripwire:
+// TestRunBatchHookedBatchRaceClean (pkg/sim/parallel_test.go) runs a hooked
+// parallel batch under -race.
 func HooksFor(g *genome.Genome) []sim.HookFunc {
 	if len(g.Borrowed) == 0 {
 		return nil
