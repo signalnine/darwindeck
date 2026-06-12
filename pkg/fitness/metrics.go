@@ -36,7 +36,7 @@ func ComputeFitness(
 		GameArc:             computeGameArc(randomResult),
 		Interaction:         computeInteraction(randomResult),
 		SkillGradient:       computeSkillGradient(randomResult, greedyResult, numPlayers),
-		SessionLength:       computeSessionLength(randomResult),
+		SessionLength:       computeSessionLength(randomResult, numPlayers),
 	}
 
 	m.TotalFitness = m.MeaningfulDecisions*WeightDecisions +
@@ -269,10 +269,20 @@ func computeSkillGradient(randomResult, greedyResult sim.BatchResult, numPlayers
 	return clamp(skillDiff/maxDiff, 0, 1)
 }
 
-// computeSessionLength scores the average game length against target range.
-// Target: 15-40 turns. Linear falloff outside. Below 5 or above 100 = 0.
-func computeSessionLength(result sim.BatchResult) float64 {
-	avg := result.AvgTurns
+// computeSessionLength scores game length measured in DECISIONS PER PLAYER
+// against the target band. The old unit was state.Turn, whose meaning varied
+// by skeleton -- per-move for shedding, per-card for trick-taking, per-cycle
+// for rummy -- so a 52-card whist deal counted as "52 turns" and was silently
+// pushed down the long-game falloff while each player actually made only 13
+// decisions (audit Task 12). TurnRecords give one record per applied move,
+// attributed to the acting player, so the unit is identical across skeletons.
+//
+// Target band: 15-40 decisions per player, linear falloff outside, hard zero
+// below 5 or above 100. The band and falloff shape carry over from the old
+// curve unchanged; only the unit moved. The band is provisional -- Task 14
+// recalibrates it from the measured spread of the 8 classic seeds.
+func computeSessionLength(result sim.BatchResult, numPlayers int) float64 {
+	avg := avgDecisionsPerPlayer(result, numPlayers)
 	if avg < 5 || avg > 100 {
 		return 0
 	}
@@ -284,6 +294,23 @@ func computeSessionLength(result sim.BatchResult) float64 {
 	}
 	// avg > 40
 	return (100 - avg) / 60 // Linear from 40→100
+}
+
+// avgDecisionsPerPlayer returns the batch mean of each game's decisions per
+// player: count(TurnRecords where Player==p) averaged over the numPlayers
+// seats, which reduces to len(TurnRecords)/numPlayers per game since every
+// record belongs to exactly one seat. Computed per game, then averaged over
+// the batch. Returns 0 for an empty batch or a nonpositive player count.
+func avgDecisionsPerPlayer(result sim.BatchResult, numPlayers int) float64 {
+	games := len(result.AllTurns)
+	if numPlayers <= 0 || games == 0 {
+		return 0
+	}
+	total := 0
+	for _, turns := range result.AllTurns {
+		total += len(turns)
+	}
+	return float64(total) / float64(numPlayers) / float64(games)
 }
 
 func clamp(v, min, max float64) float64 {
