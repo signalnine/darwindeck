@@ -334,6 +334,136 @@ func TestGameArcLeadChangesIgnoreTies(t *testing.T) {
 	}
 }
 
+// interactionFixture builds a single-game batch from explicit turn records
+// and events -- the two inputs computeInteraction consumes (audit Task 11).
+func interactionFixture(records []sim.TurnRecord, events []sim.Event) sim.BatchResult {
+	return sim.BatchResult{
+		GamesPlayed: 1,
+		AllTurns:    [][]sim.TurnRecord{records},
+		AllEvents:   [][]sim.Event{events},
+	}
+}
+
+// TestInteractionSolitaireLikeIsZero: required case 1. A game where no move
+// ever changes the next player's options (all OptionDelta 0) and no
+// direct-attack event fires is NOT interactive, even though every play lands
+// on the shared discard pile. The old event-taxonomy metric scored exactly
+// this fixture 1.0 (every "discard"-detail EventCardPlayed counted) -- that
+// was its central flaw.
+func TestInteractionSolitaireLikeIsZero(t *testing.T) {
+	records := make([]sim.TurnRecord, 10)
+	events := make([]sim.Event, 0, 13)
+	for i := 0; i < 10; i++ {
+		records[i] = sim.TurnRecord{Player: i % 2, LegalMoves: 3, OptionDelta: 0}
+		events = append(events, sim.Event{Type: sim.EventCardPlayed, PlayerID: i % 2, Detail: "discard"})
+	}
+	for i := 0; i < 3; i++ {
+		events = append(events, sim.Event{Type: sim.EventCardDrawn, PlayerID: i % 2})
+	}
+
+	if got := computeInteraction(interactionFixture(records, events)); got != 0 {
+		t.Fatalf("solitaire-like fixture (all deltas 0, no attack events) must score 0, got %.3f", got)
+	}
+	if got := computeInteraction(sim.BatchResult{}); got != 0 {
+		t.Fatalf("empty batch must score 0, got %.3f", got)
+	}
+}
+
+// TestInteractionDrawTwoHeavySheddingIsHigh: required case 2. A draw-2-heavy
+// shedding game: most moves perturb the next player's options (OptionDelta
+// != 0) and draw_two specials fire. The event stream is dominated by the
+// victims' penalty EventCardDrawn entries, which the old metric scored
+// against (3 specials / 20 events => 0.5); the perturbation metric reads the
+// 6/10 interactive turns instead.
+func TestInteractionDrawTwoHeavySheddingIsHigh(t *testing.T) {
+	records := []sim.TurnRecord{
+		{Player: 0, LegalMoves: 4, OptionDelta: -2},
+		{Player: 1, LegalMoves: 2, OptionDelta: 0},
+		{Player: 0, LegalMoves: 3, OptionDelta: 3},
+		{Player: 1, LegalMoves: 5, OptionDelta: -1},
+		{Player: 0, LegalMoves: 2, OptionDelta: 0},
+		{Player: 1, LegalMoves: 3, OptionDelta: 2},
+		{Player: 0, LegalMoves: 4, OptionDelta: 0},
+		{Player: 1, LegalMoves: 2, OptionDelta: -3},
+		{Player: 0, LegalMoves: 3, OptionDelta: 1},
+		{Player: 1, LegalMoves: 2, OptionDelta: 0},
+	}
+	events := make([]sim.Event, 0, 20)
+	for i := 0; i < 3; i++ {
+		events = append(events, sim.Event{Type: sim.EventSpecialTriggered, PlayerID: 1, Detail: "draw_two"})
+	}
+	for i := 0; i < 17; i++ {
+		events = append(events, sim.Event{Type: sim.EventCardDrawn, PlayerID: i % 2})
+	}
+
+	got := computeInteraction(interactionFixture(records, events))
+	if got < 0.9 {
+		t.Fatalf("draw-2-heavy fixture (6/10 turns perturb options) must score high (>= 0.9), got %.3f", got)
+	}
+}
+
+// TestInteractionTrickEventsCountWithoutDeltas: trick-taking records
+// OptionDelta 0 BY DESIGN (follow-suit legality is set by the acting player,
+// so the counterfactual is ill-defined); its interaction signal is the
+// EventTrickWon stream. 2 tricks over 8 card-play turns => ratio 0.25, and
+// with the provisional clamp(ratio/0.5) scale that is exactly 0.5 (Task 14
+// recalibrates the denominator; update this expectation there).
+func TestInteractionTrickEventsCountWithoutDeltas(t *testing.T) {
+	records := make([]sim.TurnRecord, 8)
+	events := make([]sim.Event, 0, 10)
+	for i := 0; i < 8; i++ {
+		records[i] = sim.TurnRecord{Player: i % 4, LegalMoves: 2, OptionDelta: 0}
+		events = append(events, sim.Event{Type: sim.EventCardPlayed, PlayerID: i % 4})
+	}
+	events = append(events,
+		sim.Event{Type: sim.EventTrickWon, PlayerID: 2},
+		sim.Event{Type: sim.EventTrickWon, PlayerID: 0},
+	)
+
+	got := computeInteraction(interactionFixture(records, events))
+	if math.Abs(got-0.5) > 1e-9 {
+		t.Fatalf("2 tricks / 8 turns must score exactly 0.5 under the provisional scale, got %.3f", got)
+	}
+}
+
+// TestInteractionNonAttackEventsDoNotCount: only the opponent-affecting
+// special details emitted by the shedding runner (skip, draw_two, draw_four,
+// reverse) and EventTrickWon are attacks. A hypothetical self-targeted
+// special, a meld, a discard-detail play, and a round end are not -- the old
+// metric counted three of these four.
+func TestInteractionNonAttackEventsDoNotCount(t *testing.T) {
+	records := make([]sim.TurnRecord, 4)
+	for i := range records {
+		records[i] = sim.TurnRecord{Player: i % 2, LegalMoves: 3, OptionDelta: 0}
+	}
+	events := []sim.Event{
+		{Type: sim.EventSpecialTriggered, PlayerID: 0, Detail: "wild_suit_chosen"},
+		{Type: sim.EventMeldLaid, PlayerID: 1},
+		{Type: sim.EventCardPlayed, PlayerID: 0, Detail: "discard"},
+		{Type: sim.EventRoundEnd, PlayerID: 1, Detail: "gin"},
+	}
+
+	if got := computeInteraction(interactionFixture(records, events)); got != 0 {
+		t.Fatalf("non-attack events must not count as interaction, got %.3f", got)
+	}
+}
+
+// TestInteractionHearts4pNotPinnedToOldConstant: required case 3. The old
+// event-taxonomy metric scored hearts-4p a deterministic 0.657 (13 TrickWon /
+// 66 events / 0.3 scale) regardless of what happened in the games. The
+// perturbation metric must produce something else on a real evaluation.
+func TestInteractionHearts4pNotPinnedToOldConstant(t *testing.T) {
+	g := seeds.Hearts()
+	runner := GetRunner(g)
+	result := sim.RunBatch(g, runner, &sim.RandomAI{}, 50, 0)
+
+	got := computeInteraction(result)
+	t.Logf("hearts-4p interaction: %.4f", got)
+	if math.Abs(got-0.657) < 0.005 {
+		t.Fatalf("hearts-4p interaction still pins to the old deterministic 0.657, got %.4f", got)
+	}
+}
+
 func TestSkillGradientUsesEmpiricalBaseline(t *testing.T) {
 	// Greedy always plays seat 0. A game with first-player advantage gives seat 0
 	// a high random win rate; comparing greedy's seat-0 rate against the theoretical

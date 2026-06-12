@@ -153,45 +153,80 @@ func tent(x, c float64) float64 {
 	return clamp(1-math.Abs(x-c)/c, 0, 1)
 }
 
-// computeInteraction measures how much players' actions affect each other.
-// We use the ratio of special-triggered events (skips, draws affecting others)
-// to total events as a proxy.
+// attackDetails enumerates the EventSpecialTriggered Detail strings that
+// directly affect an opponent. This is the complete set the shedding runner's
+// applySpecialEffects emits (the only EventSpecialTriggered emitter in the
+// codebase): draw penalties inflicted on the next player, a skip, and a
+// reverse. A future self-targeted special (e.g. a wild-suit choice) must NOT
+// be added here.
+var attackDetails = map[string]bool{
+	"skip":      true,
+	"draw_two":  true,
+	"draw_four": true,
+	"reverse":   true,
+}
+
+// computeInteraction: fraction of turns whose move perturbed the next
+// player's legal options (TurnRecord.OptionDelta != 0, audit Task 7) or
+// carried a direct-attack event (EventTrickWon, or EventSpecialTriggered with
+// an opponent-affecting detail). A discard that does not change what the
+// opponent can legally do is NOT interaction -- that was the old
+// event-taxonomy metric's central flaw: it counted every shedding discard and
+// every rummy meld as interactive and pinned hearts-4p at a deterministic
+// 0.657 (13 TrickWon / 66 events / 0.3).
+//
+// Events and TurnRecords are parallel per game but not per-turn indexed, so
+// rather than correlating event groups to turn boundaries we count
+// option-perturbing turns and attack events separately and take the larger
+// count over total turns (the plan's "max ratio" option -- the simplest
+// correct approach). Each attack event is emitted by exactly one applied move
+// (= one TurnRecord), so each count is a valid lower bound on the number of
+// interactive turns, and max never double-counts a turn that both perturbed
+// options and attacked. The clamp absorbs the rare move emitting two attack
+// events (a card matching both a draw and a skip rule).
+//
+// Per-skeleton signal sources (Task 7 table): shedding = OptionDelta from the
+// discard-top perturbation plus skip/draw/reverse specials; rummy =
+// OptionDelta attached to the turn-passing MoveDiscard; trick-taking =
+// EventTrickWon only (OptionDelta is 0 BY DESIGN -- follow-suit legality is
+// set by the acting player, so the counterfactual is ill-defined).
+//
+// Scale: clamp(ratio/0.5) is provisional; Task 14 recalibrates the
+// denominator from the seed-game spread, not assumption.
 func computeInteraction(result sim.BatchResult) float64 {
-	if len(result.AllEvents) == 0 {
+	totalTurns, deltaTurns := 0, 0
+	for _, turns := range result.AllTurns {
+		totalTurns += len(turns)
+		for _, tr := range turns {
+			if tr.OptionDelta != 0 {
+				deltaTurns++
+			}
+		}
+	}
+	if totalTurns == 0 {
 		return 0
 	}
 
-	totalEvents := 0
-	interactionEvents := 0
-
+	attackEvents := 0
 	for _, events := range result.AllEvents {
 		for _, e := range events {
-			totalEvents++
 			switch e.Type {
-			case sim.EventSpecialTriggered:
-				interactionEvents++
 			case sim.EventTrickWon:
-				// Tricks are inherently interactive (every player plays)
-				interactionEvents++
-			case sim.EventMeldLaid:
-				// Melds signal hand strength and enable lay-offs
-				interactionEvents++
-			case sim.EventCardPlayed:
-				// Cards played to shared areas (discard, trick) are interactive
-				if e.Detail == "discard" {
-					interactionEvents++ // Changes what opponent can draw
+				attackEvents++
+			case sim.EventSpecialTriggered:
+				if attackDetails[e.Detail] {
+					attackEvents++
 				}
 			}
 		}
 	}
 
-	if totalEvents == 0 {
-		return 0
+	interactive := deltaTurns
+	if attackEvents > interactive {
+		interactive = attackEvents
 	}
-
-	ratio := float64(interactionEvents) / float64(totalEvents)
-	// Scale: 0.3+ interaction ratio = good
-	return clamp(ratio/0.3, 0, 1)
+	ratio := float64(interactive) / float64(totalTurns)
+	return clamp(ratio/0.5, 0, 1)
 }
 
 // computeSkillGradient measures whether better play leads to better results.
