@@ -286,12 +286,24 @@ func TestInvalidGenomeGetsZeroFitness(t *testing.T) {
 // changes), and duration spread is SessionLength's job, not the arc's. See
 // docs/plans/2026-06-11-audit-remediation.md, Task 10.
 
-// leaderBatch builds a BatchResult whose only populated per-game data is the
-// leader tracks -- the sole input the lead-trajectory GameArc consumes.
+// leaderBatch builds a BatchResult from leader tracks plus the real batch
+// winners the arc consumes (audit Wave D fix 1): every fixture game here is a
+// COMPLETED game whose winner is its final strict leader (-1, i.e. skipped,
+// when the track is empty or ends tied). Non-completed games and games whose
+// winner differs from the final leader are built explicitly in
+// TestGameArcSkipsNonCompletedGames / TestGameArcWinnerFromBatchNotFinalLeader.
 func leaderBatch(tracks ...[]int8) sim.BatchResult {
+	winners := make([]int, len(tracks))
+	for i, track := range tracks {
+		winners[i] = -1
+		if n := len(track); n > 0 {
+			winners[i] = int(track[n-1])
+		}
+	}
 	return sim.BatchResult{
 		GamesPlayed: len(tracks),
 		AllLeaders:  tracks,
+		AllWinners:  winners,
 	}
 }
 
@@ -438,6 +450,70 @@ func TestGameArcSkipsShortAndWinnerlessTracks(t *testing.T) {
 	got := computeGameArc(leaderBatch(short, winnerless, repeatLeader(0, 8)))
 	if math.Abs(got-0.4) > 1e-9 {
 		t.Fatalf("skipped tracks must not dilute qualifying games: want 0.4, got %.4f", got)
+	}
+}
+
+// TestGameArcSkipsNonCompletedGames (audit Wave D fix 1): the batch runner
+// appends leader tracks for ALL games, including max_turns/stuck/no_moves
+// exits, and those games record Winner -1 even when their leader track ends
+// with a strict leader. The old code inferred winner = final leader sample, so
+// a timed-out game contributed arc stats attributed to a player who won
+// nothing. Non-completed games must contribute NOTHING; completed games still
+// do.
+func TestGameArcSkipsNonCompletedGames(t *testing.T) {
+	timedOut := repeatLeader(0, 20) // strict final leader, but Winner -1
+
+	solo := sim.BatchResult{
+		GamesPlayed: 1,
+		AllLeaders:  [][]int8{timedOut},
+		AllWinners:  []int{-1},
+	}
+	if _, _, _, counted := arcStats(solo); counted != 0 {
+		t.Fatalf("timed-out game must not be counted, counted %d", counted)
+	}
+	if got := computeGameArc(solo); got != 0 {
+		t.Fatalf("batch of only non-completed games must score 0, got %.4f", got)
+	}
+
+	// Alongside one completed wire-to-wire game, only the completed game
+	// counts: arc is the wire-to-wire 0.4 exactly, undiluted and uninflated.
+	mixed := sim.BatchResult{
+		GamesPlayed: 2,
+		AllLeaders:  [][]int8{timedOut, repeatLeader(0, 20)},
+		AllWinners:  []int{-1, 0},
+	}
+	if _, _, _, counted := arcStats(mixed); counted != 1 {
+		t.Fatalf("only the completed game qualifies, counted %d", counted)
+	}
+	if got := computeGameArc(mixed); math.Abs(got-0.4) > 1e-9 {
+		t.Fatalf("completed wire-to-wire game must still score 0.4, got %.4f", got)
+	}
+}
+
+// TestGameArcWinnerFromBatchNotFinalLeader (audit Wave D fix 1): for rummy
+// genomes with scoring borrows, the final Progress leader (live deadwood) can
+// differ from the actual CheckEnd winner (state.Scores incl. hook
+// contributions). The arc must attribute the win to the REAL winner: player 0
+// led wire-to-wire on the track, but player 1 won -- that is a comeback with
+// zero resolution, not a resolved hold.
+func TestGameArcWinnerFromBatchNotFinalLeader(t *testing.T) {
+	batch := sim.BatchResult{
+		GamesPlayed: 1,
+		AllLeaders:  [][]int8{repeatLeader(0, 20)},
+		AllWinners:  []int{1},
+	}
+	comeback, resolution, leadChanges, counted := arcStats(batch)
+	if counted != 1 {
+		t.Fatalf("completed game must be counted, counted %d", counted)
+	}
+	if comeback != 1 {
+		t.Errorf("real winner never led at 50%%: comeback must be 1, got %.3f", comeback)
+	}
+	if resolution != 0 {
+		t.Errorf("real winner did not lead at the resolution sample: want 0, got %.3f", resolution)
+	}
+	if leadChanges != 0 {
+		t.Errorf("track has 0 lead changes, got %.3f", leadChanges)
 	}
 }
 

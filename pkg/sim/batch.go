@@ -26,6 +26,14 @@ type BatchResult struct {
 	// runner's Progress after each applied move, -1 = tie), parallel to
 	// AllEvents (audit Task 8).
 	AllLeaders [][]int8
+	// AllWinners holds each game's real winner (GameResult.Winner: -1 for
+	// every non-completion -- max_turns/stuck/no_moves exits), parallel to
+	// AllEvents. Arc attribution must read these, never the final leader
+	// sample: a timed-out game has a leader but no winner, and a rummy
+	// scoring borrow can hand the CheckEnd win (state.Scores incl. hook
+	// contributions) to a player who never led on live deadwood (audit Wave D
+	// fix 1).
+	AllWinners []int
 }
 
 // GenericRunner is the interface all skeleton runners implement.
@@ -66,6 +74,7 @@ func RunBatch(g *genome.Genome, runner GenericRunner, ai AIPlayer, n int, baseSe
 		AllEvents:   make([][]Event, 0, n),
 		AllTurns:    make([][]TurnRecord, 0, n),
 		AllLeaders:  make([][]int8, 0, n),
+		AllWinners:  make([]int, 0, n),
 	}
 
 	maxTurns := g.MaxTurns()
@@ -98,6 +107,7 @@ func RunBatch(g *genome.Genome, runner GenericRunner, ai AIPlayer, n int, baseSe
 		result.AllEvents = append(result.AllEvents, gr.Events)
 		result.AllTurns = append(result.AllTurns, gr.TurnRecords)
 		result.AllLeaders = append(result.AllLeaders, gr.Leaders)
+		result.AllWinners = append(result.AllWinners, gr.Winner)
 	}
 
 	if n > 0 {

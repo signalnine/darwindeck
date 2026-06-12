@@ -83,10 +83,13 @@ func computeDecisionDensity(result sim.BatchResult) float64 {
 // gave both ~1.0. The previous turn-CV term is gone entirely: duration spread
 // is SessionLength's concern (plan Task 10 decision).
 //
-// The per-game winner is inferred from the final leader sample: the winner's
-// final Progress is the strict maximum in a completed game (audit Task 8), so
-// the last track entry identifies them. Games with fewer than 4 leader
-// samples or no strict final leader (-1: tied, so no winner attributable) are
+// The per-game winner is the REAL batch winner (BatchResult.AllWinners, from
+// GameResult.Winner), never the final leader sample: the batch runner appends
+// leader tracks for ALL games including max_turns/stuck/no_moves exits, whose
+// tracks end with a leader but no winner; and a rummy scoring borrow can hand
+// the CheckEnd win (state.Scores incl. hook contributions) to a player who
+// never led on live deadwood (audit Wave D fix 1). Games with fewer than 4
+// leader samples or without a winner (Winner < 0: non-completion) are
 // skipped; a batch with no qualifying game scores 0.
 func computeGameArc(result sim.BatchResult) float64 {
 	comeback, resolution, leadChanges, counted := arcStats(result)
@@ -97,19 +100,22 @@ func computeGameArc(result sim.BatchResult) float64 {
 }
 
 // arcStats aggregates the three arc components over qualifying games (>= 4
-// leader samples and a strict final leader). comeback and resolution are
-// batch-level probabilities; leadChanges is the mean per qualifying game.
+// leader samples and a real winner: AllWinners[i] >= 0, i.e. the game
+// completed). comeback and resolution are batch-level probabilities;
+// leadChanges is the mean per qualifying game.
 func arcStats(result sim.BatchResult) (comeback, resolution, leadChanges float64, counted int) {
 	comebacks, resolutions, changes := 0, 0, 0
-	for _, track := range result.AllLeaders {
+	for i, track := range result.AllLeaders {
 		n := len(track)
 		if n < 4 {
 			continue
 		}
-		winner := track[n-1]
-		if winner < 0 {
+		// Defensive: a hand-built BatchResult without winners carries no
+		// completion information, so none of its games qualify.
+		if i >= len(result.AllWinners) || result.AllWinners[i] < 0 {
 			continue
 		}
+		winner := int8(result.AllWinners[i])
 		counted++
 		// A -1 (tie) at a sample point means the winner was NOT strictly
 		// leading there: it counts toward comeback and against resolution.

@@ -343,6 +343,97 @@ func TestBatchLeadersTrackArgmaxProgress(t *testing.T) {
 	}
 }
 
+// timeoutRunner never ends: CheckEnd is always -1 and ApplyMove only bumps
+// state.Turn, so every game exits via max_turns with Winner -1 -- while
+// Progress reports player 0 as a STRICT leader on every sample. This is the
+// phantom-winner trap (audit Wave D fix 1): arc attribution must come from
+// the recorded batch winner, never from the final leader sample, or this
+// winnerless game's arc gets credited to player 0.
+type timeoutRunner struct{}
+
+func (timeoutRunner) Setup(g *genome.Genome, rng *rand.Rand) *sim.GameState {
+	st := sim.NewGameState(g.Players)
+	st.Hands[0] = []sim.Card{{Suit: sim.Hearts, Rank: sim.Two}}
+	st.Hands[1] = []sim.Card{{Suit: sim.Spades, Rank: sim.Three}}
+	st.RNG = rng
+	return st
+}
+func (timeoutRunner) Upkeep(state *sim.GameState, g *genome.Genome) {}
+func (timeoutRunner) GenerateMoves(state *sim.GameState, g *genome.Genome) []sim.Move {
+	return []sim.Move{{Type: sim.MovePass, PlayerID: state.Active}}
+}
+func (timeoutRunner) ApplyMove(state *sim.GameState, move sim.Move, g *genome.Genome) []sim.Event {
+	state.Turn++
+	state.NextPlayer()
+	return nil
+}
+func (timeoutRunner) CheckEnd(state *sim.GameState, g *genome.Genome) int { return -1 }
+func (timeoutRunner) Progress(state *sim.GameState, g *genome.Genome) []float64 {
+	return []float64{1, 0} // player 0 strictly "leads" every sample, forever
+}
+
+// TestBatchAllWinnersParallel (audit Wave D fix 1): BatchResult.AllWinners
+// must hold each game's REAL winner, parallel to AllEvents -- -1 for every
+// non-completion (max_turns/stuck/no_moves), the CheckEnd winner otherwise.
+func TestBatchAllWinnersParallel(t *testing.T) {
+	// Timed-out games: a strict leader on every sample, but no winner.
+	g := &genome.Genome{
+		Skeleton: genome.Shedding,
+		Players:  2,
+		HandSize: 1, // MaxTurns = 1*2*10 = 20: fast timeout
+		Shedding: &genome.SheddingParams{MatchRule: genome.MatchEither, DrawPenalty: 1},
+	}
+	result := sim.RunBatch(g, timeoutRunner{}, &sim.RandomAI{}, 3, 1)
+	if result.Timeouts != 3 {
+		t.Fatalf("premise broken: want 3 timeouts, got %d (errors=%d completions=%d)",
+			result.Timeouts, result.Errors, result.Completions)
+	}
+	if len(result.AllWinners) != len(result.AllEvents) {
+		t.Fatalf("len(AllWinners) = %d, len(AllEvents) = %d: must be parallel",
+			len(result.AllWinners), len(result.AllEvents))
+	}
+	for i, w := range result.AllWinners {
+		if w != -1 {
+			t.Errorf("game %d timed out but AllWinners[%d] = %d, want -1", i, i, w)
+		}
+	}
+	// The trap this guards: the leader track DOES end with a strict leader.
+	track := result.AllLeaders[0]
+	if len(track) == 0 || track[len(track)-1] != 0 {
+		t.Fatalf("premise broken: timed-out game should end with strict leader 0, track tail %v", track)
+	}
+
+	// Completed game (forced-draw fixture from TestBatchLeadersTrackArgmaxProgress):
+	// P1 wins, so AllWinners must record 1.
+	gc := &genome.Genome{
+		Skeleton: genome.Shedding,
+		Players:  2,
+		HandSize: 1,
+		Shedding: &genome.SheddingParams{MatchRule: genome.MatchEither, DrawPenalty: 1},
+	}
+	runner := fixedSetupRunner{
+		GenericRunner: &shedding.Runner{},
+		build: func() *sim.GameState {
+			st := sim.NewGameState(2)
+			top := card(sim.Hearts, sim.Seven)
+			st.Discard = []sim.Card{top}
+			st.TopCard = &top
+			st.Hands[0] = []sim.Card{card(sim.Diamonds, sim.Nine)}
+			st.Hands[1] = []sim.Card{card(sim.Diamonds, sim.Seven)}
+			st.Deck = []sim.Card{card(sim.Clubs, sim.Two), card(sim.Clubs, sim.Three)}
+			st.Phase = sim.PhasePlay
+			return st
+		},
+	}
+	cres := sim.RunBatch(gc, runner, &sim.RandomAI{}, 1, 1)
+	if cres.Completions != 1 {
+		t.Fatalf("fixture broken: want 1 completion, got %d", cres.Completions)
+	}
+	if len(cres.AllWinners) != 1 || cres.AllWinners[0] != 1 {
+		t.Fatalf("AllWinners = %v, want [1] (P1 wins the fixture)", cres.AllWinners)
+	}
+}
+
 // TestSameDerivedSeedSameEventStream is the Execution-notes doc-test: per-game
 // seeds derive as baseSeed+index, so game i of one batch must be byte-identical
 // (events AND turn records) to game 0 of a batch whose baseSeed is shifted by
