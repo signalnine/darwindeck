@@ -65,6 +65,47 @@ func BuildHooks(g *genome.Genome) []Hook {
 	return hooks
 }
 
+// HooksFor converts a genome's borrowed mechanics into sim.HookFunc closures
+// ready to pass to sim.RunBatch or an interactive playtest session, mapping
+// each hook's HookPoint onto the event type that triggers it (HookAfterPlay
+// <- EventCardPlayed; HookEndOfRound and HookScoring <- EventRoundEnd).
+//
+// This is the SINGLE hook-construction site (audit Task 24): the fitness
+// pipeline (Tier 1 + Tier 2, pkg/fitness/evaluate.go) and the playtest
+// session (pkg/playtest/session.go) both build their hooks here, so humans
+// always playtest exactly the game fitness evaluated. Do not hand-roll the
+// HookPoint->event mapping anywhere else; the grep-test
+// TestHooksForIsSingleConstructionSite (pkg/playtest) enforces this.
+func HooksFor(g *genome.Genome) []sim.HookFunc {
+	if len(g.Borrowed) == 0 {
+		return nil
+	}
+
+	hooks := BuildHooks(g)
+	if len(hooks) == 0 {
+		return nil
+	}
+
+	funcs := make([]sim.HookFunc, 0, len(hooks))
+	for _, h := range hooks {
+		hook := h // capture
+		funcs = append(funcs, func(state *sim.GameState, g *genome.Genome, event sim.Event) {
+			switch hook.Point {
+			case HookAfterPlay:
+				if event.Type == sim.EventCardPlayed {
+					hook.Apply(state, g, event)
+				}
+			case HookEndOfRound, HookScoring:
+				if event.Type == sim.EventRoundEnd {
+					hook.Apply(state, g, event)
+				}
+			}
+		})
+	}
+
+	return funcs
+}
+
 // RunHooks executes all hooks matching the given point.
 func RunHooks(hooks []Hook, point HookPoint, state *sim.GameState, g *genome.Genome, event sim.Event) {
 	for _, h := range hooks {

@@ -79,9 +79,11 @@ func evaluate(g *genome.Genome, baseSeed uint64, mcts *MCTSEvalConfig) Evaluatio
 	}
 
 	// Build hooks for borrowed mechanics ONCE, before Tier 1: both tiers
-	// must simulate the same game (audit Task 16). buildHookFuncs is the
-	// single shared constructor -- never hand Tier 1 a different hook set.
-	hooks := buildHookFuncs(g)
+	// must simulate the same game (audit Task 16). mechanic.HooksFor is the
+	// single shared constructor (audit Task 24) -- the playtest session uses
+	// it too, so humans play the same game this pipeline evaluates. Never
+	// hand Tier 1 a different hook set.
+	hooks := mechanic.HooksFor(g)
 
 	// Tier 1: Quick simulation (10 games)
 	result.Tier1 = RunTier1(g, runner, baseSeed, hooks...)
@@ -150,38 +152,3 @@ func runMCTSBatch(g *genome.Genome, runner sim.GenericRunner, n int, baseSeed ui
 	return sim.RunBatch(g, runner, ai, n, baseSeed, hooks...)
 }
 
-// buildHookFuncs converts mechanic hooks into sim.HookFunc closures.
-func buildHookFuncs(g *genome.Genome) []sim.HookFunc {
-	if len(g.Borrowed) == 0 {
-		return nil
-	}
-
-	hooks := mechanic.BuildHooks(g)
-	if len(hooks) == 0 {
-		return nil
-	}
-
-	var funcs []sim.HookFunc
-	for _, h := range hooks {
-		hook := h // capture
-		funcs = append(funcs, func(state *sim.GameState, g *genome.Genome, event sim.Event) {
-			// Map event types to hook points
-			switch hook.Point {
-			case mechanic.HookAfterPlay:
-				if event.Type == sim.EventCardPlayed {
-					hook.Apply(state, g, event)
-				}
-			case mechanic.HookEndOfRound:
-				if event.Type == sim.EventRoundEnd {
-					hook.Apply(state, g, event)
-				}
-			case mechanic.HookScoring:
-				if event.Type == sim.EventRoundEnd {
-					hook.Apply(state, g, event)
-				}
-			}
-		})
-	}
-
-	return funcs
-}

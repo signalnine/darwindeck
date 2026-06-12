@@ -231,7 +231,29 @@ func cmdPlaytest(args []string) {
 	}
 
 	session := playtest.NewSession(&g, runner, ai, *seed)
-	session.Run()
+	outcome := session.Run()
+
+	// Human-ratings capture (audit Task 24): the only instrument linking
+	// fitness scores to human ground truth. Empty rating = skipped (null);
+	// EOF on piped/non-interactive stdin skips silently.
+	rating, comment := playtest.PromptRating(session.Scanner, os.Stdout)
+	rec := playtest.Record{
+		Timestamp:  time.Now().Format(time.RFC3339),
+		GenomeID:   g.ID,
+		GenomePath: remaining[0],
+		Difficulty: *difficulty,
+		Seed:       *seed,
+		Winner:     outcome.WinnerLabel(session.HumanID),
+		Turns:      outcome.Turns,
+		Rating:     rating,
+		Comment:    comment,
+		Stuck:      outcome.Stuck,
+	}
+	if err := playtest.AppendRecord(playtest.ResultsFile, rec); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to record playtest result: %v\n", err)
+	} else {
+		fmt.Printf("Session recorded to %s\n", playtest.ResultsFile)
+	}
 }
 
 func cmdDescribe(args []string) {

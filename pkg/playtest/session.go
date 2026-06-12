@@ -2,13 +2,16 @@ package playtest
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
+	"io"
 	"math/rand/v2"
 	"os"
 	"strconv"
 	"strings"
 
 	"github.com/darwindeck/darwindeck/pkg/genome"
+	"github.com/darwindeck/darwindeck/pkg/mechanic"
 	"github.com/darwindeck/darwindeck/pkg/sim"
 )
 
@@ -21,6 +24,36 @@ type Session struct {
 	RNG     *rand.Rand
 	Scanner *bufio.Scanner
 	HumanID int // Which player is the human
+	// Hooks are the genome's borrowed-mechanic hooks, built by
+	// mechanic.HooksFor -- the same single construction site the fitness
+	// pipeline uses (audit Task 24). They run after every applied move so a
+	// human plays exactly the game fitness evaluated.
+	Hooks []sim.HookFunc
+}
+
+// Outcome summarizes a finished session for ratings capture (audit Task 24).
+// Winner is a player index, or -1 when the game ended without one (max turns
+// or stuck). Stuck is true only for the no-legal-moves termination path.
+type Outcome struct {
+	Winner int
+	Turns  int
+	Stuck  bool
+}
+
+// WinnerLabel maps the outcome to the playtest_results.jsonl winner
+// vocabulary established by the v1 file: "human", "ai", "stuck", or "none"
+// (max-turns cap, no winner).
+func (o Outcome) WinnerLabel(humanID int) string {
+	switch {
+	case o.Stuck:
+		return "stuck"
+	case o.Winner < 0:
+		return "none"
+	case o.Winner == humanID:
+		return "human"
+	default:
+		return "ai"
+	}
 }
 
 // NewMCTSAI constructs the ISMCTS opponent for the playtest `mcts`
@@ -51,11 +84,13 @@ func NewSession(g *genome.Genome, runner sim.GenericRunner, ai sim.AIPlayer, see
 		RNG:     rng,
 		Scanner: bufio.NewScanner(os.Stdin),
 		HumanID: 0,
+		Hooks:   mechanic.HooksFor(g),
 	}
 }
 
-// Run plays the game interactively.
-func (s *Session) Run() {
+// Run plays the game interactively and returns the outcome for ratings
+// capture.
+func (s *Session) Run() Outcome {
 	s.State = s.Runner.Setup(s.Genome, s.RNG)
 	maxTurns := s.Genome.MaxTurns()
 
@@ -73,23 +108,37 @@ func (s *Session) Run() {
 		winner := s.Runner.CheckEnd(s.State, s.Genome)
 		if winner >= 0 {
 			s.printFinalState(winner)
-			return
+			return Outcome{Winner: winner, Turns: s.State.Turn}
 		}
 		if s.State.Turn >= maxTurns {
 			fmt.Printf("\nGame ended at max turns (%d).\n", maxTurns)
-			return
+			return Outcome{Winner: -1, Turns: s.State.Turn}
 		}
 
 		moves := s.Runner.GenerateMoves(s.State, s.Genome)
 		if len(moves) == 0 {
 			fmt.Println("No legal moves — game stuck!")
-			return
+			return Outcome{Winner: -1, Turns: s.State.Turn, Stuck: true}
 		}
 
 		if s.State.Active == s.HumanID {
 			s.humanTurn(moves)
 		} else {
 			s.aiTurn(moves)
+		}
+	}
+}
+
+// afterMove mirrors the post-ApplyMove sequence of sim.RunBatch's game loop:
+// record the move's events on the state and dispatch each one to the
+// borrowed-mechanic hooks. Without this the session would play a hook-less
+// variant of the game fitness evaluated -- the audit's playtest-parity
+// finding (Task 24).
+func (s *Session) afterMove(events []sim.Event) {
+	s.State.Events = append(s.State.Events, events...)
+	for _, e := range events {
+		for _, hook := range s.Hooks {
+			hook(s.State, s.Genome, e)
 		}
 	}
 }
@@ -106,6 +155,7 @@ func (s *Session) humanTurn(moves []sim.Move) {
 	choice := s.getChoice(len(moves))
 	move := moves[choice]
 	events := s.Runner.ApplyMove(s.State, move, s.Genome)
+	s.afterMove(events)
 	for _, e := range events {
 		if e.Detail != "" {
 			fmt.Printf("  > %s\n", describeEvent(e))
@@ -117,6 +167,7 @@ func (s *Session) aiTurn(moves []sim.Move) int {
 	actor := s.State.Active
 	move := s.AI.SelectMove(moves, s.State, s.RNG)
 	events := s.Runner.ApplyMove(s.State, move, s.Genome)
+	s.afterMove(events)
 
 	fmt.Printf("  Player %d: %s", actor, describeMoveShort(move))
 	for _, e := range events {
@@ -232,6 +283,79 @@ func describeMoveShort(m sim.Move) string {
 	default:
 		return "Unknown"
 	}
+}
+
+// ResultsFile is the append-only human-ratings log. It is the same file the
+// v1 Python playtest wrote, so v1 and v2 session records accumulate together.
+const ResultsFile = "playtest_results.jsonl"
+
+// Record is one line of playtest_results.jsonl (the plan's v2 schema, audit
+// Task 24). Field names match the v1 writer where the two schemas overlap
+// (timestamp, genome_id, genome_path, difficulty, seed, winner, turns,
+// rating, comment); the v2 "stuck" boolean replaces v1's stuck_reason string.
+// Rating is a pointer so a skipped prompt serializes as JSON null, exactly
+// like v1's unrated sessions.
+type Record struct {
+	Timestamp  string `json:"timestamp"`
+	GenomeID   string `json:"genome_id"`
+	GenomePath string `json:"genome_path"`
+	Difficulty string `json:"difficulty"`
+	Seed       uint64 `json:"seed"`
+	Winner     string `json:"winner"`
+	Turns      int    `json:"turns"`
+	Rating     *int   `json:"rating"`
+	Comment    string `json:"comment"`
+	Stuck      bool   `json:"stuck"`
+}
+
+// PromptRating asks for a 1-5 rating and a free-text comment on scanner,
+// writing prompts to w. Empty input skips the rating (nil = null in the
+// record); EOF skips everything silently so piped/non-interactive sessions
+// never block or error. Out-of-range or non-numeric input re-prompts.
+func PromptRating(scanner *bufio.Scanner, w io.Writer) (*int, string) {
+	var rating *int
+	for {
+		fmt.Fprint(w, "Rate this game 1-5 (Enter to skip): ")
+		if !scanner.Scan() {
+			return nil, "" // EOF: non-interactive input exhausted
+		}
+		input := strings.TrimSpace(scanner.Text())
+		if input == "" {
+			break // skipped: null rating
+		}
+		n, err := strconv.Atoi(input)
+		if err != nil || n < 1 || n > 5 {
+			fmt.Fprintln(w, "Enter a number 1-5, or press Enter to skip.")
+			continue
+		}
+		rating = &n
+		break
+	}
+
+	fmt.Fprint(w, "Comment (Enter to skip): ")
+	if !scanner.Scan() {
+		return rating, ""
+	}
+	return rating, strings.TrimSpace(scanner.Text())
+}
+
+// AppendRecord appends rec as one JSONL line to path, creating the file if
+// needed. Append-only by construction: existing (v1 or v2) records are never
+// rewritten.
+func AppendRecord(path string, rec Record) error {
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	data, err := json.Marshal(rec)
+	if err != nil {
+		return err
+	}
+	data = append(data, '\n')
+	_, err = f.Write(data)
+	return err
 }
 
 func describeEvent(e sim.Event) string {
