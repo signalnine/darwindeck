@@ -9,6 +9,7 @@ package fitness_test
 
 import (
 	"math"
+	"strings"
 	"testing"
 
 	"github.com/darwindeck/darwindeck/pkg/evolution"
@@ -267,10 +268,17 @@ func meanFit(t *testing.T, g *genome.Genome) calResult {
 	return r
 }
 
-// TestDegenerateFixturesAreTier0Valid pins the fixture contract: degenerate
-// fixtures (and all classics) must pass genome.Validate -- they are negative
-// ground truth for the METRICS, so they must not be rejectable by static
-// analysis.
+// TestDegenerateFixturesAreTier0Valid pins the fixture contract: TIER-2
+// degenerate fixtures (and all classics) must pass genome.Validate -- they
+// are negative ground truth for the METRICS, so they must not be rejectable
+// by static analysis.
+//
+// RESTRUCTURED in round 3 (Task 28 step 4): fixtures whose degeneracy vector
+// became a Tier-0 rule -- the catch-all specials -- are deliberately NOT in
+// this list anymore; a statically rejected genome never reaches the metrics,
+// so it cannot serve as metric ground truth. Those are now negative Tier-0
+// specimens with the INVERSE contract, asserted by
+// TestTier0RejectsCatchAllChampions below.
 func TestDegenerateFixturesAreTier0Valid(t *testing.T) {
 	all := append(seeds.All(), seeds.InstantKnockRummy(), seeds.ForcedShedding())
 	all = append(all, seeds.RejectedChampions()...)
@@ -281,6 +289,38 @@ func TestDegenerateFixturesAreTier0Valid(t *testing.T) {
 	}
 	if n := len(seeds.All()); n != 8 {
 		t.Errorf("seeds.All() returned %d classics, want 8", n)
+	}
+}
+
+// TestTier0RejectsCatchAllChampions (round 3): the catch-all-special
+// champions -- round-1 A1 (catch-all SKIP, CatchAllSkipShedding) and the
+// round-2 flagship rank01 encoding (catch-all WILD, CatchAllWildShedding) --
+// must be rejected by STATIC validation: a special card with ByRank=0 and
+// BySuit=0 matches every card and deletes the shedding skeleton's
+// match/draw rules as dead genes. These fixtures' ground-truth role moved
+// from "the metrics must rank them below classics" to "Tier 0 must never let
+// them reach the metrics at all".
+func TestTier0RejectsCatchAllChampions(t *testing.T) {
+	champs := seeds.CatchAllChampions()
+	if len(champs) < 2 {
+		t.Fatalf("expected at least 2 catch-all specimens (round-1 A1 + r2 rank01), got %d", len(champs))
+	}
+	for _, g := range champs {
+		errs := genome.Validate(g)
+		found := false
+		for _, e := range errs {
+			if strings.Contains(e, "catch-all") {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%s: catch-all champion must be Tier-0 rejected with a catch-all violation, got: %v", g.ID, errs)
+		}
+		// And the full pipeline must refuse it before any simulation.
+		res := fitness.Evaluate(g, fitness.CalibrationSeeds[0])
+		if len(res.Tier0Errors) == 0 || res.Valid {
+			t.Errorf("%s: Evaluate must stop at Tier 0 (errors=%v valid=%v)", g.ID, res.Tier0Errors, res.Valid)
+		}
 	}
 }
 
@@ -329,9 +369,12 @@ func TestCalibrationClassicsBeatDegenerates(t *testing.T) {
 }
 
 // TestCalibrationRejectedChampionsBelowClassics is the named round-2 gate
-// over the Task 28 step-4 failed-review fixtures: the three archetypes that
-// owned the ENTIRE top 30 of the post-fix flagship
+// over the Task 28 step-4 failed-review fixtures: the archetypes that owned
+// the ENTIRE top 30 of the post-fix flagship
 // (output/2026-06-12-flagship-postfix) and were rejected at designer review.
+// ROUND 3: the catch-all-skip archetype left this gate for the Tier-0 one
+// (TestTier0RejectsCatchAllChampions) -- seeds.RejectedChampions() now holds
+// only the fixtures that remain statically valid.
 // Same two-view semantics as TestCalibrationClassicsBeatDegenerates (which
 // also includes these fixtures in its degens list; this test stays as the
 // round's named falsification record). RED PHASE ON RECORD (fixtures

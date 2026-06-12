@@ -1,6 +1,9 @@
 package genome
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestValidGenome(t *testing.T) {
 	g := &Genome{
@@ -470,5 +473,57 @@ func TestLeadWinnerLeadsReserved(t *testing.T) {
 	errs := Validate(g)
 	if len(errs) == 0 {
 		t.Fatal("LeadWinnerLeads must be rejected as reserved (inert: winner-leads is hardcoded)")
+	}
+}
+
+// TestValidateRejectsCatchAllSpecialCards (Task 28 round 3, the catch-all
+// liveness rule): a special card with NO qualifier (ByRank == 0 AND
+// BySuit == 0) matches EVERY card, which statically deletes the shedding
+// skeleton's core rules -- a catch-all wild makes match_rule and draw_penalty
+// dead genes (every card is always playable), and a catch-all effect fires on
+// every play. "Parameters control WHAT happens, not WHETHER the game works";
+// a parameter that erases other parameters is a liveness violation, so it is
+// Tier-0 rejected (the round-2 flagship's entire shedding top 10 carried a
+// catch-all wild).
+func TestValidateRejectsCatchAllSpecialCards(t *testing.T) {
+	mk := func(cards ...SpecialCard) *Genome {
+		return &Genome{
+			Skeleton: Shedding,
+			Players:  2,
+			HandSize: 7,
+			Shedding: &SheddingParams{MatchRule: MatchEither, DrawPenalty: 1},
+			SpecialCards: cards,
+		}
+	}
+
+	for _, ty := range []SpecialCardType{SpecialSkip, SpecialReverse, SpecialDrawTwo, SpecialDrawFour, SpecialWild} {
+		g := mk(SpecialCard{Type: ty}) // ByRank 0, BySuit 0: matches every card
+		errs := Validate(g)
+		found := false
+		for _, e := range errs {
+			if strings.Contains(e, "catch-all") {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("catch-all %s special (ByRank=0, BySuit=0) must be Tier-0 rejected, got: %v", ty, errs)
+		}
+	}
+
+	// Qualified specials stay valid: rank-bound, suit-bound, and both-bound.
+	for _, sc := range []SpecialCard{
+		{Type: SpecialWild, ByRank: 8},
+		{Type: SpecialSkip, BySuit: 3},
+		{Type: SpecialDrawTwo, ByRank: 2, BySuit: 1},
+	} {
+		if errs := Validate(mk(sc)); len(errs) != 0 {
+			t.Errorf("qualified special %+v must stay valid, got: %v", sc, errs)
+		}
+	}
+
+	// A catch-all hiding behind qualified rules is still rejected.
+	g := mk(SpecialCard{Type: SpecialWild, ByRank: 8}, SpecialCard{Type: SpecialSkip})
+	if errs := Validate(g); len(errs) == 0 {
+		t.Error("catch-all special in second position must be Tier-0 rejected")
 	}
 }

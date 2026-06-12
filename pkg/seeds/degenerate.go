@@ -80,6 +80,11 @@ func ForcedShedding() *genome.Genome {
 // interaction pinned 1.00 (every play emitted a "skip" attack event) and
 // decisions 0.86-0.88 (legal-move COUNT inflated by wilds whose choice has
 // near-zero impact).
+//
+// ROUND 3 STATUS: now a NEGATIVE TIER-0 SPECIMEN (see CatchAllChampions).
+// The catch-all skip is statically rejected by genome.Validate as a liveness
+// violation, so this fixture no longer reaches the metrics and is no longer
+// metric ground truth; TestTier0RejectsCatchAllChampions pins the rejection.
 func CatchAllSkipShedding() *genome.Genome {
 	return &genome.Genome{
 		ID:       "catch-all-skip-shedding",
@@ -171,13 +176,72 @@ func PairMeldKnockRummy() *genome.Genome {
 	}
 }
 
-// RejectedChampions returns the Task 28 round-2 failed-review fixtures as a
-// group, in flagship rank order. The calibration gate and the calibrate
-// subcommand both consume this list so the two can never drift.
+// CatchAllWildShedding is the round-3 catch-all encoding: a byte-faithful
+// clone (ID/fitness/generation stripped) of the round-2 flagship champion
+// rank01_gen185_15818 (output/2026-06-12-flagship-r2). Its first special rule
+// is a CATCH-ALL WILD ({Type: SpecialWild}, ByRank=0/BySuit=0 matches every
+// card), which statically deletes match_rule and draw_penalty as dead genes:
+// every card is always playable, so the "shedding" skeleton's matching game
+// never happens. The archetype owned the r2 shedding top 10 (density
+// 0.86-0.98 from inflict-vs-plain profile mixing, greedy skill 0.00; this
+// genome even cycled to the 390-turn cap under greedy play).
+//
+// NEGATIVE TIER-0 SPECIMEN: genome.Validate rejects the catch-all encoding
+// outright (Task 28 round 3), so this fixture is ground truth for STATIC
+// rejection, not for the metrics -- see CatchAllChampions and
+// TestTier0RejectsCatchAllChampions.
+func CatchAllWildShedding() *genome.Genome {
+	return &genome.Genome{
+		ID:       "catch-all-wild-shedding",
+		Skeleton: genome.Shedding,
+		Players:  3,
+		HandSize: 13,
+		Shedding: &genome.SheddingParams{
+			MatchRule:     genome.MatchEither,
+			DrawPenalty:   2,
+			RoundsPerGame: 1,
+		},
+		SpecialCards: []genome.SpecialCard{
+			{Type: genome.SpecialWild},                            // catch-all: EVERY card wild
+			{Type: genome.SpecialDrawTwo, ByRank: 11, BySuit: 3},  // J of hearts draw-two
+			{Type: genome.SpecialDrawFour, BySuit: 2},             // suit 2 draw-four
+			{Type: genome.SpecialDrawFour, ByRank: 8},             // 8s draw-four
+			{Type: genome.SpecialDrawTwo, BySuit: 3},              // suit 3 draw-two
+		},
+		Scoring: genome.ScoringConfig{
+			CardPoints: []genome.CardScoring{
+				{Rank: 11, Suit: 4, Points: 9, Event: genome.ScoreOnTrickWin},
+			},
+		},
+	}
+}
+
+// RejectedChampions returns the failed-review fixtures that are TIER-2 METRIC
+// ground truth: statically valid genomes the dynamic pipeline (Tier 1 +
+// degeneracy vetoes + metrics) must rank below every classic. The calibration
+// gate and the calibrate subcommand both consume this list so the two can
+// never drift.
+//
+// RESTRUCTURED in round 3: fixtures whose degeneracy is now STATICALLY
+// rejected at Tier 0 (the catch-all specials) moved to CatchAllChampions --
+// a Tier-0-rejected genome never reaches the metrics, so it cannot serve as
+// metric ground truth.
 func RejectedChampions() []*genome.Genome {
 	return []*genome.Genome{
-		CatchAllSkipShedding(),
 		NoFollowAvoidanceTrick(),
 		PairMeldKnockRummy(),
+	}
+}
+
+// CatchAllChampions returns the rejected champions whose shared degeneracy
+// vector -- a catch-all special card ({ByRank: 0, BySuit: 0} matches every
+// card) -- is rejected STATICALLY by genome.Validate (Task 28 round 3). They
+// are negative Tier-0 specimens: TestTier0RejectsCatchAllChampions asserts
+// each one fails static validation, the inverse of the Tier-2 fixtures'
+// contract.
+func CatchAllChampions() []*genome.Genome {
+	return []*genome.Genome{
+		CatchAllSkipShedding(), // round-1 A1: catch-all SKIP
+		CatchAllWildShedding(), // round-2 rank01: catch-all WILD
 	}
 }

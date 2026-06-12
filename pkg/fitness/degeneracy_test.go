@@ -108,15 +108,21 @@ func TestDegeneracyDrawSupplyChurn(t *testing.T) {
 	}
 }
 
-// --- Integration: the three rejected flagship champions are killed by the
+// --- Integration: the rejected flagship champions are killed by the
 // pipeline, every classic survives it ---
+//
+// ROUND 3 NOTE: the catch-all-skip champion (round-2 tempo_monopoly
+// specimen) is no longer here -- its catch-all special is now rejected
+// STATICALLY at Tier 0 (TestTier0RejectsCatchAllChampions in
+// calibration_test.go), so it never reaches the veto. tempo_monopoly keeps
+// its synthetic unit coverage above and gains a greedy-batch integration
+// specimen in the round-3 fixtures.
 
 func TestDegeneracyKillsRejectedChampions(t *testing.T) {
 	cases := []struct {
 		g      *genome.Genome
 		reason string
 	}{
-		{seeds.CatchAllSkipShedding(), "tempo_monopoly"},
 		{seeds.NoFollowAvoidanceTrick(), "non_agentic"},
 		{seeds.PairMeldKnockRummy(), "draw_supply_churn"},
 	}

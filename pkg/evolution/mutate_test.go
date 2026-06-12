@@ -261,3 +261,25 @@ func TestTweakParameterSkipsRoundsWithoutScoringBorrow(t *testing.T) {
 		}
 	}
 }
+
+// TestAddSpecialCardNeverCatchAll (Task 28 round 3): a special card with
+// ByRank == 0 AND BySuit == 0 matches every card and is Tier-0 rejected as a
+// liveness violation (it deletes match_rule/draw_penalty as dead genes -- the
+// round-2 flagship's shedding top 10). Mutation must never generate the
+// encoding: when the rank qualifier is dropped, a suit qualifier must be
+// forced, so catch-alls like "every Heart is wild" stay reachable while
+// "every card is wild" is not.
+func TestAddSpecialCardNeverCatchAll(t *testing.T) {
+	for seed := uint64(0); seed < 2000; seed++ {
+		rng := rand.New(rand.NewPCG(seed, 0))
+		g := &genome.Genome{Skeleton: genome.Shedding}
+		addSpecialCard(g, rng)
+		if len(g.SpecialCards) != 1 {
+			t.Fatalf("seed %d: expected 1 special card, got %d", seed, len(g.SpecialCards))
+		}
+		sc := g.SpecialCards[0]
+		if sc.ByRank == 0 && sc.BySuit == 0 {
+			t.Fatalf("seed %d: addSpecialCard produced a catch-all special %+v (Tier-0 rejected encoding)", seed, sc)
+		}
+	}
+}

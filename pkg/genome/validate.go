@@ -64,6 +64,26 @@ func Validate(g *Genome) []string {
 			len(g.SpecialCards), g.Skeleton))
 	}
 
+	// Catch-all specials are a LIVENESS violation (Task 28 round 3): a rule
+	// with no qualifier (ByRank == 0 AND BySuit == 0) matches EVERY card
+	// (SpecialCard.MatchesCard), which statically deletes the skeleton's core
+	// rules -- a catch-all wild makes match_rule and draw_penalty dead genes
+	// (every card is always playable) and a catch-all effect fires on every
+	// single play. "Parameters control what happens, not whether the game
+	// works"; a parameter that erases other parameters breaks that contract,
+	// so it is rejected at Tier 0 rather than left for the dynamic vetoes to
+	// catch one champion at a time (the round-2 flagship's entire shedding
+	// top 10 rode a catch-all wild). Mutation never generates the encoding
+	// (addSpecialCard forces a suit qualifier when ByRank is 0) and crossover
+	// copies special-card slices wholesale, so valid parents cannot produce
+	// it.
+	for i, sc := range g.SpecialCards {
+		if sc.ByRank == 0 && sc.BySuit == 0 {
+			errs = append(errs, fmt.Sprintf(
+				"special card %d (%s) is a catch-all (by_rank=0, by_suit=0 matches every card): it deletes the skeleton's match/draw rules; qualify it by rank and/or suit", i, sc.Type))
+		}
+	}
+
 	// Validate borrowed mechanics
 	errs = append(errs, validateBorrowed(g)...)
 

@@ -183,21 +183,31 @@ func addSpecialCard(g *genome.Genome, rng *rand.Rand) {
 		genome.SpecialWild,
 	}
 
-	// Sample ByRank=0 ("any rank") with ~15% probability so catch-all
-	// specials like "every Heart is wild" are reachable through cumulative
+	// Sample ByRank=0 ("any rank") with ~15% probability so suit-bound
+	// catch-alls like "every Heart is wild" are reachable through cumulative
 	// mutation, not only via seed copy. Mirrors the mutateScoring catch-all
 	// convention from dd-eir (dd-g2m).
-	var byRank uint8
+	//
+	// LIVENESS GUARD (Task 28 round 3): ByRank=0 AND BySuit=0 matches EVERY
+	// card -- the catch-all encoding genome.Validate rejects as a Tier-0
+	// liveness violation (it deletes match_rule/draw_penalty as dead genes;
+	// the round-2 flagship's entire shedding top 10 carried one). When the
+	// rank qualifier is dropped, a specific suit is forced; the full BySuit
+	// 0-4 range stays reachable for rank-qualified rules. Pinned by
+	// TestAddSpecialCardNeverCatchAll.
+	var byRank, bySuit uint8
 	if rng.Float64() < 0.15 {
 		byRank = 0
+		bySuit = uint8(rng.IntN(4) + 1) // 1-4: a suit qualifier is mandatory
 	} else {
 		byRank = ranks[rng.IntN(len(ranks))]
+		bySuit = uint8(rng.IntN(5)) // 0=any suit, 1-4=specific
 	}
 
 	sc := genome.SpecialCard{
 		Type:   types[rng.IntN(len(types))],
 		ByRank: byRank,
-		BySuit: uint8(rng.IntN(5)), // 0=any suit, 1-4=specific
+		BySuit: bySuit,
 	}
 
 	g.SpecialCards = append(g.SpecialCards, sc)
