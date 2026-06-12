@@ -2,6 +2,7 @@ package evolution
 
 import (
 	"fmt"
+	"math"
 	"math/rand/v2"
 	"runtime"
 	"sort"
@@ -13,9 +14,37 @@ import (
 )
 
 const (
-	NoveltyK         = 15  // k-nearest neighbors for novelty
-	NoveltyWeight    = 0.5 // weight of novelty vs fitness
-	NoveltyThreshold = 0.3 // min novelty to enter archive
+	NoveltyK      = 15  // k-nearest neighbors for novelty
+	NoveltyWeight = 0.5 // weight of novelty vs fitness
+
+	// NoveltyAddThreshold is the INITIAL absolute archive-admission
+	// threshold: an individual enters the archive iff its behavior is
+	// farther than this from every same-skeleton archive entry, including
+	// entries admitted earlier in the same pass. This replaces the old
+	// per-generation-max-normalized threshold, which re-admitted
+	// persisting elites every generation (audit Task 18). Initialized from
+	// the measured descriptor spread of the Task 17 population (8 classics
+	// + 50 Tier-0-valid mutants, 2026-06-11): within-skeleton
+	// nearest-neighbor distance medians were shedding 0.014, trick-taking
+	// 0.002, rummy 0.001 with p90s 0.040/0.034/0.006, so 0.02 sits in the
+	// upper NN tail -- the right order of magnitude for a low-single-digit
+	// admission rate. The engine adapts it from there (noveltyAdmitLo/Hi).
+	NoveltyAddThreshold = 0.02
+
+	// NoveltyArchiveCap bounds archive growth. Eviction at the cap is
+	// uniform-random: FIFO eviction turned the archive into a sliding
+	// window that forgot early coverage (audit Task 18).
+	NoveltyArchiveCap = 1000
+
+	// Adaptive admission control: after each admission pass the threshold
+	// doubles if more than noveltyAdmitHi of the population was admitted
+	// and halves below noveltyAdmitLo, keeping admissions at roughly 2-5%
+	// per generation. Clamped to [noveltyThresholdMin, noveltyThresholdMax]
+	// (the max distance in the unit behavior square is sqrt(2) ~ 1.414).
+	noveltyAdmitLo      = 0.02
+	noveltyAdmitHi      = 0.05
+	noveltyThresholdMin = 1e-3
+	noveltyThresholdMax = 1.5
 
 	// DefaultFitnessFloor is derived from the seed-calibration suite
 	// (Task 15): worst classic survivor-conditioned mean (crazy-eights
@@ -48,6 +77,10 @@ type NoveltyEngine struct {
 	Generation int
 	rng        *rand.Rand
 
+	// addThreshold is the current absolute archive-admission threshold,
+	// adapted each generation (see NoveltyAddThreshold).
+	addThreshold float64
+
 	// Stats
 	BestFitness float64
 	BestGenome  *genome.Genome
@@ -59,9 +92,10 @@ func NewNoveltyEngine(config Config, seeds []*genome.Genome) *NoveltyEngine {
 		config.Workers = runtime.NumCPU()
 	}
 	return &NoveltyEngine{
-		Config: config,
-		Seeds:  seeds,
-		rng:    rand.New(rand.NewPCG(config.BaseSeed, 0)),
+		Config:       config,
+		Seeds:        seeds,
+		rng:          rand.New(rand.NewPCG(config.BaseSeed, 0)),
+		addThreshold: NoveltyAddThreshold,
 	}
 }
 
@@ -95,7 +129,11 @@ func (e *NoveltyEngine) Run(progress func(gen int, best float64, avg float64)) {
 		e.Population = e.selectNext()
 	}
 
-	// Final evaluation
+	// Final evaluation. Bump Generation past the loop range so elites get
+	// fresh seeds here instead of repeating the last generation's
+	// evaluation, which would double-count the same sample in the running
+	// mean (mirrors engine.go, Task 13.3).
+	e.Generation = e.Config.Generations
 	e.evaluatePopulation()
 	e.computeNovelty()
 }
@@ -114,15 +152,20 @@ func (e *NoveltyEngine) initialize() {
 	}
 }
 
+// evaluatePopulation evaluates EVERY individual every generation -- elites
+// included. The old `if ind.Valid { continue }` skip froze a single
+// (possibly lucky) estimate forever (the winner's curse; engine.go got the
+// fix in f882a67, this engine did not -- carried finding (a) of the
+// 2026-06-11 checkpoint). The per-generation seed term gives elites fresh
+// games each time, and TotalFitness becomes the running mean over all
+// evaluations of the exact genome via EvalCount/FitnessSum. Behavior is
+// recomputed from a fresh batch alongside, so the descriptor estimate
+// sharpens with the fitness estimate.
 func (e *NoveltyEngine) evaluatePopulation() {
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, e.Config.Workers)
 
 	for i, ind := range e.Population {
-		if ind.Valid {
-			continue
-		}
-
 		wg.Add(1)
 		sem <- struct{}{}
 
@@ -135,26 +178,52 @@ func (e *NoveltyEngine) evaluatePopulation() {
 
 			ind.Valid = result.Valid
 			ind.Fitness = result.Metrics
+			if !result.Valid {
+				// A genome that fails Tier 0/1 on re-evaluation is flaky
+				// (e.g. degenerate under some seeds). Drop its history so
+				// it must re-qualify from scratch if it ever passes again.
+				ind.EvalCount = 0
+				ind.FitnessSum = 0
+				return
+			}
 
-			if result.Valid {
-				// Compute behavior
-				runner := fitness.GetRunner(ind.Genome)
-				if runner != nil {
-					randomAI := &sim.RandomAI{}
-					batchResult := sim.RunBatch(ind.Genome, runner, randomAI, 50, seed+5000)
-					ind.Behavior = ComputeBehavior(batchResult)
-				}
+			ind.FitnessSum += result.Metrics.TotalFitness
+			ind.EvalCount++
+			ind.Fitness.TotalFitness = ind.FitnessSum / float64(ind.EvalCount)
+
+			// Compute behavior from a fresh batch
+			runner := fitness.GetRunner(ind.Genome)
+			if runner != nil {
+				randomAI := &sim.RandomAI{}
+				batchResult := sim.RunBatch(ind.Genome, runner, randomAI, 50, seed+5000)
+				ind.Behavior = ComputeBehavior(batchResult)
 			}
 		}(i, ind)
 	}
 
 	wg.Wait()
+	e.updateBestFitness()
+}
 
+// updateBestFitness recomputes BestFitness/BestGenome from the CURRENT
+// population's (running-mean) TotalFitness. It deliberately does NOT keep a
+// sticky historical max: with elite re-evaluation an elite's mean drifts
+// toward its true value, and freezing the highest-ever noisy estimate would
+// reintroduce the winner's curse. If no valid individual exists, the
+// previous best is retained.
+func (e *NoveltyEngine) updateBestFitness() {
+	var best *NoveltyIndividual
 	for _, ind := range e.Population {
-		if ind.Valid && ind.Fitness.TotalFitness > e.BestFitness {
-			e.BestFitness = ind.Fitness.TotalFitness
-			e.BestGenome = ind.Genome
+		if !ind.Valid {
+			continue
 		}
+		if best == nil || ind.Fitness.TotalFitness > best.Fitness.TotalFitness {
+			best = ind
+		}
+	}
+	if best != nil {
+		e.BestFitness = best.Fitness.TotalFitness
+		e.BestGenome = best.Genome
 	}
 }
 
@@ -279,21 +348,70 @@ func (e *NoveltyEngine) computeNovelty() {
 
 		ind.Fitness.SharedFitness = combined
 		ind.Genome.Fitness = ind.Fitness.SharedFitness
+	}
 
-		// Add to archive if sufficiently novel (within-skeleton normalized)
-		if normalizedNovelty >= NoveltyThreshold {
+	// Archive admission (audit Task 18): absolute distance threshold,
+	// within-skeleton. Admit iff the behavior is farther than addThreshold
+	// from every same-skeleton archive entry -- including entries admitted
+	// earlier in this pass, so duplicates within one generation cannot
+	// double-admit and persisting elites (distance 0 to their own archive
+	// copy) are never re-admitted. The old rule compared per-generation
+	// max-normalized novelty against a constant, which re-admitted elites
+	// every generation. The FitnessFloor still gates admission: the
+	// archive is exploration memory for QD-qualified games.
+	admitted := 0
+	for _, ind := range e.Population {
+		if !ind.Valid || ind.Fitness.TotalFitness < FitnessFloor {
+			continue
+		}
+		if e.nearestArchiveDistance(ind.Genome.Skeleton, ind.Behavior) > e.addThreshold {
 			e.Archive = append(e.Archive, &NoveltyIndividual{
 				Individual: ind.Individual,
 				Behavior:   ind.Behavior,
 				Novelty:    ind.Novelty,
 			})
+			admitted++
 		}
 	}
 
-	// Cap archive size to prevent unbounded growth
-	if len(e.Archive) > 1000 {
-		e.Archive = e.Archive[len(e.Archive)-1000:]
+	// Adaptive admission control: keep admissions at roughly 2-5% of the
+	// population per generation by doubling/halving the threshold.
+	if n := len(e.Population); n > 0 {
+		rate := float64(admitted) / float64(n)
+		if rate > noveltyAdmitHi {
+			e.addThreshold = min(e.addThreshold*2, noveltyThresholdMax)
+		} else if rate < noveltyAdmitLo {
+			e.addThreshold = max(e.addThreshold/2, noveltyThresholdMin)
+		}
 	}
+
+	// Cap archive size with uniform-random eviction: every entry is equally
+	// likely to go, preserving early coverage memory (FIFO truncation made
+	// the archive a sliding window of recent generations).
+	for len(e.Archive) > NoveltyArchiveCap {
+		i := e.rng.IntN(len(e.Archive))
+		e.Archive[i] = e.Archive[len(e.Archive)-1]
+		e.Archive = e.Archive[:len(e.Archive)-1]
+	}
+}
+
+// nearestArchiveDistance returns the behavior distance from b to the nearest
+// archive entry of the given skeleton, or +Inf if that skeleton has no
+// entries yet (so a skeleton's first qualified individual is always
+// admitted). Within-skeleton on purpose: descriptors of different skeletons
+// share the unit square but describe different game families, consistent
+// with the engine's within-skeleton novelty computation.
+func (e *NoveltyEngine) nearestArchiveDistance(skel genome.SkeletonType, b BehaviorDescriptor) float64 {
+	best := math.Inf(1)
+	for _, arch := range e.Archive {
+		if arch.Genome.Skeleton != skel {
+			continue
+		}
+		if d := b.Distance(arch.Behavior); d < best {
+			best = d
+		}
+	}
+	return best
 }
 
 func (e *NoveltyEngine) selectNext() []*NoveltyIndividual {
@@ -304,14 +422,19 @@ func (e *NoveltyEngine) selectNext() []*NoveltyIndividual {
 
 	nextGen := make([]*NoveltyIndividual, e.Config.PopulationSize)
 
-	// Elitism
+	// Elitism: top N carry forward, including their running-mean state.
+	// Elites are re-evaluated with a fresh seed every generation (see
+	// evaluatePopulation); carrying EvalCount/FitnessSum is what turns the
+	// next evaluation into a running mean instead of a fresh point estimate.
 	elite := min(e.Config.EliteSize, len(e.Population))
 	for i := 0; i < elite; i++ {
 		nextGen[i] = &NoveltyIndividual{
 			Individual: Individual{
-				Genome:  e.Population[i].Genome,
-				Fitness: e.Population[i].Fitness,
-				Valid:   true,
+				Genome:     e.Population[i].Genome,
+				Fitness:    e.Population[i].Fitness,
+				Valid:      true,
+				EvalCount:  e.Population[i].EvalCount,
+				FitnessSum: e.Population[i].FitnessSum,
 			},
 			Behavior: e.Population[i].Behavior,
 		}
