@@ -152,7 +152,12 @@ func (e *MAPElitesEngine) evaluateAndInsert(genomes []*genome.Genome, gen int) {
 			seed := e.Config.BaseSeed + uint64(gen)*10000 + uint64(idx)
 			result := fitness.Evaluate(g, seed)
 
-			if !result.Valid || result.Metrics.TotalFitness < 0.70 {
+			// No fitness gate here: archive ADMISSION is floor-free (audit
+			// Task 18). The old hardcoded 0.70 cutoff silently emptied the
+			// archive after the Task 14 recalibration (classics 0.43-0.65)
+			// and threw away stepping stones. The FitnessFloor applies to
+			// OUTPUT (AllQualified) only.
+			if !result.Valid {
 				return
 			}
 
@@ -181,34 +186,47 @@ func (e *MAPElitesEngine) evaluateAndInsert(genomes []*genome.Genome, gen int) {
 		if !r.valid {
 			continue
 		}
-
-		archive := e.Archives[r.genome.Skeleton]
-		row, col := r.behavior.GridCell(GridSize)
-
-		cell := archive.Cells[row][col]
-		if cell == nil || r.metrics.TotalFitness > cell.Individual.Fitness.TotalFitness {
-			if cell == nil {
-				archive.Occupied++
-			} else {
-				archive.QDScore -= cell.Individual.Fitness.TotalFitness
-			}
-
-			archive.Cells[row][col] = &ArchiveCell{
-				Individual: &Individual{
-					Genome:  r.genome,
-					Fitness: r.metrics,
-					Valid:   true,
-				},
-				Behavior: r.behavior,
-			}
-			archive.QDScore += r.metrics.TotalFitness
-
-			if r.metrics.TotalFitness > e.BestFitness {
-				e.BestFitness = r.metrics.TotalFitness
-				e.BestGenome = r.genome
-			}
-		}
+		e.insert(r.genome, r.metrics, r.behavior)
 	}
+}
+
+// insert offers an evaluated genome to its skeleton archive. Admission is
+// pure cell-local elitism: the cell keeps its best occupant REGARDLESS of
+// the global FitnessFloor (audit Task 18) -- sub-floor occupants are
+// stepping stones for parent selection (randomArchiveOccupant draws from
+// all occupants), while the floor applies to output via AllQualified.
+// Ties keep the incumbent (strict > comparison). Returns true if the
+// genome took the cell.
+func (e *MAPElitesEngine) insert(g *genome.Genome, metrics fitness.Metrics, behavior BehaviorDescriptor) bool {
+	archive := e.Archives[g.Skeleton]
+	row, col := behavior.GridCell(GridSize)
+
+	cell := archive.Cells[row][col]
+	if cell != nil && metrics.TotalFitness <= cell.Individual.Fitness.TotalFitness {
+		return false
+	}
+
+	if cell == nil {
+		archive.Occupied++
+	} else {
+		archive.QDScore -= cell.Individual.Fitness.TotalFitness
+	}
+
+	archive.Cells[row][col] = &ArchiveCell{
+		Individual: &Individual{
+			Genome:  g,
+			Fitness: metrics,
+			Valid:   true,
+		},
+		Behavior: behavior,
+	}
+	archive.QDScore += metrics.TotalFitness
+
+	if metrics.TotalFitness > e.BestFitness {
+		e.BestFitness = metrics.TotalFitness
+		e.BestGenome = g
+	}
+	return true
 }
 
 // randomArchiveOccupant returns a random genome from any occupied archive cell.
@@ -264,7 +282,9 @@ func (e *MAPElitesEngine) totalStats() (int, float64) {
 	return occupied, qdScore
 }
 
-// AllQualified returns all genomes in the archives with their behaviors.
+// AllQualified returns the archive occupants that meet the FitnessFloor.
+// Admission is floor-free (see insert), so the archive may hold sub-floor
+// stepping stones; output keeps the floor so they are never published.
 func (e *MAPElitesEngine) AllQualified() []*Individual {
 	// Iterate skeletons in a stable order so seeded runs are reproducible;
 	// Go map iteration order is randomized per process and would otherwise
@@ -277,8 +297,8 @@ func (e *MAPElitesEngine) AllQualified() []*Individual {
 		}
 		for r := 0; r < GridSize; r++ {
 			for c := 0; c < GridSize; c++ {
-				if archive.Cells[r][c] != nil {
-					result = append(result, archive.Cells[r][c].Individual)
+				if cell := archive.Cells[r][c]; cell != nil && cell.Individual.Fitness.TotalFitness >= FitnessFloor {
+					result = append(result, cell.Individual)
 				}
 			}
 		}
