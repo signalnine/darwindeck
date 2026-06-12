@@ -2,6 +2,7 @@ package rummy
 
 import (
 	"math/rand/v2"
+	"reflect"
 	"testing"
 
 	"github.com/darwindeck/darwindeck/pkg/genome"
@@ -94,6 +95,38 @@ func TestRummyDeterminism(t *testing.T) {
 	}
 	if r1.Turns != r2.Turns {
 		t.Fatalf("non-deterministic: turns %d vs %d", r1.Turns, r2.Turns)
+	}
+}
+
+// TestMeldMoveOrderDeterministic pins dd-audit-1: meld-move generation must not
+// depend on Go map iteration order. Same genome+seed => byte-identical event streams.
+func TestMeldMoveOrderDeterministic(t *testing.T) {
+	g := seeds.GinRummy() // rummy genome with melds reachable
+	for seed := uint64(1); seed <= 20; seed++ {
+		r1 := sim.RunBatch(g, &Runner{}, &sim.RandomAI{}, 1, seed)
+		r2 := sim.RunBatch(g, &Runner{}, &sim.RandomAI{}, 1, seed)
+		if !reflect.DeepEqual(r1.AllEvents, r2.AllEvents) {
+			t.Fatalf("seed %d: event streams differ", seed)
+		}
+	}
+}
+
+// TestMeldMoveListOrderDeterministic asserts the generated move list itself is
+// order-stable across repeated calls on identical state. This catches map-order
+// nondeterminism directly, without relying on RandomAI to expose it.
+func TestMeldMoveListOrderDeterministic(t *testing.T) {
+	g := seeds.GinRummy()
+	runner := &Runner{}
+	for seed := uint64(1); seed <= 20; seed++ {
+		s1 := runner.Setup(g, rand.New(rand.NewPCG(seed, 0)))
+		s2 := runner.Setup(g, rand.New(rand.NewPCG(seed, 0)))
+		s1.Phase = sim.PhaseMeld
+		s2.Phase = sim.PhaseMeld
+		m1 := runner.GenerateMoves(s1, g)
+		m2 := runner.GenerateMoves(s2, g)
+		if !reflect.DeepEqual(m1, m2) {
+			t.Fatalf("seed %d: meld move lists differ in order/content:\n%v\nvs\n%v", seed, m1, m2)
+		}
 	}
 }
 

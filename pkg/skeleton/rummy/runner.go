@@ -2,6 +2,7 @@ package rummy
 
 import (
 	"math/rand/v2"
+	"slices"
 	"sort"
 
 	"github.com/darwindeck/darwindeck/pkg/genome"
@@ -343,8 +344,18 @@ func findSets(hand []sim.Card, minSize int) [][]sim.Card {
 		byRank[c.Rank] = append(byRank[c.Rank], c)
 	}
 
+	// Iterate ranks in sorted order: map iteration order is randomized in Go,
+	// which would make move-list order (and thus fixed-seed games)
+	// nondeterministic (dd-audit-1).
+	ranks := make([]sim.Rank, 0, len(byRank))
+	for r := range byRank {
+		ranks = append(ranks, r)
+	}
+	slices.Sort(ranks)
+
 	var sets [][]sim.Card
-	for _, cards := range byRank {
+	for _, r := range ranks {
+		cards := byRank[r]
 		if len(cards) >= minSize {
 			set := make([]sim.Card, len(cards))
 			copy(set, cards)
@@ -361,8 +372,16 @@ func findRuns(hand []sim.Card, minSize int) [][]sim.Card {
 		bySuit[c.Suit] = append(bySuit[c.Suit], c)
 	}
 
+	// Sorted-key iteration for determinism (dd-audit-1).
+	suits := make([]sim.Suit, 0, len(bySuit))
+	for s := range bySuit {
+		suits = append(suits, s)
+	}
+	slices.Sort(suits)
+
 	var runs [][]sim.Card
-	for _, cards := range bySuit {
+	for _, s := range suits {
+		cards := bySuit[s]
 		if len(cards) < minSize {
 			continue
 		}
@@ -450,7 +469,15 @@ func enumerateMeldCandidates(hand []sim.Card, params *genome.RummyParams) []meld
 		for i, c := range hand {
 			byRank[c.Rank] = append(byRank[c.Rank], i)
 		}
-		for _, idxs := range byRank {
+		// Sorted-key iteration for determinism (dd-audit-1): candidate order
+		// feeds findMelds, so map order would randomize meld-move order.
+		ranks := make([]sim.Rank, 0, len(byRank))
+		for r := range byRank {
+			ranks = append(ranks, r)
+		}
+		slices.Sort(ranks)
+		for _, r := range ranks {
+			idxs := byRank[r]
 			if len(idxs) < min {
 				continue
 			}
@@ -465,7 +492,14 @@ func enumerateMeldCandidates(hand []sim.Card, params *genome.RummyParams) []meld
 		for i, c := range hand {
 			bySuit[c.Suit] = append(bySuit[c.Suit], i)
 		}
-		for _, idxs := range bySuit {
+		// Sorted-key iteration for determinism (dd-audit-1).
+		suits := make([]sim.Suit, 0, len(bySuit))
+		for s := range bySuit {
+			suits = append(suits, s)
+		}
+		slices.Sort(suits)
+		for _, s := range suits {
+			idxs := bySuit[s]
 			if len(idxs) < min {
 				continue
 			}
