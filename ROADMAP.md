@@ -2,7 +2,22 @@
 
 This document tracks planned features, known limitations, and future work.
 
-## Current Status
+## v2 Scope Decisions (recorded 2026-06-11)
+
+The active system is the pure Go v2 rewrite (`cmd/`, `pkg/`). Everything below this section describes the legacy v1 Python/Go hybrid (`src/`), which is no longer developed. Scope explicitly dropped or deferred in v2:
+
+| Capability | v2 status | Decision |
+|------------|-----------|----------|
+| MCTS skill evaluation | **Absent** | v1's MCTS was omniscient (it cloned hidden hands) and was not ported. v2's skill ceiling is currently 1-ply greedy; a determinized ISMCTS player is scheduled in Phase 5 of `docs/plans/2026-06-11-audit-remediation.md`. |
+| Pareto / NSGA-II selection | **Open question** | Weighted-sum fitness is in use. Multi-objective selection remains the day-one open question, tracked as an optional experiment (Phase 8 of the remediation plan). |
+| Betting/wagering | **v1-only** | Not representable in the three v2 skeletons (shedding, trick-taking, rummy); no port planned. |
+| Bidding/contracts | **v1-only** | Same -- v1 `BiddingPhase`/`ContractScoring` were not carried into v2. |
+| Team/partnership play | **v1-only** | v1 `team_mode`/`teams` were not carried into v2. |
+| Web UI | **v1-only** | The FastAPI + SvelteKit UI targets the v1 engine; v2 is CLI-only. |
+
+> **Historical-accuracy note (2026-06-11 audit):** the v1 checklists below are preserved as history, but two classes of claims no longer match the v1 code as it stands: (1) the "Python-level process pool (~4x speedup)" and "360x combined" parallelization items -- `ParallelFitnessEvaluator` runs serially on current code (`num_workers` is ignored; Python 3.13 multiprocessing hangs with CGo); (2) the Python-Go golden equivalence tests (`tests/integration/test_bytecode_equivalence.py`) are `@pytest.mark.skip` in the current suite, so cross-language equivalence is not verified.
+
+## Current Status (v1 legacy -- historical)
 
 **Core System: Complete**
 - Genome schema with 19 seed games (including 4 betting games)

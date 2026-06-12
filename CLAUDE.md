@@ -66,13 +66,13 @@ pkg/
 
 ### Fitness Function (5 metrics)
 
-| Metric | Weight | What it measures |
+| Metric | Weight | What it measures (current implementation) |
 |--------|--------|-----------------|
-| Meaningful Decisions | 0.25 | Fraction of turns with >1 legal move that were plays (not forced draws) |
-| Game Arc | 0.25 | Win distribution entropy + turn variance (uncertainty → resolution) |
-| Interaction | 0.20 | How much players' actions affect each other |
-| Skill Gradient | 0.20 | Greedy AI win rate vs random baseline |
-| Session Length | 0.10 | Target 15-40 turns, linear falloff outside |
+| Meaningful Decisions | 0.25 | Event-log proxy: fraction of move events that are chosen plays (card played, meld laid, draw-from-discard) vs forced deck draws. Does NOT count legal-move alternatives, so trick-taking pins at 1.0 structurally. Real legal-move counting lands in Task 9 of `docs/plans/2026-06-11-audit-remediation.md`. |
+| Game Arc | 0.25 | Across-games proxy: win-distribution entropy across seats (0.6) + turn-count coefficient of variation (0.4). Measures seat balance and length spread, not a within-game arc (remediation Task 10). |
+| Interaction | 0.20 | Event-taxonomy proxy: share of events tagged interactive (specials, trick wins, melds, every discard). Counts discards as interactive regardless of effect on opponents (remediation Task 11). |
+| Skill Gradient | 0.20 | Greedy seat-0 win rate vs the empirical random seat-0 baseline from the same-seed random batch |
+| Session Length | 0.10 | Target 15-40 turns, linear falloff outside; 0 below 5 or above 100. Turn units differ per skeleton (remediation Task 12). |
 
 ### Validation Pipeline
 
@@ -157,6 +157,8 @@ STYLE=bluffing ./scripts/run-evolution.sh
 
 ## Performance and Parallelization
 
+> **Historical note (2026-06-11 audit):** the claims in this section describe v1 as originally benchmarked and are NOT all true of current code. `ParallelFitnessEvaluator` (`src/darwindeck/evolution/parallel_fitness.py`) runs **serially** on current code -- `num_workers` is ignored because Python 3.13 multiprocessing hangs with CGo -- so the "~4x Python-level speedup" and "3.3-4.0x combined" figures are not reproducible today. Preserved as v1 history only.
+
 The system implements **two-level parallelization** to maximize throughput on multi-core systems:
 
 ### Go-Level Parallelization (Phase 3)
@@ -166,13 +168,14 @@ The system implements **two-level parallelization** to maximize throughput on mu
 - **Optimal batch size:** 500-1000 games per evaluation
 - **Memory overhead:** < 0.5% (negligible)
 
-### Python-Level Parallelization (Phase 4)
+### Python-Level Parallelization (Phase 4) -- HISTORICAL, no longer true
 - **Implementation:** Process pool in `src/darwindeck/evolution/parallel_fitness.py`
 - **Performance:** ~4x speedup on 4-core systems for population evaluation
 - **Usage:** Use `ParallelFitnessEvaluator` for evaluating multiple genomes
 - **Process-safe:** Each worker gets isolated Go simulator instance
+- **Status (2026-06-11):** KNOWN INACCURATE -- current code evaluates serially; `num_workers` is accepted but ignored (see the `_serial_evaluate_task` loop and its comment about the Python 3.13 multiprocessing + CGo hang)
 
-### Combined Performance
+### Combined Performance -- HISTORICAL, depends on the inaccurate Python-level claim above
 - **Total speedup:** 3.3-4.0x end-to-end on 4-core systems
 - **Throughput:** 3,000-4,000 games/second
 - **Population (100 genomes):** ~25-30 seconds
@@ -294,6 +297,7 @@ When implementing, follow this sequence:
    - Go bytecode parsing tests (4 passing)
    - `tests/golden/war_genome.bin` (77 bytes) validates Python↔Go equivalence
    - Determinism verification
+   - **Status (2026-06-11):** KNOWN INACCURATE as stated -- the cross-language equivalence tests in `test_bytecode_equivalence.py` are `@pytest.mark.skip` (require `libcardsim.so` to be built; one case deferred), so Python-Go equivalence is NOT verified by the current test suite
 
 **Performance Status:** ✅ **COMPLETE - TARGET ACHIEVED**
 

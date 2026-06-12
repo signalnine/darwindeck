@@ -82,6 +82,8 @@ Each Tier 2 evaluation runs 250 game simulations. With sub-millisecond per-game 
 
 ## Diversity Experiments
 
+> **Caveat (2026-06-11):** every number in this section comes from April 2026 runs that predate the April-June 2026 fitness-metric fixes. The experiments will be re-run on fixed code and these tables regenerated (see `docs/plans/2026-06-11-audit-remediation.md`, Phase 7), at which point this caveat is removed.
+
 Experimental comparison of evolution algorithms (10 seeds each, 2000 pop, 200 gens):
 
 | Metric | Baseline | Hybrid |
@@ -98,6 +100,18 @@ Per-skeleton coverage shows hybrid lifts all skeleton types:
 - Shedding: 0.090 -> 0.220 (+144%)
 - Trick-taking: 0.110 -> 0.300 (+173%)
 - Rummy: 0.150 -> 0.230 (+53%)
+
+MAP-Elites was compared in a separate 15-seed run at a smaller evaluation budget (`results/pre-fix-experiments/full/results.json`), so its absolute numbers are not comparable to the table above; it is shown against its own in-run baseline (mean over 15 seeds):
+
+| Metric | Baseline | MAP-Elites |
+|--------|----------|------------|
+| Coverage (qualified cells filled) | 0.090 | 0.087 |
+| QD-Score (sum of fitness in cells) | 22.1 | 22.2 |
+| Pairwise Behavioral Distance | 0.220 | **0.348** |
+| Median Fitness | 0.800 | **0.862** |
+| Games Produced | 436 | 79 |
+
+MAP-Elites matched baseline coverage and QD-score with ~5x fewer output games and the highest median fitness of any algorithm in either run (0.862) -- it concentrates quality into a small, diverse archive rather than a large output pool.
 
 See `docs/plans/2026-04-11-diversity-experiments-design.md` for the full experimental design.
 
