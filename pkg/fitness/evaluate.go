@@ -33,6 +33,11 @@ type EvaluationResult struct {
 	Tier1       Tier1Result
 	Metrics     Metrics
 	Valid       bool
+	// DegenerateReason is non-empty when the Tier 2 degeneracy veto rejected
+	// the genome (see degeneracy.go): the game passed Tier 1 and produced
+	// metrics, but its random batch carries a degeneracy signature
+	// (non_agentic, tempo_monopoly, draw_supply_churn). Valid is false.
+	DegenerateReason string
 }
 
 // Evaluate runs the default tiered evaluation pipeline for a genome.
@@ -92,11 +97,26 @@ func evaluate(g *genome.Genome, baseSeed uint64, mcts *MCTSEvalConfig) Evaluatio
 	}
 
 	// Tier 2: Full simulation
-	result.Valid = true
 
 	// Games with random AI
 	randomAI := &sim.RandomAI{}
 	randomResult := sim.RunBatch(g, runner, randomAI, tier2RandomGames, baseSeed+100, hooks...)
+
+	// Degeneracy veto (Task 28 round 2): the random batch's turn records are
+	// checked for game-shaped non-game signatures BEFORE the genome is
+	// declared valid. A vetoed genome still reports its metrics (the
+	// calibrate subcommand shows them) but is fitness 0 in the pipeline,
+	// exactly like a Tier 1 kill. Both modes share this path, so an MCTS
+	// grant can never resurrect a vetoed genome.
+	if reason := CheckDegeneracy(randomResult, g); reason != "" {
+		result.DegenerateReason = reason
+		// No greedy batch for a dead genome: metrics are reported for
+		// diagnosis (calibrate) from the random batch alone; skill reads 0.
+		result.Metrics = ComputeFitness(randomResult, sim.BatchResult{}, g.Players)
+		return result
+	}
+
+	result.Valid = true
 
 	// Games with greedy AI (player 0) vs random opponents
 	greedyResult := runGreedyBatch(g, runner, tier2GreedyGames, baseSeed+1000, hooks...)

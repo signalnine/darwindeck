@@ -74,7 +74,8 @@ import (
 // crazy-eights stripped of its special cards, and the metrics see exactly
 // that difference (interaction 0.385 vs 0.231, decisions 0.300 vs 0.181).
 
-// POST-TASK-20 RESULT (two-tier skill gradient, 2026-06-11). The skill
+// HISTORICAL -- POST-TASK-20 RESULT (two-tier skill gradient, 2026-06-11;
+// superseded by the ROUND 2 block below). The skill
 // metric became skill = clamp(raw/skillScale, 0, 1) with
 // raw = 0.4*greedyTerm + 0.6*mctsTerm and skillScale = 0.5 (the one
 // scale-constant change Task 20 permits; weights UNCHANGED at
@@ -129,6 +130,60 @@ import (
 // as a fixture here; TestMCTSTierRewardsDegenKnockTiming (evaluate_test.go)
 // pins the mechanism.
 
+// ROUND 2 RESULT (Task 28 step 4 failed-review loop, 2026-06-12). The
+// post-fix flagship's designer review HARD-BLOCKED publication: its top 30
+// were three gamed archetypes, now fixtures (pkg/seeds/degenerate.go:
+// CatchAllSkipShedding 0.879, NoFollowAvoidanceTrick 0.854,
+// PairMeldKnockRummy 0.673 at rejection -- two above EVERY classic). Three
+// changes re-passed the gate, in order:
+//
+//  1. INTERACTION FIX: 2p skip/reverse are self-tempo, not attacks, and
+//     self-perturbation never counts as OptionDelta coupling. Catch-all-skip
+//     interaction 1.00 -> 0.632.
+//  2. CHOICE-IMPACT DECISIONS: a turn counts only if sampled moves differ in
+//     type, effect profile, or next-player option-SET probe. No-follow trick
+//     density 0.917 -> 0.000; catch-all-skip 0.874 -> 0.633 (honest inflict
+//     choices remain); classics moved too (whist 0.776 -> 0.201, oh-hell
+//     -> 0.172, gin unchanged 0.690 -- rummy keeps count semantics).
+//  3. RECALIBRATION (this round's Task 14): one scale change -- the session
+//     band's low edge 10 -> 6 (ramp 3..6), because oh-hell (7.0
+//     decisions/player, a CLASSIC) paid a 0.5 length penalty and fell below
+//     a degenerate. Weights UNCHANGED at 0.25/0.25/0.20/0.20/0.10;
+//     interaction denominator (0.5) and skillScale (0.5) unchanged --
+//     measured interactive-turn ratios still top out at 0.42 among classics
+//     (no saturation) and the skill scale's gin-margin derivation still
+//     holds.
+//
+// EXIT CONDITION (a) TAKEN AND DOCUMENTED: after fixes 1-2 the three
+// rejected champions still measured 0.625-0.759 vs classics 0.428-0.578 --
+// catch-all-skip Pareto-dominates several classics on the five metrics, and
+// no monotone scale change separates a dominating pair. Per the plan's Task
+// 14 exit condition (a), ONE added measurement was introduced: the Tier 2
+// degeneracy veto (pkg/fitness/degeneracy.go) -- agency floor (density >=
+// 0.05), tempo monopoly (mean same-player run <= 6), rummy draw-supply
+// churn (delta share <= 0.10) -- validity rules computed from the existing
+// random batch, NOT a sixth weighted term, so the five weights stay frozen.
+// Every detector encodes the designer's stated rejection reason with >= 2x
+// measured margins to every classic (full table in the checkpoint doc's
+// Wave H entry).
+//
+// Survivor-conditioned means after all three changes (n=10/10 classics):
+//
+//	classics: crazy-eights 0.451 | mau-mau 0.476 | whist 0.486 |
+//	          hearts 0.486 | spades 0.500 | oh-hell 0.478 |
+//	          gin-rummy 0.548 | knock-rummy 0.578
+//	degens:   instant-knock 0.431 (n=1/10, eff 0.043) |
+//	          forced-shedding 0.399 (n=4/10, eff 0.160) |
+//	          catch-all-skip / no-follow / pair-meld: VETOED on 10/10 seeds
+//	          (tempo_monopoly / non_agentic / draw_supply_churn), survivor
+//	          mean 0, eff 0
+//
+// Margins: survivor-strict worst classic crazy-eights 0.451 vs best
+// degenerate instant-knock 0.431 (+0.020, strict ordering holds);
+// pipeline-effective worst classic 0.451 vs best degenerate 0.160 (+0.29);
+// gin 0.548 vs instant-knock 0.431 (+0.117 >= 0.10). FitnessFloor
+// re-derived 0.42 -> 0.40 (= 0.451 - 0.05, Task 15 rule).
+
 // Ground truth: the 8 classic seeds are the only human-validated "fun" games
 // in the repo. Any fitness function that scores a classic below a degenerate
 // fixture is falsified. Evaluations are averaged over the pinned seed list
@@ -182,7 +237,11 @@ func meanFit(t *testing.T, g *genome.Genome) calResult {
 			t.Fatalf("%s: tier-0 errors (fixture must be statically valid): %v", g.ID, res.Tier0Errors)
 		}
 		if !res.Valid {
-			t.Logf("%s: seed %d killed by tier 1: %s", g.ID, seed, res.Tier1.Reason)
+			if res.DegenerateReason != "" {
+				t.Logf("%s: seed %d killed by tier-2 degeneracy veto: %s", g.ID, seed, res.DegenerateReason)
+			} else {
+				t.Logf("%s: seed %d killed by tier 1: %s", g.ID, seed, res.Tier1.Reason)
+			}
 			continue
 		}
 		fits = append(fits, res.Metrics.TotalFitness)
@@ -231,22 +290,11 @@ func TestDegenerateFixturesAreTier0Valid(t *testing.T) {
 //   - survivor-conditioned: strict ordering, every classic above every
 //     degenerate (no margin -- the metric stack alone must never invert)
 func TestCalibrationClassicsBeatDegenerates(t *testing.T) {
-	// TEMPORARY SKIP (choice-impact commit, 2026-06-12; removed by the
-	// round-2 recalibration commit that immediately follows): the Task 28
-	// round-2 metric fixes intentionally land BEFORE the Task 14 round-2
-	// scale recalibration, and the choice-impact decisions fix moves the
-	// classics (survivor means now: crazy-eights 0.451, mau-mau 0.476,
-	// whist 0.486, hearts 0.486, spades 0.500, oh-hell 0.428, gin 0.548,
-	// knock 0.578) below instant-knock's single-surviving-seed mean (0.431,
-	// n 1/10): oh-hell 0.428 <= 0.431 inverts the survivor-strict view by
-	// 0.003. The pipeline-effective view still passes by +0.385. Scale
-	// constants may only move in the recalibration commit, which restores
-	// and re-verifies this gate -- a green build with this skip still
-	// present is not a passing gate.
-	t.Skip("temporary: survivor-strict view inverted by 0.003 (oh-hell 0.428 vs instant-knock n=1/10 0.431) between the choice-impact fix and the round-2 recalibration commit")
-
 	classics := seeds.All() // 8 games
-	degens := []*genome.Genome{seeds.InstantKnockRummy(), seeds.ForcedShedding()}
+	// All five degenerate fixtures: the two originals plus the three
+	// rejected round-2 flagship champions (Task 28 failed-review loop).
+	degens := append([]*genome.Genome{seeds.InstantKnockRummy(), seeds.ForcedShedding()},
+		seeds.RejectedChampions()...)
 
 	worstClassic, worstEff := 1.0, 1.0
 	bestDegen, bestEff := 0.0, 0.0
@@ -280,28 +328,21 @@ func TestCalibrationClassicsBeatDegenerates(t *testing.T) {
 	}
 }
 
-// TestCalibrationRejectedChampionsBelowClassics extends the core gate to the
-// Task 28 step-4 failed-review fixtures (round 2): the three archetypes that
+// TestCalibrationRejectedChampionsBelowClassics is the named round-2 gate
+// over the Task 28 step-4 failed-review fixtures: the three archetypes that
 // owned the ENTIRE top 30 of the post-fix flagship
 // (output/2026-06-12-flagship-postfix) and were rejected at designer review.
-// Same two-view semantics as TestCalibrationClassicsBeatDegenerates. This
-// test is the round's falsification on record: it MUST fail before the
-// metric fixes land (the metrics promoted these genomes to champions) and
-// MUST pass after recalibration.
+// Same two-view semantics as TestCalibrationClassicsBeatDegenerates (which
+// also includes these fixtures in its degens list; this test stays as the
+// round's named falsification record). RED PHASE ON RECORD (fixtures
+// commit): with the pre-fix metric stack this gate FAILED -- survivor means
+// catch-all-skip-shedding 0.879, no-follow-avoidance-trick 0.854,
+// pair-meld-knock-rummy 0.673 vs worst classic crazy-eights 0.474, all
+// passing Tier 1 on 10/10 seeds. GREEN since the round-2 fixes: all three
+// are now vetoed by the Tier 2 degeneracy checks on every calibration seed
+// (tempo_monopoly / non_agentic / draw_supply_churn -- see the ROUND 2
+// block).
 func TestCalibrationRejectedChampionsBelowClassics(t *testing.T) {
-	// RED ON RECORD (fixtures commit, 2026-06-12) -- this skip is the Task 14
-	// round-2 falsification: measured with the pre-fix metric stack, the gate
-	// FAILS with survivor means catch-all-skip-shedding 0.879 (sd 0.003,
-	// n 10/10), no-follow-avoidance-trick 0.854 (sd 0.003, n 10/10),
-	// pair-meld-knock-rummy 0.673 (sd 0.003, n 10/10) vs worst classic
-	// crazy-eights 0.474 -- two fixtures above EVERY classic, the third above
-	// both rummy classics (gin 0.548, knock 0.578). Pipeline-effective view
-	// identical (all three pass Tier 1 on 10/10 seeds). TRACKING: this skip
-	// MUST be removed by the round-2 recalibration commit (interaction +
-	// choice-impact fixes, Task 28 step 4); a green build with this skip
-	// still present is not a passing gate.
-	t.Skip("red on record: rejected-champion fixtures outscore classics with the pre-fix metric stack (see comment); un-skipped by the round-2 recalibration commit")
-
 	classics := seeds.All()
 	degens := seeds.RejectedChampions()
 

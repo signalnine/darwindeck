@@ -101,4 +101,50 @@ Commit d930dae. The harness's aggregation math backed published comparisons with
 - **Mann-Whitney U:** two-sided, normal approximation with tie + continuity correction (scipy's 'asymptotic' method; fixtures cross-checked against scipy to 1e-9), documented as adequate at n >= 8 per side, plus rank-biserial effect size. Wired into the report for every pairwise config comparison on coverage and QD-score, printing n per side and the small-n caveat (effect-size indications, not strong claims); persisted with per-config aggregates to summary_stats.json.
 - **Verified (Wave F.1 claim):** experiment.go threads -mcts-decile into evolution.Config (experiment.go:145). Per-run wall time now recorded (duration_sec) and per-config totals/medians printed.
 
+## Wave H (Task 28 step 4, failed-review loop ROUND 2 of the Task 14 procedure): done 2026-06-12
+
+The post-fix flagship (output/2026-06-12-flagship-postfix) was designer-reviewed; publication HARD-BLOCKED -- the entire top 30 collapsed to three gamed archetypes. Per the failed-review loop, each became a permanent fixture and the metric stack was re-falsified and re-calibrated. Six commits:
+
+1. **Fixtures + red on record** (36d3b79): CatchAllSkipShedding (A1, ranks 1-10: catch-all skip special matches EVERY card + 3 suits wild; in 2p skip == play-again, the opponent spectates), NoFollowAvoidanceTrick (A2, ranks 11-20: no-follow + flat avoidance + winner-leads; off-suit never wins, follower always ducks), PairMeldKnockRummy (A3, ranks 21-29: min_meld_size 2 knock race over a ~1-card stock). Pre-fix gate measurement (the falsification): A1 0.879, A2 0.854, A3 0.673 survivor means, ALL n=10/10, vs worst classic 0.474 -- two fixtures above every classic.
+2. **Interaction fix** (8a042bb): 2p skip/reverse are self-tempo, not attacks (IsAttackEvent now takes the player count; draw penalties stay attacks at any count), and self-perturbation never counts as OptionDelta coupling (the rummy rule, now applied to shedding). A1 interaction 1.00 -> 0.632.
+3. **Choice-impact decisions** (75778a9): TurnRecord.Meaningful -- a turn with >= 2 legal moves counts only if up to 4 deterministically sampled moves differ in (type, special-effect profile, next-player option-SET hash probe). A2 density 0.917 -> 0.000; A1 0.874 -> 0.633 (the remainder is honest inflict-vs-plain profile mixing); whist 0.776 -> 0.201 (leads stay meaningful, follows/completions collapse); rummy keeps count semantics (a count/set probe cannot capture hidden-information discard value and would collapse gin's core decision as hard as a degenerate's). Throughput gate: shedding bench 1.24x, rummy unchanged (gate 3x).
+4. **Recalibration, Task 14 round 2** (this commit): see below.
+5. (pending) Output pipeline dedup + fitness-field fixes.
+6. (pending) lead_restriction inert-param resolution.
+
+**Round-2 recalibration decisions (commit 4):**
+
+- ONE scale-constant change: session band low edge 10 -> 6 (ramp 3..6). Justification: oh-hell measures 7.0 decisions/player -- a human-validated classic paying a 0.5 length penalty for its natural deal size, which left it 0.003 BELOW instant-knock's single-surviving-seed mean after the decisions fix. Weights unchanged (0.25/0.25/0.20/0.20/0.10); interaction denominator 0.5 unchanged (classic interactive-turn ratios top out at 0.42 -- no saturation, and the A2 ratio pin is structural 1/N, not a denominator problem); skillScale 0.5 unchanged (the gin-margin derivation still holds).
+- **EXIT CONDITION (a) TAKEN** (plan Task 14 step 2b, anticipated by the round-2 brief): after the interaction+decisions fixes the three rejected champions still measured 0.625-0.759 vs classics 0.428-0.578; A1 in particular Pareto-dominates several classics on the five metrics (real greedy gradient 0.709, frequent draw-two attacks 0.632, arc 0.874, in-band length), and no monotone scale change separates a dominating pair. The added measurement is the **Tier 2 degeneracy veto** (pkg/fitness/degeneracy.go) -- a validity rule on the existing 200-game random batch, NOT a sixth weighted term (the weight vector stays frozen): non_agentic (meaningful density < 0.05; A2 = 0.000, classic min 0.171), tempo_monopoly (mean consecutive same-player run > 6; A1 = 15.4 -- the designer's literal rejection note "13 consecutive plays, opponent acted 0 times" -- classic max 3.04, rummy's structural turn cycle), draw_supply_churn (rummy-only, OptionDelta share > 0.10; A3 = 0.292 from its starved 1-card stock, gin/knock 0.010). Every threshold has >= 2x measured margin to every classic. Vetoed genomes skip the greedy batch and read fitness 0 in the pipeline, exactly like Tier 1 kills.
+- FitnessFloor re-derived 0.42 -> 0.40 (worst classic crazy-eights 0.451 - 0.05, the Task 15 rule).
+
+**Round-2 calibrate table** (./bin/darwindeck calibrate, raw metric means over the 10 pinned CalibrationSeeds; weighted survivor means in the rightmost notes):
+
+```
+genome                 skeleton      tier1  decisions       arc             interact        skill           length
+---------------------------------------------------------------------------------------------------------------------------
+crazy-eights           shedding      10/10  0.211 sd 0.003  0.866 sd 0.015  0.385 sd 0.003  0.026 sd 0.026  1.000 sd 0.000   -> 0.451
+mau-mau                shedding      10/10  0.237 sd 0.002  0.797 sd 0.019  0.565 sd 0.004  0.024 sd 0.020  1.000 sd 0.000   -> 0.476
+whist                  trick_taking  10/10  0.201 sd 0.001  0.609 sd 0.007  0.844 sd 0.002  0.073 sd 0.016  1.000 sd 0.000   -> 0.486
+hearts                 trick_taking  10/10  0.200 sd 0.001  0.359 sd 0.009  0.844 sd 0.001  0.387 sd 0.014  1.000 sd 0.000   -> 0.486
+spades                 trick_taking  10/10  0.188 sd 0.001  0.631 sd 0.021  0.835 sd 0.001  0.141 sd 0.018  1.000 sd 0.000   -> 0.500
+oh-hell                trick_taking  10/10  0.172 sd 0.001  0.630 sd 0.034  0.783 sd 0.003  0.105 sd 0.034  1.000 sd 0.000   -> 0.478
+gin-rummy              rummy         10/10  0.690 sd 0.000  0.859 sd 0.010  0.022 sd 0.000  0.725 sd 0.009  0.114 sd 0.022   -> 0.548
+knock-rummy            rummy         10/10  0.687 sd 0.000  0.813 sd 0.009  0.021 sd 0.000  0.611 sd 0.014  0.765 sd 0.011   -> 0.578
+instant-knock-rummy    rummy         1/10   0.356           0.930           0.000           0.049           1.000            -> 0.431 (eff 0.043)
+forced-shedding        shedding      4/10   0.112           0.706           0.231           0.242           1.000            -> 0.399 (eff 0.160)
+catch-all-skip-shedding shedding     0/10   vetoed 10/10: tempo_monopoly                                                     -> 0 (eff 0)
+no-follow-avoidance-trick trick_takg 0/10   vetoed 10/10: non_agentic                                                        -> 0 (eff 0)
+pair-meld-knock-rummy  rummy         0/10   vetoed 10/10: draw_supply_churn                                                  -> 0 (eff 0)
+```
+
+Gate (both views): survivor-strict worst classic crazy-eights 0.451 > best degenerate instant-knock 0.431 (+0.020); pipeline-effective worst classic 0.451 vs best degenerate 0.160 (+0.29 >= 0.05); gin 0.548 > instant-knock 0.431 + 0.10. All four calibration tests green, untagged, in the default suite.
+
+Throughput: 41,300 games in 10.3s = 3,991 games/sec single-threaded (Task 13.5 measured 7,939; ratio 1.99x, under the 3x regression gate -- the cost is the choice-impact probes, measured 1.24x on the shedding bench, plus 30 extra fixture evaluations in the report).
+
+**Round-2 hazards carried to Task 28 step 5 (the re-run):**
+- The veto thresholds are specimen-derived (2-29x margins, but from three specimens). Round 3 of 3 remains: if the next flagship's champions are veto-adjacent cousins (e.g. 5p hand-9 pair-meld rummy at churn 0.08, or mean-run 5.5 shedding), encode them and tighten ONLY from new measured tables.
+- Vetoed genomes still occupy descriptor space in QD batches (BehaviorBatch does not veto); acceptable -- archives gate output on Valid fitness -- but worth a look if veto-shaped mutants dominate a niche.
+- The decisions metric's classic band moved from [0.30, 0.78] to [0.17, 0.69]; anything downstream that hardcoded the old spread (descriptor grids are unit-square, so they are fine) should be re-checked at republish time.
+
 **Task 28 budgeting baseline (this 28-core machine):** one run, one config (baseline), one seed, harness defaults pop=500 / gens=100, -parallel 1, -mcts-decile 0: **10m58s wall**, 10,955s CPU (1663% = ~59% of 28 cores), max RSS 422MB; produced coverage 0.07, QD 13.3, 466 qualified games. Projection for the 4-config x 15-seed matrix at -mcts-decile 0: ~657k CPU-seconds ~= 7-11h wall (random/map-elites/novelty add a 50-game behavior batch per valid eval, ~+12% games over baseline). WARNING: at the default -mcts-decile 0.10, baseline/novelty runs additionally grant ~50 EvaluateWithMCTS per generation x ~14.5s CPU each ~= 73k CPU-seconds per run -- a ~7x multiplier that puts the default-mode matrix in multi-day territory on this box. Either budget for that, restrict the matrix to -mcts-decile 0 and record `mcts_mode: greedy-only` in meta.json (hazard 3), or run the decile mode on bigger iron.

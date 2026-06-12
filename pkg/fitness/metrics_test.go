@@ -27,26 +27,27 @@ func sessionBatch(numPlayers int, perPlayer ...int) sim.BatchResult {
 	return sim.BatchResult{GamesPlayed: len(perPlayer), AllTurns: games}
 }
 
-// TestSessionLengthScoring pins the falloff curve in the new unit (decisions
-// per player): hard zero below 5 and above 100, ramp 5->15, flat band 15-40,
-// ramp 40->100. Shape is unchanged from the old curve; only the unit moved
-// (Task 14 recalibrates the band itself).
+// TestSessionLengthScoring pins the falloff curve in decisions per player.
 func TestSessionLengthScoring(t *testing.T) {
-	// Band calibrated by Task 14 from the measured classic spread (see
-	// computeSessionLength): flat [10, 60], ramps 4..10 and 60..170.
+	// Band calibrated by Task 14 from the measured classic spread and
+	// re-derived in round 2 (see computeSessionLength): flat [6, 60], ramps
+	// 3..6 and 60..170. The low edge moved 10 -> 6 because oh-hell (7.0
+	// decisions/player, a classic) sat in the previous ramp at 0.5.
 	tests := []struct {
 		dpp      int
 		expected float64
 	}{
-		{3, 0},     // Too short (below hard cutoff)
-		{4, 0},     // Minimum (ramp starts at 0 here)
-		{7, 0.5},   // Ramping up
-		{10, 1.0},  // Target start
-		{25, 1.0},  // In range
-		{60, 1.0},  // Target end
-		{115, 0.5}, // Ramping down
-		{170, 0},   // Maximum (ramp reaches 0 here)
-		{180, 0},   // Way too long (above hard cutoff)
+		{2, 0},          // Too short (below hard cutoff)
+		{3, 0},          // Minimum (ramp starts at 0 here)
+		{4, 1.0 / 3.0},  // Ramping up
+		{5, 2.0 / 3.0},  // Ramping up
+		{6, 1.0},        // Target start
+		{7, 1.0},        // oh-hell's natural length: in band since round 2
+		{25, 1.0},       // In range
+		{60, 1.0},       // Target end
+		{115, 0.5},      // Ramping down
+		{170, 0},        // Maximum (ramp reaches 0 here)
+		{180, 0},        // Way too long (above hard cutoff)
 	}
 
 	for _, tt := range tests {

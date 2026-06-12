@@ -132,9 +132,13 @@ func cmdCalibrate(args []string) {
 					g.ID, res.Tier0Errors)
 				os.Exit(1)
 			}
-			totalGames += fitness.GamesPerEvaluation(res.Valid)
+			totalGames += fitness.GamesPerEvaluation(res)
 			if !res.Valid {
-				kills = append(kills, fmt.Sprintf("%s seed %d: %s", g.ID, seed, res.Tier1.Reason))
+				reason := res.Tier1.Reason
+				if res.DegenerateReason != "" {
+					reason = "tier-2 degeneracy veto: " + res.DegenerateReason
+				}
+				kills = append(kills, fmt.Sprintf("%s seed %d: %s", g.ID, seed, reason))
 				continue
 			}
 			samples = append(samples, rawMetrics(res.Metrics))
@@ -146,7 +150,7 @@ func cmdCalibrate(args []string) {
 	printCalibrationTable(os.Stdout, rows)
 
 	if len(kills) > 0 {
-		fmt.Printf("\nTier 1 kills (%d):\n", len(kills))
+		fmt.Printf("\nPipeline kills (%d):\n", len(kills))
 		for _, k := range kills {
 			fmt.Printf("  %s\n", k)
 		}

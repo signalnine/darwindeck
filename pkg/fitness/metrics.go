@@ -343,28 +343,38 @@ func computeSkillGradient(randomResult, greedyResult, mctsResult sim.BatchResult
 // decisions (audit Task 12). TurnRecords give one record per applied move,
 // attributed to the acting player, so the unit is identical across skeletons.
 //
-// Target band: flat 1.0 in [10, 60] decisions per player, linear ramps
-// 4..10 and 60..170, hard zero below 4 or above 170. Calibrated (Task 14)
+// Target band: flat 1.0 in [6, 60] decisions per player, linear ramps
+// 3..6 and 60..170, hard zero below 3 or above 170. Calibrated (Task 14)
 // from the measured spread of the 8 classic seeds under random play over
 // the pinned CalibrationSeeds (mean decisions/player, 200 games each):
 //   oh-hell 7.0 | mau-mau 12.2 | whist/hearts/spades 13.0 |
 //   crazy-eights 18.8 | knock-rummy 77.1 | gin-rummy 150.6
-// The previous band (15-40 flat, zero >100) hard-zeroed gin rummy -- a
-// human-validated classic -- while degenerate fixtures sat at 1.0. Every
-// classic now scores > 0; the band intentionally still discounts the
-// random-play-marathon end (gin 0.18) rather than covering it flat, because
-// 150 random-play decision cycles IS a real playability cost (gin's old
-// Tier 1 timeout rate came from the same tail).
+// The original band (15-40 flat, zero >100) hard-zeroed gin rummy -- a
+// human-validated classic -- while degenerate fixtures sat at 1.0.
+//
+// ROUND 2 RE-DERIVATION (Task 28 step 4, the one session-scale change this
+// round): the flat band's low edge moved 10 -> 6 (ramp 3..6, previously
+// 4..10). Justification from the same measured table: oh-hell sits at 7.0
+// decisions/player -- a human-validated classic INSIDE the previous ramp,
+// paying a 0.5 length penalty for its natural deal size, which left it the
+// worst classic (0.428) and 0.003 BELOW the instant-knock fixture's
+// single-surviving-seed mean after the round-2 decisions fix. The Task 14
+// mandate is "set the band to cover all 8 classics with margin"; 6 covers
+// oh-hell with ~15% margin while instant-knock's class is killed by Tier 1
+// (too-short AVERAGE games), not by this band -- its surviving seed already
+// scored length 1.0, so no degenerate gains from the wider flat. The
+// random-play-marathon end stays discounted (gin 0.18): 150 random-play
+// decision cycles IS a real playability cost.
 func computeSessionLength(result sim.BatchResult, numPlayers int) float64 {
 	avg := avgDecisionsPerPlayer(result, numPlayers)
-	if avg < 4 || avg > 170 {
+	if avg < 3 || avg > 170 {
 		return 0
 	}
-	if avg >= 10 && avg <= 60 {
+	if avg >= 6 && avg <= 60 {
 		return 1.0
 	}
-	if avg < 10 {
-		return (avg - 4) / 6 // Linear from 4→10
+	if avg < 6 {
+		return (avg - 3) / 3 // Linear from 3→6
 	}
 	// avg > 60
 	return (170 - avg) / 110 // Linear from 60→170

@@ -20,15 +20,20 @@ var CalibrationSeeds = []uint64{11, 22, 33, 44, 55, 66, 77, 88, 99, 110}
 const tier1Games = 10
 
 // GamesPerEvaluation returns the number of simulated games one Evaluate call
-// plays: the Tier 1 quick batch always runs; Tier 2's random + greedy batches
-// run only when Tier 1 passes. The calibrate subcommand uses this for
-// throughput accounting so the count cannot drift from the pipeline.
+// played for the given result: the Tier 1 quick batch always runs; the
+// Tier 2 random batch runs when Tier 1 passes; the greedy batch is skipped
+// when the degeneracy veto fires on the random batch (Task 28 round 2). The
+// calibrate subcommand uses this for throughput accounting so the count
+// cannot drift from the pipeline.
 // DEFAULT MODE ONLY (Task 20): EvaluateWithMCTS plays tier2MCTSGames more
 // when Tier 1 passes; no throughput-accounting caller uses that path.
-func GamesPerEvaluation(tier1Passed bool) int {
+func GamesPerEvaluation(res EvaluationResult) int {
 	games := tier1Games
-	if tier1Passed {
-		games += tier2RandomGames + tier2GreedyGames
+	if res.Tier1.Passed {
+		games += tier2RandomGames
+		if res.DegenerateReason == "" {
+			games += tier2GreedyGames
+		}
 	}
 	return games
 }

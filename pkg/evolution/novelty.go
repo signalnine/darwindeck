@@ -46,13 +46,16 @@ const (
 	noveltyThresholdMax = 1.5
 
 	// DefaultFitnessFloor is derived from the seed-calibration suite
-	// (Task 15): worst classic survivor-conditioned mean (crazy-eights
-	// 0.475 at the Task 14 commit) minus 0.05. The previous folklore value
-	// 0.70 sat ABOVE every trick-taking classic, zeroing the selection
-	// gradient for human-validated games. If the calibration suite's
-	// worst-classic mean moves, re-derive this constant
-	// (TestCalibrationClassicsAboveFloor enforces the relationship).
-	DefaultFitnessFloor = 0.42
+	// (Task 15): worst classic survivor-conditioned mean minus 0.05. The
+	// original folklore value 0.70 sat ABOVE every trick-taking classic,
+	// zeroing the selection gradient for human-validated games; Task 14
+	// derived 0.42 from crazy-eights' then-mean 0.475. RE-DERIVED in round 2
+	// (Task 28 step 4): the choice-impact decisions fix moved the classics
+	// to 0.451-0.578 (worst: crazy-eights 0.451, ROUND 2 block in
+	// pkg/fitness/calibration_test.go), so the floor is 0.451 - 0.05 = 0.40.
+	// If the calibration suite's worst-classic mean moves, re-derive this
+	// constant (TestCalibrationClassicsAboveFloor enforces the relationship).
+	DefaultFitnessFloor = 0.40
 )
 
 // FitnessFloor is the minimum fitness for QD consideration (novelty archive
