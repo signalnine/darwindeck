@@ -280,6 +280,184 @@ func TestGameStateFieldCountPinsClone(t *testing.T) {
 	}
 }
 
+// --- Determinization (Task 19 step 2) ---
+
+// cardMultiset counts every card in every zone of the state. Determinization
+// must conserve this exactly: it may move hidden cards between hidden zones
+// but can never create, destroy, or duplicate a card.
+func cardMultiset(st *sim.GameState) map[sim.Card]int {
+	ms := make(map[sim.Card]int, 52)
+	add := func(cards []sim.Card) {
+		for _, c := range cards {
+			ms[c]++
+		}
+	}
+	add(st.Deck)
+	for _, h := range st.Hands {
+		add(h)
+	}
+	add(st.Discard)
+	for _, tb := range st.Tableau {
+		add(tb)
+	}
+	for _, m := range st.Melds {
+		add(m)
+	}
+	add(st.TrickCards)
+	return ms
+}
+
+// midGameState advances a fresh game `steps` applied moves so determinization
+// tests run against states with populated discard/tableau/meld zones.
+func midGameState(t *testing.T, tc skeletonCase, seed uint64, steps int) *sim.GameState {
+	t.Helper()
+	rng := rand.New(rand.NewPCG(seed, 0))
+	st := tc.runner.Setup(tc.g, rng)
+	for i := 0; i < steps; i++ {
+		if !stepOnce(t, tc.runner, tc.g, st, rng) {
+			break
+		}
+	}
+	return st
+}
+
+// TestDeterminizePreservesPublicInfo is the hidden-info contract from the
+// plan: from player p's perspective the hidden cards are the deck plus all
+// OTHER hands; p's own hand and every public zone must be byte-identical
+// after determinization, hidden zone SIZES must be preserved, and the full
+// card multiset must be conserved. v1's MCTS was omniscient (it cloned hidden
+// hands verbatim); this test plus TestDeterminizeActuallyShuffles guards
+// against recreating that.
+func TestDeterminizePreservesPublicInfo(t *testing.T) {
+	for _, tc := range allSkeletonCases() {
+		t.Run(tc.name, func(t *testing.T) {
+			for seed := uint64(1); seed <= 5; seed++ {
+				st := midGameState(t, tc, seed, 20)
+				p := st.Active
+				before := st.Clone() // reference snapshot
+				wantMS := cardMultiset(st)
+
+				det := sim.Determinize(st, p, rand.New(rand.NewPCG(seed*100, 1)))
+
+				// The original must be untouched.
+				detOriginal := st.Clone()
+				detOriginal.Events, before.Events = nil, nil
+				if !reflect.DeepEqual(detOriginal, before) {
+					t.Fatalf("seed %d: Determinize mutated the original state", seed)
+				}
+
+				// p's own hand and all public zones identical.
+				if !reflect.DeepEqual(det.Hands[p], st.Hands[p]) {
+					t.Errorf("seed %d: player %d's own hand changed: %v -> %v", seed, p, st.Hands[p], det.Hands[p])
+				}
+				public := []struct {
+					name      string
+					got, want interface{}
+				}{
+					{"Discard", det.Discard, st.Discard},
+					{"Tableau", det.Tableau, st.Tableau},
+					{"Melds", det.Melds, st.Melds},
+					{"MeldOwner", det.MeldOwner, st.MeldOwner},
+					{"TrickCards", det.TrickCards, st.TrickCards},
+					{"TrickPlayers", det.TrickPlayers, st.TrickPlayers},
+					{"Scores", det.Scores, st.Scores},
+					{"Turn", det.Turn, st.Turn},
+					{"Active", det.Active, st.Active},
+					{"Phase", det.Phase, st.Phase},
+					{"Direction", det.Direction, st.Direction},
+					{"Round", det.Round, st.Round},
+					{"TrumpSuit", det.TrumpSuit, st.TrumpSuit},
+					{"TrickBroken", det.TrickBroken, st.TrickBroken},
+				}
+				for _, c := range public {
+					if !reflect.DeepEqual(c.got, c.want) {
+						t.Errorf("seed %d: public field %s changed: %v -> %v", seed, c.name, c.want, c.got)
+					}
+				}
+				if (det.TopCard == nil) != (st.TopCard == nil) ||
+					(det.TopCard != nil && *det.TopCard != *st.TopCard) {
+					t.Errorf("seed %d: TopCard changed: %v -> %v", seed, st.TopCard, det.TopCard)
+				}
+
+				// Hidden zone sizes preserved.
+				if len(det.Deck) != len(st.Deck) {
+					t.Errorf("seed %d: deck size %d -> %d", seed, len(st.Deck), len(det.Deck))
+				}
+				for i := range st.Hands {
+					if len(det.Hands[i]) != len(st.Hands[i]) {
+						t.Errorf("seed %d: hand %d size %d -> %d", seed, i, len(st.Hands[i]), len(det.Hands[i]))
+					}
+				}
+
+				// Full multiset conservation.
+				if got := cardMultiset(det); !reflect.DeepEqual(got, wantMS) {
+					t.Errorf("seed %d: card multiset not conserved", seed)
+				}
+			}
+		})
+	}
+}
+
+// TestDeterminizeActuallyShuffles: across many determinizations the hidden
+// zones must actually vary -- otherwise Determinize is a glorified Clone and
+// MCTS would search the true hidden state (v1's omniscience bug).
+func TestDeterminizeActuallyShuffles(t *testing.T) {
+	tc := skeletonCase{"rummy/gin-rummy", seeds.GinRummy(), &rummy.Runner{}}
+	st := midGameState(t, tc, 3, 6) // early game: big deck, full opponent hand
+	p := st.Active
+	opp := (p + 1) % st.NumPlayers
+
+	changed := false
+	for i := uint64(0); i < 20 && !changed; i++ {
+		det := sim.Determinize(st, p, rand.New(rand.NewPCG(i, 7)))
+		if !reflect.DeepEqual(det.Hands[opp], st.Hands[opp]) {
+			changed = true
+		}
+	}
+	if !changed {
+		t.Fatal("20 determinizations never changed the opponent's hand -- hidden info is leaking into the search")
+	}
+}
+
+// TestMoveIdentityStableAcrossDeterminizations is the second half of Task 19
+// Step 0: moves generated on two different determinizations of the same
+// info-state refer only to the acting player's own (known) cards and public
+// zones, so the move lists -- and their keys -- must be element-wise
+// identical. Checked at every decision point along a 30-step game.
+func TestMoveIdentityStableAcrossDeterminizations(t *testing.T) {
+	for _, tc := range allSkeletonCases() {
+		t.Run(tc.name, func(t *testing.T) {
+			rng := rand.New(rand.NewPCG(11, 0))
+			st := tc.runner.Setup(tc.g, rng)
+			for step := 0; step < 30; step++ {
+				tc.runner.Upkeep(st, tc.g)
+				if tc.runner.CheckEnd(st, tc.g) >= 0 {
+					break
+				}
+				moves := tc.runner.GenerateMoves(st, tc.g)
+				if len(moves) == 0 {
+					break
+				}
+
+				det1 := sim.Determinize(st, st.Active, rand.New(rand.NewPCG(uint64(step), 1)))
+				det2 := sim.Determinize(st, st.Active, rand.New(rand.NewPCG(uint64(step), 2)))
+				m1 := tc.runner.GenerateMoves(det1, tc.g)
+				m2 := tc.runner.GenerateMoves(det2, tc.g)
+				if !reflect.DeepEqual(m1, moves) || !reflect.DeepEqual(m2, moves) {
+					t.Fatalf("step %d: determinized move lists diverge from original\n original: %v\n det1:     %v\n det2:     %v", step, moves, m1, m2)
+				}
+				for i := range moves {
+					if k, k1, k2 := moves[i].Key(), m1[i].Key(), m2[i].Key(); k != k1 || k != k2 {
+						t.Fatalf("step %d move %d: keys diverge: %q / %q / %q", step, i, k, k1, k2)
+					}
+				}
+
+				tc.runner.ApplyMove(st, moves[rng.IntN(len(moves))], tc.g)
+			}
+		})
+	}
+}
+
 // BenchmarkCloneRollout is Task 19's benchmark-first gate: it measures the
 // naive heap-allocating Clone plus one random rollout (the unit MCTS performs
 // ~40k times per genome: Iterations 200 x Determinizations 10 x 20 games).
