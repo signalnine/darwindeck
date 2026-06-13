@@ -378,6 +378,51 @@ func TestTier0RejectsCatchAllChampions(t *testing.T) {
 	}
 }
 
+// TestTier0RejectsTrivialMeldChampions (round 4): the trivial-meld champions
+// -- the runs-only pair-meld flagship (r3 rank23/rank27) and the two earlier
+// pair-meld specimens (round-2 A3, round-3 r2 rank22) -- must be rejected by
+// STATIC validation: min_meld_size 2 makes a 2-card "meld" trivially formable
+// for either meld type, so melding carries no consequence and the rummy
+// skeleton's deadwood economy never bites. Their ground-truth role is "Tier 0
+// must never let them reach the metrics," the inverse of the Tier-2 fixtures'
+// contract -- parallel to TestTier0RejectsCatchAllChampions.
+func TestTier0RejectsTrivialMeldChampions(t *testing.T) {
+	champs := seeds.TrivialMeldChampions()
+	if len(champs) < 2 {
+		t.Fatalf("expected at least 2 trivial-meld specimens (runs and sets), got %d", len(champs))
+	}
+	sawRuns, sawSets := false, false
+	for _, g := range champs {
+		if g.Rummy != nil {
+			switch g.Rummy.MeldTypes {
+			case genome.MeldRuns, genome.MeldBoth:
+				sawRuns = true
+			case genome.MeldSets:
+				sawSets = true
+			}
+		}
+		errs := genome.Validate(g)
+		found := false
+		for _, e := range errs {
+			if strings.Contains(e, "min_meld_size") {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%s: trivial-meld champion must be Tier-0 rejected with a min_meld_size violation, got: %v", g.ID, errs)
+		}
+		res := fitness.Evaluate(g, fitness.CalibrationSeeds[0])
+		if len(res.Tier0Errors) == 0 || res.Valid {
+			t.Errorf("%s: Evaluate must stop at Tier 0 (errors=%v valid=%v)", g.ID, res.Tier0Errors, res.Valid)
+		}
+	}
+	// The rule must cover BOTH meld types -- a 2-card set is as trivial as a
+	// 2-card run -- so the closure is not runs-specific.
+	if !sawRuns || !sawSets {
+		t.Errorf("trivial-meld specimens must span both meld types (runs=%v sets=%v)", sawRuns, sawSets)
+	}
+}
+
 // TestCalibrationClassicsBeatDegenerates is the core gate, asserted on both
 // views (see the TASK 14 RESULT block for semantics and justification):
 //   - pipeline-effective: worst classic beats best degenerate by 0.05

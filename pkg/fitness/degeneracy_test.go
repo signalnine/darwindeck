@@ -124,7 +124,9 @@ func TestDegeneracyKillsRejectedChampions(t *testing.T) {
 		reason string
 	}{
 		{seeds.NoFollowAvoidanceTrick(), "non_agentic"},
-		{seeds.PairMeldKnockRummy(), "draw_supply_churn"},
+		// PairMeldKnockRummy (round-2 draw_supply_churn specimen) moved to a
+		// Tier-0 rejection in round 4 (min_meld_size 2) -- it no longer reaches
+		// the veto; TestTier0RejectsTrivialMeldChampions covers it now.
 	}
 	for _, tc := range cases {
 		res := Evaluate(tc.g, 11)
@@ -341,7 +343,9 @@ func TestDegeneracyKillsRound3Champions(t *testing.T) {
 	}{
 		{seeds.ReverseLockoutShedding(), "dead_match_rule"},
 		{seeds.HeartEngineShedding(), "dead_match_rule"},
-		{seeds.PairMeldStockRummy(), "draw_supply_churn"},
+		// PairMeldStockRummy (round-3 draw_supply_churn specimen) moved to a
+		// Tier-0 rejection in round 4 (min_meld_size 2, sets); it no longer
+		// reaches the veto -- TestTier0RejectsTrivialMeldChampions covers it.
 	}
 	for _, tc := range cases {
 		res := Evaluate(tc.g, 11)

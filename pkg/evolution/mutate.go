@@ -105,7 +105,9 @@ func tweakParameter(g *genome.Genome, rng *rand.Rand) {
 		if g.Rummy != nil {
 			switch rng.IntN(2) {
 			case 0:
-				g.Rummy.MinMeldSize = clampInt(g.Rummy.MinMeldSize+rng.IntN(3)-1, 2, 4)
+				// Floor 3 (not 2): a 2-card meld is trivially formable and
+				// Tier-0 rejected as a liveness violation (Task 28 round 4).
+				g.Rummy.MinMeldSize = clampInt(g.Rummy.MinMeldSize+rng.IntN(3)-1, 3, 4)
 			case 1:
 				g.Rummy.KnockThreshold = clampInt(g.Rummy.KnockThreshold+rng.IntN(5)-2, 0, 30)
 			}

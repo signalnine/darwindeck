@@ -289,6 +289,7 @@ func TestRulebookNoDeadRuleTextAcrossAllFixtures(t *testing.T) {
 	all = append(all, seeds.InstantKnockRummy(), seeds.ForcedShedding())
 	all = append(all, seeds.RejectedChampions()...)
 	all = append(all, seeds.CatchAllChampions()...)
+	all = append(all, seeds.TrivialMeldChampions()...)
 
 	for _, g := range all {
 		rb := GenerateRulebook(g)

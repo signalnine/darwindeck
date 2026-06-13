@@ -156,6 +156,12 @@ func NoFollowAvoidanceTrick() *genome.Genome {
 // a pair-meld knock race over a ~1-card stock (5x10 dealt + upcard leaves 1
 // in stock). Milder than A1/A2 but scored 0.688-0.696, ABOVE the rummy
 // classics (gin 0.548, knock 0.578).
+//
+// ROUND 4 STATUS: now a NEGATIVE TIER-0 SPECIMEN (see TrivialMeldChampions).
+// min_meld_size 2 is statically rejected by genome.Validate as a trivial-meld
+// liveness violation, so this fixture no longer reaches the metrics or the
+// draw_supply_churn veto; TestTier0RejectsTrivialMeldChampions pins the
+// rejection. (Previously a round-2 draw_supply_churn veto specimen.)
 func PairMeldKnockRummy() *genome.Genome {
 	return &genome.Genome{
 		ID:       "pair-meld-knock-rummy",
@@ -310,6 +316,14 @@ func HeartEngineShedding() *genome.Genome {
 // this one parks churn just UNDER the 0.10 cliff and instead rode the
 // count-based density exception (pinned 0.80 > gin 0.69). The round-3
 // deadwood-consequence probe is what kills the archetype's score.
+//
+// ROUND 4 STATUS: now a NEGATIVE TIER-0 SPECIMEN (see TrivialMeldChampions).
+// Its min_meld_size 2 is statically rejected, so the dynamic stack never sees
+// it -- a strictly earlier kill than the churn/density measures it used to
+// need. The round-4 runs-only pair-meld champions (r3 rank23/rank27) share
+// the same min_meld_size 2 vector and are subsumed by the same static rule;
+// this fixture stays as the SETS-side specimen, proving the Tier-0 rule
+// covers both meld types.
 func PairMeldStockRummy() *genome.Genome {
 	return &genome.Genome{
 		ID:       "pair-meld-stock-rummy",
@@ -330,24 +344,144 @@ func PairMeldStockRummy() *genome.Genome {
 	}
 }
 
+// --- Task 28 step 4 failed-review fixtures (round 4, 2026-06-12) ---
+//
+// The round-3 flagship (output/2026-06-12-flagship-r3) was designer-reviewed:
+// 0 publishable / 19 borderline / 11 degenerate. Three exploits slipped the
+// frozen round-3 stack and become fixtures here. Round 4 is an authorized
+// EXTRA swing past the budgeted 3 rounds, adding three NEW detectors (a
+// per-turn playable-share veto, a longest-run monopoly veto, and the
+// trivial-meld Tier-0 rule above) -- no weighted-metric scale constant moved.
+
+// WildUnionShedding reproduces r3 rank01 (gen192_16965): a 2-player, 13-card
+// shedding game with THREE of four suits wild (suits 2/3/4) -- 39/52 cards
+// playable on any card -- so the "match suit or rank" core is dead for 75% of
+// the deck. It is Tier-0 VALID (each wild is suit-qualified; no catch-all),
+// so it is a TIER-2 METRIC FIXTURE. It slipped the round-3 stack because
+// dead_match_rule uses the WHOLE-HAND-playable share (can the whole hand dump
+// at once), which at hand 13 stays ~0.03-0.19 even though per-card 75% of the
+// deck ignores the match rule. The round-4 per-turn playable-share veto
+// (pkg/fitness/degeneracy.go playable_share) measures the per-card share
+// directly: rank01 sits at ~0.62 vs classic shedding max ~0.30.
+func WildUnionShedding() *genome.Genome {
+	return &genome.Genome{
+		ID:       "wild-union-shedding",
+		Skeleton: genome.Shedding,
+		Players:  2,
+		HandSize: 13,
+		Shedding: &genome.SheddingParams{
+			MatchRule:   genome.MatchEither,
+			DrawPenalty: 3,
+		},
+		SpecialCards: []genome.SpecialCard{
+			{Type: genome.SpecialDrawTwo, ByRank: 2}, // 2s draw-two
+			{Type: genome.SpecialReverse, ByRank: 10},// 10s reverse
+			{Type: genome.SpecialWild, BySuit: 2},    // suit 2 wild
+			{Type: genome.SpecialWild, BySuit: 3},    // suit 3 wild
+			{Type: genome.SpecialWild, BySuit: 4},    // suit 4 wild
+			{Type: genome.SpecialDrawTwo, BySuit: 1}, // suit 1 draw-two
+		},
+		Scoring: genome.ScoringConfig{
+			CardPoints: []genome.CardScoring{
+				{Rank: 13, Suit: 4, Points: 3, Event: genome.ScoreOnTrickWin},
+			},
+		},
+	}
+}
+
+// HeartEngine2SuitShedding reproduces r3 rank04 (gen200_59040): a milder
+// 2-player, 13-card shedding game with TWO of four suits wild (suits 3/4) --
+// 26/52 cards always playable, draw_penalty 2. The round-3 review called it
+// "one fix from a real game" -- it is the JUDGMENT fixture, deliberately NOT
+// in RejectedChampions: the calibration gate does not require it to die.
+// TestRound4JudgmentFixtureLanding measures where it lands and records
+// whether the new detectors flag it. Its per-turn playable-share (~0.44)
+// sits BETWEEN the classics (~0.30) and rank01 (~0.62); the playable-share
+// threshold (0.45) is set to spare it. Its longest-run (~6.5) DOES trip the
+// round-4 monopoly veto, which is the documented limitation: the longest-run
+// detector cannot distinguish rank04 from its degenerate cousins.
+func HeartEngine2SuitShedding() *genome.Genome {
+	return &genome.Genome{
+		ID:       "heart-engine-2suit-shedding",
+		Skeleton: genome.Shedding,
+		Players:  2,
+		HandSize: 13,
+		Shedding: &genome.SheddingParams{
+			MatchRule:   genome.MatchEither,
+			DrawPenalty: 2,
+		},
+		SpecialCards: []genome.SpecialCard{
+			{Type: genome.SpecialReverse, ByRank: 10},            // 10s reverse
+			{Type: genome.SpecialWild, BySuit: 3},                // suit 3 wild
+			{Type: genome.SpecialWild, BySuit: 4},                // suit 4 wild
+			{Type: genome.SpecialDrawTwo, BySuit: 1},             // suit 1 draw-two
+			{Type: genome.SpecialDrawTwo, ByRank: 8, BySuit: 1},  // 8 of suit 1 draw-two
+			{Type: genome.SpecialDrawFour, ByRank: 2},            // 2s draw-four
+		},
+		Scoring: genome.ScoringConfig{
+			CardPoints: []genome.CardScoring{
+				{Rank: 13, Suit: 4, Points: 3, Event: genome.ScoreOnTrickWin},
+			},
+		},
+	}
+}
+
+// RunsOnlyPairMeldRummy reproduces r3 rank23 (gen200_2700): a 2-player,
+// 13-card runs-only rummy with min_meld_size 2 (two-card runs count as
+// melds), DrawEither, knock 16, carrying a draw-penalty + avoidance borrow.
+// Deadwood reaches ~0 by turn 7 because five 2-card runs come off the deal,
+// so melding is consequence-free. r3 rank27 is the byte-near twin (no
+// borrows, catch-all-rank card scoring). It is a NEGATIVE TIER-0 SPECIMEN:
+// min_meld_size 2 is statically rejected by the round-4 trivial-meld rule
+// (genome.Validate); see TrivialMeldChampions.
+func RunsOnlyPairMeldRummy() *genome.Genome {
+	return &genome.Genome{
+		ID:       "runs-only-pair-meld-rummy",
+		Skeleton: genome.Rummy,
+		Players:  2,
+		HandSize: 13,
+		Rummy: &genome.RummyParams{
+			MeldTypes:      genome.MeldRuns,
+			MinMeldSize:    2,
+			DrawFrom:       genome.DrawEither,
+			KnockThreshold: 16,
+		},
+		Borrowed: []genome.BorrowedMechanic{
+			{Source: genome.Shedding, Mechanic: genome.MechDrawPenalty},
+			{Source: genome.TrickTaking, Mechanic: genome.MechAvoidance},
+		},
+		Scoring: genome.ScoringConfig{
+			CardPoints: []genome.CardScoring{
+				{Rank: 6, Suit: 4, Points: 3, Event: genome.ScoreOnTrickWin},
+			},
+		},
+	}
+}
+
 // RejectedChampions returns the failed-review fixtures that are TIER-2 METRIC
 // ground truth: statically valid genomes the dynamic pipeline (Tier 1 +
 // degeneracy vetoes + metrics) must rank below every classic. The calibration
 // gate and the calibrate subcommand both consume this list so the two can
 // never drift.
 //
-// RESTRUCTURED in round 3: fixtures whose degeneracy is now STATICALLY
-// rejected at Tier 0 (the catch-all specials) moved to CatchAllChampions --
-// a Tier-0-rejected genome never reaches the metrics, so it cannot serve as
-// metric ground truth. The round-3 fixtures (reverse-lockout, heart-engine,
-// pair-meld-stock) joined in flagship rank order.
+// RESTRUCTURED in round 3: fixtures whose degeneracy became a Tier-0 rule (the
+// catch-all specials) moved to CatchAllChampions -- a Tier-0-rejected genome
+// never reaches the metrics, so it cannot serve as metric ground truth.
+//
+// RESTRUCTURED AGAIN in round 4: the two pair-meld fixtures (min_meld_size 2)
+// moved to TrivialMeldChampions for the same reason -- the round-4 Tier-0
+// trivial-meld rule rejects them statically. The round-4 ADDITION is the
+// wild-union shedding champion (r3 rank01), Tier-0 valid and killed
+// dynamically by the new per-turn playable-share veto.
 func RejectedChampions() []*genome.Genome {
 	return []*genome.Genome{
 		NoFollowAvoidanceTrick(),
-		PairMeldKnockRummy(),
 		ReverseLockoutShedding(),
 		HeartEngineShedding(),
-		PairMeldStockRummy(),
+		// WildUnionShedding (r3 rank01) is added to this list in the round-4
+		// fixtures+recalibration commit, AFTER its killing detectors
+		// (playable_share, longest_run) land -- so the calibration gate stays
+		// green at every commit.
 	}
 }
 
@@ -361,5 +495,20 @@ func CatchAllChampions() []*genome.Genome {
 	return []*genome.Genome{
 		CatchAllSkipShedding(), // round-1 A1: catch-all SKIP
 		CatchAllWildShedding(), // round-2 rank01: catch-all WILD
+	}
+}
+
+// TrivialMeldChampions returns the rejected champions whose shared degeneracy
+// vector -- a 2-card meld (min_meld_size 2) -- is rejected STATICALLY by
+// genome.Validate (Task 28 round 4 trivial-meld liveness rule). Like
+// CatchAllChampions they are negative Tier-0 specimens (not metric ground
+// truth): TestTier0RejectsTrivialMeldChampions asserts each fails static
+// validation. The list spans both meld types so the test proves the Tier-0
+// rule is not runs-specific.
+func TrivialMeldChampions() []*genome.Genome {
+	return []*genome.Genome{
+		RunsOnlyPairMeldRummy(), // round 4: r3 rank23/rank27, runs min 2
+		PairMeldKnockRummy(),    // round 2 A3: runs min 2 (now Tier-0)
+		PairMeldStockRummy(),    // round 3 r2 rank22: sets min 2 (now Tier-0)
 	}
 }

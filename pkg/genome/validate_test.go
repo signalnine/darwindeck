@@ -527,3 +527,46 @@ func TestValidateRejectsCatchAllSpecialCards(t *testing.T) {
 		t.Error("catch-all special in second position must be Tier-0 rejected")
 	}
 }
+
+// TestValidateRejectsTrivialMeldSize pins the round-4 trivial-meld liveness
+// rule (Task 28 step 4): min_meld_size 2 makes melds trivially formable for
+// BOTH meld types -- any two same-rank cards are a 2-set, any two sequential
+// same-suit cards are a 2-run -- so melding is consequence-free and the
+// rummy skeleton's deadwood economy never bites. It is rejected at Tier 0,
+// parallel to the catch-all-special liveness rule: a parameter that erases
+// the skeleton's core decision (when to meld vs hold) breaks the
+// "parameters control what happens, not whether the game works" contract.
+// Reproduces the runs-only-pair-meld flagship champions
+// (r3 rank23/rank27): meld_types=runs, min_meld_size=2, deadwood ~0 by
+// turn 7.
+func TestValidateRejectsTrivialMeldSize(t *testing.T) {
+	mk := func(meld MeldType, min int) *Genome {
+		return &Genome{
+			Skeleton: Rummy,
+			Players:  2,
+			HandSize: 7,
+			Rummy:    &RummyParams{MeldTypes: meld, MinMeldSize: min, DrawFrom: DrawEither, KnockThreshold: 10},
+		}
+	}
+	// min_meld_size 2 is rejected for every meld type (runs, sets, both).
+	for _, meld := range []MeldType{MeldSets, MeldRuns, MeldBoth} {
+		errs := Validate(mk(meld, 2))
+		found := false
+		for _, e := range errs {
+			if strings.Contains(e, "min_meld_size") {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("min_meld_size 2 with meld_types %s must be Tier-0 rejected, got: %v", meld, errs)
+		}
+	}
+	// min_meld_size 3 and 4 stay valid for every meld type (gin/knock floor).
+	for _, meld := range []MeldType{MeldSets, MeldRuns, MeldBoth} {
+		for _, min := range []int{3, 4} {
+			if errs := Validate(mk(meld, min)); len(errs) != 0 {
+				t.Errorf("min_meld_size %d with meld_types %s must stay valid, got: %v", min, meld, errs)
+			}
+		}
+	}
+}

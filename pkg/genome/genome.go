@@ -157,7 +157,7 @@ func (d DrawSource) String() string {
 // RummyParams controls a rummy game.
 type RummyParams struct {
 	MeldTypes      MeldType   `json:"meld_types"`
-	MinMeldSize    int        `json:"min_meld_size"`   // 2-4
+	MinMeldSize    int        `json:"min_meld_size"`   // 3-4 (2 is Tier-0 rejected: a 2-card meld is trivially formable)
 	DrawFrom       DrawSource `json:"draw_from"`
 	KnockThreshold int        `json:"knock_threshold"` // Deadwood to knock (0 = gin only)
 }

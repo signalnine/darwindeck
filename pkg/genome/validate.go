@@ -135,8 +135,20 @@ func validateRummy(p *RummyParams) []string {
 	if p.MeldTypes > MeldBoth {
 		errs = append(errs, fmt.Sprintf("invalid meld_types: %d", p.MeldTypes))
 	}
-	if p.MinMeldSize < 2 || p.MinMeldSize > 4 {
-		errs = append(errs, fmt.Sprintf("min_meld_size must be 2-4, got %d", p.MinMeldSize))
+	// min_meld_size floor raised 2 -> 3 (Task 28 round 4, trivial-meld
+	// liveness). A 2-card "meld" is trivially formable for either meld type
+	// -- any two same-rank cards are a 2-set, any two sequential same-suit
+	// cards are a 2-run -- so melding is consequence-free and the rummy
+	// skeleton's deadwood economy never bites (the runs-only-pair-meld
+	// flagship champions r3 rank23/rank27 reached deadwood ~0 by turn 7).
+	// This is the Tier-0 twin of the catch-all-special liveness rule: a
+	// parameter that erases the skeleton's core hold-vs-meld decision breaks
+	// the "parameters control what happens, not whether the game works"
+	// contract. Real rummy melds are always 3+, so no classic seed (gin/knock
+	// use 3) or genuinely-borderline champion (all r3 keepers use 3) is
+	// affected; mutation clamps to 3-4 so the engine never generates it.
+	if p.MinMeldSize < 3 || p.MinMeldSize > 4 {
+		errs = append(errs, fmt.Sprintf("min_meld_size must be 3-4 (a 2-card meld is trivially formable; melding must carry consequence), got %d", p.MinMeldSize))
 	}
 	if p.DrawFrom > DrawEither {
 		errs = append(errs, fmt.Sprintf("invalid draw_from: %d", p.DrawFrom))
