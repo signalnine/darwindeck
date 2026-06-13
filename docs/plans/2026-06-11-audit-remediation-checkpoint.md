@@ -194,3 +194,27 @@ Throughput: 45,500 games in 2.79s = 16,290 games/sec (calibrate process, Wave I 
 - THIN-MARGIN WATCH (round-3 review finding 5): instant-knock's seed-44 death rides greedy_timeout at 0.110 vs the 0.10 threshold (1.1x). Any RNG-affecting change could flip that seed back to surviving, where its survivor mean (0.431) sits only ~3 sd under the binding classic (crazy-eights 0.451). The gate would still pass via the pipeline-effective view, but expect this to resurface as the suite's thinnest margin after any sim-layer change.
 
 - Wave I (sim.RunBatch game-parallelism): done 2026-06-12 -- commit 06f832b. Games within a batch now play on a bounded worker pool (min(BatchGameParallelism=8, GOMAXPROCS, n)) with sequential in-order reduction, BIT-IDENTICAL to the retained serial reference runBatchSerial (permanent golden test: 3 skeletons x 7 genomes incl. hooked borrows + greedy + shared-MCTSAI, 5 seeds, n=20; -race clean across sim/fitness/evolution; hooks audited stateless, guard comments on HooksFor and MCTSAI). Benches on this 28-thread box: Shedding200 12.0ms -> 1.62ms, Rummy20 13.6ms -> 2.10ms, 20-game MCTS grant (new BenchmarkMCTSBatch20) 12.7s -> 2.0s (~6.4-7.4x) -- the per-grant serial pole behind the EPYC's 16% load is gone, and the Task 19 2s MCTS budget now holds, shrinking the Wave H decile-mode (~7x) matrix warning accordingly.
+
+## Round-3 review outcome + HONEST EXIT (Task 28 step 4 verdict; Wave K): 2026-06-12
+
+The round-3 flagship (output/2026-06-12-flagship-r3: pop 2000, gen 200, seed 42, -mcts-decile 0.02, commit 1bd5e5d-dirty) was designer-reviewed -- the THIRD and FINAL round of the failed-review loop. Verdict: **0 publishable / 19 borderline / 11 degenerate.** No champion gamed the stack in the round-1/round-2 sense (the vetoes held); the panel found playable-but-unremarkable games and weak-but-not-vetoed failure shapes, plus three publication-integrity findings:
+
+1. **Incommensurable leaderboard:** the top-N sort mixed MCTS-mode published means (decile grantees) with greedy-only means (everyone else) in one ranking. Ranks 1-10 were exactly the grant set, carrying +0.085..+0.145 uplift -- the MCTS-grant boundary WAS the top-10 boundary.
+2. **Functional duplicates:** ranks 1/2/3 were one game differing only in DEAD card_points genes (no consumer in borrow-less single-round shedding); all three rendered identical rulebooks. Byte-level output dedup (Task 28 round 2) cannot see this.
+3. **Winner's-curse headline:** every one of the ten published MCTS-mode means rested on a SINGLE two-tier eval; the 0.918 headline reproduced at 0.73-0.82 over fresh seeds.
+
+**HONEST EXIT DECLARED.** The loop budget (3 rounds) is spent and the metric stack is FROZEN -- no metric, veto, weight, or threshold moved in response to this review, and none will without a new plan. The project claims NO publishable champion from the remediated pipeline. The run is preserved as judged in results/2026-06-12-flagship-r3/ (REVIEW.md there records all three rounds' verdicts); README republish (Task 29) happens after the experiment matrix lands and must present the honest exit, not a champion table.
+
+**Wave K (output/reporting fixes only, from the three findings):**
+
+- 9a1600e: gene-liveness predicates (LiveBorrows/LiveCardPoints) hoisted from pkg/output to pkg/genome so dedup and rulebook share one truth.
+- 2a699d8 (finding 2): output-ranking dedup hashes the genome's LIVE view -- dead scoring borrows, unread card_points, non-shedding special cards are zeroed before hashing -- at all three output sites (Engine.TopN, Novelty/MAP-Elites AllQualified). POPULATION dedup stays byte-level on purpose (dead genes remain evolutionary material).
+- 11e9b26 (findings 1+3): Individual.OutputRank() = the greedy-only running mean is THE leaderboard key everywhere (TopN, sortAndTrim, clone-group keeps); genome.json fitness + report.md headline = OutputRank; summary.json best_fitness = greedy-only best with explicit mcts_best alongside; report provenance always prints n=MctsCount and replaces the uplift line with "insufficient samples (n=N)" below n=3. Selection inside the run still uses publishedFitness -- search policy untouched.
+- fc70b22: the results bundle + REVIEW.md.
+
+**Carried round-4 detector candidates** (recorded for a FUTURE plan; the frozen stack does not change):
+
+- Per-turn playable-share statistic (hand fraction playable per turn -- the dead_match_rule generalization beyond shedding).
+- Chain-length / decisive-swing statistic on the greedy batch (the round-2/3 lockout and tempo shapes that only skilled play exposes).
+- Gameplay-level dedup (behavioral equivalence beyond gene liveness) -- PARTIALLY LANDED via 2a699d8's liveness-aware output dedup; full behavioral dedup (e.g. trace-distribution hashing) remains future work.
+- Plus the standing round-3 hazards above (dead_match_rule skeleton coverage, seat_participation under stronger play, the greedy_timeout thin margin).
