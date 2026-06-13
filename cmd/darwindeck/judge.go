@@ -9,6 +9,35 @@ import (
 	"github.com/darwindeck/darwindeck/pkg/judge"
 )
 
+// valueFlags are the judge flags that consume the following token as their
+// value (so splitPositional does not mistake that token for a positional).
+var valueFlags = map[string]bool{
+	"-out": true, "--out": true,
+	"-answer-key": true, "--answer-key": true,
+}
+
+// splitPositional separates bare positional arguments from flag arguments so
+// flags may appear before OR after positionals. A token starting with '-' is a
+// flag; if it is a known value-flag without an '=' form, the next token is its
+// value and is kept with the flags.
+func splitPositional(args []string) (positional, flagArgs []string) {
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if len(a) > 0 && a[0] == '-' {
+			flagArgs = append(flagArgs, a)
+			// `--flag=value` carries its own value; `--flag value` consumes the
+			// next token.
+			if valueFlags[a] && i+1 < len(args) {
+				i++
+				flagArgs = append(flagArgs, args[i])
+			}
+			continue
+		}
+		positional = append(positional, a)
+	}
+	return positional, flagArgs
+}
+
 // cmdJudge dispatches the LLM-as-judge subcommands: emit (build blind
 // dossiers) and rank (ingest verdicts, re-rank, flag rediscoveries).
 func cmdJudge(args []string) {
@@ -48,14 +77,17 @@ func cmdJudgeEmit(args []string) {
 	fs := flag.NewFlagSet("judge emit", flag.ExitOnError)
 	out := fs.String("out", "", "output dossier directory (required)")
 	answerKey := fs.String("answer-key", "", "private answer-key.json path (default: <out>/../answer-key.json)")
-	fs.Parse(args)
+	// Parse with the leading positional(s) hoisted out, so flags may appear
+	// either before OR after the <input> argument (Go's flag package otherwise
+	// stops at the first positional).
+	positional, flagArgs := splitPositional(args)
+	fs.Parse(flagArgs)
 
-	rest := fs.Args()
-	if len(rest) == 0 || *out == "" {
+	if len(positional) == 0 || *out == "" {
 		fmt.Fprintln(os.Stderr, "usage: darwindeck judge emit <input> --out <dir> [--answer-key <path>]")
 		os.Exit(1)
 	}
-	input := rest[0]
+	input := positional[0]
 
 	res, err := judge.Emit(input, *out, nil)
 	if err != nil {
@@ -90,15 +122,15 @@ func cmdJudgeEmit(args []string) {
 func cmdJudgeRank(args []string) {
 	fs := flag.NewFlagSet("judge rank", flag.ExitOnError)
 	out := fs.String("out", "", "judged report path (default: <dossier-dir>/judged-report.md)")
-	fs.Parse(args)
+	positional, flagArgs := splitPositional(args)
+	fs.Parse(flagArgs)
 
-	rest := fs.Args()
-	if len(rest) < 2 {
+	if len(positional) < 2 {
 		fmt.Fprintln(os.Stderr, "usage: darwindeck judge rank <dossier-dir> <verdicts.json> [--out report.md]")
 		os.Exit(1)
 	}
-	dossierDir := rest[0]
-	verdictsPath := rest[1]
+	dossierDir := positional[0]
+	verdictsPath := positional[1]
 
 	verdicts, err := judge.LoadVerdicts(verdictsPath)
 	if err != nil {
