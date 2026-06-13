@@ -186,7 +186,11 @@ import (
 // re-derived 0.42 -> 0.40 (= 0.451 - 0.05, Task 15 rule).
 
 // ROUND 3 RESULT (Task 28 step 4 failed-review loop, round 3 of 3,
-// 2026-06-12). The r2 flagship (output/2026-06-12-flagship-r2) was
+// 2026-06-12). HISTORICAL: the classic metric values below are still current
+// (round 4 moved NO metric or scale), but the degenerate roster and veto
+// stack are superseded by the ROUND 4 RESULT block below, which adds the
+// playable_share + longest_run vetoes and the trivial-meld Tier-0 rule.
+// The r2 flagship (output/2026-06-12-flagship-r2) was
 // designer-reviewed; publication HARD-BLOCKED again: shedding ranks 1-10
 // were catch-all-wild profile-mixing engines (greedy skill 0.00, one cycling
 // to the 390-turn cap under greedy), rank03 locked 2 of 4 seats out via
@@ -238,6 +242,72 @@ import (
 // FitnessFloor: worst classic is still crazy-eights 0.451 -> floor stays
 // 0.40 (Task 15 rule). Throughput: 45,500 games in 2.79s (calibrate,
 // Wave I game-parallel batches) -- no regression vs the round-2 checkpoint.
+
+// ROUND 4 RESULT (Task 28 step 4 failed-review loop, AUTHORIZED EXTRA swing
+// past the budgeted 3 rounds, 2026-06-12). The r3 flagship
+// (output/2026-06-12-flagship-r3) returned 0 publishable / 19 borderline / 11
+// degenerate at designer review. Three exploits slipped the FROZEN round-3
+// stack; round 4 adds three NEW VALIDITY measures (no weighted-metric scale
+// constant moved -- weights stay 0.25/0.25/0.20/0.20/0.10):
+//
+//  1. WILD-UNION SHEDDING (r3 rank01): 3 of 4 suits wild = 39/52 cards
+//     playable on any card, so the match rule is dead for 75% of the deck. It
+//     passed dead_match_rule because that veto uses the WHOLE-HAND-playable
+//     share (LegalMoves >= HandSize), which at hand 13 stays ~0.16 (r_allplay
+//     column) even though per-card 75% of the deck ignores the rule. FIX 1 is
+//     a PER-TURN PLAYABLE-SHARE veto (playable_share), computed directly by
+//     the shedding runner (PlayableShareProber -> TurnRecord.PlayableCount,
+//     NOT from the wild-deduped LegalMoves): mean per-card share > 0.45.
+//     Measured: classics 0.225-0.299, rank01 0.629. WildUnionShedding now
+//     vetoed 10/10 by playable_share.
+//  2. UNINTERRUPTIBLE CHAIN MONOPOLY (same champions + the runs-only rummy):
+//     a held attack-card chain fires in ONE mega-turn (6-13 consecutive plays,
+//     opponent never acts) while other turns alternate, keeping
+//     meanConsecutiveRun ~1.4. FIX 2 is a LONGEST-RUN veto (greedy_longest_run)
+//     on the GREEDY batch: mean per-game MAXIMUM run > 5.0. Measured g_longest:
+//     gin 4.07 / knock 3.94 (the structural rummy cycle, legitimate max), all
+//     other classics 1.0-2.0; runs-only-pair-meld ~5.84.
+//  3. RUNS-ONLY TRIVIAL-MELD RUMMY (r3 rank23/rank27): meld_types=runs,
+//     min_meld_size 2, deadwood ~0 by turn 7. FIX 3 is a TIER-0 rule:
+//     min_meld_size 2 is a trivial-meld liveness violation for either meld
+//     type (a 2-card set or 2-run is always formable), parallel to the
+//     catch-all-special rule. Rejects exactly rank23/rank27 of the 10 r3
+//     rummy champions; preserves the 8 genuinely-borderline keepers (all
+//     MeldBoth min 3) and both classics. RunsOnlyPairMeldRummy +
+//     PairMeldKnockRummy + PairMeldStockRummy moved to TrivialMeldChampions
+//     (negative Tier-0 specimens, like CatchAllChampions).
+//
+// Survivor-conditioned means after round 4 (n=10/10 classics; weights and ALL
+// metric scale constants FROZEN -- the only additions are the two new vetoes
+// and the Tier-0 trivial-meld rule, all VALIDITY rules):
+//
+//	classics: crazy-eights 0.451 | mau-mau 0.476 | whist 0.486 |
+//	          hearts 0.486 | spades 0.500 | oh-hell 0.478 |
+//	          gin-rummy 0.468 | knock-rummy 0.501
+//	degens:   ALL SIX Tier-2 fixtures at 0/10 -- every evaluation is killed by
+//	          Tier 1 or a degeneracy veto on every calibration seed (survivor
+//	          mean 0, pipeline-effective 0). Kill reasons: instant-knock
+//	          tier-1-too-quick + greedy_timeout; forced-shedding tier-1
+//	          timeouts + greedy_timeout; no-follow-avoidance non_agentic;
+//	          reverse-lockout + heart-engine-shedding dead_match_rule;
+//	          wild-union-shedding playable_share. The survivor view stays
+//	          vacuously strict (no degenerate survives to be compared) and is
+//	          retained as a regression tripwire.
+//
+// JUDGMENT FIXTURE (r3 rank04, HeartEngine2SuitShedding -- the review's "one
+// fix from a real game"): a milder 2-of-4-suit wild game. The playable_share
+// veto is SPARED on it (per-card share ~0.44 < 0.45 threshold), the intended
+// judgment call. But longest_run KILLS it (greedy longest-run ~6.5 > 5.0): in
+// 2-player its wild + draw-penalty chains produce the same episodic bursts as
+// the fully degenerate cousins. DOCUMENTED LIMITATION: the longest_run
+// detector cannot distinguish rank04's one-fix-from-real tempo from a
+// degenerate monopoly. It is NOT in RejectedChampions;
+// TestRound4JudgmentFixtureLanding pins the landing.
+//
+// FitnessFloor: worst classic is still crazy-eights 0.451 -> floor stays 0.40
+// (Task 15 rule). Throughput: 43,400 games in 1.21s = ~35,900 games/sec
+// (calibrate; the new shedding fixtures die at the veto so fewer reach the
+// 200-greedy batch) -- no regression vs round 3 (gate: >3x drop).
 
 // Ground truth: the 8 classic seeds are the only human-validated "fun" games
 // in the repo. Any fitness function that scores a classic below a degenerate
@@ -542,5 +612,48 @@ func TestCalibrationGinBeatsInstantKnock(t *testing.T) {
 	knock := meanFit(t, seeds.InstantKnockRummy()).mean
 	if gin < knock+0.10 {
 		t.Errorf("gin rummy %.3f does not beat instant-knock %.3f by 0.10", gin, knock)
+	}
+}
+
+// TestRound4JudgmentFixtureLanding records where the JUDGMENT fixture
+// (HeartEngine2SuitShedding, r3 rank04) lands and pins the documented
+// LIMITATION (Task 28 round 4 step 4). The round-3 review called rank04 "one
+// fix from a real game": a 2-of-4-suit wild shedding game, milder than the
+// 3-suit wild-union cousin. The playable_share veto (FIX 1) is set to SPARE
+// it -- its per-card share ~0.44 is below the 0.45 threshold -- so FIX 1 does
+// NOT distinguish it from a real game, which is the intended judgment call.
+//
+// BUT the longest_run veto (FIX 2) DOES kill it: in 2-player its wild +
+// draw-penalty chains produce the same episodic 6+ bursts as the fully
+// degenerate cousins (measured greedy longest-run ~6.5 > 5.0), so it reads 0
+// in the pipeline. This is a REAL LIMITATION, asserted here so it cannot
+// silently change: the longest-run detector cannot tell rank04's
+// "one-fix-from-real" tempo from a degenerate monopoly. The fixture is
+// deliberately NOT in RejectedChampions (the gate does not require it to die);
+// this test documents the outcome rather than demanding it.
+func TestRound4JudgmentFixtureLanding(t *testing.T) {
+	g := seeds.HeartEngine2SuitShedding()
+	if errs := genome.Validate(g); len(errs) > 0 {
+		t.Fatalf("judgment fixture must be Tier-0 valid, got: %v", errs)
+	}
+	var killedByLongestRun, killedOther, survived int
+	for _, seed := range fitness.CalibrationSeeds {
+		res := fitness.Evaluate(g, seed)
+		switch {
+		case res.Valid:
+			survived++
+		case res.DegenerateReason == "greedy_longest_run":
+			killedByLongestRun++
+		default:
+			killedOther++
+		}
+	}
+	t.Logf("heart-engine-2suit judgment fixture: survived %d, killed-by-longest_run %d, killed-other %d",
+		survived, killedByLongestRun, killedOther)
+	// Documented landing: the longest_run veto dominates its death. If this
+	// ever changes (e.g. the detector stops flagging it), the limitation note
+	// above must be revisited.
+	if killedByLongestRun == 0 {
+		t.Errorf("expected the longest_run veto to flag the judgment fixture (documented limitation); it did not -- revisit the round-4 note")
 	}
 }

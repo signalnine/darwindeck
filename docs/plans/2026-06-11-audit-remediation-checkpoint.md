@@ -218,3 +218,50 @@ The round-3 flagship (output/2026-06-12-flagship-r3: pop 2000, gen 200, seed 42,
 - Chain-length / decisive-swing statistic on the greedy batch (the round-2/3 lockout and tempo shapes that only skilled play exposes).
 - Gameplay-level dedup (behavioral equivalence beyond gene liveness) -- PARTIALLY LANDED via 2a699d8's liveness-aware output dedup; full behavioral dedup (e.g. trace-distribution hashing) remains future work.
 - Plus the standing round-3 hazards above (dead_match_rule skeleton coverage, seat_participation under stronger play, the greedy_timeout thin margin).
+
+## Round 4 (Task 28 step 4, AUTHORIZED EXTRA swing past the budgeted 3 rounds): 2026-06-12
+
+The round-3 flagship (output/2026-06-12-flagship-r3) review returned **0 publishable / 19 borderline / 11 degenerate**. Round 4 encodes the three exploits that slipped the frozen round-3 stack and adds three NEW VALIDITY measures. Metric WEIGHTS and ALL weighted-metric scale constants stay FROZEN (0.25/0.25/0.20/0.20/0.10) -- the additions are two vetoes and one Tier-0 rule, all validity rules (the round-1 exit-condition-(a) instrument). Three commits:
+
+1. **FIX 3 -- Tier-0 trivial-meld liveness** (99ad0e4): genome.Validate rejects min_meld_size < 3 for ANY meld type (a 2-card set or 2-run is trivially formable, so melding is consequence-free -- the runs-only-pair-meld champions r3 rank23/rank27 reached deadwood ~0 by turn 7). Parallel to the round-3 catch-all-special rule. mutate clamp 2-4 -> 3-4. Verified against all 10 r3 rummy champions: rejects exactly rank23/rank27; preserves the 8 genuinely-borderline keepers (all MeldBoth min 3) and both classics (gin/knock MeldBoth min 3). Fixture restructure: the three min-2 pair-meld fixtures (RunsOnlyPairMeldRummy = r3 rank23, PairMeldKnockRummy = r2 A3 runs, PairMeldStockRummy = r2 rank22 sets) become seeds.TrivialMeldChampions -- negative Tier-0 specimens (TestTier0RejectsTrivialMeldChampions, spanning both meld types), like CatchAllChampions; they leave RejectedChampions and the draw_supply_churn integration cases.
+
+2. **FIX 1/2 -- playable_share + longest_run vetoes** (b78a356):
+   - **playable_share** (shedding, random batch): the round-3 dead_match_rule uses the WHOLE-HAND-playable share (LegalMoves >= HandSize), which at hand 13 stays ~0.16 even when 3 of 4 suits are wild (r3 rank01: 39/52 cards playable on any card -- r_allplay 0.159, never near the 0.70 cliff). The new per-card share is computed DIRECTLY by the shedding runner (new sim.PlayableShareProber -> TurnRecord.PlayableCount), NOT from LegalMoves (GenerateMoves dedups equivalent wild plays via alreadyInMoves, undercounting wild duplicates). Mean per-card playable share over choice-turns (HandSize >= 2) > 0.45 vetoes. Measured (calibrate r_playshare): classics 0.275 (crazy-eights) / 0.299 (mau-mau) / 0.223 (forced-shedding) = 1.51x below; r3 rank01 0.629 = 1.40x above.
+   - **longest_run** (greedy batch): meanConsecutiveRun averages ALL runs and misses an EPISODIC monopoly -- a held attack-card chain firing in ONE mega-turn (6-13 consecutive plays, opponent never acts) on a game otherwise alternating (mean run ~1.4). New meanLongestRun = mean over games of each game's per-game MAXIMUM same-player run; > 5.0 vetoes. Measured (calibrate g_longest): gin 4.074 / knock 3.958 (the structural rummy draw-meld-discard cycle, the table's legitimate maximum) = 1.23x below; all other classics 1.0-2.0; the runs-only-pair-meld champion ~5.84 above. Run on the GREEDY batch because the chains are a skilled-play phenomenon.
+   - Both statistics added to DegeneracyStats, DegeneracyThresholds (meta.json), and the calibrate veto table (new r_playshare, g_longest columns -- step 6 satisfied).
+
+3. **Round-4 fixtures + recalibration** (this commit): WildUnionShedding (r3 rank01, 3-suit wild, Tier-0 VALID so a TIER-2 metric fixture) joins RejectedChampions. RED on record (measured before the FIX-1 veto, survivor means over CalibrationSeeds): wild-union-shedding 0.734, heart-engine-2suit 0.733, runs-only-pair-meld 0.529, ALL n=10/10 -- every one above worst classic 0.451; wild-union and the 2-suit cousin above EVERY classic. GREEN after: wild-union vetoed 10/10 by playable_share.
+
+**JUDGMENT FIXTURE (r3 rank04, HeartEngine2SuitShedding -- the review's "one fix from a real game"):** a milder 2-of-4-suit wild shedding game. The playable_share veto is deliberately SPARED on it (per-card share ~0.44 < 0.45 threshold -- the intended judgment call). But longest_run KILLS it (greedy longest-run ~6.5 > 5.0): in 2-player its wild + draw-penalty chains produce the same episodic bursts as the fully degenerate cousins, so it reads 0 on all 10 seeds. **DOCUMENTED LIMITATION:** the longest_run detector cannot distinguish rank04's one-fix-from-real tempo from a degenerate monopoly. It is NOT in RejectedChampions (the gate does not require it to die); TestRound4JudgmentFixtureLanding pins the landing (survived 0, killed-by-longest_run 10).
+
+**Round-4 calibrate table** (./bin/darwindeck calibrate, raw metric means over the 10 pinned CalibrationSeeds; weighted survivor means in the notes; NO metric/scale constant moved -- classic metric columns are identical to round 3):
+
+```
+genome                 skeleton      tier1  decisions       arc             interact        skill           length
+---------------------------------------------------------------------------------------------------------------------------
+crazy-eights           shedding      10/10  0.211 sd 0.003  0.866 sd 0.015  0.385 sd 0.003  0.026 sd 0.026  1.000 sd 0.000   -> 0.451
+mau-mau                shedding      10/10  0.237 sd 0.002  0.797 sd 0.019  0.565 sd 0.004  0.024 sd 0.020  1.000 sd 0.000   -> 0.476
+whist                  trick_taking  10/10  0.201 sd 0.001  0.609 sd 0.007  0.844 sd 0.002  0.073 sd 0.016  1.000 sd 0.000   -> 0.486
+hearts                 trick_taking  10/10  0.200 sd 0.001  0.359 sd 0.009  0.844 sd 0.001  0.387 sd 0.014  1.000 sd 0.000   -> 0.486
+spades                 trick_taking  10/10  0.188 sd 0.001  0.631 sd 0.021  0.835 sd 0.001  0.141 sd 0.018  1.000 sd 0.000   -> 0.500
+oh-hell                trick_taking  10/10  0.172 sd 0.001  0.630 sd 0.034  0.783 sd 0.003  0.105 sd 0.034  1.000 sd 0.000   -> 0.478
+gin-rummy              rummy         10/10  0.369 sd 0.000  0.859 sd 0.010  0.022 sd 0.000  0.725 sd 0.009  0.114 sd 0.022   -> 0.468
+knock-rummy            rummy         10/10  0.377 sd 0.000  0.813 sd 0.009  0.021 sd 0.000  0.611 sd 0.014  0.765 sd 0.011   -> 0.501
+instant-knock-rummy    rummy         0/10   killed: 9x tier-1 too-quick, 1x greedy_timeout                                   -> 0 (eff 0)
+forced-shedding        shedding      0/10   killed: 6x tier-1 timeouts, 4x greedy_timeout                                    -> 0 (eff 0)
+no-follow-avoidance-trick trick_takg 0/10   vetoed 10/10: non_agentic                                                        -> 0 (eff 0)
+reverse-lockout-shedding shedding    0/10   vetoed 10/10: dead_match_rule (r_allplay 1.000)                                  -> 0 (eff 0)
+heart-engine-shedding  shedding      0/10   vetoed 10/10: dead_match_rule (r_allplay 1.000)                                  -> 0 (eff 0)
+wild-union-shedding    shedding      0/10   vetoed 10/10: playable_share (r_playshare 0.629 > 0.45, r_allplay only 0.159)    -> 0 (eff 0)
+```
+
+Veto-statistic margins (calibrate veto table): r_playshare classic max mau-mau 0.299 (1.51x below the 0.45 threshold); wild-union 0.629 (1.40x above). g_longest classic max gin 4.074 (1.23x below the 5.0 threshold). r_allplay confirms the round-3 dead_match_rule would NOT have caught wild-union (0.159, far under 0.70) -- the new per-card veto is what closes it.
+
+Gate (both views): every one of the SIX Tier-2 fixtures reads 0 on every calibration seed -- survivor view vacuously strict (no degenerate survives), pipeline-effective worst classic 0.451 vs best degenerate 0.000. Worst classic crazy-eights 0.451 -> FitnessFloor stays 0.40 (Task 15 rule; 0.451 - 0.05 = 0.401). gin 0.468 > instant-knock 0 + 0.10. All calibration tests green, untagged, in the default suite. Weights frozen at 0.25/0.25/0.20/0.20/0.10; no metric scale constant moved this round (the three additions are validity rules).
+
+Throughput: 43,400 games in 1.17s = ~37,100 games/sec (calibrate; the new shedding fixtures die at the veto before the 200-greedy batch, so fewer batches run). Round 3 measured 16,290 g/s pre-this-machine-load -- no regression (gate: >3x drop).
+
+**Round-4 hazards carried forward:**
+- The longest_run veto cannot distinguish the 2-suit "one-fix-from-real" judgment fixture (rank04) from its degenerate cousins (both ~6.5 greedy longest-run). A future plan wanting to RESCUE rank04-class games needs a richer monopoly signal (e.g. victim-acted-at-all share, or distinguishing self-tempo chains from opponent-locking chains), not a threshold nudge.
+- playable_share is shedding-only (it needs the runner's match predicate). A future skeleton with a match rule needs its own per-card-liveness twin, same as the dead_match_rule note.
+- The trivial-meld Tier-0 rule subsumes both PairMeld fixtures' dynamic vetoes (draw_supply_churn). draw_supply_churn now has NO live fixture among the trivial-meld cousins -- a future min-3 rummy with a starved stock would be its only remaining target; keep the synthetic unit coverage.

@@ -478,10 +478,7 @@ func RejectedChampions() []*genome.Genome {
 		NoFollowAvoidanceTrick(),
 		ReverseLockoutShedding(),
 		HeartEngineShedding(),
-		// WildUnionShedding (r3 rank01) is added to this list in the round-4
-		// fixtures+recalibration commit, AFTER its killing detectors
-		// (playable_share, longest_run) land -- so the calibration gate stays
-		// green at every commit.
+		WildUnionShedding(), // round 4: r3 rank01, killed by playable_share veto
 	}
 }
 

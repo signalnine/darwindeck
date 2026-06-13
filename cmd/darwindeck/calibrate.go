@@ -273,7 +273,8 @@ func cmdCalibrate(args []string) {
 
 	fmt.Printf("\nDegeneracy-detector statistics (means over evals reaching Tier 2; vetoed evals included).\n")
 	fmt.Printf("Thresholds: meanrun > 6 vetoes; minseat < 0.50x fair share vetoes; churn > 0.05 vetoes (rummy);\n")
-	fmt.Printf("allplay > 0.70 vetoes (shedding); g_timeout > 0.10 vetoes. r_ = random, g_ = greedy batch.\n\n")
+	fmt.Printf("allplay > 0.70 vetoes (shedding); playshare > 0.45 vetoes (shedding, round 4 per-card);\n")
+	fmt.Printf("g_longest > 5.0 vetoes (round 4 monopoly); g_timeout > 0.10 vetoes. r_ = random, g_ = greedy batch.\n\n")
 	printVetoTable(os.Stdout, vetoRows)
 
 	if len(kills) > 0 {
