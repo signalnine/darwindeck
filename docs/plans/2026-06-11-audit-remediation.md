@@ -707,6 +707,8 @@ Commit: `feat(experiment): random-search null config and tested statistics`.
 
 ### Task 28: Full re-runs on fixed code
 
+**STATUS (2026-06-13): COMPLETE via the failed-review loop -> HONEST EXIT.** The flagship was re-run on remediated code four times (postfix, r2, r3, r4); step 3 designer review and step 4 failed-review loop ran the budgeted 3 rounds + 1 authorized extra. Verdict: 0 publishable -- evolution gamed the newest veto each round or rediscovered an existing game (round-4 top 30 = 10 wild-union shedding + 10 Whist + 10 Gin/Knock; best honest fitness 0.739). The reproducible flagship bundle is `results/2026-06-12-flagship-r4/` (re-published through the Wave M veto-stable path; meta.json complete). NOT done: the 4-config x 15-seed experiment matrix (step 2), running on a separate machine -- results.json lands later and fills the README table placeholder. See the LOOP CLOSED section of the checkpoint doc.
+
 **Files:**
 - Create: `results/2026-MM-DD-flagship/` and `results/2026-MM-DD-experiments/` (tracked artifacts per Task 4 convention)
 
@@ -720,6 +722,8 @@ Commit: `feat(experiment): random-search null config and tested statistics`.
 5. Write `meta.json` per the Task 4 convention (commit SHA, go version, platform, CLI args, master seed, calibration seeds, MCTS mode); copy summary.json, results.json, top-10 rulebooks/reports into `results/`; commit: `results: post-remediation flagship + experiment artifacts`.
 
 ### Task 29: Republish numbers and close the loop
+
+**STATUS (2026-06-13): DONE except the matrix table.** README rewritten to the honest exit (Wave M commit 3): playable games + correct ranking of Whist/Gin rediscoveries, NO novel fun across 4 rounds, the failed-review-loop arc as the headline, the lesson, current fitness/validation sections, calibration suite noted as the permanent regression harness. The algorithm-comparison table is a marked PLACEHOLDER (`<!-- TABLE: pending final experiment matrix -->`) -- the experiment matrix fills it later; no numbers invented. Pre-fix numbers removed. CLAUDE.md/ROADMAP truth-pass for the honest exit folds into the matrix-landing commit.
 
 **Files:**
 - Modify: `README.md`, `CLAUDE.md`, `ROADMAP.md`

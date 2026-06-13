@@ -265,3 +265,42 @@ Throughput: 43,400 games in 1.17s = ~37,100 games/sec (calibrate; the new sheddi
 - The longest_run veto cannot distinguish the 2-suit "one-fix-from-real" judgment fixture (rank04) from its degenerate cousins (both ~6.5 greedy longest-run). A future plan wanting to RESCUE rank04-class games needs a richer monopoly signal (e.g. victim-acted-at-all share, or distinguishing self-tempo chains from opponent-locking chains), not a threshold nudge.
 - playable_share is shedding-only (it needs the runner's match predicate). A future skeleton with a match rule needs its own per-card-liveness twin, same as the dead_match_rule note.
 - The trivial-meld Tier-0 rule subsumes both PairMeld fixtures' dynamic vetoes (draw_supply_churn). draw_supply_churn now has NO live fixture among the trivial-meld cousins -- a future min-3 rummy with a starved stock would be its only remaining target; keep the synthetic unit coverage.
+
+## LOOP CLOSED -- round-4 review verdict + Wave M (2026-06-13)
+
+The round-4 flagship (output/2026-06-12-flagship-r4: pop 2000, gen 200, seed 42, -mcts-decile 0.02, commit ccf6df5-dirty) was designer-reviewed -- the AUTHORIZED EXTRA swing past the budgeted three rounds. **Verdict: 0 publishable.** The top 30 is exactly 10 shedding (wild-union residue parked just under the round-4 vetoes; the original published rank02 actually FAILS its own greedy_longest_run veto on 1/10 seeds, published only because production does a SINGLE eval per genome), 10 trick-taking (genuine multi-round Whist -- a real game but a public-domain REDISCOVERY, not novel), 10 rummy (genuine Gin/Knock after the min_meld>=3 fix -- also rediscoveries). Best honest greedy-only fitness 0.739 (down from round-3's inflated 0.918).
+
+**The four-round arc (the headline methodology result):**
+
+| Round | Run | Verdict | What gamed the stack | Validity rules added (weights/scales FROZEN from round 1) |
+|-------|-----|---------|----------------------|-----------------------------------------------------------|
+| 1 | flagship-postfix | HARD-BLOCKED | catch-all-skip shedding, no-follow avoidance trick, pair-meld knock rummy | non_agentic, tempo_monopoly, draw_supply_churn; interaction + choice-impact decision-density metric fixes |
+| 2 | flagship-r2 | HARD-BLOCKED | catch-all WILD shedding (dead match_rule), reverse-lockout, pair-meld at churn 0.088 under the 0.10 cliff | Tier-0 catch-all liveness; greedy-batch vetoes (seat_participation, greedy_timeout, greedy tempo); rummy deadwood-consequence density; churn 0.10 -> 0.05 |
+| 3 | flagship-r3 | 0 publishable / 19 borderline / 11 degenerate | no NEW exploit (vetoes held); only playable-unremarkable games + publication bugs | Wave K output-path fixes: greedy-only leaderboard key, functional output dedup, MCTS-provenance n-floor |
+| 4 | flagship-r4 | 0 publishable; 10 wild-union shedding / 10 Whist / 10 Gin-Knock | wild-union shedding (statically valid), trivial-meld rummy, episodic monopoly | Tier-0 trivial-meld liveness (min_meld >= 3); playable_share (per-card) + longest_run (episodic monopoly) vetoes |
+
+Honest fitness ceiling per round as exploit corners closed: **0.97 -> 0.91 -> 0.92-inflated -> 0.739-honest** (the round-3 0.92 was inflated by the incommensurable MCTS/greedy leaderboard + single-eval winner's curse).
+
+**FINAL VERDICT -- HONEST EXIT.** Correct, calibrated, four-times-adversarially-hardened proxy metrics still do not discover novel fun. Evolution either games the newest veto or rediscovers an existing game; the most game-like outputs are faithful Whist/Gin reimplementations. The project claims **no novel publishable game** from the remediated pipeline. This is an honest negative result with a real lesson: automated fun-proxies are exploitable by construction; novel-fun discovery needs a human in the loop or a fundamentally richer signal, not more vetoes. The metric stack is FROZEN -- no metric, veto, weight, or threshold moved in response to the round-4 review, and none will without a new plan.
+
+**Wave M (loop-closure and honest-exit publication, four commits -- output path only, metric stack untouched):**
+
+1. **Veto-stable publication fix** (the bug rank02 exposed): single-eval publication let a genome that fails its own veto on 10% of seeds publish as rank 2. SaveResults now RE-EVALUATES each top-N genome K=5 times at distinct fresh seeds (pkg/output/stability.go); a genome valid on a majority (>= 3/5) is veto_stable and keeps its leaderboard place, the rest are demoted below all stable games. Every published genome.json/report carries veto_stable + stable_evals ("N/5"). Output-path only (Wave K spirit): selection/evolution dynamics/frozen metric stack untouched; input greedy-only leaderboard order preserved within each stability class. Throughput: ~11ms/eval, 30 top-N x 5 = ~1.65s, trivial vs a run. Tests: planted degenerate is unstable + demoted, clean classic keeps rank, determinism under fixed seed, majority boundary (2/5 demoted, 3/5 stable).
+
+2. **Re-published flagship-r4 through the fixed path**: new `darwindeck restamp` subcommand (cmd/darwindeck/restamp.go) loads a saved run's games/*/genome.json, runs the K=5 stability check + a fresh greedy-only eval on each, re-ranks stable-first, and writes results/2026-06-12-flagship-r4/ (summary.json, meta.json copied+annotated, 30x {genome.json, rulebook.md, report.md}, STABILITY.md, REVIEW.md). The original rank02 (gen200_55718) demotes to rank 29 with honest fitness 0 -- its single fresh published eval lands on its failing greedy_longest_run seed while K=5 reads 4/5 -- the exact single-eval/multi-eval divergence the fix exposes. REVIEW.md records the full four-round arc + honest exit.
+
+3. **README honest-exit republish** (Task 29 narrative): the true story -- playable games + correct ranking of Whist/Gin rediscoveries, NO novel fun across 4 rounds; the failed-review-loop arc as the headline; the lesson; the current fitness/validation sections (5 rebuilt metrics, Tier-0 liveness, degeneracy veto stack, calibration gate as permanent regression test, two-tier greedy+top-decile-MCTS skill, veto-stable publication); a clearly-marked PLACEHOLDER for the algorithm-comparison table; stale pre-fix numbers removed.
+
+4. **This checkpoint finale + plan closure**.
+
+**Tasks 28/29 status:**
+- **Task 28 (full re-runs on fixed code): COMPLETE via the failed-review loop -> honest exit.** The flagship was re-run on remediated code four times (postfix, r2, r3, r4); step 3 designer review and step 4 failed-review loop ran to their full budget + one authorized extra; the loop's verdict is 0 publishable. The reproducible flagship bundle is results/2026-06-12-flagship-r4/ (re-published through the veto-stable path); meta.json records mcts_mode/decile/knobs, veto thresholds, fitness floor, pop/gens. NOT done: the 4-config x 15-seed experiment matrix (step 2), running on a separate machine; its results.json lands later.
+- **Task 29 (republish + close the loop): DONE except the matrix table.** README/checkpoint tell the honest exit; the algorithm-comparison table is a marked placeholder for the experiment matrix. CLAUDE.md/ROADMAP truth-pass for the honest exit can fold into the matrix-landing commit.
+
+**What remains (carried-forward research directions, for a FUTURE plan -- the frozen stack does not change):**
+- The **experiment-matrix table** (Task 29 step 2): fill the README placeholder from the 4-config x 15-seed matrix's results.json when it lands.
+- **Optional NSGA-II (Task 30)**: Pareto selection vs weighted sum over the 5 raw metrics; pre-registered criterion in the plan.
+- **Human-in-the-loop fitness**: the only signal that can see fun the simulation cannot (the rank04-class "one fix from a real game" judgment no threshold can make). Task 24's playtest ratings instrument exists but is unvalidated (no N >= 10 rated sessions yet).
+- **Richer victim-acted / decision-impact signals**: distinguish self-tempo chains from opponent-locking chains; a "victim acted at all" share to rescue the rank04-class games longest_run cannot tell from degenerate monopolies.
+- **Novelty-vs-existing-games detection**: the system has no way to know its best trick-taking output IS Whist; a rediscovery detector turns these false positives into an explicit "rediscovered a classic" label.
+- Standing round-4 hazards (playable_share is shedding-only; draw_supply_churn has no live fixture after the trivial-meld Tier-0 rule -- keep synthetic coverage; the greedy_timeout thin margin).
