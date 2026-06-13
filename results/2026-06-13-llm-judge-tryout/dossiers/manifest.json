@@ -1,0 +1,107 @@
+[
+  {
+    "id": "G01",
+    "dossier": "G01.md",
+    "skeleton": "shedding",
+    "players": 2,
+    "hand_size": 10
+  },
+  {
+    "id": "G02",
+    "dossier": "G02.md",
+    "skeleton": "shedding",
+    "players": 2,
+    "hand_size": 11
+  },
+  {
+    "id": "G03",
+    "dossier": "G03.md",
+    "skeleton": "shedding",
+    "players": 2,
+    "hand_size": 13
+  },
+  {
+    "id": "G04",
+    "dossier": "G04.md",
+    "skeleton": "shedding",
+    "players": 2,
+    "hand_size": 10
+  },
+  {
+    "id": "G05",
+    "dossier": "G05.md",
+    "skeleton": "shedding",
+    "players": 2,
+    "hand_size": 9
+  },
+  {
+    "id": "G06",
+    "dossier": "G06.md",
+    "skeleton": "shedding",
+    "players": 2,
+    "hand_size": 9
+  },
+  {
+    "id": "G07",
+    "dossier": "G07.md",
+    "skeleton": "shedding",
+    "players": 3,
+    "hand_size": 13
+  },
+  {
+    "id": "G08",
+    "dossier": "G08.md",
+    "skeleton": "trick_taking",
+    "players": 2,
+    "hand_size": 10
+  },
+  {
+    "id": "G09",
+    "dossier": "G09.md",
+    "skeleton": "trick_taking",
+    "players": 2,
+    "hand_size": 11
+  },
+  {
+    "id": "G10",
+    "dossier": "G10.md",
+    "skeleton": "rummy",
+    "players": 2,
+    "hand_size": 12
+  },
+  {
+    "id": "G11",
+    "dossier": "G11.md",
+    "skeleton": "rummy",
+    "players": 3,
+    "hand_size": 11
+  },
+  {
+    "id": "G12",
+    "dossier": "G12.md",
+    "skeleton": "shedding",
+    "players": 2,
+    "hand_size": 7
+  },
+  {
+    "id": "G13",
+    "dossier": "G13.md",
+    "skeleton": "rummy",
+    "players": 2,
+    "hand_size": 10
+  },
+  {
+    "id": "G14",
+    "dossier": "G14.md",
+    "skeleton": "rummy",
+    "players": 3,
+    "hand_size": 7
+  },
+  {
+    "id": "G15",
+    "dossier": "G15.md",
+    "skeleton": "shedding",
+    "players": 2,
+    "hand_size": 13
+  }
+]

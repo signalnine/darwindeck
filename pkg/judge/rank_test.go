@@ -1,8 +1,39 @@
 package judge
 
 import (
+	"math"
 	"testing"
 )
+
+// TestVerdictConfidenceAcceptsStringOrNumber verifies that the `confidence`
+// field unmarshals from both a JSON number and a qualitative string label, the
+// shape an LLM judge naturally emits.
+func TestVerdictConfidenceAcceptsStringOrNumber(t *testing.T) {
+	cases := []struct {
+		json string
+		want float64
+	}{
+		{`{"id":"G01","confidence":0.85}`, 0.85},
+		{`{"id":"G01","confidence":"high"}`, 0.9},
+		{`{"id":"G01","confidence":"medium"}`, 0.6},
+		{`{"id":"G01","confidence":"low"}`, 0.3},
+		{`{"id":"G01","confidence":"HIGH"}`, 0.9},
+		{`{"id":"G01"}`, 0.0},
+		{`{"id":"G01","confidence":"bogus"}`, 0.0},
+	}
+	for _, c := range cases {
+		var v Verdict
+		if err := v.UnmarshalJSON([]byte(c.json)); err != nil {
+			t.Fatalf("unmarshal %s: %v", c.json, err)
+		}
+		if math.Abs(v.Confidence-c.want) > 1e-9 {
+			t.Errorf("confidence for %s = %v, want %v", c.json, v.Confidence, c.want)
+		}
+		if v.ID != "G01" {
+			t.Errorf("id for %s = %q, want G01", c.json, v.ID)
+		}
+	}
+}
 
 // TestAggregateMajorityWithSplit checks majority-of-3 aggregation including a
 // 2-1 split: two "borderline" + one "publishable" -> borderline.

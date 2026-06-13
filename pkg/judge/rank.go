@@ -22,6 +22,55 @@ type Verdict struct {
 	Reason              string  `json:"reason"`
 }
 
+// confidenceLabels maps the qualitative confidence labels an LLM judge
+// naturally emits onto the numeric scale Confidence stores. The midpoints keep
+// the same ordering and rough magnitude as the numeric form (0.0-1.0).
+var confidenceLabels = map[string]float64{
+	"low":      0.3,
+	"medium":   0.6,
+	"moderate": 0.6,
+	"high":     0.9,
+}
+
+// UnmarshalJSON accepts the `confidence` field as either a JSON number
+// (0.0-1.0) or a qualitative string label ("low"/"medium"/"high"), which is
+// the shape an LLM judge naturally produces. Everything else unmarshals via the
+// struct tags. Unknown string labels are tolerated as 0 rather than erroring,
+// so one malformed field does not reject an entire verdict batch.
+func (v *Verdict) UnmarshalJSON(data []byte) error {
+	type verdictAlias Verdict
+	aux := struct {
+		Confidence json.RawMessage `json:"confidence"`
+		*verdictAlias
+	}{verdictAlias: (*verdictAlias)(v)}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	v.Confidence = parseConfidence(aux.Confidence)
+	return nil
+}
+
+// parseConfidence interprets a raw confidence value as a float: a JSON number
+// passes through; a JSON string is mapped via confidenceLabels (case- and
+// space-insensitive). Empty or unrecognized values yield 0.
+func parseConfidence(raw json.RawMessage) float64 {
+	raw = json.RawMessage(strings.TrimSpace(string(raw)))
+	if len(raw) == 0 || string(raw) == "null" {
+		return 0
+	}
+	var f float64
+	if err := json.Unmarshal(raw, &f); err == nil {
+		return f
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err == nil {
+		if val, ok := confidenceLabels[strings.ToLower(strings.TrimSpace(s))]; ok {
+			return val
+		}
+	}
+	return 0
+}
+
 // AggregatedVerdict is the majority-of-3 result for one dossier id.
 type AggregatedVerdict struct {
 	ID                  string  `json:"id"`
