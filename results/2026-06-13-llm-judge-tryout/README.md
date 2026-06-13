@@ -15,9 +15,14 @@ two-stage LLM-as-judge harness:
   dossier dir so the judge stays blind.
 - `judge rank <dossier-dir> <verdicts.json> --out <report.md>` ingests the
   judge's verdicts (3 reps per game), aggregates **majority-of-3** per id,
-  applies a **rediscovery demotion** (majority `variant_of_known` drops one
-  quality band and is labeled with the classic family), re-ranks by judged
-  quality, and writes `judged-report.md` + `judged.json`.
+  flags rediscoveries (majority `variant_of_known`, labeled with the classic
+  family), re-ranks by judged quality, and writes `judged-report.md` +
+  `judged.json`. **Quality and novelty are orthogonal:** the Quality column is
+  always the judges' true majority band (publishable / borderline / degenerate)
+  and is NEVER altered by novelty. A rediscovery only **sinks in the rank
+  order** -- within an equal quality band a genuinely novel game ranks above a
+  rediscovery -- it never relabels the game's quality. ("degenerate" means
+  broken/unfun and is reserved for the judges' quality verdict alone.)
 
 Aggregation rules: quality tie -> worse band (conservative); novelty tie ->
 `variant_of_known` (a rediscovery suspicion is not dropped on a split); playable
@@ -73,13 +78,14 @@ KEY TEST -- the two prior FALSE POSITIVES cleared:
 
 | Game | Prior validation | This run (majority verdict) | Final band |
 |------|------------------|-----------------------------|------------|
-| G13 Gin Rummy | 3/3 degenerate | 3/3 **publishable**, playable=true | borderline* |
-| G14 Knock Rummy | 3/3 degenerate | **publishable** (2 pub / 1 borderline), playable=true | borderline* |
+| G13 Gin Rummy | 3/3 degenerate | 3/3 **publishable**, playable=true | **publishable** (rediscovery) |
+| G14 Knock Rummy | 3/3 degenerate | **publishable** (2 pub / 1 borderline), playable=true | **publishable** (rediscovery) |
 
-*Their final band is borderline only because of the rediscovery demotion
-(publishable -> borderline for being Gin/Knock-Rummy variants), NOT because of
-degeneracy. Both are judged playable and sound. Each reason explicitly cites the
-Termination section ("the low AI completion is mere slowness, not degeneracy").
+Both keep their TRUE majority quality (publishable). The `variant_of_known`
+novelty only labels them as Gin/Knock-Rummy rediscoveries and sinks them within
+the publishable band -- it does NOT demote their quality. Both are judged
+playable and sound. Each reason explicitly cites the Termination section ("the
+low AI completion is mere slowness, not degeneracy").
 
 Degeneracy detection stayed sharp -- the negative control was still caught:
 
@@ -96,17 +102,21 @@ Rediscoveries still flagged with correct families:
 
 Judge order among the 11 champions vs their R4 greedy-fitness rank:
 
-- **G08** (R4 #11, trick): rises to judge **#2** -- the only champion the judge
-  rated genuinely sound (publishable -> borderline after rediscovery demotion).
-  Biggest mover up.
+- **G08** (R4 #11, trick): rises to judge **#2** -- judged genuinely sound
+  (publishable), a Whist/Spades rediscovery so it sinks within the publishable
+  band but keeps its quality. Biggest mover up.
 - **G01** (R4 #1, top greedy-fitness shedding champion): falls to judge **#9**.
-  The judge demoted it: borderline raw quality, then rediscovery-demoted to
-  degenerate for being an over-wilded Crazy Eights clone. Biggest mover down.
+  The judge rated it **borderline** (thin decision surface from over-wilding)
+  and flagged it a Crazy Eights rediscovery, which sinks it within the
+  borderline band. Its quality stays borderline -- it is NOT relabeled
+  degenerate. Biggest mover down.
 - The two classics that were prior false positives, **G13/G14**, sit at judge
-  **#1 and #3** -- above every shedding champion.
-- Shedding champions G01-G07 collapse into the bottom (all borderline -> demoted
-  to degenerate via the rediscovery cascade: ~37-50% of the deck wild). Greedy
-  fitness ranked them top; the judge ranks them last.
+  **#1 and #3** (both publishable) -- above every shedding champion.
+- Shedding champions G01-G07 land in the borderline band (thin decisions from
+  ~37-50% of the deck being wild) and, as Crazy Eights rediscoveries, sort to
+  the bottom of that band. Greedy fitness ranked them top; the judge ranks them
+  near last. Only G15 (the over-wilded negative-control fixture) is judged
+  degenerate -- by the judges' raw quality call, not by any novelty demotion.
 
 Net: the judge inverts the greedy-fitness ordering. Greedy fitness rewarded the
 over-wilded shedding champions; the judge sees their thin decision surface,

@@ -101,22 +101,24 @@ func TestRankPublishableAboveDegenerate(t *testing.T) {
 	}
 }
 
-// TestRediscoveryFlagDemotes verifies that a majority variant_of_known game is
-// demoted one band and labeled with the rediscovery name.
-func TestRediscoveryFlagDemotes(t *testing.T) {
+// TestRediscoveryFlagDoesNotAlterQuality verifies that a majority
+// variant_of_known game is FLAGGED as a rediscovery and labeled, but its
+// displayed quality is the judges' TRUE majority band -- novelty never demotes
+// quality. Quality and novelty are orthogonal.
+func TestRediscoveryFlagDoesNotAlterQuality(t *testing.T) {
 	verdicts := []Verdict{
-		// Publishable quality but majority says variant_of_known -> demote to
-		// borderline + label.
+		// Publishable quality, majority says variant_of_known. The game must
+		// stay publishable (NOT demoted to borderline) and carry the flag+label.
 		{ID: "G01", Rep: 1, Quality: "publishable", Novelty: "variant_of_known", RediscoveryName: "Whist-like", Playable: true, Confidence: 0.8},
 		{ID: "G01", Rep: 2, Quality: "publishable", Novelty: "variant_of_known", RediscoveryName: "Whist-like", Playable: true, Confidence: 0.8},
 		{ID: "G01", Rep: 3, Quality: "publishable", Novelty: "novel", Playable: true, Confidence: 0.7},
 	}
 	a := Aggregate(verdicts)[0]
-	if !a.Demoted {
-		t.Error("expected rediscovery demotion flag")
+	if !a.Rediscovery {
+		t.Error("expected rediscovery flag for majority variant_of_known")
 	}
-	if a.Quality != "borderline" {
-		t.Errorf("demoted quality = %q, want borderline", a.Quality)
+	if a.Quality != "publishable" {
+		t.Errorf("quality = %q, want publishable (novelty must NOT demote quality)", a.Quality)
 	}
 	if a.Novelty != "variant_of_known" {
 		t.Errorf("novelty = %q, want variant_of_known", a.Novelty)
@@ -126,23 +128,100 @@ func TestRediscoveryFlagDemotes(t *testing.T) {
 	}
 }
 
-// TestRediscoveryDemotedBelowNovelPublishable verifies a demoted rediscovery
-// ranks below a genuinely novel publishable game.
-func TestRediscoveryDemotedBelowNovelPublishable(t *testing.T) {
+// TestNoveltyNeverProducesDegenerate pins the core invariant: a borderline game
+// that is a rediscovery must NEVER be relabeled degenerate by a novelty
+// demotion. "degenerate" means broken/unfun and is reserved for the judges'
+// quality verdict alone.
+func TestNoveltyNeverProducesDegenerate(t *testing.T) {
 	verdicts := []Verdict{
-		// G01: publishable but rediscovery -> demoted to borderline.
-		{ID: "G01", Rep: 1, Quality: "publishable", Novelty: "variant_of_known", RediscoveryName: "Gin-like", Playable: true, Confidence: 0.9},
-		{ID: "G01", Rep: 2, Quality: "publishable", Novelty: "variant_of_known", RediscoveryName: "Gin-like", Playable: true, Confidence: 0.9},
-		{ID: "G01", Rep: 3, Quality: "publishable", Novelty: "variant_of_known", RediscoveryName: "Gin-like", Playable: true, Confidence: 0.9},
-		// G02: genuinely novel publishable.
-		{ID: "G02", Rep: 1, Quality: "publishable", Novelty: "novel", Playable: true, Confidence: 0.7},
-		{ID: "G02", Rep: 2, Quality: "publishable", Novelty: "novel", Playable: true, Confidence: 0.7},
-		{ID: "G02", Rep: 3, Quality: "publishable", Novelty: "novel", Playable: true, Confidence: 0.7},
+		{ID: "G01", Rep: 1, Quality: "borderline", Novelty: "variant_of_known", RediscoveryName: "Crazy Eights-like", Playable: true, Confidence: 0.9},
+		{ID: "G01", Rep: 2, Quality: "borderline", Novelty: "variant_of_known", RediscoveryName: "Crazy Eights-like", Playable: true, Confidence: 0.9},
+		{ID: "G01", Rep: 3, Quality: "borderline", Novelty: "variant_of_known", RediscoveryName: "Crazy Eights-like", Playable: true, Confidence: 0.9},
 	}
-	ranked := Rank(Aggregate(verdicts))
-	if ranked[0].ID != "G02" {
-		t.Errorf("rank 1 = %s, want G02 (novel publishable above demoted rediscovery)", ranked[0].ID)
+	a := Aggregate(verdicts)[0]
+	if a.Quality == "degenerate" {
+		t.Fatal("novelty demotion must NEVER produce degenerate quality")
 	}
+	if a.Quality != "borderline" {
+		t.Errorf("quality = %q, want borderline (unaltered by novelty)", a.Quality)
+	}
+}
+
+// TestCrazyEightsClassKeepsQualityButSinksInRank pins the exact Crazy-Eights
+// regression: a borderline game that is a faithful rediscovery of a real
+// classic (Crazy Eights) must (1) KEEP quality=borderline in the output -- NOT
+// be relabeled degenerate -- and (2) still sort BELOW an equal-quality novel
+// game. Quality (broken?) and novelty (known?) are orthogonal.
+func TestCrazyEightsClassKeepsQualityButSinksInRank(t *testing.T) {
+	verdicts := []Verdict{
+		// G12-class: a sound-but-thin Crazy Eights rediscovery. Judges' true
+		// majority quality is borderline (2 borderline, 1 publishable).
+		{ID: "G12", Rep: 1, Quality: "borderline", Novelty: "variant_of_known", RediscoveryName: "Crazy Eights-like", Playable: true, Confidence: 0.9},
+		{ID: "G12", Rep: 2, Quality: "publishable", Novelty: "variant_of_known", RediscoveryName: "Crazy Eights-like", Playable: true, Confidence: 0.9},
+		{ID: "G12", Rep: 3, Quality: "borderline", Novelty: "variant_of_known", RediscoveryName: "Crazy Eights-like", Playable: true, Confidence: 0.9},
+		// GNV: a genuinely novel game of the SAME (borderline) quality band.
+		{ID: "GNV", Rep: 1, Quality: "borderline", Novelty: "novel", Playable: true, Confidence: 0.9},
+		{ID: "GNV", Rep: 2, Quality: "borderline", Novelty: "novel", Playable: true, Confidence: 0.9},
+		{ID: "GNV", Rep: 3, Quality: "borderline", Novelty: "novel", Playable: true, Confidence: 0.9},
+	}
+	aggs := Aggregate(verdicts)
+
+	var g12 AggregatedVerdict
+	for _, a := range aggs {
+		if a.ID == "G12" {
+			g12 = a
+		}
+	}
+	// (1) Quality column must show the TRUE majority (borderline), never
+	//     degenerate from a novelty demotion.
+	if g12.Quality != "borderline" {
+		t.Errorf("G12 quality = %q, want borderline (Crazy Eights is a real classic, not degenerate)", g12.Quality)
+	}
+	if !g12.Rediscovery {
+		t.Error("G12 should be flagged as a rediscovery")
+	}
+	if g12.RediscoveryName != "Crazy Eights-like" {
+		t.Errorf("G12 rediscovery name = %q, want Crazy Eights-like", g12.RediscoveryName)
+	}
+
+	// (2) Within the equal (borderline) band, the novel game sorts above the
+	//     rediscovery.
+	ranked := Rank(aggs)
+	posG12, posGNV := -1, -1
+	for i, a := range ranked {
+		switch a.ID {
+		case "G12":
+			posG12 = i
+		case "GNV":
+			posGNV = i
+		}
+	}
+	if posGNV >= posG12 {
+		t.Errorf("expected novel GNV (pos %d) to rank above rediscovery G12 (pos %d)", posGNV, posG12)
+	}
+
+	// And the rendered report must NOT show degenerate for G12.
+	report := RenderReport(ranked)
+	for _, line := range splitLines(report) {
+		if contains(line, "| G12 |") && contains(line, "degenerate") {
+			t.Errorf("G12 report row labeled degenerate: %s", line)
+		}
+	}
+}
+
+func splitLines(s string) []string {
+	var lines []string
+	start := 0
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\n' {
+			lines = append(lines, s[start:i])
+			start = i + 1
+		}
+	}
+	if start < len(s) {
+		lines = append(lines, s[start:])
+	}
+	return lines
 }
 
 // TestRenderReportContainsRanks checks the report renders a ranked table.
