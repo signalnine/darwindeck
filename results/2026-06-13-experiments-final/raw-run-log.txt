@@ -1,0 +1,27 @@
+DarwinDeck Diversity Experiment
+  Configs: baseline,novelty,map-elites,random
+  Seeds per config: 15
+  Population: 500, Generations: 100
+  Workers per run: 24, Parallel runs: 6
+  Output: output/2026-06-13-experiments-final
+
+  Done: random seed=3001 coverage=0.08 qd=13.6 pairwise=0.309 games=25 (1h19m32.944s)
+  Done: novelty seed=1002 coverage=0.20 qd=34.2 pairwise=0.382 games=1026 (2h30m58.669s)
+  Done: novelty seed=1001 coverage=0.21 qd=34.9 pairwise=0.375 games=975 (3h31m49.476s)
+  Done: random seed=3002 coverage=0.08 qd=13.7 pairwise=0.308 games=25 (1h11m50.531s)
+  Done: baseline seed=1 coverage=0.06 qd=9.7 pairwise=0.474 games=434 (4h27m1.091s)
+  Done: baseline seed=2 coverage=0.07 qd=11.7 pairwise=0.506 games=402 (4h27m38.684s)
+  Done: map-elites seed=2001 coverage=0.12 qd=20.4 pairwise=0.357 games=50 (4h30m46.701s)
+  Done: random seed=3003 coverage=0.09 qd=14.4 pairwise=0.315 games=26 (1h12m0.926s)
+  Done: map-elites seed=2002 coverage=0.11 qd=18.8 pairwise=0.360 games=48 (4h20m39.285s)
+  Done: novelty seed=1003 coverage=0.20 qd=34.5 pairwise=0.395 games=997 (3h6m3.623s)
+  Done: random seed=3004 coverage=0.08 qd=13.2 pairwise=0.303 games=24 (1h9m25.429s)
+  Done: baseline seed=3 coverage=0.04 qd=7.9 pairwise=0.507 games=447 (4h54m35.929s)
+  Done: map-elites seed=2003 coverage=0.14 qd=23.8 pairwise=0.370 games=52 (4h25m47.127s)
+  Done: novelty seed=1004 coverage=0.19 qd=32.7 pairwise=0.416 games=999 (3h14m56.89s)
+  Done: baseline seed=4 coverage=0.04 qd=7.8 pairwise=0.483 games=446 (4h25m30.548s)
+  Done: random seed=3005 coverage=0.09 qd=14.4 pairwise=0.311 games=26 (1h13m10.855s)
+  Done: map-elites seed=2004 coverage=0.13 qd=22.6 pairwise=0.362 games=51 (4h27m42.76s)
+  Done: baseline seed=5 coverage=0.05 qd=8.8 pairwise=0.308 games=400 (3h42m56.493s)
+  Done: novelty seed=1005 coverage=0.19 qd=32.7 pairwise=0.403 games=1066 (3h35m29.185s)
+  Done: baseline seed=6 coverage=0.04 qd=6.9 pairwise=0.511 games=439 (3h27m22.238s)

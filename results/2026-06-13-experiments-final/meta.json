@@ -1,0 +1,15 @@
+{
+  "bundle": "2026-06-13-experiments-final",
+  "kind": "algorithm-comparison experiment matrix (post-remediation, final frozen metric stack)",
+  "commit_sha": "bcb2ec9",
+  "go_version": "go1.24.4",
+  "platform": "anarres (256-core EPYC, 1TB RAM); per-evolution scaling ceiling ~40 cores",
+  "cli_args": "experiment -configs baseline,novelty,map-elites,random -seeds 15 -workers 24 -parallel 6 -mcts-decile 0",
+  "designed_seeds_per_config": 15,
+  "completed_seeds_per_config": {"baseline": 6, "novelty": 5, "map-elites": 4, "random": 5},
+  "truncated": true,
+  "truncation_reason": "compute host (anarres) taken down for security patching at 20/60 runs; result already a complete separation at the completed N",
+  "data_source": "raw-run-log.txt (the experiment harness writes results.json only on full completion, which did not occur; the per-run Done: lines in the log carry coverage/qd/pairwise/games and are the authoritative record)",
+  "date": "2026-06-13",
+  "non_reproducible": false
+}

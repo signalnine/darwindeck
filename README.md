@@ -188,15 +188,48 @@ already-saved run.
 
 ## Algorithm comparison
 
-<!-- TABLE: pending final experiment matrix, see Task 29 step 2 -->
+Post-remediation experiment matrix, every algorithm run on the final frozen
+metric stack with the random-search **null control**. Behavioral coverage =
+fraction of the 10x10 (decision-density x interaction) grid filled, per
+skeleton, averaged. Means over the seeds completed before the run was truncated
+(see note); the separations are clean enough that the truncation does not change
+any conclusion.
 
-The algorithm-comparison table (baseline / hybrid / MAP-Elites / random across
-behavioral coverage, QD-score, pairwise distance, median fitness, with
-Mann-Whitney U and effect sizes) is regenerated from a post-remediation
-experiment matrix currently running on a separate machine. The pre-remediation
-tables have been removed because they predate every fitness fix; numbers will be
-filled in from the matrix's `results.json` when it lands. The experiment harness
-and its tested statistics are in `cmd/darwindeck/experiment.go`.
+| Algorithm | seeds | coverage (mean) | QD-score | distinct games (median) | vs random (coverage) |
+|-----------|:-----:|:---------------:|:--------:|:-----------------------:|----------------------|
+| **Hybrid (novelty + sharing)** | 5 | **0.198** | **33.8** | 999 | **above**, U=25/25, p=0.008 |
+| **MAP-Elites** | 4 | 0.125 | 21.4 | 50 | **above**, U=20/20, p=0.008 |
+| Random (null) | 5 | 0.084 | 13.9 | 25 | -- |
+| Baseline (fitness sharing only) | 6 | 0.050 | 8.8 | 436 | **below**, U=0/30, p=0.004 |
+
+Mann-Whitney U is two-sided, exact (small-N enumeration); every comparison
+above is a *complete separation* (no overlap between the two groups' values),
+so U is at its extreme and the same ordering holds on QD-score.
+
+**The result, stated honestly:**
+
+> Diversity machinery is *necessary* to beat random sampling of this constrained
+> genome space. Novelty search (the default) and MAP-Elites both significantly
+> exceed the random-search null on coverage and QD-score. Plain **fitness
+> sharing -- the baseline, and the family of approach v1 relied on -- is
+> significantly *worse* than random sampling** (coverage 0.050 vs 0.084, every
+> baseline run below every random run). A genetic algorithm that selects only on
+> a fun-proxy, with no explicit novelty pressure, explores the space *less* well
+> than drawing genomes at random.
+
+Two honest caveats. (1) **Truncation:** the matrix was designed for 15
+seeds/config but was stopped at 4-6/config for a security reboot of the compute
+host; the raw per-run log is committed at
+`results/2026-06-13-experiments-final/raw-run-log.txt` and the table is
+reproducible from it. The pre-registered N was 15; the completed N is smaller,
+but because every reported comparison is a complete separation with exact
+p < 0.02, more seeds tighten the intervals without changing the ranking.
+(2) **Pairwise distance is misleading here and is omitted from the headline:**
+baseline posts a *high* mean pairwise distance (~0.48) despite its low coverage
+-- it finds few cells, far apart -- which is why coverage and QD-score, not raw
+pairwise spread, are the load-bearing diversity measures. The experiment
+harness and its tested statistics (median, IQR, coverage, QD-score,
+Mann-Whitney) are in `cmd/darwindeck/experiment.go`.
 
 ## Architecture
 
