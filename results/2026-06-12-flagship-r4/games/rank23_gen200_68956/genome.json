@@ -1,0 +1,34 @@
+{
+  "id": "gen200_68956",
+  "generation": 200,
+  "skeleton": 2,
+  "fitness": 0.5066114199797025,
+  "shared_fitness": 0.36573211376942316,
+  "veto_stable": true,
+  "stable_evals": "5/5",
+  "players": 4,
+  "hand_size": 11,
+  "rummy": {
+    "meld_types": 0,
+    "min_meld_size": 3,
+    "draw_from": 2,
+    "knock_threshold": 27
+  },
+  "borrowed": [
+    {
+      "source": 1,
+      "mechanic": 0
+    }
+  ],
+  "scoring": {
+    "card_points": [
+      {
+        "rank": 13,
+        "suit": 2,
+        "points": 14,
+        "event": 0
+      }
+    ]
+  },
+  "trump_rule": 0
+}

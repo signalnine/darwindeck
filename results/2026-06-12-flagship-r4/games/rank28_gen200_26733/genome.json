@@ -1,0 +1,25 @@
+{
+  "id": "gen200_26733",
+  "generation": 200,
+  "skeleton": 2,
+  "fitness": 0.49293229103566294,
+  "shared_fitness": 0.42912761446021097,
+  "veto_stable": true,
+  "stable_evals": "5/5",
+  "players": 3,
+  "hand_size": 13,
+  "rummy": {
+    "meld_types": 2,
+    "min_meld_size": 3,
+    "draw_from": 2,
+    "knock_threshold": 15
+  },
+  "borrowed": [
+    {
+      "source": 1,
+      "mechanic": 0
+    }
+  ],
+  "scoring": {},
+  "trump_rule": 0
+}

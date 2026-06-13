@@ -35,6 +35,19 @@ be reproduced (e.g. preserved evidence of pre-fix results) must set
 
 ## Bundles
 
+- `2026-06-12-flagship-r4/` -- the round-4 flagship (pop 2000, gen 200,
+  seed 42, -mcts-decile 0.02), the authorized extra swing past the budgeted
+  three rounds, **re-published through the veto-stable publication path**
+  (Wave M, audit Task 28/29 follow-up). The genomes are the run's saved top
+  30; the fitness, rank order, and `veto_stable`/`stable_evals` stamps come
+  from a fresh re-evaluation via `darwindeck restamp`, not the original
+  single-eval publication. Top 30 = 10 wild-union-residue shedding + 10 Whist
+  rediscoveries + 10 Gin/Knock rediscoveries; **0 publishable**. `REVIEW.md`
+  records the full four-round arc and the honest exit; `STABILITY.md` records
+  the per-game K=5 re-evaluation. The motivating bug for the fix is here:
+  the original rank02 shedding game fails its own `greedy_longest_run` veto
+  on a minority of fresh seeds and is demoted to rank 29 with honest fitness
+  0. `meta.json` carries the original run inputs plus the restamp annotation.
 - `2026-06-12-flagship-r3/` -- the round-3 flagship (pop 2000, gen 200,
   seed 42, -mcts-decile 0.02) exactly as the round-3 designer panel judged
   it: 0 publishable / 19 borderline / 11 degenerate, the failed-review

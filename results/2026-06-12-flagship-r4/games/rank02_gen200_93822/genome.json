@@ -1,0 +1,53 @@
+{
+  "id": "gen200_93822",
+  "generation": 200,
+  "skeleton": 0,
+  "fitness": 0.7154833226009466,
+  "shared_fitness": 0.34721493552364735,
+  "veto_stable": true,
+  "stable_evals": "5/5",
+  "players": 2,
+  "hand_size": 13,
+  "shedding": {
+    "match_rule": 2,
+    "draw_penalty": 2,
+    "rounds_per_game": 2
+  },
+  "special_cards": [
+    {
+      "type": 4,
+      "by_suit": 4
+    },
+    {
+      "type": 4,
+      "by_suit": 1
+    },
+    {
+      "type": 1,
+      "by_rank": 7
+    },
+    {
+      "type": 3,
+      "by_rank": 8
+    },
+    {
+      "type": 0,
+      "by_rank": 12
+    },
+    {
+      "type": 3,
+      "by_rank": 11
+    }
+  ],
+  "scoring": {
+    "card_points": [
+      {
+        "rank": 0,
+        "suit": 0,
+        "points": 1,
+        "event": 0
+      }
+    ]
+  },
+  "trump_rule": 0
+}

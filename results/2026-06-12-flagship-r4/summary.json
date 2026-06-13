@@ -1,0 +1,9 @@
+{
+  "best_fitness": 0.7209073682002217,
+  "games": 30,
+  "note": "greedy-only best over VETO-STABLE games only; honest exit -- no publishable champion claimed",
+  "restamp_date": "2026-06-13T00:44:43-07:00",
+  "restamp_seed": 424242,
+  "source_run": "output/2026-06-12-flagship-r4",
+  "stability_evals": 5
+}
