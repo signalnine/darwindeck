@@ -48,58 +48,17 @@ func GenerateRulebook(g *genome.Genome) string {
 	return b.String()
 }
 
-// liveCardPoints reports whether anything in g's RULES reads
-// Scoring.CardPoints: trick-taking under card_points/avoidance scoring
-// (cardPointValue in the runner), or a LIVE MechAvoidance borrow (the
-// applyAvoidance hook returns early on empty CardPoints; see liveBorrows for
-// when the borrow itself is live).
+// liveCardPoints delegates to the genome-level liveness predicate (hoisted
+// to pkg/genome in Wave K so the output-ranking dedup shares the exact same
+// rules; semantics pinned by pkg/genome/liveness_test.go).
 func liveCardPoints(g *genome.Genome) bool {
-	if len(g.Scoring.CardPoints) == 0 {
-		return false
-	}
-	if g.Skeleton == genome.TrickTaking && g.TrickTaking != nil &&
-		(g.TrickTaking.TrickScoring == genome.ScoreCardPoints ||
-			g.TrickTaking.TrickScoring == genome.ScoreAvoidance) {
-		return true
-	}
-	for _, bm := range liveBorrows(g) {
-		if bm.Mechanic == genome.MechAvoidance {
-			return true
-		}
-	}
-	return false
+	return g.LiveCardPoints()
 }
 
-// liveBorrows returns the borrowed mechanics that can actually affect g's
-// outcome -- the ones the rulebook (and report) may advertise (round 3
-// commit 6b; the r2 rank05 advertised a meld-bonus borrow that was inert at
-// rounds_per_game 1):
-//
-//   - SCORING borrows (MechMeldBonus, MechAvoidance) bank state.Scores at
-//     round end. On a SINGLE-round shedding host nothing ever reads those
-//     scores (the game ends at the first empty hand), so they are live only
-//     when genome.SheddingMultiRound() -- the same predicate the runner
-//     uses. Trick-taking and rummy hosts read Scores in CheckEnd, so they
-//     are live there at any round count.
-//   - MechAvoidance additionally requires non-empty CardPoints (the hook
-//     no-ops without them).
-//   - Everything else whitelisted (MechTrickScoring, MechDrawPenalty) acts
-//     directly and is always live.
+// liveBorrows delegates to the genome-level liveness predicate (see
+// liveCardPoints).
 func liveBorrows(g *genome.Genome) []genome.BorrowedMechanic {
-	var live []genome.BorrowedMechanic
-	for _, bm := range g.Borrowed {
-		switch bm.Mechanic {
-		case genome.MechMeldBonus, genome.MechAvoidance:
-			if g.Skeleton == genome.Shedding && !g.SheddingMultiRound() {
-				continue
-			}
-			if bm.Mechanic == genome.MechAvoidance && len(g.Scoring.CardPoints) == 0 {
-				continue
-			}
-		}
-		live = append(live, bm)
-	}
-	return live
+	return g.LiveBorrows()
 }
 
 func gameName(g *genome.Genome) string {
