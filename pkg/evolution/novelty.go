@@ -535,7 +535,9 @@ func (e *NoveltyEngine) AllQualified() ([]*Individual, []BehaviorDescriptor) {
 	add := func(ind *Individual, b BehaviorDescriptor) {
 		hash := outputHash(ind.Genome)
 		if cur, ok := best[hash]; ok {
-			if ind.Fitness.TotalFitness > cur.ind.Fitness.TotalFitness {
+			// Clone-group keep is by OutputRank, the commensurable
+			// leaderboard key (Wave K fix 1).
+			if ind.OutputRank() > cur.ind.OutputRank() {
 				cur.ind, cur.behavior = ind, b // keep first-seen order
 			}
 			return

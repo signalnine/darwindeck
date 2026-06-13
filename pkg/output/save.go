@@ -15,12 +15,20 @@ import (
 
 // RunSummary holds metadata about an evolution run.
 type RunSummary struct {
-	StartTime      string  `json:"start_time"`
-	Duration       string  `json:"duration"`
-	PopulationSize int     `json:"population_size"`
-	Generations    int     `json:"generations"`
-	BestFitness    float64 `json:"best_fitness"`
-	TopGamesCount  int     `json:"top_games_count"`
+	StartTime      string `json:"start_time"`
+	Duration       string `json:"duration"`
+	PopulationSize int    `json:"population_size"`
+	Generations    int    `json:"generations"`
+	// BestFitness is the best GREEDY-ONLY running mean across the published
+	// games -- the commensurable leaderboard key (Wave K fix 1; this field
+	// used to be top[0]'s published fitness, an MCTS-mode mean resting on as
+	// few as one eval).
+	BestFitness float64 `json:"best_fitness"`
+	// MctsBest is the best MCTS-mode running mean across the published
+	// games, reported alongside but never ranked. 0 when no published game
+	// received an MCTS grant.
+	MctsBest      float64 `json:"mcts_best"`
+	TopGamesCount int     `json:"top_games_count"`
 }
 
 // RunMeta is the meta.json reproducibility record (audit Task 4 convention,
@@ -73,8 +81,13 @@ func SaveResults(
 		Generations:    config.Generations,
 		TopGamesCount:  len(top),
 	}
-	if len(top) > 0 {
-		summary.BestFitness = top[0].Fitness.TotalFitness
+	for _, ind := range top {
+		if rank := ind.OutputRank(); rank > summary.BestFitness {
+			summary.BestFitness = rank
+		}
+		if mctsMean, ok := ind.MCTSMean(); ok && mctsMean > summary.MctsBest {
+			summary.MctsBest = mctsMean
+		}
 	}
 
 	if err := writeJSON(filepath.Join(dir, "summary.json"), summary); err != nil {
@@ -94,16 +107,18 @@ func SaveResults(
 			return err
 		}
 
-		// PUBLICATION INVARIANT (round 3 commit 5a): genome.json and
-		// report.md must state the SAME fitness -- the published
-		// TotalFitness of THIS individual. The genome's own Fitness field
-		// can be stale at save time (the r2 flagship's rank04: a
-		// novelty-archive snapshot whose live twin was re-evaluated later
-		// overwrote the shared genome's field to 0.808 while the archived
-		// metrics said 0.847). Stamp a clone; never mutate the caller's
-		// genome.
+		// PUBLICATION INVARIANT (round 3 commit 5a; key changed by Wave K
+		// fix 1): genome.json and report.md must state the SAME fitness --
+		// the GREEDY-ONLY running mean (OutputRank) of THIS individual, the
+		// commensurable leaderboard key. The MCTS-mode mean lives in the
+		// report's provenance section and summary.json's mcts_best, never in
+		// the headline. The genome's own Fitness field can be stale at save
+		// time (the r2 flagship's rank04: a novelty-archive snapshot whose
+		// live twin was re-evaluated later overwrote the shared genome's
+		// field to 0.808 while the archived metrics said 0.847). Stamp a
+		// clone; never mutate the caller's genome.
 		published := ind.Genome.Clone()
-		published.Fitness = ind.Fitness.TotalFitness
+		published.Fitness = ind.OutputRank()
 		published.SharedFitness = ind.Fitness.SharedFitness
 
 		// Genome JSON

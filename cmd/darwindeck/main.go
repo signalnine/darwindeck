@@ -312,8 +312,11 @@ func sortAndTrim(inds []*evolution.Individual, n int) []*evolution.Individual {
 		unique = append(unique, ind)
 	}
 
+	// Order by OutputRank, the greedy-only running mean -- the commensurable
+	// leaderboard key (Wave K fix 1). Published MCTS-mode means are reported
+	// in report.md/summary.json but never ranked.
 	sort.Slice(unique, func(i, j int) bool {
-		return unique[i].Fitness.TotalFitness > unique[j].Fitness.TotalFitness
+		return unique[i].OutputRank() > unique[j].OutputRank()
 	})
 
 	// Reserve slots per skeleton for diversity in output

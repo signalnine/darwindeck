@@ -382,7 +382,9 @@ func (e *MAPElitesEngine) AllQualified() []*Individual {
 				}
 				hash := outputHash(cell.Individual.Genome)
 				if cur, ok := best[hash]; ok {
-					if cell.Individual.Fitness.TotalFitness > cur.ind.Fitness.TotalFitness {
+					// Clone-group keep is by OutputRank, the commensurable
+					// leaderboard key (Wave K fix 1).
+					if cell.Individual.OutputRank() > cur.ind.OutputRank() {
 						cur.ind = cell.Individual // keep first-seen order
 					}
 					continue

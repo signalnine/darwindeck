@@ -128,6 +128,28 @@ func (ind *Individual) MCTSMean() (mean float64, ok bool) {
 	return ind.MctsSum / float64(ind.MctsCount), true
 }
 
+// OutputRank is the LEADERBOARD ranking key (Wave K fix 1): the greedy-only
+// running mean, the one number every individual has, measured the same way.
+// The round-3 review caught the top-N sort mixing MCTS-mode published means
+// (decile-granted genomes only, +0.085..+0.145 uplift) with greedy-only
+// means in one ranking -- the MCTS-grant boundary WAS the top-10 boundary,
+// and the headline numbers rested on as few as one MCTS eval. All published
+// ordering (TopN, sortAndTrim, AllQualified clone-group keep) and the
+// report/summary headline numbers flow from this; the MCTS-mode mean is
+// reported alongside, never ranked. Selection inside the run still uses
+// publishedFitness -- that is search policy, not publication.
+//
+// Falls back to the published TotalFitness when no running-mean history
+// exists (EvalCount == 0): production individuals always carry EvalCount >=
+// 1 while Valid, so the fallback only serves hand-built fixtures and legacy
+// snapshots.
+func (ind *Individual) OutputRank() float64 {
+	if ind.EvalCount > 0 {
+		return ind.greedyMean()
+	}
+	return ind.Fitness.TotalFitness
+}
+
 // Engine runs the evolutionary algorithm.
 type Engine struct {
 	Config     Config
@@ -686,15 +708,19 @@ func (e *Engine) Run(progress func(gen int, best float64, avg float64)) {
 // TopN returns the top N genomes ensuring skeleton diversity.
 // Reserves slots per skeleton proportionally, then fills remaining with best overall.
 //
+// Ordering is by OutputRank -- the greedy-only running mean, the
+// commensurable leaderboard key (Wave K fix 1; sorting by published fitness
+// mixed MCTS-mode and greedy-only means in one ranking).
+//
 // Functionally identical genomes are deduplicated by outputHash (Task 28
 // round 2 caught byte-identical clones under different IDs; Wave K fix 2
 // extends the key to ignore DEAD genes after flagship-r3 published one game
 // as ranks 1/2/3 differing only in unread card_points). The population is
-// sorted by fitness first, so the kept member of each clone group is its
-// best and the freed slots flow to the next-best DISTINCT genomes.
+// sorted by rank first, so the kept member of each clone group is its best
+// and the freed slots flow to the next-best DISTINCT genomes.
 func (e *Engine) TopN(n int) []*Individual {
 	sort.Slice(e.Population, func(i, j int) bool {
-		return e.Population[i].Fitness.TotalFitness > e.Population[j].Fitness.TotalFitness
+		return e.Population[i].OutputRank() > e.Population[j].OutputRank()
 	})
 
 	// Reserve at least n/numSkeletons slots per skeleton type

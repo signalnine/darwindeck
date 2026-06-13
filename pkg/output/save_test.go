@@ -45,10 +45,12 @@ func publishedIndividual() *evolution.Individual {
 	return ind
 }
 
-// TestSaveResultsReportMatchesGenomeJSON (round 3 commit 5a): the fitness
-// number report.md's header renders and the fitness genome.json stores MUST
-// be the same number -- the published individual's TotalFitness -- no matter
-// how stale the genome's own Fitness field is at save time.
+// TestSaveResultsReportMatchesGenomeJSON (round 3 commit 5a, retargeted by
+// Wave K fix 1): the fitness number report.md's header renders and the
+// fitness genome.json stores MUST be the same number -- the individual's
+// GREEDY-ONLY running mean (OutputRank), the commensurable leaderboard key
+// -- no matter how stale the genome's own Fitness field is at save time and
+// no matter how few MCTS evals inflated the published mean.
 func TestSaveResultsReportMatchesGenomeJSON(t *testing.T) {
 	dir := t.TempDir()
 	ind := publishedIndividual()
@@ -81,8 +83,11 @@ func TestSaveResultsReportMatchesGenomeJSON(t *testing.T) {
 	}
 	headerFit, _ := strconv.ParseFloat(m[1], 64)
 
-	if want := ind.Fitness.TotalFitness; saved.Fitness != want {
-		t.Errorf("genome.json fitness = %v, want the published TotalFitness %v", saved.Fitness, want)
+	if want := ind.OutputRank(); saved.Fitness != want {
+		t.Errorf("genome.json fitness = %v, want the greedy-only mean %v (NOT the MCTS-mode 0.847)", saved.Fitness, want)
+	}
+	if saved.Fitness != 0.800 {
+		t.Errorf("fixture drift: greedy-only mean should be 0.800, got %v", saved.Fitness)
 	}
 	if diff := headerFit - saved.Fitness; diff > 0.0005 || diff < -0.0005 {
 		t.Errorf("report.md header %.3f != genome.json fitness %.6f", headerFit, saved.Fitness)
@@ -160,14 +165,14 @@ func TestSaveResultsWritesMetaJSON(t *testing.T) {
 	}
 }
 
-// TestReportShowsBothFitnessMeans (round 3 commit 5c): the published fitness
-// of a decile-granted genome is the MCTS-mode mean, which can exceed the
-// weighted sum of the displayed component metrics by a large margin (+0.177
-// measured on skill-0.00 r2 champions -- carried hazard 1 realized). For
-// transparency the report must show BOTH means and the gap explicitly.
+// TestReportShowsBothFitnessMeans (round 3 commit 5c, extended by Wave K
+// fixes 1+3): the report headline is the greedy-only mean; the MCTS-mode
+// mean is a separate provenance line that must print its sample count
+// (MctsCount), and the uplift is stated only when MctsCount >= 3.
 func TestReportShowsBothFitnessMeans(t *testing.T) {
 	dir := t.TempDir()
 	ind := publishedIndividual()
+	ind.MctsSum, ind.MctsCount = 2.541, 3 // MCTS mean 0.847 over n=3
 	if err := SaveResults(dir, []*evolution.Individual{ind}, evolution.Config{}, time.Second); err != nil {
 		t.Fatalf("SaveResults: %v", err)
 	}
@@ -179,12 +184,13 @@ func TestReportShowsBothFitnessMeans(t *testing.T) {
 	report := string(raw)
 
 	for _, want := range []string{
-		"0.847", // published / MCTS-mode mean
-		"0.800", // greedy-only mean
-		"+0.047", // the explicit gap
+		"Fitness 0.800", // headline = greedy-only mean
+		"0.847",         // MCTS-mode mean, separate line
+		"n=3",           // MctsCount is explicit
+		"+0.047",        // the explicit gap (n >= 3, so it may be stated)
 	} {
 		if !strings.Contains(report, want) {
-			t.Errorf("report.md missing %q (both means + gap must be explicit):\n%s", want, report)
+			t.Errorf("report.md missing %q (greedy headline + MCTS mean/count/gap must be explicit):\n%s", want, report)
 		}
 	}
 
@@ -201,5 +207,75 @@ func TestReportShowsBothFitnessMeans(t *testing.T) {
 	raw2, _ := os.ReadFile(filepath.Join(games2[0], "report.md"))
 	if strings.Contains(string(raw2), "MCTS-mode mean") {
 		t.Errorf("greedy-only report must not claim an MCTS-mode mean:\n%s", raw2)
+	}
+}
+
+// TestReportSuppressesUpliftBelowThreeMctsEvals (Wave K fix 3, the winner's
+// curse): the flagship-r3 headline 0.918 rested on ONE MCTS eval (a reviewer
+// reproduced 0.73-0.82 over fresh seeds). With fewer than 3 two-tier evals
+// the uplift line must be replaced by an explicit insufficient-samples note;
+// the MCTS-mode mean itself stays visible with its count.
+func TestReportSuppressesUpliftBelowThreeMctsEvals(t *testing.T) {
+	dir := t.TempDir()
+	ind := publishedIndividual() // MctsCount = 1, MCTS mean 0.847, greedy 0.800
+	if err := SaveResults(dir, []*evolution.Individual{ind}, evolution.Config{}, time.Second); err != nil {
+		t.Fatalf("SaveResults: %v", err)
+	}
+	games, _ := filepath.Glob(filepath.Join(dir, "games", "rank01_*"))
+	raw, _ := os.ReadFile(filepath.Join(games[0], "report.md"))
+	report := string(raw)
+
+	if !strings.Contains(report, "insufficient samples (n=1)") {
+		t.Errorf("report.md must declare insufficient samples at MctsCount=1:\n%s", report)
+	}
+	if strings.Contains(report, "+0.047") {
+		t.Errorf("report.md must NOT state an uplift at MctsCount=1:\n%s", report)
+	}
+	if !strings.Contains(report, "0.847") {
+		t.Errorf("the MCTS-mode mean itself stays visible (with its count):\n%s", report)
+	}
+	if !strings.Contains(report, "Fitness 0.800") {
+		t.Errorf("headline must be the greedy-only mean:\n%s", report)
+	}
+}
+
+// TestSummaryBestFitnessIsGreedyOnly (Wave K fix 1): summary.json's
+// best_fitness is the greedy-only best across the published games -- the
+// commensurable number -- with the MCTS-mode best in an explicit, separate
+// mcts_best field.
+func TestSummaryBestFitnessIsGreedyOnly(t *testing.T) {
+	dir := t.TempDir()
+
+	granted := publishedIndividual() // greedy 0.800, MCTS mean 0.847 (n=1)
+	ungranted := publishedIndividual()
+	ungranted.Genome.ID = "ungranted"
+	ungranted.MctsSum, ungranted.MctsCount = 0, 0
+	ungranted.EvalCount, ungranted.FitnessSum = 4, 3.28 // greedy mean 0.820
+	ungranted.Fitness.TotalFitness = 0.820
+
+	// Caller order deliberately has the MCTS-granted one first: best_fitness
+	// must still be the greedy-only maximum, not top[0]'s published value.
+	if err := SaveResults(dir, []*evolution.Individual{granted, ungranted}, evolution.Config{}, time.Second); err != nil {
+		t.Fatalf("SaveResults: %v", err)
+	}
+
+	raw, err := os.ReadFile(filepath.Join(dir, "summary.json"))
+	if err != nil {
+		t.Fatalf("reading summary.json: %v", err)
+	}
+	var summary map[string]any
+	if err := json.Unmarshal(raw, &summary); err != nil {
+		t.Fatalf("summary.json invalid: %v", err)
+	}
+
+	if got := summary["best_fitness"]; got != 0.820 {
+		t.Errorf("best_fitness = %v, want the greedy-only best 0.820", got)
+	}
+	mctsBest, ok := summary["mcts_best"]
+	if !ok {
+		t.Fatalf("summary.json must carry an explicit mcts_best field")
+	}
+	if mctsBest != 0.847 {
+		t.Errorf("mcts_best = %v, want 0.847", mctsBest)
 	}
 }

@@ -9,32 +9,43 @@ import (
 	"github.com/darwindeck/darwindeck/pkg/genome"
 )
 
-// GenerateIndividualReport produces the published per-genome report,
-// including the fitness provenance section (round 3 commit 5c): the
-// published fitness of a decile-granted genome is the MCTS-mode running
-// mean, which can exceed the weighted sum of the displayed (last-eval)
-// component metrics by a large margin -- the r2 flagship published +0.177
-// of silent uplift on skill-0.00 champions. Both means and the gap are
-// therefore explicit.
+// minMctsEvalsForUplift is the sample floor below which the report refuses
+// to state an MCTS uplift (Wave K fix 3): the flagship-r3 headline 0.918
+// rested on ONE two-tier eval, which a reviewer reproduced as 0.73-0.82 over
+// fresh seeds -- a textbook winner's curse. n >= 3 is not a significance
+// claim, just the minimum for the word "mean" to carry any information
+// beyond a single draw.
+const minMctsEvalsForUplift = 3
+
+// GenerateIndividualReport produces the published per-genome report. The
+// headline fitness is the GREEDY-ONLY running mean -- OutputRank, the
+// commensurable leaderboard key (Wave K fix 1) -- matching genome.json and
+// the leaderboard order. The provenance section (round 3 commit 5c,
+// retargeted here) reports the MCTS-mode mean separately with its sample
+// count, and states the uplift only at MctsCount >= minMctsEvalsForUplift.
 func GenerateIndividualReport(g *genome.Genome, ind *evolution.Individual) string {
-	report := GenerateReport(g, ind.Fitness)
+	headline := ind.Fitness
+	headline.TotalFitness = ind.OutputRank()
+	report := GenerateReport(g, headline)
 
 	var b strings.Builder
 	b.WriteString(report)
 	b.WriteString("**Fitness provenance:**\n")
+	b.WriteString(fmt.Sprintf("- Headline fitness %.3f is the greedy-only running mean (%d evals) -- the leaderboard ranking key for every published game\n",
+		ind.OutputRank(), ind.EvalCount))
 	if mctsMean, ok := ind.MCTSMean(); ok {
-		greedy := ind.GreedyMean()
-		b.WriteString(fmt.Sprintf("- Published fitness %.3f is the MCTS-mode mean (%d two-tier evals)\n",
+		b.WriteString(fmt.Sprintf("- MCTS-mode mean: %.3f (n=%d two-tier evals; reported separately, never ranked)\n",
 			mctsMean, ind.MctsCount))
-		b.WriteString(fmt.Sprintf("- Greedy-only mean: %.3f (%d evals -- the selection/decile ranking key)\n",
-			greedy, ind.EvalCount))
-		b.WriteString(fmt.Sprintf("- MCTS uplift: %+.3f (the second skill tier and fresh batches; large gaps on low-skill games are the knock-timing hazard -- see pkg/fitness)\n",
-			mctsMean-greedy))
+		if ind.MctsCount >= minMctsEvalsForUplift {
+			b.WriteString(fmt.Sprintf("- MCTS uplift: %+.3f (the second skill tier and fresh batches; large gaps on low-skill games are the knock-timing hazard -- see pkg/fitness)\n",
+				mctsMean-ind.GreedyMean()))
+		} else {
+			b.WriteString(fmt.Sprintf("- MCTS uplift: insufficient samples (n=%d)\n", ind.MctsCount))
+		}
 	} else {
-		b.WriteString(fmt.Sprintf("- Published fitness %.3f is the greedy-only mean (%d evals); no MCTS tier was granted\n",
-			ind.Fitness.TotalFitness, ind.EvalCount))
+		b.WriteString("- No MCTS tier was granted to this genome\n")
 	}
-	b.WriteString("- Component metrics above are last-evaluation values while the published fitness is a running mean over all evaluations: the weighted component sum will NOT reconcile exactly with the headline number\n\n")
+	b.WriteString("- Component metrics above are last-evaluation values while the headline fitness is a running mean over all evaluations: the weighted component sum will NOT reconcile exactly with the headline number\n\n")
 	return b.String()
 }
 
