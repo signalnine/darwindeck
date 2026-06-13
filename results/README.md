@@ -35,6 +35,12 @@ be reproduced (e.g. preserved evidence of pre-fix results) must set
 
 ## Bundles
 
+- `2026-06-12-flagship-r3/` -- the round-3 flagship (pop 2000, gen 200,
+  seed 42, -mcts-decile 0.02) exactly as the round-3 designer panel judged
+  it: 0 publishable / 19 borderline / 11 degenerate, the failed-review
+  loop's honest exit. `REVIEW.md` inside summarizes all three review rounds;
+  `meta.json` present (note `commit_dirty: true`). Preserved as evidence --
+  the reports predate the Wave K leaderboard/dedup fixes on purpose.
 - `pre-fix-flagship/` -- evidence of the 2026-04-12 flagship run
   (pop 2000, gen 200, best fitness 0.919) as published before the
   Apr-Jun 2026 fitness fixes. **Non-reproducible**; preserved as evidence of

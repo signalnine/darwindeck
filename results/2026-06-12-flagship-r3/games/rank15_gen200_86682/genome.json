@@ -1,0 +1,19 @@
+{
+  "id": "gen200_86682",
+  "generation": 200,
+  "skeleton": 1,
+  "fitness": 0.6951002302436127,
+  "shared_fitness": 0.7749675073966057,
+  "players": 2,
+  "hand_size": 10,
+  "trick_taking": {
+    "must_follow_suit": true,
+    "trick_scoring": 0,
+    "lead_restriction": 0,
+    "rounds_per_game": 9
+  },
+  "scoring": {
+    "trump_suit": 1
+  },
+  "trump_rule": 2
+}

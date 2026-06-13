@@ -1,0 +1,41 @@
+{
+  "id": "gen194_17966",
+  "generation": 194,
+  "skeleton": 0,
+  "fitness": 0.8744464208058357,
+  "shared_fitness": 0.46014033192485987,
+  "players": 2,
+  "hand_size": 12,
+  "shedding": {
+    "match_rule": 2,
+    "draw_penalty": 3
+  },
+  "special_cards": [
+    {
+      "type": 2,
+      "by_rank": 2
+    },
+    {
+      "type": 1,
+      "by_rank": 10
+    },
+    {
+      "type": 4,
+      "by_suit": 2
+    },
+    {
+      "type": 4,
+      "by_suit": 3
+    },
+    {
+      "type": 4,
+      "by_suit": 4
+    },
+    {
+      "type": 2,
+      "by_suit": 1
+    }
+  ],
+  "scoring": {},
+  "trump_rule": 0
+}

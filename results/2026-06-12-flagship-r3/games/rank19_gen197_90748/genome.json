@@ -1,0 +1,27 @@
+{
+  "id": "gen197_90748",
+  "generation": 197,
+  "skeleton": 1,
+  "fitness": 0.6867445887445889,
+  "shared_fitness": 0.34373861617704915,
+  "players": 3,
+  "hand_size": 7,
+  "trick_taking": {
+    "must_follow_suit": true,
+    "trick_scoring": 0,
+    "lead_restriction": 1,
+    "rounds_per_game": 11
+  },
+  "scoring": {
+    "card_points": [
+      {
+        "rank": 0,
+        "suit": 3,
+        "points": 1,
+        "event": 0
+      }
+    ],
+    "trump_suit": 2
+  },
+  "trump_rule": 2
+}
