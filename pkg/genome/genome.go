@@ -354,6 +354,22 @@ type Genome struct {
 	// masquerading as fitness.
 	SharedFitness float64 `json:"shared_fitness,omitempty"`
 
+	// VetoStable / StableEvals record the Wave M publication-integrity check
+	// (audit Task 28/29 follow-up). Production publishes a genome from a
+	// SINGLE evaluation, so a genome that fails its own degeneracy veto (or
+	// Tier-1 kill) on a minority of seeds can still land in the top-N -- the
+	// r4 rank02 shedding genome failed greedy_longest_run on 1/10 seeds yet
+	// published as rank 2. Before SaveResults writes the top-N, each genome is
+	// RE-EVALUATED at K distinct fresh seeds; VetoStable is true iff a majority
+	// of those re-evals stayed valid, and StableEvals is the literal "N/K"
+	// count. Unstable genomes are demoted below the stable ones in the
+	// published order. These fields appear only in PUBLISHED genome.json files;
+	// they are output-path metadata, not evolutionary state, and never feed
+	// selection or the metric stack (which is frozen). Empty/false when the
+	// stability check did not run (e.g. legacy bundles).
+	VetoStable  bool   `json:"veto_stable,omitempty"`
+	StableEvals string `json:"stable_evals,omitempty"`
+
 	// Shared parameters
 	Players  int `json:"players"`   // 2-6
 	HandSize int `json:"hand_size"` // 3-13

@@ -73,15 +73,23 @@ func SaveResults(
 		return fmt.Errorf("creating output dir: %w", err)
 	}
 
+	// Veto-stable publication (Wave M, audit Task 28/29 follow-up). Before the
+	// top-N is written, re-evaluate each genome at fresh seeds and reorder so
+	// every veto-stable game outranks every unstable one. This is output-path
+	// only: the input `top` order (the greedy-only leaderboard, Wave K) is
+	// preserved WITHIN each stability class, so a stable game never jumps a
+	// higher-fitness stable game -- only unstable games sink. See stability.go.
+	ranked, stabilities := reRankByStability(top, config.BaseSeed)
+
 	// Save summary
 	summary := RunSummary{
 		StartTime:      time.Now().Add(-elapsed).Format(time.RFC3339),
 		Duration:       elapsed.String(),
 		PopulationSize: config.PopulationSize,
 		Generations:    config.Generations,
-		TopGamesCount:  len(top),
+		TopGamesCount:  len(ranked),
 	}
-	for _, ind := range top {
+	for _, ind := range ranked {
 		if rank := ind.OutputRank(); rank > summary.BestFitness {
 			summary.BestFitness = rank
 		}
@@ -100,7 +108,7 @@ func SaveResults(
 	}
 
 	// Save each top genome
-	for i, ind := range top {
+	for i, ind := range ranked {
 		name := fmt.Sprintf("rank%02d_%s", i+1, sanitize(ind.Genome.ID))
 		gameDir := filepath.Join(gamesDir, name)
 		if err := os.MkdirAll(gameDir, 0755); err != nil {
@@ -120,6 +128,14 @@ func SaveResults(
 		published := ind.Genome.Clone()
 		published.Fitness = ind.OutputRank()
 		published.SharedFitness = ind.Fitness.SharedFitness
+		// Stamp the Wave M veto-stability verdict (stability.go). VetoStable +
+		// StableEvals tell a reviewer whether this published game survived
+		// re-evaluation on fresh seeds; an unstable game published as evidence
+		// (after demotion) carries "1/5"-style honesty rather than a silent
+		// single-eval claim.
+		st := stabilities[i]
+		published.VetoStable = st.Stable
+		published.StableEvals = st.Label()
 
 		// Genome JSON
 		if err := writeJSON(filepath.Join(gameDir, "genome.json"), published); err != nil {

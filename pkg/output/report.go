@@ -68,7 +68,18 @@ func GenerateReport(g *genome.Genome, m fitness.Metrics) string {
 	b.WriteString(fmt.Sprintf("- Interaction: %.2f\n", m.Interaction))
 	b.WriteString(fmt.Sprintf("- Skill gradient: %.2f\n", m.SkillGradient))
 	b.WriteString(fmt.Sprintf("- Session length: %.2f\n", m.SessionLength))
-	b.WriteString(fmt.Sprintf("- Generation: %d\n\n", g.Generation))
+	b.WriteString(fmt.Sprintf("- Generation: %d\n", g.Generation))
+	// Veto-stability (Wave M): published only when the stability check ran
+	// (StableEvals set). An unstable game is here as demoted evidence, not a
+	// recommendation -- say so plainly.
+	if g.StableEvals != "" {
+		if g.VetoStable {
+			b.WriteString(fmt.Sprintf("- Veto-stable: yes (%s fresh-seed re-evals valid)\n", g.StableEvals))
+		} else {
+			b.WriteString(fmt.Sprintf("- Veto-stable: NO -- only %s fresh-seed re-evals stayed valid; DEMOTED below stable games (this game fails its own degeneracy veto / Tier-1 on a majority of fresh seeds and should not be treated as a publishable result)\n", g.StableEvals))
+		}
+	}
+	b.WriteString("\n")
 
 	// What makes it interesting
 	b.WriteString("**What makes it interesting:**\n")
