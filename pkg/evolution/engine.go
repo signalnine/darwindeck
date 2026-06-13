@@ -567,6 +567,31 @@ func genomeHash(g *genome.Genome) string {
 	return string(b)
 }
 
+// outputHash is the OUTPUT-ranking dedup key (Wave K fix 2): genomeHash with
+// genes that are DEAD under the rulebook's own liveness rules zeroed out --
+// dead scoring borrows (genome.LiveBorrows), unread card_points blocks
+// (genome.LiveCardPoints), and special cards on non-shedding skeletons
+// (which no runner simulates; dd-24e). The flagship-r3 leaderboard's ranks
+// 1/2/3 were one game differing only in dead card_points genes: same rules,
+// same rulebook, three slots. Two genomes whose LIVE views match are the
+// same published game and must take one output slot.
+//
+// POPULATION dedup (enforceDiversity/dedupParent) deliberately keeps the
+// byte-level genomeHash: dead genes are still evolutionary material (a later
+// mutation can revive them), so the search may carry the variants -- only
+// publication collapses them.
+func outputHash(g *genome.Genome) string {
+	c := g.Clone()
+	c.Borrowed = g.LiveBorrows()
+	if !g.LiveCardPoints() {
+		c.Scoring.CardPoints = nil
+	}
+	if g.Skeleton != genome.Shedding {
+		c.SpecialCards = nil
+	}
+	return genomeHash(c)
+}
+
 func sortedBorrowed(in []genome.BorrowedMechanic) []genome.BorrowedMechanic {
 	if len(in) == 0 {
 		return nil
@@ -661,11 +686,12 @@ func (e *Engine) Run(progress func(gen int, best float64, avg float64)) {
 // TopN returns the top N genomes ensuring skeleton diversity.
 // Reserves slots per skeleton proportionally, then fills remaining with best overall.
 //
-// Byte-identical genomes are deduplicated by genomeHash (Task 28 round 2):
-// the flagship's published top 30 contained clone groups under different IDs
-// (ranks 2/3 identical, a 6-way group in 11-20). The population is sorted by
-// fitness first, so the kept member of each clone group is its best and the
-// freed slots flow to the next-best DISTINCT genomes.
+// Functionally identical genomes are deduplicated by outputHash (Task 28
+// round 2 caught byte-identical clones under different IDs; Wave K fix 2
+// extends the key to ignore DEAD genes after flagship-r3 published one game
+// as ranks 1/2/3 differing only in unread card_points). The population is
+// sorted by fitness first, so the kept member of each clone group is its
+// best and the freed slots flow to the next-best DISTINCT genomes.
 func (e *Engine) TopN(n int) []*Individual {
 	sort.Slice(e.Population, func(i, j int) bool {
 		return e.Population[i].Fitness.TotalFitness > e.Population[j].Fitness.TotalFitness
@@ -689,7 +715,7 @@ func (e *Engine) TopN(n int) []*Individual {
 		}
 		skel := ind.Genome.Skeleton
 		if skeletonCounts[skel] < perSkeleton {
-			if hash := genomeHash(ind.Genome); !seen[hash] {
+			if hash := outputHash(ind.Genome); !seen[hash] {
 				seen[hash] = true
 				result = append(result, ind)
 				used[i] = true
@@ -709,7 +735,7 @@ func (e *Engine) TopN(n int) []*Individual {
 		if used[i] || !ind.Valid || ind.Genome == nil {
 			continue
 		}
-		if hash := genomeHash(ind.Genome); !seen[hash] {
+		if hash := outputHash(ind.Genome); !seen[hash] {
 			seen[hash] = true
 			result = append(result, ind)
 		}
