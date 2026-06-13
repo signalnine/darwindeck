@@ -227,6 +227,84 @@ func TestSpecialCards(t *testing.T) {
 // TestDrawTwoSkipsVictim ensures SpecialDrawTwo not only inflicts cards
 // on the next player but also forces them to lose their turn (Uno-style),
 // matching the SpecialSkip behavior for consistency (dd-jey).
+// TestPlayableCountCountsWildDuplicates pins the round-4 FIX 1 statistic: the
+// shedding runner reports how many of the active player's hand cards legally
+// satisfy the match rule OR are wild, WITHOUT the alreadyInMoves dedup that
+// GenerateMoves applies. This is the per-card playable count the
+// dead_match_rule successor (per-turn playable share) needs -- LegalMoves
+// undercounts because the runner collapses equivalent wild plays.
+func TestPlayableCountCountsWildDuplicates(t *testing.T) {
+	g := &genome.Genome{
+		ID:       "test-playable-count",
+		Skeleton: genome.Shedding,
+		Players:  2,
+		HandSize: 5,
+		Shedding: &genome.SheddingParams{MatchRule: genome.MatchSuit, DrawPenalty: 1},
+		// All of suit Spades is wild.
+		SpecialCards: []genome.SpecialCard{
+			{Type: genome.SpecialWild, BySuit: uint8(sim.Spades) + 1},
+		},
+	}
+	runner := &Runner{}
+	// Top is Hearts-Three (MatchSuit -> only Hearts match the rule). Hand:
+	// two Hearts (match suit), two Spades (wild), one Clubs (neither). Under
+	// MatchSuit the two Hearts are playable by rule and the two Spades are
+	// playable by wild = 4 of 5 playable. GenerateMoves would emit those 4
+	// MovePlay moves too here (no dedup collision since cards differ), but the
+	// statistic must be the raw count regardless of dedup behaviour.
+	state := &sim.GameState{
+		NumPlayers: 2,
+		Active:     0,
+		Hands: [][]sim.Card{
+			{
+				{Suit: sim.Hearts, Rank: sim.Four},
+				{Suit: sim.Hearts, Rank: sim.Seven},
+				{Suit: sim.Spades, Rank: sim.Two},
+				{Suit: sim.Spades, Rank: sim.Nine},
+				{Suit: sim.Clubs, Rank: sim.King},
+			},
+			{{Suit: sim.Hearts, Rank: sim.Five}},
+		},
+		Deck:    sim.StandardDeck(),
+		Discard: []sim.Card{{Suit: sim.Hearts, Rank: sim.Three}},
+		TopCard: &sim.Card{Suit: sim.Hearts, Rank: sim.Three},
+	}
+	if got := runner.PlayableCount(state, g); got != 4 {
+		t.Fatalf("PlayableCount = %d, want 4 (2 suit matches + 2 wild)", got)
+	}
+
+	// Now make ALL four suits wild via a catch-all-by-union (one wild rule per
+	// suit): every card is playable, count == hand size.
+	gAllWild := &genome.Genome{
+		ID:       "test-all-wild",
+		Skeleton: genome.Shedding,
+		Players:  2,
+		HandSize: 5,
+		Shedding: &genome.SheddingParams{MatchRule: genome.MatchSuit, DrawPenalty: 1},
+		SpecialCards: []genome.SpecialCard{
+			{Type: genome.SpecialWild, BySuit: 1},
+			{Type: genome.SpecialWild, BySuit: 2},
+			{Type: genome.SpecialWild, BySuit: 3},
+			{Type: genome.SpecialWild, BySuit: 4},
+		},
+	}
+	if got := runner.PlayableCount(state, gAllWild); got != 5 {
+		t.Fatalf("all-wild PlayableCount = %d, want 5 (whole hand playable)", got)
+	}
+
+	// No top card (start of game): nothing to match; only wilds count. With no
+	// specials and no top, count is 0.
+	gPlain := &genome.Genome{
+		ID: "plain", Skeleton: genome.Shedding, Players: 2, HandSize: 5,
+		Shedding: &genome.SheddingParams{MatchRule: genome.MatchSuit, DrawPenalty: 1},
+	}
+	noTop := *state
+	noTop.TopCard = nil
+	if got := runner.PlayableCount(&noTop, gPlain); got != 0 {
+		t.Fatalf("no-top PlayableCount = %d, want 0", got)
+	}
+}
+
 func TestDrawTwoSkipsVictim(t *testing.T) {
 	g := &genome.Genome{
 		ID:       "test-drawtwo",

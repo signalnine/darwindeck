@@ -50,19 +50,27 @@ type calRow struct {
 // matching vetoStats below (audit Task 28 round 3: detector thresholds are
 // derived from these numbers measured on the classics, so the calibrate
 // command must print them per genome).
-var vetoStatNames = [7]string{"r_meanrun", "r_minseat", "r_churn", "r_allplay", "g_meanrun", "g_minseat", "g_timeout"}
+// vetoStatNames are the degeneracy-detector statistics in report order,
+// matching vetoStats below. Round 4 added two columns: r_playshare (the
+// per-card playable share behind the playable_share veto) and g_longest (the
+// per-game longest same-player run mean behind the longest_run monopoly veto,
+// measured on the greedy batch). r_ = random batch, g_ = greedy batch.
+var vetoStatNames = [9]string{"r_meanrun", "r_minseat", "r_churn", "r_allplay", "r_playshare", "g_meanrun", "g_minseat", "g_longest", "g_timeout"}
 
 // vetoStats extracts the detector statistics from one evaluation. The greedy
 // columns are only present when the greedy batch ran (greedyRan false on
-// random-batch vetoes and Tier 1 kills).
-func vetoStats(d fitness.DegeneracyStats) [7]float64 {
-	return [7]float64{
+// random-batch vetoes and Tier 1 kills). Indices 0-4 are random-batch
+// statistics; 5-8 are greedy-batch.
+func vetoStats(d fitness.DegeneracyStats) [9]float64 {
+	return [9]float64{
 		d.RandomMeanRun,
 		d.RandomMinSeatShare,
 		d.RandomDeltaShare,
 		d.RandomAllPlayable,
+		d.RandomPlayShare,
 		d.GreedyMeanRun,
 		d.GreedyMinSeatShare,
+		d.GreedyLongestRun,
 		d.GreedyTimeoutShare,
 	}
 }
@@ -75,8 +83,13 @@ type vetoRow struct {
 	players       int
 	randomSamples int
 	greedySamples int
-	means         [7]float64
+	means         [9]float64
 }
+
+// randomVetoCols is the number of leading vetoStats indices measured on the
+// random batch; the rest are greedy-batch statistics. Round 4 made it 5
+// (r_meanrun, r_minseat, r_churn, r_allplay, r_playshare).
+const randomVetoCols = 5
 
 // aggregateVetoRow averages each statistic over its available samples
 // (greedy columns only over evaluations whose greedy batch ran).
@@ -92,22 +105,22 @@ func aggregateVetoRow(id string, players int, stats []fitness.DegeneracyStats) v
 	row.greedySamples = len(greedy)
 	for _, d := range stats {
 		s := vetoStats(d)
-		for k := 0; k < 4; k++ {
+		for k := 0; k < randomVetoCols; k++ {
 			row.means[k] += s[k]
 		}
 	}
-	for k := 0; k < 4; k++ {
+	for k := 0; k < randomVetoCols; k++ {
 		if len(stats) > 0 {
 			row.means[k] /= float64(len(stats))
 		}
 	}
 	for _, d := range greedy {
 		s := vetoStats(d)
-		for k := 4; k < 7; k++ {
+		for k := randomVetoCols; k < len(s); k++ {
 			row.means[k] += s[k]
 		}
 	}
-	for k := 4; k < 7; k++ {
+	for k := randomVetoCols; k < len(row.means); k++ {
 		if len(greedy) > 0 {
 			row.means[k] /= float64(len(greedy))
 		}
@@ -124,7 +137,7 @@ func printVetoTable(w io.Writer, rows []vetoRow) {
 		fmt.Fprintf(w, " %-14s", name)
 	}
 	fmt.Fprintln(w)
-	fmt.Fprintln(w, strings.Repeat("-", 22+1+7+1+9+7*15))
+	fmt.Fprintln(w, strings.Repeat("-", 22+1+7+1+9+len(vetoStatNames)*15))
 	for _, r := range rows {
 		fmt.Fprintf(w, "%-22s %-7s %-9d", r.id,
 			fmt.Sprintf("%d/%d", r.randomSamples, r.greedySamples), r.players)
@@ -132,7 +145,7 @@ func printVetoTable(w io.Writer, rows []vetoRow) {
 		for k, name := range vetoStatNames {
 			cell := "n/a"
 			n := r.randomSamples
-			if k >= 4 {
+			if k >= randomVetoCols {
 				n = r.greedySamples
 			}
 			if n > 0 {

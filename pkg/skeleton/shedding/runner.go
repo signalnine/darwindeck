@@ -195,6 +195,41 @@ func (r *Runner) GenerateMoves(state *sim.GameState, g *genome.Genome) []sim.Mov
 	return moves
 }
 
+// PlayableCount reports how many of the active player's hand cards legally
+// satisfy the match rule against the discard top OR are wild (Task 28 round 4
+// FIX 1). It is the per-card playable count behind the per-turn playable-share
+// veto (pkg/fitness/degeneracy.go playable_share) -- the dead_match_rule
+// successor that catches a wild UNION covering most of the deck (the r3 rank01
+// champion: 3 of 4 suits wild = 39/52 cards playable on any card) which the
+// whole-hand-playable share misses at large hand sizes.
+//
+// Critical: this is NOT derived from GenerateMoves. GenerateMoves dedups
+// equivalent wild plays via alreadyInMoves, so its move count undercounts
+// playable wild duplicates; here every qualifying card is counted once. Pure
+// query -- it reads state and the genome and mutates nothing, so the batch
+// loop can call it at record time (implements sim.PlayableShareProber).
+func (r *Runner) PlayableCount(state *sim.GameState, g *genome.Genome) int {
+	hand := state.ActiveHand()
+	if len(hand) == 0 {
+		return 0
+	}
+	rule := genome.MatchEither
+	if g.Shedding != nil {
+		rule = g.Shedding.MatchRule
+	}
+	count := 0
+	for _, card := range hand {
+		if state.TopCard != nil && matchesTop(card, *state.TopCard, rule) {
+			count++
+			continue
+		}
+		if isWild(card, g.SpecialCards) {
+			count++
+		}
+	}
+	return count
+}
+
 // refillDeckFromDiscard moves all but the top discard card into the deck and
 // shuffles using state.RNG. Called when the deck has emptied so shedding
 // games can recover instead of stalling on an unreachable discard pile.

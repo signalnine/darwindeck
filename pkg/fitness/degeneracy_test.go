@@ -287,6 +287,93 @@ func TestGreedyDegeneracyTempoAndSeats(t *testing.T) {
 	}
 }
 
+// TestGreedyDegeneracyLongestRun (round 4 FIX 2): the LONGEST-run monopoly
+// detector catches the single decisive burst that meanConsecutiveRun averages
+// away. The r3 uninterruptible-chain champions held attack-card runs that
+// played out in ONE mega-turn (6-13 consecutive plays, opponent never acted)
+// while most other turns alternated, keeping the MEAN run ~1.4. The per-game
+// MAXIMUM run, averaged over the batch, sees the burst.
+func TestGreedyDegeneracyLongestRun(t *testing.T) {
+	g := &genome.Genome{Skeleton: genome.Shedding, Players: 2}
+
+	// Episodic monopoly: 30 alternating turns (run length 1) followed by one
+	// 8-move burst by player 0. Mean run ~1.4 (well under the 6.0 mean-run
+	// veto), but the per-game longest run is 8 -> longest_run fires.
+	episodic := make([]sim.TurnRecord, 0, 38)
+	for i := 0; i < 30; i++ {
+		episodic = append(episodic, sim.TurnRecord{Player: i % 2, LegalMoves: 3, Meaningful: true})
+	}
+	for i := 0; i < 8; i++ {
+		episodic = append(episodic, sim.TurnRecord{Player: 0, LegalMoves: 3, Meaningful: true})
+	}
+	if mr := meanConsecutiveRun(greedyBatch(episodic, 5, 0)); mr > degTempoMonopolyMeanRun {
+		t.Fatalf("setup invalid: mean run %.2f should be under the mean-run veto so only longest_run can fire", mr)
+	}
+	if reason := CheckGreedyDegeneracy(greedyBatch(episodic, 5, 0), g); reason != "greedy_longest_run" {
+		t.Fatalf("an 8-move burst per game must flag greedy_longest_run, got %q", reason)
+	}
+
+	// Rummy's structural draw-meld-discard cycle produces same-player runs of
+	// ~3-4. A batch of pure 4-run games must NOT trip the detector (gin/knock
+	// classics measure longest-run ~4.0; the threshold clears them).
+	rummyCycle := make([]sim.TurnRecord, 0, 40)
+	for cyc := 0; cyc < 10; cyc++ {
+		for i := 0; i < 4; i++ {
+			rummyCycle = append(rummyCycle, sim.TurnRecord{Player: cyc % 2, LegalMoves: 3, Meaningful: true})
+		}
+	}
+	gr := &genome.Genome{Skeleton: genome.Rummy, Players: 2}
+	if reason := CheckGreedyDegeneracy(greedyBatch(rummyCycle, 5, 0), gr); reason != "" {
+		t.Fatalf("rummy's structural 4-run cycle must pass longest_run, got %q", reason)
+	}
+
+	// A 5-run game is the boundary (threshold is strict-above 5.0): must pass.
+	five := make([]sim.TurnRecord, 0, 40)
+	for cyc := 0; cyc < 8; cyc++ {
+		for i := 0; i < 5; i++ {
+			five = append(five, sim.TurnRecord{Player: cyc % 2, LegalMoves: 3, Meaningful: true})
+		}
+	}
+	if reason := CheckGreedyDegeneracy(greedyBatch(five, 5, 0), gr); reason != "" {
+		t.Fatalf("a longest-run of exactly 5 must pass (strict-above threshold), got %q", reason)
+	}
+
+	// A 6-run game trips it.
+	six := make([]sim.TurnRecord, 0, 48)
+	for cyc := 0; cyc < 8; cyc++ {
+		for i := 0; i < 6; i++ {
+			six = append(six, sim.TurnRecord{Player: cyc % 2, LegalMoves: 3, Meaningful: true})
+		}
+	}
+	if reason := CheckGreedyDegeneracy(greedyBatch(six, 5, 0), gr); reason != "greedy_longest_run" {
+		t.Fatalf("a longest-run of 6 must flag greedy_longest_run, got %q", reason)
+	}
+}
+
+// TestMeanLongestRunStatistic pins the per-game-maximum aggregation: it is the
+// MEAN over games of each game's LONGEST same-player run, distinct from
+// meanConsecutiveRun (which averages ALL runs). The episodic batch is the
+// discriminating case.
+func TestMeanLongestRunStatistic(t *testing.T) {
+	// One game: 1,1,1 (three alternating) then a run of 4 by player 0.
+	turns := []sim.TurnRecord{
+		{Player: 0}, {Player: 1}, {Player: 0},
+		{Player: 1}, {Player: 1}, {Player: 1}, {Player: 1},
+	}
+	res := sim.BatchResult{GamesPlayed: 1, AllTurns: [][]sim.TurnRecord{turns}}
+	if got := meanLongestRun(res); got != 4 {
+		t.Fatalf("meanLongestRun = %.2f, want 4 (the single longest run)", got)
+	}
+	// meanConsecutiveRun on the same game: runs are 1,1,1,4 -> mean 1.75.
+	if mr := meanConsecutiveRun(res); mr >= 4 {
+		t.Fatalf("meanConsecutiveRun should average down to ~1.75, got %.2f (test setup wrong)", mr)
+	}
+	// Empty batch -> 0.
+	if got := meanLongestRun(sim.BatchResult{}); got != 0 {
+		t.Fatalf("empty batch meanLongestRun = %.2f, want 0", got)
+	}
+}
+
 // TestDegeneracyDeadMatchRule (round 3): the DYNAMIC twin of the Tier-0
 // catch-all rule. The r2 flagship's shedding champions carried a catch-all
 // wild; with that encoding statically rejected, the same semantics remain
@@ -329,6 +416,63 @@ func TestDegeneracyDeadMatchRule(t *testing.T) {
 	gt := &genome.Genome{Skeleton: genome.TrickTaking, Players: 2}
 	if reason := CheckDegeneracy(degBatch(mk(1)), gt); reason != "" {
 		t.Fatalf("dead_match_rule must be shedding-only, got %q", reason)
+	}
+}
+
+// TestDegeneracyPlayableShare (round 4 FIX 1): the PER-CARD playable share --
+// mean over shedding choice-turns of PlayableCount/HandSize -- catches a wild
+// UNION covering most of the deck that dead_match_rule misses. dead_match_rule
+// fires only when the WHOLE hand is playable at once (LegalMoves >= HandSize),
+// which at hand 13 almost never holds even when 75% of the deck is wild; the
+// per-card share sees that 75% directly. Threshold 0.45: classics measure
+// ~0.30, the wild-union champion ~0.62.
+func TestDegeneracyPlayableShare(t *testing.T) {
+	g := &genome.Genome{Skeleton: genome.Shedding, Players: 2}
+
+	// mk builds records where each HandSize-13 turn has `playable` of 13 cards
+	// playable. The whole hand is NEVER playable at once (playable <= 9), so
+	// dead_match_rule (LegalMoves >= HandSize) stays silent -- only the
+	// per-card share can fire.
+	mk := func(playable int) []sim.TurnRecord {
+		records := make([]sim.TurnRecord, 60)
+		for i := range records {
+			records[i] = sim.TurnRecord{
+				Player: i % 2, HandSize: 13, LegalMoves: 3, Meaningful: true,
+				PlayableCount: uint8(playable),
+			}
+		}
+		return records
+	}
+
+	// 9/13 = 0.69 playable per card -> flags playable_share (and NOT
+	// dead_match_rule, since LegalMoves 3 << HandSize 13).
+	if reason := CheckDegeneracy(degBatch(mk(9)), g); reason != "playable_share" {
+		t.Fatalf("9/13 per-card playable must flag playable_share, got %q", reason)
+	}
+	// 4/13 = 0.31 (classic-shedding level) -> passes.
+	if reason := CheckDegeneracy(degBatch(mk(4)), g); reason != "" {
+		t.Fatalf("4/13 per-card playable (classic level) must pass, got %q", reason)
+	}
+	// 5/13 = 0.385 -> passes (under 0.45).
+	if reason := CheckDegeneracy(degBatch(mk(5)), g); reason != "" {
+		t.Fatalf("5/13 per-card playable must pass (under threshold), got %q", reason)
+	}
+
+	// Trivial hands (HandSize < 2) are excluded from the share, like
+	// dead_match_rule -- a 1-card playable hand is vacuously all-playable.
+	tiny := make([]sim.TurnRecord, 40)
+	for i := range tiny {
+		tiny[i] = sim.TurnRecord{Player: i % 2, HandSize: 1, LegalMoves: 1, PlayableCount: 1, Meaningful: true}
+	}
+	if reason := CheckDegeneracy(degBatch(tiny), g); reason != "" {
+		t.Fatalf("1-card hands must not witness playable_share, got %q", reason)
+	}
+
+	// Non-shedding skeletons never carry a playable count (the field is 0) and
+	// the detector is shedding-only regardless.
+	gt := &genome.Genome{Skeleton: genome.TrickTaking, Players: 2}
+	if reason := CheckDegeneracy(degBatch(mk(9)), gt); reason == "playable_share" {
+		t.Fatalf("playable_share must be shedding-only, got %q", reason)
 	}
 }
 

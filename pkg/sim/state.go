@@ -99,6 +99,18 @@ type TurnRecord struct {
 	// dynamically dead (the wild-union encodings of the r2 flagship's
 	// shedding champions; see dead_match_rule in pkg/fitness/degeneracy.go).
 	HandSize uint8
+	// PlayableCount is the number of the acting player's hand cards that
+	// legally satisfy the shedding match rule OR are wild, capped at 255
+	// (Task 28 round 4 FIX 1). It is set ONLY for shedding skeletons, from the
+	// runner's PlayableShareProber (the runner owns the match predicate and
+	// counts wild duplicates that GenerateMoves dedups away). 0 on every
+	// non-shedding record and on shedding records where the prober is absent.
+	// Divided by HandSize it gives the per-turn playable share the
+	// playable_share veto means over choice-turns -- the per-card twin of
+	// dead_match_rule, which catches a wild UNION covering most of the deck
+	// (r3 rank01: 3 of 4 suits wild) that the whole-hand-playable share misses
+	// at large hand sizes.
+	PlayableCount uint8
 }
 
 // EventType identifies game events for logging and fitness analysis.

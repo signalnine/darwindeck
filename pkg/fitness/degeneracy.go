@@ -94,6 +94,27 @@ const (
 	// r2 rank03 lockout measures ~0.07x (locked seats act a handful of times
 	// per game), ~7x below it.
 	degSeatShareFraction = 0.5
+	// degPlayableShare (round 4 FIX 1): maximum mean PER-CARD playable share
+	// over shedding decision records (HandSize >= 2). For each such record the
+	// share is PlayableCount/HandSize -- the fraction of the acting player's
+	// hand that legally satisfies the match rule OR is wild, counted directly
+	// by the runner (PlayableShareProber) WITHOUT the alreadyInMoves dedup that
+	// collapses equivalent wild plays in LegalMoves. This is the per-card twin
+	// of dead_match_rule, which only fires when the WHOLE hand is playable at
+	// once (LegalMoves >= HandSize): a wild UNION covering most of the deck
+	// (r3 rank01: 3 of 4 suits wild = 39/52 cards) leaves the per-card share
+	// near 0.62 while the whole-hand share stays ~0.03-0.19 at hand 13, so the
+	// match rule is dead for 75% of the deck yet dead_match_rule never fires.
+	// Strict-above 0.45. Measured over CalibrationSeeds (calibrate
+	// r_playshare column): classic shedding tops out at mau-mau 0.298
+	// (crazy-eights 0.275, forced-shedding 0.225) -- the match rule binds, you
+	// must hold matching cards -- so 0.45 is 1.51x above the worst classic.
+	// The r3 wild-union champion (WildUnionShedding) measures ~0.62 = 1.38x
+	// above the threshold. The milder 2-suit judgment fixture
+	// (HeartEngine2SuitShedding, r3 rank04) measures ~0.44, just UNDER 0.45 --
+	// the threshold is set to spare it (it is "one fix from a real game" per
+	// the review); the longest-run veto is what catches that one.
+	degPlayableShare = 0.45
 	// degGreedyTimeoutShare (round 3): maximum share of greedy-batch games
 	// hitting the turn cap. The r2 rank01 class cycles to the 390-turn cap
 	// under GREEDY play while completing under random -- non-termination
@@ -109,6 +130,26 @@ const (
 	// detector encodes. Both now read pipeline-effective 0 on every
 	// calibration seed.
 	degGreedyTimeoutShare = 0.10
+	// degLongestRunMonopoly (round 4 FIX 2): maximum mean per-game LONGEST
+	// same-player run, measured on the GREEDY batch. meanConsecutiveRun
+	// averages ALL runs and so misses an EPISODIC monopoly -- a held
+	// attack-card chain that plays out in ONE mega-turn (the r3 uninterruptible
+	// champions: 6-13 consecutive plays in a single burst while the opponent
+	// never acts) on a game whose other turns alternate, keeping the mean run
+	// ~1.4. The per-game MAXIMUM run, averaged over the batch, catches that
+	// single decisive burst. Strict-above 5.0. Measured greedy-batch longest
+	// runs over CalibrationSeeds (calibrate g_longest column): rummy classics
+	// gin 4.07 / knock 3.94 (the structural draw-meld-discard cycle, the
+	// table's legitimate maximum), shedding/trick-taking classics 1.0-2.0 --
+	// so 5.0 clears the worst classic by 1.23x. The r3 runs-only-pair-meld
+	// champion measures ~5.84 and the milder 2-suit judgment fixture ~6.50,
+	// both above; the r3 wild-union champion measures ~4.84 (greedy averaging
+	// pulls its per-game max below 5.0) and is caught instead by the
+	// playable_share veto -- the two round-4 detectors share the shedding load.
+	// Run on the greedy batch (not random) because the chains are a
+	// skilled-play phenomenon: random play rarely assembles and fires a full
+	// attack chain, so the burst lives where the skill batch is.
+	degLongestRunMonopoly = 5.0
 )
 
 // DegeneracyThresholds returns the veto thresholds as a name -> value map for
@@ -123,7 +164,9 @@ func DegeneracyThresholds() map[string]float64 {
 		"seat_participation_min_fair_frac": degSeatShareFraction,
 		"draw_supply_churn_max_share":      degRummyChurnMax,
 		"dead_match_rule_max_share":        degDeadMatchRuleShare,
+		"playable_share_max_per_card":      degPlayableShare,
 		"greedy_timeout_max_share":         degGreedyTimeoutShare,
+		"longest_run_max_mean_per_game":    degLongestRunMonopoly,
 	}
 }
 
@@ -152,6 +195,9 @@ func CheckDegeneracy(result sim.BatchResult, g *genome.Genome) string {
 	if g.Skeleton == genome.Shedding && allPlayableShare(result) > degDeadMatchRuleShare {
 		return "dead_match_rule"
 	}
+	if g.Skeleton == genome.Shedding && playableShareMean(result) > degPlayableShare {
+		return "playable_share"
+	}
 	if g.Skeleton == genome.Rummy && optionDeltaShare(result) > degRummyChurnMax {
 		return "draw_supply_churn"
 	}
@@ -171,6 +217,9 @@ func CheckDegeneracy(result sim.BatchResult, g *genome.Genome) string {
 //	                             390-turn class; random Tier 1 cannot see it)
 //	greedy_tempo_monopoly     -- same threshold as the random batch
 //	greedy_seat_participation -- same threshold as the random batch
+//	greedy_longest_run        -- mean per-game LONGEST same-player run > 5.0
+//	                             (round 4 FIX 2): the episodic uninterruptible
+//	                             chain that meanConsecutiveRun averages away
 //
 // The agency floor and churn deliberately do NOT run here: meaningfulness
 // under a deterministic AI is not the density metric's semantics (one fixed
@@ -192,6 +241,9 @@ func CheckGreedyDegeneracy(result sim.BatchResult, g *genome.Genome) string {
 
 	if meanConsecutiveRun(result) > degTempoMonopolyMeanRun {
 		return "greedy_tempo_monopoly"
+	}
+	if meanLongestRun(result) > degLongestRunMonopoly {
+		return "greedy_longest_run"
 	}
 	if meanMinSeatShare(result, g.Players) < degSeatShareFraction/float64(g.Players) {
 		return "greedy_seat_participation"
@@ -227,6 +279,41 @@ func meanConsecutiveRun(result sim.BatchResult) float64 {
 		return 0
 	}
 	return float64(sum) / float64(runs)
+}
+
+// meanLongestRun returns the mean over games of each game's LONGEST maximal
+// consecutive same-player record run (round 4 FIX 2). It differs from
+// meanConsecutiveRun -- which averages ALL runs and so dilutes a single
+// decisive burst among many short runs -- by taking the per-game MAXIMUM
+// first, then averaging. That makes it sensitive to an episodic monopoly: a
+// game that alternates for 30 turns then fires one 8-move attack chain has
+// meanConsecutiveRun ~1.4 but meanLongestRun 8. Games without records are
+// skipped; an empty batch returns 0.
+func meanLongestRun(result sim.BatchResult) float64 {
+	games, sum := 0, 0
+	for _, turns := range result.AllTurns {
+		if len(turns) == 0 {
+			continue
+		}
+		best, cur, prev := 0, 0, -1
+		for _, tr := range turns {
+			if tr.Player == prev {
+				cur++
+			} else {
+				cur = 1
+				prev = tr.Player
+			}
+			if cur > best {
+				best = cur
+			}
+		}
+		sum += best
+		games++
+	}
+	if games == 0 {
+		return 0
+	}
+	return float64(sum) / float64(games)
 }
 
 // meanMinSeatShare returns the mean over games of the least-active seat's
@@ -291,6 +378,33 @@ func allPlayableShare(result sim.BatchResult) float64 {
 		return 0
 	}
 	return float64(all) / float64(total)
+}
+
+// playableShareMean returns the mean PER-CARD playable share over shedding
+// decision records (HandSize >= 2): for each such record, PlayableCount (cards
+// matching the rule OR wild, counted by the runner without the GenerateMoves
+// wild-dedup) divided by HandSize, averaged over records. Unlike
+// allPlayableShare -- which asks whether the WHOLE hand is playable at once --
+// this measures how much of the hand ignores the match rule on a typical turn,
+// so a wild union covering most of the deck registers even when no single hand
+// is entirely playable. Records with HandSize < 2 are excluded (a 1-card hand
+// is vacuously all-playable); an empty/non-shedding batch returns 0.
+func playableShareMean(result sim.BatchResult) float64 {
+	total := 0
+	var sum float64
+	for _, turns := range result.AllTurns {
+		for _, tr := range turns {
+			if tr.HandSize < 2 {
+				continue
+			}
+			total++
+			sum += float64(tr.PlayableCount) / float64(tr.HandSize)
+		}
+	}
+	if total == 0 {
+		return 0
+	}
+	return sum / float64(total)
 }
 
 // optionDeltaShare returns the fraction of all recorded moves carrying a

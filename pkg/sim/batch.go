@@ -64,6 +64,21 @@ type GenericRunner interface {
 	Progress(state *GameState, g *genome.Genome) []float64
 }
 
+// PlayableShareProber is an OPTIONAL interface a runner may implement to
+// report, for the active player at a decision point, how many hand cards
+// legally satisfy the skeleton's match rule OR are wild (Task 28 round 4
+// FIX 1). Only the shedding runner implements it; the batch loop type-asserts
+// it once and records the count in TurnRecord.PlayableCount when present.
+// It MUST be a pure query (the loop calls it on the live pre-move state).
+//
+// This exists because the per-card playable count cannot be recovered from
+// TurnRecord.LegalMoves: shedding GenerateMoves dedups equivalent wild plays
+// (alreadyInMoves), so its move count undercounts playable wild duplicates.
+// The runner owns the match predicate and counts every qualifying card.
+type PlayableShareProber interface {
+	PlayableCount(state *GameState, g *genome.Genome) int
+}
+
 // HookFunc is called after each move with the resulting events.
 type HookFunc func(state *GameState, g *genome.Genome, event Event)
 
@@ -277,6 +292,10 @@ func runSingleGame(g *genome.Genome, runner GenericRunner, ai AIPlayer, rng *ran
 	if mode == deltaModeShedding {
 		baseline = make([]int, state.NumPlayers)
 	}
+	// PlayableShareProber (Task 28 round 4 FIX 1): only the shedding runner
+	// implements it. Detected once -- the per-card playable count populates
+	// TurnRecord.PlayableCount at record time for the playable_share veto.
+	prober, _ := runner.(PlayableShareProber)
 	records := make([]TurnRecord, 0, 64)
 	leaders := make([]int8, 0, 64)
 	// Reused by the choice-impact probes so the hypothetical top-card swap
@@ -335,6 +354,14 @@ func runSingleGame(g *genome.Genome, runner GenericRunner, ai AIPlayer, rng *ran
 		move := ai.SelectMove(moves, state, rng)
 		mover := state.Active
 		moverHandSize := len(state.Hands[mover])
+
+		// Per-card playable count for the acting player, captured from the
+		// pre-move state (shedding only; 0 elsewhere). Counts wild duplicates
+		// GenerateMoves dedups away, so it cannot be derived from len(moves).
+		playableCount := 0
+		if prober != nil {
+			playableCount = prober.PlayableCount(state, g)
+		}
 
 		// Choice impact (Task 28 round 2): decide BEFORE the move applies
 		// whether this decision point was meaningful -- the probes below
@@ -449,12 +476,13 @@ func runSingleGame(g *genome.Genome, runner GenericRunner, ai AIPlayer, rng *ran
 		}
 
 		records = append(records, TurnRecord{
-			Player:      mover,
-			LegalMoves:  capLegalMoves(len(moves)),
-			OptionDelta: clampOptionDelta(delta),
-			Attack:      attack,
-			Meaningful:  meaningful,
-			HandSize:    capLegalMoves(moverHandSize),
+			Player:        mover,
+			LegalMoves:    capLegalMoves(len(moves)),
+			OptionDelta:   clampOptionDelta(delta),
+			Attack:        attack,
+			Meaningful:    meaningful,
+			HandSize:      capLegalMoves(moverHandSize),
+			PlayableCount: capLegalMoves(playableCount),
 		})
 
 		// Leader after this move: argmax of Progress, -1 on a tie at the
