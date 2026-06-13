@@ -42,6 +42,8 @@ func main() {
 		cmdPlaytest(os.Args[2:])
 	case "describe":
 		cmdDescribe(os.Args[2:])
+	case "judge":
+		cmdJudge(os.Args[2:])
 	case "version":
 		fmt.Printf("darwindeck %s (built %s)\n", Version, BuildTime)
 	case "help", "--help", "-h":
@@ -63,6 +65,7 @@ Commands:
   restamp     Re-evaluate a saved run's genomes for veto-stability and write a results bundle
   playtest    Play a game interactively against AI
   describe    Show details of a genome JSON file
+  judge       LLM-as-judge: emit blind dossiers / rank verdicts
   version     Print version info
   help        Show this message`)
 }
