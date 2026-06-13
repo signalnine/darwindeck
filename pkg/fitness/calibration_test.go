@@ -266,7 +266,9 @@ import (
 //     meanConsecutiveRun ~1.4. FIX 2 is a LONGEST-RUN veto (greedy_longest_run)
 //     on the GREEDY batch: mean per-game MAXIMUM run > 5.0. Measured g_longest:
 //     gin 4.07 / knock 3.94 (the structural rummy cycle, legitimate max), all
-//     other classics 1.0-2.0; runs-only-pair-meld ~5.84.
+//     other classics 1.0-2.0. PROSPECTIVE: catches no current gate fixture
+//     (wild-union dies to playable_share; runs-only-pair-meld is Tier-0
+//     rejected); its only specimen kill is the spared 2-suit judgment fixture.
 //  3. RUNS-ONLY TRIVIAL-MELD RUMMY (r3 rank23/rank27): meld_types=runs,
 //     min_meld_size 2, deadwood ~0 by turn 7. FIX 3 is a TIER-0 rule:
 //     min_meld_size 2 is a trivial-meld liveness violation for either meld

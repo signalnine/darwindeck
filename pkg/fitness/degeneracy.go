@@ -141,10 +141,19 @@ const (
 	// runs over CalibrationSeeds (calibrate g_longest column): rummy classics
 	// gin 4.07 / knock 3.94 (the structural draw-meld-discard cycle, the
 	// table's legitimate maximum), shedding/trick-taking classics 1.0-2.0 --
-	// so 5.0 clears the worst classic by 1.23x. The r3 runs-only-pair-meld
-	// champion measures ~5.84 and the milder 2-suit judgment fixture ~6.50,
-	// both above; the r3 wild-union champion measures ~4.84 (greedy averaging
-	// pulls its per-game max below 5.0) and is caught instead by the
+	// so 5.0 clears the worst classic by 1.23x (a thin margin but on a
+	// near-zero-variance statistic: gin's per-seed mean spans only 4.06-4.09,
+	// structurally pinned at <=5 by the draw-meld-discard cycle, so no seed
+	// crosses 5.0). PROSPECTIVE detector: among all known specimens it is the
+	// unique killer of nothing the gate needs -- the r3 wild-union champion
+	// measures ~4.84 (greedy averaging pulls its per-game max below 5.0) and
+	// dies to playable_share; the runs-only-pair-meld champion is now Tier-0
+	// rejected (min_meld<3) before it reaches here. longest_run exists to
+	// catch the FUTURE episodic-monopoly shape -- a held chain firing in one
+	// mega-turn on an otherwise-alternating game -- that meanConsecutiveRun,
+	// dead_match_rule, and playable_share all miss. Its only suite-visible
+	// action today is killing the 2-suit judgment fixture (~6.50), the
+	// "one fix from a real game" rank04 the project chose not to rescue.
 	// playable_share veto -- the two round-4 detectors share the shedding load.
 	// Run on the greedy batch (not random) because the chains are a
 	// skilled-play phenomenon: random play rarely assembles and fires a full
