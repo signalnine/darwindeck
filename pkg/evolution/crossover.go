@@ -61,7 +61,13 @@ func hybridCrossover(a, b *genome.Genome, rng *rand.Rand) *genome.Genome {
 				break
 			}
 		}
-		if !dup && len(child.Borrowed) < 3 {
+		// Coherence nudge (Wave 2 step 3): softly discourage stacking a SECOND
+		// banking-scoring borrow on a host that already has one -- the Wave-1
+		// "muddled scoring pile-up". Soft (half the time), never a veto, and
+		// only when a banking borrow already exists, so the headline single-
+		// borrow hybrids and legitimately complex two-borrow games both survive.
+		pileUp := isBankingMechanic(bm.Mechanic) && child.HasBankingBorrow() && rng.Float64() < 0.5
+		if !dup && !pileUp && len(child.Borrowed) < 3 {
 			child.Borrowed = append(child.Borrowed, bm)
 			wireHybridBorrow(child, bm, a, b)
 		}
@@ -116,6 +122,12 @@ func crossFamilyBorrow(host, other genome.SkeletonType, rng *rand.Rand) (genome.
 			{genome.MechTrickScoring, genome.TrickTaking},
 			// rummy with penalty-card avoidance scoring
 			{genome.MechAvoidance, genome.TrickTaking},
+			// rummy with shedding-style draw-penalty bursts (Wave 2 diversity
+			// fix): whitelisted (validBorrows[Rummy][MechDrawPenalty]) and
+			// hooked (applyDrawPenalty fires on face-card discards in the rummy
+			// runner -- the borrow the pre-Wave-2 cross table omitted, leaving
+			// rummy hosts unable to reach a whole novel direction).
+			{genome.MechDrawPenalty, genome.Shedding},
 		},
 	}
 
