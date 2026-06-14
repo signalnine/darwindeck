@@ -100,16 +100,21 @@ func TestEmitDossiersAreLeakFree(t *testing.T) {
 	writeSeed(t, in, "g1", seeds.GinRummy())
 	writeSeed(t, in, "g2", seeds.CrazyEights())
 	writeSeed(t, in, "g3", seeds.Whist())
+	writeSeed(t, in, "g4", seeds.BigTwo())
 
 	if _, err := Emit(in, out, nil); err != nil {
 		t.Fatalf("Emit: %v", err)
 	}
 
 	// Leak terms: game names + metric words. Suit/card words are allowed, so we
-	// check whole-word game names and metric tokens only.
+	// check whole-word game names and metric tokens only. The climbing-skeleton
+	// rulebook used to advertise "climbing game (Big Two / Tichu / President
+	// family)"; neutralizeRulebook now strips both the family names and the
+	// "climbing" keyword, so guard against a regression here.
 	leaks := []string{
 		"gin", "knock", "crazy", "mau", "whist", "spades-game",
 		"oh hell", "oh-hell", "wild union",
+		"big two", "tichu", "president", "climbing",
 		"fitness", "veto", "skill=", "coverage",
 	}
 	matches, err := filepath.Glob(filepath.Join(out, "G*.md"))
