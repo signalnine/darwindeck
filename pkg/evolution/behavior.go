@@ -81,3 +81,111 @@ func (b BehaviorDescriptor) Distance(other BehaviorDescriptor) float64 {
 	dy := b[1] - other[1]
 	return math.Sqrt(dx*dx + dy*dy)
 }
+
+// CounterfactualIntegration measures how much a genome's BORROWED mechanics
+// actually change its play, vs the same genome with the borrows removed -- a
+// paired (common-random-numbers) counterfactual. This is a MECHANIC-AWARE
+// novelty signal, unlike the 2-D behavior descriptor (a blind playstyle
+// shadow): a borrow that genuinely fuses families (changes the legal-move set
+// AND/OR the win condition) moves play a lot when removed; an inert or bolt-on
+// borrow moves it ~nothing. Returns 0 for a borrowless genome (no
+// counterfactual) and in [0,1] otherwise, the mean of three divergences
+// between the HOOKED and NEUTERED batches:
+//   - win-distribution total-variation (does the borrow change WHO wins?)
+//   - game-length shift (does it change tempo/length?)
+//   - option-flow shift (mean legal-move count -- does it change the MOVE set?
+//     a move-adding borrow like MechRunPlay raises this; a pure end-of-round
+//     scoring tally leaves it ~0, which is exactly the discrimination we want)
+//
+// `hooked` is the genome's own already-run descriptor batch (so the hooked arm
+// is not re-run); `seed` MUST be the seed used for `hooked` (paired CRN). The
+// neutered arm is the genome with Borrowed=nil at the same params -- because
+// the rounds machinery and ComboPlay are gated on the borrow, clearing Borrowed
+// removes both the move-change and the win-condition-change while holding hand
+// size etc. fixed, isolating the borrow's contribution. Guard: if either arm
+// cannot complete a game, the borrow may be load-bearing for non-brokenness, so
+// return 0 (degeneracy is the vetoes' job, not a novelty reward).
+func CounterfactualIntegration(g *genome.Genome, hooked sim.BatchResult, seed uint64) float64 {
+	if len(g.Borrowed) == 0 {
+		return 0
+	}
+	runner := fitness.GetRunner(g)
+	if runner == nil {
+		return 0
+	}
+	neut := g.Clone()
+	neut.Borrowed = nil
+	neutered := sim.RunBatch(neut, runner, &sim.RandomAI{}, behaviorBatchGames, seed, mechanic.HooksFor(neut)...)
+	if hooked.Completions == 0 || neutered.Completions == 0 {
+		return 0
+	}
+	cid := (winDistTV(hooked, neutered) + lengthShift(hooked, neutered) + optionFlowShift(hooked, neutered)) / 3.0
+	if cid > 1 {
+		cid = 1
+	}
+	return cid
+}
+
+// winDistTV is the total-variation distance between the two batches' normalized
+// win distributions (in [0,1]).
+func winDistTV(a, b sim.BatchResult) float64 {
+	n := len(a.WinCounts)
+	if len(b.WinCounts) < n {
+		n = len(b.WinCounts)
+	}
+	ta, tb := 0, 0
+	for i := 0; i < n; i++ {
+		ta += a.WinCounts[i]
+		tb += b.WinCounts[i]
+	}
+	if ta == 0 || tb == 0 {
+		return 0
+	}
+	tv := 0.0
+	for i := 0; i < n; i++ {
+		tv += math.Abs(float64(a.WinCounts[i])/float64(ta) - float64(b.WinCounts[i])/float64(tb))
+	}
+	return tv / 2
+}
+
+// lengthShift is the normalized absolute change in average game length ([0,1]).
+func lengthShift(a, b sim.BatchResult) float64 {
+	m := math.Max(a.AvgTurns, b.AvgTurns)
+	if m < 1 {
+		return 0
+	}
+	d := math.Abs(a.AvgTurns-b.AvgTurns) / m
+	if d > 1 {
+		d = 1
+	}
+	return d
+}
+
+// optionFlowShift is the normalized change in the mean per-turn legal-move
+// count ([0,1]) -- the cheap proxy for "the borrow changes the move set".
+func optionFlowShift(a, b sim.BatchResult) float64 {
+	la, lb := meanLegalMoves(a), meanLegalMoves(b)
+	m := math.Max(la, lb)
+	if m < 1 {
+		return 0
+	}
+	d := math.Abs(la-lb) / m
+	if d > 1 {
+		d = 1
+	}
+	return d
+}
+
+func meanLegalMoves(r sim.BatchResult) float64 {
+	sum, cnt := 0.0, 0
+	for _, game := range r.AllTurns {
+		for _, t := range game {
+			sum += float64(t.LegalMoves)
+			cnt++
+		}
+	}
+	if cnt == 0 {
+		return 0
+	}
+	return sum / float64(cnt)
+}
