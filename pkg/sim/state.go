@@ -196,6 +196,14 @@ type GameState struct {
 	TrumpSuit    int    // Trump suit (0-3), -1 = none, -2 = pending
 	TrickBroken  bool   // Has trump been played off-suit?
 
+	// Climbing-specific. The climbing runner reuses the trick fields for the
+	// "current combination" (TrickCards = the combination on the table to beat,
+	// TrickLeader = the player who played it). PassCount counts how many players
+	// have passed in succession since the current combination was played; when
+	// it reaches NumPlayers-1 every other player has passed, so the leader wins
+	// the round and the table clears (handled in Upkeep).
+	PassCount int
+
 	// Rummy-specific
 	Melds     [][]Card // All melds on the table
 	MeldOwner []int    // Owner of each meld

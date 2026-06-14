@@ -401,6 +401,16 @@ func TestSheddingMultiRoundPredicate(t *testing.T) {
 			g.Borrowed = []BorrowedMechanic{{Source: TrickTaking, Mechanic: MechAvoidance}}
 			g.Scoring.CardPoints = []CardScoring{{Suit: 3, Points: 1}}
 		}, true},
+		// Cross-skeleton hybrid (novelty evolution): MechTrickScoring banks per
+		// round via applyTrickScoring, so it activates the banked-score rounds
+		// machinery exactly like the scoring borrows.
+		{"trick scoring, 3 rounds", func(g *Genome) {
+			g.Borrowed = []BorrowedMechanic{{Source: TrickTaking, Mechanic: MechTrickScoring}}
+		}, true},
+		{"trick scoring, 1 round", func(g *Genome) {
+			g.Shedding.RoundsPerGame = 1
+			g.Borrowed = []BorrowedMechanic{{Source: TrickTaking, Mechanic: MechTrickScoring}}
+		}, false},
 	}
 	for _, tc := range cases {
 		g := sheddingGenomeWithRounds(3)

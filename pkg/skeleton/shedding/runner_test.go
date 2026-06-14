@@ -1433,6 +1433,87 @@ func multiRoundAvoidanceGenome() *genome.Genome {
 	}
 }
 
+// multiRoundTrickScoringGenome: shedding host, trick-taking MechTrickScoring
+// borrow, 3 rounds -- the headline cross-skeleton hybrid (novelty evolution):
+// a shed-to-win game scored by tricks. Each shed card is a "trick"; the best
+// shedder of each round banks a capture bonus.
+func multiRoundTrickScoringGenome() *genome.Genome {
+	return &genome.Genome{
+		ID:       "shedding-trickscoring-3rounds",
+		Skeleton: genome.Shedding,
+		Players:  3,
+		HandSize: 7,
+		Shedding: &genome.SheddingParams{
+			MatchRule:     genome.MatchEither,
+			DrawPenalty:   1,
+			RoundsPerGame: 3,
+		},
+		Borrowed: []genome.BorrowedMechanic{
+			{Source: genome.TrickTaking, Mechanic: genome.MechTrickScoring},
+		},
+	}
+}
+
+// TestTrickScoredSheddingBanksAndDeterminesWinner (novelty evolution): the
+// shed-to-win-by-tricks hybrid plays exactly 3 banked rounds, the
+// applyTrickScoring hook banks a nonzero capture bonus from the per-player
+// shed-card tableau, and the winner is the highest banked total -- the borrow
+// DETERMINES the outcome, it does not merely mutate state. Also pins the
+// 52-card conservation invariant across rounds (the tableau must be reclaimed
+// at redeal).
+func TestTrickScoredSheddingBanksAndDeterminesWinner(t *testing.T) {
+	g := multiRoundTrickScoringGenome()
+	if errs := genome.Validate(g); len(errs) > 0 {
+		t.Fatalf("genome should be valid: %v", errs)
+	}
+	if !g.SheddingMultiRound() {
+		t.Fatal("trick-scoring + 3 rounds must activate multi-round play")
+	}
+
+	completed, scored := 0, 0
+	for seed := uint64(0); seed < 30; seed++ {
+		state, winner := runMultiRoundGame(t, g, seed)
+		if winner < 0 {
+			continue
+		}
+		completed++
+
+		// Card-conservation invariant: the canonical card locations (deck +
+		// discard + hands) must hold the full 52-card deck at game end. The
+		// per-player shed tableau is a TALLY that aliases discard cards, so it
+		// is deliberately excluded from this count -- if redealRound wrongly
+		// appended it to the deck, cards would duplicate and this would exceed
+		// 52.
+		total := len(state.Deck) + len(state.Discard)
+		for i := range state.Hands {
+			total += len(state.Hands[i])
+		}
+		if total != 52 {
+			t.Errorf("seed %d: %d canonical cards accounted for, want 52 (card duplication?)", seed, total)
+		}
+
+		rounds, _ := countRoundEnds(state.Events)
+		if rounds != 3 {
+			t.Errorf("seed %d: %d EventRoundEnd events, want 3 (one per round)", seed, rounds)
+		}
+		if state.Scores[winner] != state.Scores[argmaxScores(state.Scores)] {
+			t.Errorf("seed %d: winner %d (Scores=%v) is not a banked-total maximizer", seed, winner, state.Scores)
+		}
+		for _, s := range state.Scores {
+			if s != 0 {
+				scored++
+				break
+			}
+		}
+	}
+	if completed == 0 {
+		t.Fatal("no seed completed a trick-scored shedding game")
+	}
+	if scored == 0 {
+		t.Error("no completed game banked a nonzero score: MechTrickScoring never affected the outcome on a shedding host")
+	}
+}
+
 // scoringHookFuncs adapts mechanic.BuildHooks to sim.HookFunc with the same
 // event-type mapping fitness.buildHookFuncs uses (HookEndOfRound and
 // HookScoring both fire on EventRoundEnd).

@@ -7,9 +7,20 @@ import (
 	"github.com/darwindeck/darwindeck/pkg/genome"
 )
 
-// Mutate applies random mutations to a genome copy.
-// Multiple mutations can fire independently.
+// Mutate applies random mutations to a genome copy with cross-skeleton borrows
+// OFF (the historical default). Preserved as the signature every existing
+// caller and test uses; delegates to MutateWith(..., false).
 func Mutate(g *genome.Genome, rng *rand.Rand, allSeeds []*genome.Genome) *genome.Genome {
+	return MutateWith(g, rng, allSeeds, false)
+}
+
+// MutateWith applies random mutations to a genome copy. When crossSkeleton is
+// true, addBorrowedMechanic may also add the highest-novelty cross-family
+// ACTIVE borrows (shedding -> MechTrickScoring, trick-taking -> MechAvoidance),
+// so novelty is reachable via mutation and not only via crossover (novelty
+// evolution). All other mutation behavior is identical.
+// Multiple mutations can fire independently.
+func MutateWith(g *genome.Genome, rng *rand.Rand, allSeeds []*genome.Genome, crossSkeleton bool) *genome.Genome {
 	child := cloneGenome(g)
 	child.ID = fmt.Sprintf("gen%d_%d", child.Generation+1, rng.IntN(100000))
 	child.Generation++
@@ -45,7 +56,7 @@ func Mutate(g *genome.Genome, rng *rand.Rand, allSeeds []*genome.Genome) *genome
 		removeSpecialCard(child, rng)
 	}
 	if rng.Float64() < 0.05 {
-		addBorrowedMechanic(child, rng)
+		addBorrowedMechanic(child, rng, crossSkeleton)
 	}
 	if rng.Float64() < 0.05 {
 		removeBorrowedMechanic(child, rng)
@@ -112,15 +123,45 @@ func tweakParameter(g *genome.Genome, rng *rand.Rand) {
 				g.Rummy.KnockThreshold = clampInt(g.Rummy.KnockThreshold+rng.IntN(5)-2, 0, 30)
 			}
 		}
+	case genome.Climbing:
+		if g.Climbing != nil {
+			// MinRunLen is the only int param. Keep it in the valid 3-5 band so
+			// a later AllowRuns flip lands on a length the runner accepts (the
+			// run/single boundary). The clamp also normalizes the legacy 0
+			// "unset" encoding to 3.
+			g.Climbing.MinRunLen = clampInt(g.Climbing.MinRunLen+rng.IntN(3)-1, 3, 5)
+		}
 	}
 }
 
 // flipBool toggles a boolean skeleton parameter. Shedding and rummy no longer
 // expose any runner-consumed bool (CanStack/PlayMultiple/CanLayOff were inert
-// and removed -- dd-027), so only trick-taking's MustFollowSuit remains.
+// and removed -- dd-027), so trick-taking's MustFollowSuit and climbing's
+// combination toggles (AllowPairs/AllowTriples/AllowRuns) are the only bools.
 func flipBool(g *genome.Genome, rng *rand.Rand) {
-	if g.Skeleton == genome.TrickTaking && g.TrickTaking != nil {
-		g.TrickTaking.MustFollowSuit = !g.TrickTaking.MustFollowSuit
+	switch g.Skeleton {
+	case genome.TrickTaking:
+		if g.TrickTaking != nil {
+			g.TrickTaking.MustFollowSuit = !g.TrickTaking.MustFollowSuit
+		}
+	case genome.Climbing:
+		if g.Climbing != nil {
+			// Flip one combination-type toggle. Singles are always legal (the
+			// playability floor), so toggling pairs/triples/runs off can never
+			// make the game unplayable. When AllowRuns is turned ON, ensure
+			// MinRunLen is a valid length so the runner produces runs.
+			switch rng.IntN(3) {
+			case 0:
+				g.Climbing.AllowPairs = !g.Climbing.AllowPairs
+			case 1:
+				g.Climbing.AllowTriples = !g.Climbing.AllowTriples
+			case 2:
+				g.Climbing.AllowRuns = !g.Climbing.AllowRuns
+				if g.Climbing.AllowRuns && (g.Climbing.MinRunLen < 3 || g.Climbing.MinRunLen > 5) {
+					g.Climbing.MinRunLen = 3
+				}
+			}
+		}
 	}
 }
 
@@ -226,7 +267,7 @@ func removeSpecialCard(g *genome.Genome, rng *rand.Rand) {
 	g.SpecialCards = append(g.SpecialCards[:idx], g.SpecialCards[idx+1:]...)
 }
 
-func addBorrowedMechanic(g *genome.Genome, rng *rand.Rand) {
+func addBorrowedMechanic(g *genome.Genome, rng *rand.Rand, crossSkeleton bool) {
 	if len(g.Borrowed) >= 3 {
 		return // Cap at 3 borrowed mechanics
 	}
@@ -242,6 +283,13 @@ func addBorrowedMechanic(g *genome.Genome, rng *rand.Rand) {
 			{Source: genome.Rummy, Mechanic: genome.MechMeldBonus},
 			{Source: genome.TrickTaking, Mechanic: genome.MechAvoidance},
 		}
+		if crossSkeleton {
+			// Novelty evolution: shed-to-win game scored by tricks. Whitelisted
+			// + hooked (applyTrickScoring) + outcome-affecting (wired through
+			// multi-round banking below).
+			candidates = append(candidates,
+				genome.BorrowedMechanic{Source: genome.TrickTaking, Mechanic: genome.MechTrickScoring})
+		}
 	case genome.TrickTaking:
 		// MechPlayMultiple dropped: tricktaking move-gen only ever
 		// produces single-card plays (see dd-lnh).
@@ -250,11 +298,37 @@ func addBorrowedMechanic(g *genome.Genome, rng *rand.Rand) {
 		candidates = []genome.BorrowedMechanic{
 			{Source: genome.Rummy, Mechanic: genome.MechMeldBonus},
 		}
+		if crossSkeleton {
+			// Novelty evolution: trick-taker with cross-family penalty-card
+			// scoring (applyAvoidance reads tableau captures; findWinner reads
+			// state.Scores). Sourced from Shedding to record the cross-family
+			// provenance (Avoidance's semantic home is trick-taking == host).
+			candidates = append(candidates,
+				genome.BorrowedMechanic{Source: genome.Shedding, Mechanic: genome.MechAvoidance})
+		}
 	case genome.Rummy:
+		// MechTrickScoring is intentionally NOT a rummy candidate (Wave-3):
+		// rummy "captures" are laid-down melds, which random play almost never
+		// forms before knock/gin, so applyTrickScoring fires too rarely to ever
+		// decide the winner -- a vestigial tally. It stays whitelisted in
+		// validBorrows (a genome already carrying it is valid), but the engine no
+		// longer generates the dead combination. The avoidance and draw-penalty
+		// borrows DO get teeth (giveBorrowTeeth: deadwood-scale penalty + raised
+		// knock for avoidance; a live draw pile + bigger penalty for draw).
 		candidates = []genome.BorrowedMechanic{
-			{Source: genome.TrickTaking, Mechanic: genome.MechTrickScoring},
 			{Source: genome.Shedding, Mechanic: genome.MechDrawPenalty},
 			{Source: genome.TrickTaking, Mechanic: genome.MechAvoidance},
+		}
+	case genome.Climbing:
+		// Climbing's only whitelisted borrow is MechDrawPenalty (the one hook
+		// that fires AND affects climbing's hand-based winner -- it grows a hand
+		// on face-card plays, slowing that player's race to empty). The banking
+		// scoring borrows are NOT whitelisted on climbing (CheckEnd never reads
+		// state.Scores), so they are not candidates here either. No coherence
+		// coupling is needed: MechDrawPenalty acts directly and reads no
+		// CardPoints / rounds machinery.
+		candidates = []genome.BorrowedMechanic{
+			{Source: genome.Shedding, Mechanic: genome.MechDrawPenalty},
 		}
 	}
 
@@ -270,26 +344,43 @@ func addBorrowedMechanic(g *genome.Genome, rng *rand.Rand) {
 		}
 	}
 
+	// Coherence nudge (Wave 2 step 3): softly discourage the "muddled scoring
+	// pile-up" that dominated Wave-1 hybrids -- two or more borrows that all
+	// bank into state.Scores (MeldBonus / Avoidance / TrickScoring), so the
+	// game's score is an opaque sum of overlapping bonuses. This is a SOFT
+	// discouragement, not a veto: when the host already carries a banking
+	// borrow and this pick would add a SECOND one, drop it half the time. The
+	// first scoring borrow is never touched, and a complex two-banking game is
+	// still reachable ~50% of the time, so legitimately rich games are not
+	// killed. NOT a hard veto and NOT in the degeneracy gate.
+	if isBankingMechanic(pick.Mechanic) && g.HasBankingBorrow() && rng.Float64() < 0.5 {
+		return
+	}
+
 	g.Borrowed = append(g.Borrowed, pick)
 
-	// Coherent-mutation coupling (round 3 commit 6b): a mechanic's
-	// supporting infrastructure lands in the same mutation.
-	//   - A scoring borrow on shedding banks Scores at ROUND end; with
-	//     RoundsPerGame < 2 nothing ever reads them (the game ends at the
-	//     first empty hand) -- the r2 rank05 inert combination. Force
-	//     multi-round play.
-	//   - MechAvoidance's hook no-ops without CardPoints; seed a default
-	//     rule (the changeEnum convention: Hearts worth 1 penalty point).
-	if g.Skeleton == genome.Shedding && g.Shedding != nil &&
-		(pick.Mechanic == genome.MechMeldBonus || pick.Mechanic == genome.MechAvoidance) &&
-		g.Shedding.RoundsPerGame < 2 {
-		g.Shedding.RoundsPerGame = 2
+	// Coherent-mutation coupling (round 3 commit 6b), now unified into the
+	// Wave-3 teeth wiring: a mechanic's supporting infrastructure lands in the
+	// same mutation AND is made outcome-significant by construction. A banking
+	// borrow on shedding is forced multi-round (so the banked scores get a
+	// winner signal); an avoidance borrow gets a MEANINGFUL penalty set (a full
+	// penalty suit, not a single token card) plus avoidance-mode wiring on a
+	// trick host; a draw-penalty borrow on climbing gets a live draw pile so its
+	// hook can fire. giveBorrowTeeth is the single source of this wiring, shared
+	// verbatim with the cross-skeleton crossover path (wireHybridBorrow).
+	giveBorrowTeeth(g, pick)
+}
+
+// isBankingMechanic reports whether a borrowed mechanic writes to state.Scores
+// (the banking-scoring family: MeldBonus, Avoidance, TrickScoring). Mirrors
+// genome.HasBankingBorrow's membership test; used by the coherence nudge to
+// detect a would-be second scoring pile-up.
+func isBankingMechanic(m genome.MechanicType) bool {
+	switch m {
+	case genome.MechMeldBonus, genome.MechAvoidance, genome.MechTrickScoring:
+		return true
 	}
-	if pick.Mechanic == genome.MechAvoidance && len(g.Scoring.CardPoints) == 0 {
-		g.Scoring.CardPoints = []genome.CardScoring{
-			{Suit: uint8(3), Points: 1}, // Hearts carry 1 penalty point
-		}
-	}
+	return false
 }
 
 func removeBorrowedMechanic(g *genome.Genome, rng *rand.Rand) {

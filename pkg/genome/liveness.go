@@ -14,21 +14,23 @@ package genome
 // commit 6b; the r2 rank05 advertised a meld-bonus borrow that was inert at
 // rounds_per_game 1):
 //
-//   - SCORING borrows (MechMeldBonus, MechAvoidance) bank state.Scores at
-//     round end. On a SINGLE-round shedding host nothing ever reads those
-//     scores (the game ends at the first empty hand), so they are live only
-//     when SheddingMultiRound() -- the same predicate the runner uses.
-//     Trick-taking and rummy hosts read Scores in CheckEnd, so they are live
-//     there at any round count.
+//   - BANKING borrows (MechMeldBonus, MechAvoidance, MechTrickScoring) bank
+//     state.Scores at round end. On a SINGLE-round shedding host nothing ever
+//     reads those scores (the game ends at the first empty hand), so they are
+//     live only when SheddingMultiRound() -- the same predicate the runner
+//     uses. Trick-taking and rummy hosts read Scores in CheckEnd, so they are
+//     live there at any round count. MechTrickScoring joined this set when the
+//     shed-to-win-by-tricks hybrid was enabled (novelty evolution): its
+//     applyTrickScoring hook also banks per round and is inert on a
+//     single-round shedding host.
 //   - MechAvoidance additionally requires non-empty CardPoints (the hook
 //     no-ops without them).
-//   - Everything else whitelisted (MechTrickScoring, MechDrawPenalty) acts
-//     directly and is always live.
+//   - MechDrawPenalty acts directly (appends cards) and is always live.
 func (g *Genome) LiveBorrows() []BorrowedMechanic {
 	var live []BorrowedMechanic
 	for _, bm := range g.Borrowed {
 		switch bm.Mechanic {
-		case MechMeldBonus, MechAvoidance:
+		case MechMeldBonus, MechAvoidance, MechTrickScoring:
 			if g.Skeleton == Shedding && !g.SheddingMultiRound() {
 				continue
 			}

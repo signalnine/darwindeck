@@ -24,6 +24,8 @@ func GenerateRulebook(g *genome.Genome) string {
 		writeTrickTakingRules(&b, g)
 	case genome.Rummy:
 		writeRummyRules(&b, g)
+	case genome.Climbing:
+		writeClimbingRules(&b, g)
 	}
 
 	// Special cards are only simulated by the shedding runner, so only render
@@ -202,6 +204,45 @@ func writeRummyRules(b *strings.Builder, g *genome.Genome) {
 
 	b.WriteString("### Winning\n\n")
 	b.WriteString("The player with the lowest deadwood when someone knocks or goes gin wins the round.\n\n")
+}
+
+func writeClimbingRules(b *strings.Builder, g *genome.Genome) {
+	b.WriteString("## How to Play\n\n")
+	b.WriteString("This is a **climbing game** (Big Two / Tichu / President family) — the goal is to be the first player to empty your hand.\n\n")
+
+	b.WriteString("### Setup\n\n")
+	b.WriteString(fmt.Sprintf("Deal %d cards to each player. The first player leads.\n\n", g.HandSize))
+
+	b.WriteString("### On Your Turn\n\n")
+	b.WriteString("There is a **current combination** on the table that must be beaten. On your turn you either:\n\n")
+	b.WriteString("- Play a combination of the **same type** as the current one but of **strictly higher rank**, or\n")
+	b.WriteString("- **Pass**.\n\n")
+	b.WriteString("When you lead (the table is clear) you may play **any** valid combination.\n\n")
+
+	b.WriteString("### Combinations\n\n")
+	b.WriteString("- **Single:** one card (always allowed)\n")
+	if g.Climbing != nil {
+		if g.Climbing.AllowPairs {
+			b.WriteString("- **Pair:** two cards of the same rank\n")
+		}
+		if g.Climbing.AllowTriples {
+			b.WriteString("- **Triple:** three cards of the same rank\n")
+		}
+		if g.Climbing.AllowRuns {
+			minLen := g.Climbing.MinRunLen
+			if minLen < 3 {
+				minLen = 3
+			}
+			b.WriteString(fmt.Sprintf("- **Run:** %d or more cards of consecutive rank\n", minLen))
+		}
+	}
+	b.WriteString("\n")
+
+	b.WriteString("### Clearing the Table\n\n")
+	b.WriteString("When every other player passes in succession, the player who played the current combination wins the round, the table clears, and that player leads a fresh combination.\n\n")
+
+	b.WriteString("### Winning\n\n")
+	b.WriteString("The first player to empty their hand wins.\n\n")
 }
 
 func writeSpecialCards(b *strings.Builder, g *genome.Genome) {

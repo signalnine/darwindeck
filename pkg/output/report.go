@@ -101,6 +101,8 @@ func quickTake(g *genome.Genome) string {
 		base = "A trick-taking game"
 	case genome.Rummy:
 		base = "A rummy-style game"
+	case genome.Climbing:
+		base = "A climbing/ladder game"
 	}
 
 	modifiers := []string{}

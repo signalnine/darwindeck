@@ -96,6 +96,7 @@ func cmdExperiment(args []string) {
 		seeds.CrazyEights(), seeds.MauMau(),
 		seeds.Whist(), seeds.Hearts(), seeds.Spades(), seeds.OhHell(),
 		seeds.GinRummy(), seeds.KnockRummy(),
+		seeds.BigTwo(), // climbing skeleton seed (novelty evolution)
 	}
 
 	fmt.Printf("DarwinDeck Diversity Experiment\n")

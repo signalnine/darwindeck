@@ -306,7 +306,7 @@ func TestAddScoringBorrowForcesMultiRound(t *testing.T) {
 			HandSize: 7,
 			Shedding: &genome.SheddingParams{MatchRule: genome.MatchEither, DrawPenalty: 1, RoundsPerGame: 1},
 		}
-		addBorrowedMechanic(g, rng)
+		addBorrowedMechanic(g, rng, false)
 		if !g.HasScoringBorrow() {
 			continue
 		}
