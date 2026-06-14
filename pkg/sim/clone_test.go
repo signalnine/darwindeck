@@ -152,6 +152,7 @@ func fullyPopulatedState() *sim.GameState {
 		TrickLeader:  1,
 		TrumpSuit:    2,
 		TrickBroken:  true,
+		PassCount:    1,
 
 		Melds:     [][]sim.Card{{{Suit: sim.Hearts, Rank: sim.Six}, {Suit: sim.Hearts, Rank: sim.Seven}, {Suit: sim.Hearts, Rank: sim.Eight}}},
 		MeldOwner: []int{0},
@@ -194,6 +195,7 @@ func TestCloneFieldByField(t *testing.T) {
 		{"TrickLeader", cp.TrickLeader, st.TrickLeader},
 		{"TrumpSuit", cp.TrumpSuit, st.TrumpSuit},
 		{"TrickBroken", cp.TrickBroken, st.TrickBroken},
+		{"PassCount", cp.PassCount, st.PassCount},
 		{"Melds", cp.Melds, st.Melds},
 		{"MeldOwner", cp.MeldOwner, st.MeldOwner},
 	}
@@ -243,6 +245,7 @@ func TestCloneIsDeep(t *testing.T) {
 	cp.Round = 99
 	cp.TrumpSuit = 0
 	cp.TrickBroken = false
+	cp.PassCount = 0
 
 	for name, pair := range map[string][2]interface{}{
 		"Deck":         {st.Deck, snapshot.Deck},
@@ -264,7 +267,8 @@ func TestCloneIsDeep(t *testing.T) {
 	}
 	if st.Turn != snapshot.Turn || st.Active != snapshot.Active || st.Phase != snapshot.Phase ||
 		st.Direction != snapshot.Direction || st.Round != snapshot.Round ||
-		st.TrumpSuit != snapshot.TrumpSuit || st.TrickBroken != snapshot.TrickBroken {
+		st.TrumpSuit != snapshot.TrumpSuit || st.TrickBroken != snapshot.TrickBroken ||
+		st.PassCount != snapshot.PassCount {
 		t.Error("scalar fields of original mutated through clone")
 	}
 }
@@ -274,7 +278,7 @@ func TestCloneIsDeep(t *testing.T) {
 // (pkg/sim/clone.go), Determinize (if the field carries hidden information),
 // the field-by-field tests above, and this constant are all updated together.
 func TestGameStateFieldCountPinsClone(t *testing.T) {
-	const want = 22
+	const want = 23
 	if got := reflect.TypeOf(sim.GameState{}).NumField(); got != want {
 		t.Fatalf("GameState has %d fields, want %d -- update Clone/Determinize/clone_test.go for the new field, then bump this constant", got, want)
 	}

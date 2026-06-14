@@ -25,7 +25,7 @@ import "math/rand/v2"
 // adding a field forces an update here (and in Determinize, if hidden).
 func (gs *GameState) Clone() *GameState {
 	cp := *gs // scalars: Turn, Active, Phase, NumPlayers, Direction, Round,
-	// MaxRound, TrickLeader, TrumpSuit, TrickBroken
+	// MaxRound, TrickLeader, TrumpSuit, TrickBroken, PassCount
 
 	cp.Deck = cloneCards(gs.Deck)
 	cp.Hands = cloneCardMatrix(gs.Hands)

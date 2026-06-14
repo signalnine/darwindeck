@@ -46,6 +46,12 @@ func Validate(g *Genome) []string {
 		} else {
 			errs = append(errs, validateRummy(g.Rummy)...)
 		}
+	case Climbing:
+		if g.Climbing == nil {
+			errs = append(errs, "climbing skeleton requires climbing params")
+		} else {
+			errs = append(errs, validateClimbing(g.Climbing)...)
+		}
 	default:
 		errs = append(errs, fmt.Sprintf("unknown skeleton type: %d", g.Skeleton))
 	}
@@ -53,6 +59,13 @@ func Validate(g *Genome) []string {
 	// Validate trump rule coherence
 	if g.TrumpRule != TrumpNone && g.Skeleton == Rummy {
 		errs = append(errs, "trump rule not applicable to rummy skeleton")
+	}
+	// Climbing has no trump concept (combinations beat by rank within the same
+	// type, never by suit); a trump rule on a climbing host is an inert bit that
+	// the rulebook would still render, so reject it at Tier 0 (mirrors the rummy
+	// rule above).
+	if g.TrumpRule != TrumpNone && g.Skeleton == Climbing {
+		errs = append(errs, "trump rule not applicable to climbing skeleton")
 	}
 
 	// Special cards are only consumed by the shedding runner. On any other
@@ -159,6 +172,25 @@ func validateRummy(p *RummyParams) []string {
 	return errs
 }
 
+func validateClimbing(p *ClimbingParams) []string {
+	var errs []string
+	// MinRunLen is only consulted when AllowRuns is true. Constrain it to 3-5
+	// (a 2-card "run" is a trivially-formable pair-shaped combination that
+	// would collide with the pair type and erode the run decision). When runs
+	// are off, MinRunLen is inert; mutation still keeps it in range so a later
+	// AllowRuns flip lands on a valid length, so validate it unconditionally.
+	if p.AllowRuns {
+		if p.MinRunLen < 3 || p.MinRunLen > 5 {
+			errs = append(errs, fmt.Sprintf("min_run_len must be 3-5 when runs are allowed, got %d", p.MinRunLen))
+		}
+	} else if p.MinRunLen != 0 && (p.MinRunLen < 3 || p.MinRunLen > 5) {
+		// Runs off: 0 is the natural "unset" encoding; otherwise keep it in the
+		// 3-5 band so it is ready if runs are switched on.
+		errs = append(errs, fmt.Sprintf("min_run_len must be 0 (unset) or 3-5, got %d", p.MinRunLen))
+	}
+	return errs
+}
+
 // validBorrows defines which mechanics can be borrowed by which skeletons.
 // Only mechanics with runner-side implementations belong here -- whitelisting
 // a no-op borrow wastes evolutionary search dimensions and produces rulebooks
@@ -201,6 +233,23 @@ var validBorrows = map[SkeletonType]map[MechanicType]bool{
 		MechTrickScoring: true, // Score based on some trick-like mechanic
 		MechDrawPenalty:  true, // Extra draw penalty
 		MechAvoidance:    true, // Certain cards are penalties
+	},
+	Climbing: {
+		// MechDrawPenalty is the ONLY borrow whitelisted on climbing, and it is
+		// whitelisted because its hook (applyDrawPenalty) both FIRES and AFFECTS
+		// THE WINNER on a climbing host (novelty evolution): applyDrawPenalty
+		// fires on EventCardPlayed (which climbing emits on every play) and
+		// appends a card to the player's hand on face-card plays. Climbing's
+		// winner is first-to-empty-hand (hand-based, NOT state.Scores), so a
+		// hook that GROWS a hand directly slows that player's race to empty --
+		// outcome-affecting by construction. The banking-scoring borrows
+		// (MechMeldBonus / MechAvoidance / MechTrickScoring) are deliberately
+		// NOT whitelisted here: they bank into state.Scores, which a climbing
+		// CheckEnd never reads, so their hooks would be inert no-ops on this host
+		// -- exactly the dd-lnh "don't whitelist a no-op borrow" rule. A
+		// climbing-with-meld-bonuses hybrid would need a banked-score climbing
+		// variant first (NOTE for a later wave).
+		MechDrawPenalty: true,
 	},
 }
 

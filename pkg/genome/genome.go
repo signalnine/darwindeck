@@ -9,9 +9,10 @@ const (
 	Shedding    SkeletonType = iota
 	TrickTaking
 	Rummy
+	Climbing
 )
 
-var skeletonNames = [3]string{"shedding", "trick_taking", "rummy"}
+var skeletonNames = [4]string{"shedding", "trick_taking", "rummy", "climbing"}
 
 func (s SkeletonType) String() string {
 	if int(s) >= len(skeletonNames) {
@@ -160,6 +161,30 @@ type RummyParams struct {
 	MinMeldSize    int        `json:"min_meld_size"`   // 3-4 (2 is Tier-0 rejected: a 2-card meld is trivially formable)
 	DrawFrom       DrawSource `json:"draw_from"`
 	KnockThreshold int        `json:"knock_threshold"` // Deadwood to knock (0 = gin only)
+}
+
+// --- Climbing Parameters ---
+
+// ClimbingParams controls a climbing/ladder game (Big Two / Tichu / President
+// family). On your turn you either play a combination of the SAME type as the
+// current one but strictly higher rank, or PASS. When every other player passes
+// in succession the last player who played leads a fresh combination (the table
+// clears). First player to empty their hand wins.
+//
+// Params are deliberately minimal but expressive: singles are always allowed
+// (the playability floor -- a lead can always play a single, so a legal move
+// always exists), and pairs/triples/runs are switched on individually.
+type ClimbingParams struct {
+	// AllowPairs enables two-of-a-kind combinations (same rank).
+	AllowPairs bool `json:"allow_pairs"`
+	// AllowTriples enables three-of-a-kind combinations (same rank).
+	AllowTriples bool `json:"allow_triples"`
+	// AllowRuns enables consecutive-rank runs (mixed suits, like Tichu straights)
+	// of length >= MinRunLen.
+	AllowRuns bool `json:"allow_runs"`
+	// MinRunLen is the minimum length of a run combination (3-5). Only consulted
+	// when AllowRuns is true.
+	MinRunLen int `json:"min_run_len"`
 }
 
 // --- Shared Mechanics ---
@@ -378,6 +403,7 @@ type Genome struct {
 	Shedding    *SheddingParams    `json:"shedding,omitempty"`
 	TrickTaking *TrickTakingParams `json:"trick_taking,omitempty"`
 	Rummy       *RummyParams       `json:"rummy,omitempty"`
+	Climbing    *ClimbingParams    `json:"climbing,omitempty"`
 
 	// Cross-skeleton mechanics
 	Borrowed []BorrowedMechanic `json:"borrowed,omitempty"`
@@ -407,6 +433,10 @@ func (g *Genome) Clone() *Genome {
 	if g.Rummy != nil {
 		r := *g.Rummy
 		cp.Rummy = &r
+	}
+	if g.Climbing != nil {
+		c := *g.Climbing
+		cp.Climbing = &c
 	}
 	if g.Borrowed != nil {
 		cp.Borrowed = append([]BorrowedMechanic(nil), g.Borrowed...)
@@ -509,6 +539,14 @@ func (g *Genome) MaxTurns() int {
 	case Rummy:
 		// Rummy can go long with draw/discard cycles
 		return 52 * 4
+	case Climbing:
+		// Every play strictly shrinks a hand, and passes resolve to a fresh
+		// lead within at most Players consecutive moves, so the game cannot
+		// outlast (plays + passes). Worst case: every card dribbles out one at
+		// a time (HandSize*Players plays) interleaved with a full pass-around
+		// per trick. Scale generously so the turn-cap backstop never
+		// misclassifies a healthy climbing game as a timeout.
+		return g.HandSize * g.Players * 8
 	default:
 		return 200
 	}
@@ -533,6 +571,12 @@ func (g *Genome) ActiveParams() string {
 			return fmt.Sprintf("rummy{melds=%s, min=%d, draw=%s, knock=%d}",
 				g.Rummy.MeldTypes, g.Rummy.MinMeldSize, g.Rummy.DrawFrom,
 				g.Rummy.KnockThreshold)
+		}
+	case Climbing:
+		if g.Climbing != nil {
+			return fmt.Sprintf("climbing{pairs=%v, triples=%v, runs=%v, min_run=%d}",
+				g.Climbing.AllowPairs, g.Climbing.AllowTriples,
+				g.Climbing.AllowRuns, g.Climbing.MinRunLen)
 		}
 	}
 	return "none"

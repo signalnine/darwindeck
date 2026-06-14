@@ -101,6 +101,7 @@ func paramStructTypes() []reflect.Type {
 		reflect.TypeOf(SheddingParams{}),
 		reflect.TypeOf(TrickTakingParams{}),
 		reflect.TypeOf(RummyParams{}),
+		reflect.TypeOf(ClimbingParams{}),
 	}
 }
 
@@ -112,6 +113,7 @@ var genomeAccessor = map[string]string{
 	"SheddingParams":    "Shedding",
 	"TrickTakingParams": "TrickTaking",
 	"RummyParams":       "Rummy",
+	"ClimbingParams":    "Climbing",
 }
 
 // TestGenomeAccessorsMatchGenome verifies the qualification anchor: every

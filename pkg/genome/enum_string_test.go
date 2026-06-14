@@ -7,6 +7,7 @@ func TestSkeletonTypeStringValid(t *testing.T) {
 		Shedding:    "shedding",
 		TrickTaking: "trick_taking",
 		Rummy:       "rummy",
+		Climbing:    "climbing",
 	}
 	for s, want := range cases {
 		if got := s.String(); got != want {
