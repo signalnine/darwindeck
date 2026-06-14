@@ -125,8 +125,18 @@ with `-novelty-select`, the hybrid algorithm rewards behavioral distance from th
 avoidance penalties — see `results/2026-06-13-novel-games`). Honest limitation:
 novelty so far is incidental, not reliably selected-for; the cheap structural
 novelty signal cannot distinguish novel from rediscovery the way the LLM judge
-(`darwindeck judge`) can. Wiring the judge into the selection loop is the
-documented next lever.
+(`darwindeck judge`) can.
+
+**Judge-in-the-loop (tried; partial).** `evolve -seed-dir <dir>` seeds a run from
+a custom genome set, enabling a judge-gated restart loop: evolve → judge the
+elite for novelty → seed the next round from the novel survivors. Tested over 3
+rounds (`results/2026-06-14-judge-in-loop`), it surfaced more novel games and
+more diverse lineages but did **not reliably compound** novelty (trajectory
+1 → 2 → 0): the in-round playability fitness erodes the (muddled-scoring) novel
+hybrids faster than between-round judge selection accumulates them. The
+remaining lever is novelty pressure at **generation** granularity (a strong
+novelty term or the judge inside the per-generation fitness), not just at round
+boundaries — heavier and still unbuilt.
 
 ### Fitness function (the rebuilt metric stack)
 
