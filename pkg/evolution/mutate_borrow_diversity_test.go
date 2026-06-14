@@ -48,6 +48,14 @@ func TestAddBorrowedMechanicReachesFullWhitelist(t *testing.T) {
 			}
 		}
 		for _, want := range whitelist[host] {
+			if ungeneratedBorrows[host][want] {
+				// Documented vestigial-by-host combo (Wave-3): whitelisted but
+				// deliberately never generated, so it must NOT be reached.
+				if reached[want] {
+					t.Errorf("host=%v: addBorrowedMechanic generated %v, which is documented ungeneratable (vestigial-by-host)", host, want)
+				}
+				continue
+			}
 			if !reached[want] {
 				t.Errorf("host=%v: addBorrowedMechanic(crossSkeleton) never reached whitelisted mechanic %v", host, want)
 			}
