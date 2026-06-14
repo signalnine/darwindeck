@@ -346,3 +346,62 @@ func cardDeadwood(c Card) int {
 		return int(c.Rank)
 	}
 }
+
+// --- Climbing Greedy Scorer ---
+
+// ClimbingScorer scores climbing/ladder moves with a conserve-high-cards
+// heuristic (the strategy the task specifies):
+//
+//   - When LEADING a clear table, dump the LOWEST combination first -- play out
+//     weak cards while you control the table, and prefer playing more cards at
+//     once (bigger combos shrink the hand faster) lightly over the rank
+//     preference.
+//   - When FOLLOWING, play the LOWEST beating combination (just clear the bar,
+//     save high cards for later), and treat PASS as a low-value fallback so a
+//     play is preferred when one is cheap. The pass baseline sits just below a
+//     low beat but above an expensive high-card beat, so the AI passes rather
+//     than burn its strongest cards "when behind".
+//
+// State is read from GameState.TrickCards (empty => leading) at scoring time,
+// like the other scorers. Higher score = better.
+type ClimbingScorer struct{}
+
+func (s *ClimbingScorer) ScoreMove(move Move, state *GameState) float64 {
+	switch move.Type {
+	case MovePlay:
+		if len(move.Cards) == 0 {
+			return 0
+		}
+		top := comboTopRank(move.Cards)
+		leading := len(state.TrickCards) == 0
+		if leading {
+			// Dump low first; reward shedding more cards at once slightly.
+			return 30.0 - float64(top) + float64(len(move.Cards))*0.25
+		}
+		// Following: play the lowest beating combo. Lower top rank => higher
+		// score, so the cheapest legal beat wins. The constant keeps every beat
+		// above the pass baseline UNLESS the beat needs a very high card, at
+		// which point passing (conserve) becomes preferable.
+		return 20.0 - float64(top)
+
+	case MovePass:
+		// Conserve: passing beats burning a high card (top rank ~>= 12), but a
+		// cheap low beat (top rank <= 11) is preferred over passing.
+		return 8.0
+
+	default:
+		return 0
+	}
+}
+
+// comboTopRank returns the highest rank in a combination (its comparison rank
+// for runs, the shared rank for sets, the card rank for singles).
+func comboTopRank(cards []Card) Rank {
+	top := cards[0].Rank
+	for _, c := range cards[1:] {
+		if c.Rank > top {
+			top = c.Rank
+		}
+	}
+	return top
+}
