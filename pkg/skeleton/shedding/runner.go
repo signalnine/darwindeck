@@ -112,6 +112,16 @@ func redealRound(state *sim.GameState, g *genome.Genome) {
 		deck = append(deck, state.Hands[i]...)
 		state.Hands[i] = state.Hands[i][:0]
 	}
+	// Reset per-player shed-card tableaus (SheddingTrickScored hosts only
+	// populate them). The tableau is a per-round shed TALLY that aliases cards
+	// already living in the discard pile -- gathering discard above already
+	// reclaims the physical cards, so the tableau must be cleared, NOT appended
+	// to the deck (that would duplicate cards). Clearing per round mirrors
+	// trick-taking's per-round tableau reset so each round's trick-scoring
+	// bonus counts only that round's sheds.
+	for i := range state.Tableau {
+		state.Tableau[i] = state.Tableau[i][:0]
+	}
 	state.Discard = state.Discard[:0]
 	state.TopCard = nil
 
@@ -258,6 +268,18 @@ func (r *Runner) ApplyMove(state *sim.GameState, move sim.Move, g *genome.Genome
 		// Add to discard pile
 		state.Discard = append(state.Discard, card)
 		state.TopCard = &sim.Card{Suit: card.Suit, Rank: card.Rank}
+
+		// Cross-skeleton hybrid (novelty evolution): a shed-to-win game scored
+		// by tricks. Record each successfully-shed card into the player's
+		// tableau so the borrowed applyTrickScoring hook -- which counts
+		// tableau captures -- has a per-player "cards shed = tricks taken"
+		// signal at round end. Gated on SheddingTrickScored() so the ordinary
+		// shedding host (and the MeldBonus/Avoidance scoring borrows, which
+		// read tableau as residual captures) keep an empty tableau and are
+		// byte-unaffected.
+		if g.SheddingTrickScored() && player < len(state.Tableau) {
+			state.Tableau[player] = append(state.Tableau[player], card)
+		}
 
 		events = append(events, sim.Event{
 			Type:     sim.EventCardPlayed,

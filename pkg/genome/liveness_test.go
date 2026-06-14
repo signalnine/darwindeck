@@ -50,14 +50,30 @@ func TestLiveBorrowsAvoidanceNeedsCardPoints(t *testing.T) {
 }
 
 func TestLiveBorrowsDirectActingAlwaysLive(t *testing.T) {
-	direct := []BorrowedMechanic{
-		{Source: TrickTaking, Mechanic: MechTrickScoring},
-		{Source: Shedding, Mechanic: MechDrawPenalty},
+	// MechDrawPenalty acts directly (appends cards on play), so it is live on a
+	// single-round shedding host. MechTrickScoring is NOT direct-acting on a
+	// shedding host: its applyTrickScoring hook BANKS into state.Scores at round
+	// end, which a single-round shedding game never reads (it ends at the first
+	// empty hand) -- so it is live only in multi-round mode, like the other
+	// banking borrows (novelty evolution: the shed-to-win-by-tricks hybrid).
+	directOnly := sheddingHost(1, BorrowedMechanic{Source: Shedding, Mechanic: MechDrawPenalty})
+	if got := directOnly.LiveBorrows(); len(got) != 1 || got[0].Mechanic != MechDrawPenalty {
+		t.Fatalf("direct-acting draw_penalty must be live on a single-round host, got %v", got)
 	}
-	g := sheddingHost(1, direct...) // single round: scoring borrows would be dead here
-	got := g.LiveBorrows()
-	if len(got) != 2 {
-		t.Fatalf("direct-acting borrows must always be live, got %v", got)
+
+	// Trick-scoring on a SINGLE-round shedding host is inert (banks scores
+	// nothing reads).
+	tsSingle := sheddingHost(1, BorrowedMechanic{Source: TrickTaking, Mechanic: MechTrickScoring})
+	if got := tsSingle.LiveBorrows(); len(got) != 0 {
+		t.Errorf("trick-scoring on single-round shedding must be inert (banks unread scores), got %v", got)
+	}
+
+	// Trick-scoring on a MULTI-round shedding host is live (the headline
+	// hybrid). sheddingHost(3, ...) gives RoundsPerGame 3, and MechTrickScoring
+	// is a banking borrow, so SheddingMultiRound() is true.
+	tsMulti := sheddingHost(3, BorrowedMechanic{Source: TrickTaking, Mechanic: MechTrickScoring})
+	if got := tsMulti.LiveBorrows(); len(got) != 1 || got[0].Mechanic != MechTrickScoring {
+		t.Errorf("trick-scoring on multi-round shedding must be live, got %v", got)
 	}
 }
 

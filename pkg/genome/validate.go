@@ -168,9 +168,30 @@ var validBorrows = map[SkeletonType]map[MechanicType]bool{
 	Shedding: {
 		MechMeldBonus: true, // Bonus for playing sets/runs (HookEndOfRound)
 		MechAvoidance: true, // Penalty cards (HookScoring)
+		// MechTrickScoring: the headline cross-skeleton hybrid (novelty
+		// evolution). A shed-to-win game scored by tricks -- not a faithful
+		// rediscovery of any single classic. applyTrickScoring banks a
+		// per-round capture bonus into state.Scores; the shedding runner
+		// records each shed card into the player's tableau under
+		// SheddingTrickScored() so the hook has a per-player signal, and
+		// SheddingMultiRound() (via HasBankingBorrow) routes the host through
+		// the banked-score rounds machinery that reads those scores in
+		// CheckEnd. The hook fires and affects the winner -- it is NOT a
+		// reserved/no-hook mechanic.
+		MechTrickScoring: true,
 	},
 	TrickTaking: {
-		MechMeldBonus: true, // Bonus for collecting melds from tricks
+		MechMeldBonus: true, // Bonus for collecting melds from tricks (HookEndOfRound)
+		// MechAvoidance: a cross-family ACTIVE scoring borrow (novelty
+		// evolution). applyAvoidance subtracts penalty points for cards the
+		// player captured into their tableau at round end; findWinner reads
+		// state.Scores, so the borrow affects the winner. Distinct from the
+		// trick_scoring=avoidance PARAMETER (which scores the tricks
+		// themselves): this borrows rummy/shedding-style penalty-card scoring
+		// ON TOP of whatever trick scoring the host already runs, a genuine
+		// cross-family combination. Requires non-empty CardPoints (the hook
+		// no-ops without them); the hybrid builder and mutation seed a default.
+		MechAvoidance: true,
 		// MechDrawPenalty intentionally NOT borrowable here: applyDrawPenalty
 		// appends a card to the active player's hand on face-card plays, which
 		// breaks the trick-taking runner's "all hands empty at round end"

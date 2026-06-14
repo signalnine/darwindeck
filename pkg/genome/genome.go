@@ -432,16 +432,59 @@ func (g *Genome) HasScoringBorrow() bool {
 	return false
 }
 
+// HasBankingBorrow reports whether g carries ANY borrow whose hook banks into
+// state.Scores at round end -- the scoring borrows (MechMeldBonus,
+// MechAvoidance) PLUS MechTrickScoring (the cross-skeleton hybrid borrow:
+// applyTrickScoring banks a per-round capture bonus). This is the predicate
+// the shedding runner uses to decide multi-round banked-score play, broader
+// than HasScoringBorrow because the trick-scoring hybrid also needs the rounds
+// machinery to give its banked points a winner signal. HasScoringBorrow is
+// kept narrow because LiveBorrows uses it specifically for the
+// MeldBonus/Avoidance "needs multi-round to be live" rule (those two no-op on
+// a single-round host), whereas a trick-scoring borrow is always wired through
+// the multi-round path here.
+func (g *Genome) HasBankingBorrow() bool {
+	for _, b := range g.Borrowed {
+		switch b.Mechanic {
+		case MechMeldBonus, MechAvoidance, MechTrickScoring:
+			return true
+		}
+	}
+	return false
+}
+
+// SheddingTrickScored reports whether g is a shedding host carrying a borrowed
+// MechTrickScoring mechanic -- the headline cross-skeleton hybrid, a
+// shed-to-win game scored by tricks. The shedding runner records each shed
+// card into the player's tableau ONLY under this predicate so applyTrickScoring
+// (which counts tableau captures) has a per-player signal, without disturbing
+// the MeldBonus/Avoidance shedding borrows that read tableau differently.
+func (g *Genome) SheddingTrickScored() bool {
+	if g.Skeleton != Shedding {
+		return false
+	}
+	for _, b := range g.Borrowed {
+		if b.Mechanic == MechTrickScoring {
+			return true
+		}
+	}
+	return false
+}
+
 // SheddingMultiRound reports whether g plays shedding as a series of
 // banked-score rounds (audit remediation Task 22): the shedding skeleton with
-// RoundsPerGame > 1 AND a scoring borrow present. Without a scoring borrow
+// RoundsPerGame > 1 AND a banking borrow present. Without a banking borrow
 // nothing writes state.Scores, so multiple rounds would have no winner
-// signal; such genomes stay single-round (first empty hand wins).
+// signal; such genomes stay single-round (first empty hand wins). The banking
+// set was widened from HasScoringBorrow to HasBankingBorrow when the
+// cross-skeleton MechTrickScoring borrow was enabled on shedding (the
+// shed-to-win-by-tricks hybrid): its applyTrickScoring hook banks per round
+// and needs the same rounds machinery.
 func (g *Genome) SheddingMultiRound() bool {
 	return g.Skeleton == Shedding &&
 		g.Shedding != nil &&
 		g.Shedding.RoundsPerGame > 1 &&
-		g.HasScoringBorrow()
+		g.HasBankingBorrow()
 }
 
 // MaxTurns returns the computed maximum turns based on skeleton and params.
