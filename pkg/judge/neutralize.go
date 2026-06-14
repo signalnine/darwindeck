@@ -64,17 +64,18 @@ var eventNames = map[sim.EventType]string{
 // "one player wins while the opponent barely acts" signal the rubric asks the
 // judge to look for). The trace is capped to keep dossiers readable; a
 // one-sided game still shows the imbalance well within the cap.
+// renderTrace renders a game's event stream HEAD+TAIL bounded. The cap keeps a
+// dossier inside a tight judge context budget (an uncapped long game overflowed
+// a 4096-token window once the rubric was prepended), and showing the TAIL --
+// not just the head -- lets the reader see how the game ENDS (who wins, whether
+// one player monopolizes the close), which a head-only truncation hid.
 func renderTrace(events []sim.Event) string {
-	const cap = 120
+	const headN, tailN = 20, 10
 	var b strings.Builder
 	b.WriteString("```\n")
-	shown := events
-	truncated := false
-	if len(shown) > cap {
-		shown = shown[:cap]
-		truncated = true
-	}
-	for i, e := range shown {
+	n := len(events)
+	render := func(i int) {
+		e := events[i]
 		name := eventNames[e.Type]
 		if name == "" {
 			name = fmt.Sprintf("EVENT(%d)", int(e.Type))
@@ -90,8 +91,18 @@ func renderTrace(events []sim.Event) string {
 		}
 		b.WriteString(line + "\n")
 	}
-	if truncated {
-		b.WriteString(fmt.Sprintf("... (%d more events)\n", len(events)-cap))
+	if n <= headN+tailN {
+		for i := range events {
+			render(i)
+		}
+	} else {
+		for i := 0; i < headN; i++ {
+			render(i)
+		}
+		b.WriteString(fmt.Sprintf("... (%d turns omitted) ...\n", n-headN-tailN))
+		for i := n - tailN; i < n; i++ {
+			render(i)
+		}
 	}
 	b.WriteString("```\n")
 	return b.String()

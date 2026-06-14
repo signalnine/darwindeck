@@ -110,6 +110,12 @@ func crossFamilyBorrow(host, other genome.SkeletonType, rng *rand.Rand) (genome.
 			{genome.MechMeldBonus, genome.Rummy},
 			// shedding with penalty-card avoidance scoring
 			{genome.MechAvoidance, genome.TrickTaking},
+			// DEEP move-level borrow: climbing's multi-card combinations (dump
+			// a same-rank set / same-suit run in one turn). NOT a banking tally
+			// -- it changes the legal-move set in the shedding runner
+			// (ComboPlay), a genuine cross-family fusion. Given teeth by
+			// giveBorrowTeeth (hand size + permissive match so combos form).
+			{genome.MechRunPlay, genome.Climbing},
 		},
 		genome.TrickTaking: {
 			// trick-taker with cross-family penalty-card scoring
@@ -345,6 +351,22 @@ func giveBorrowTeeth(g *genome.Genome, bm genome.BorrowedMechanic) {
 			ensureClimbingDrawPile(g)
 		case genome.Rummy:
 			giveRummyDrawPenaltyTeeth(g)
+		}
+
+	case genome.MechRunPlay:
+		// Combos (ComboPlay) need a hand large enough that 2+ same-rank groups
+		// or 2+ same-suit runs arise, and a match rule permissive enough that a
+		// group can match the discard top. Bump a too-small hand to 6 and relax
+		// an over-strict MatchBoth to MatchEither so the borrow is outcome-
+		// affecting (else dd-lnh: a no-op borrow). Valid-in/valid-out: HandSize
+		// stays in the 3-13 band and Players*6 <= 52 for the domain's seat counts.
+		if g.Skeleton == genome.Shedding && g.Shedding != nil {
+			if g.HandSize < 6 {
+				g.HandSize = 6
+			}
+			if g.Shedding.MatchRule == genome.MatchBoth {
+				g.Shedding.MatchRule = genome.MatchEither
+			}
 		}
 	}
 }

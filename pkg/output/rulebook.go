@@ -394,20 +394,51 @@ func specialCardEffect(sc genome.SpecialCard) string {
 	}
 }
 
+// borrowedDescription renders a borrowed (cross-skeleton) mechanic as a
+// CONCRETE rule, not a generic blurb. The borrow is the entire source of a
+// hybrid game's novelty, so a vague one-liner ("Earn bonus points for forming
+// sets or runs") leaves a reader -- human or LLM judge -- unable to tell a real
+// mechanical fusion from an undefined bolt-on, and unable to assess the game at
+// all (dd: blind-novelty bug). Each description below states exactly what the
+// corresponding hook in pkg/mechanic/hooks.go does, INCLUDING its scoring
+// magnitudes and trigger, so the text the judge reads matches the behavior that
+// actually fires in play.
+//
+// KEEP IN SYNC with pkg/mechanic/hooks.go: the point magnitudes here are the
+// constants in applyMeldBonus/runBonus and the trigger in applyDrawPenalty.
+// TestBorrowedRulesDescribeConcreteMechanics asserts the anchor phrases so this
+// coupling cannot silently drift back into a generic blurb.
+//
+// Only the four whitelisted borrows (MechMeldBonus, MechAvoidance,
+// MechTrickScoring, MechDrawPenalty -- see genome.ValidBorrows) can appear on a
+// valid genome; the reserved cases are kept harmless for defensiveness.
 func borrowedDescription(bm genome.BorrowedMechanic) string {
 	switch bm.Mechanic {
 	case genome.MechTrickScoring:
-		return "Score bonus points based on trick-like card combinations"
+		// applyTrickScoring: at EventRoundEnd, the player with the most
+		// captured cards (tableau captures + laid-down melds) gains a bonus
+		// equal to that count; ties split it evenly.
+		return "**Capture bonus:** at the end of each round, whoever has captured the most cards (from won tricks and laid-down melds) scores bonus points equal to the number of cards they captured; players tied for the most split the bonus evenly"
 	case genome.MechMeldBonus:
-		return "Earn bonus points for forming sets or runs"
+		// applyMeldBonus + runBonus: scored at EventRoundEnd over hand +
+		// captured cards. Sets: 3+ same rank = 5/card, pair = 2/card. Runs:
+		// 3+ consecutive same-suit = 3/card, 2-card run = 1/card.
+		return "**Meld bonus:** at the end of each round, score points for card combinations across your hand and the cards you have captured — a set of 3 or more of the same rank scores 5 points per card (a plain pair scores 2 per card), and a run of 3 or more consecutive cards in one suit scores 3 points per card (a 2-card run scores 1 per card)"
 	case genome.MechDrawPenalty:
-		return "Draw extra cards as a penalty in certain situations"
+		// applyDrawPenalty: after playing a Jack-or-higher, draw 1 extra card.
+		return "**Draw penalty:** whenever you play a face card (Jack or higher), you must immediately draw 1 extra card from the deck"
+	case genome.MechAvoidance:
+		// applyAvoidance: at round end, subtract the Card Point Values of
+		// penalty cards left in hand + captures (liveness guarantees CardPoints).
+		return "**Penalty cards:** at the end of each round, lose points equal to the value of any scoring cards (see Card Point Values) still in your hand or among the cards you captured — avoid collecting them"
+	case genome.MechRunPlay:
+		// shedding/runner.go ComboPlay: discard same-rank sets / same-suit runs
+		// of 2+ cards in one turn (when the group matches the top).
+		return "**Combination plays:** instead of one card, you may discard a set of 2 or more cards of the same rank, or a run of 2 or more consecutive cards in one suit, in a single turn — as long as one of those cards legally matches the discard top. Unloading several cards at once lets you empty your hand in bursts, so it pays to hold cards and dump a whole run"
 	case genome.MechKnock:
 		return "Knock to end the round early"
 	case genome.MechTrump:
 		return "One suit is designated as trump and beats other suits"
-	case genome.MechAvoidance:
-		return "Certain cards carry penalty points — avoid collecting them"
 	case genome.MechPlayMultiple:
 		return "Play multiple matching cards at once"
 	case genome.MechFollowSuit:

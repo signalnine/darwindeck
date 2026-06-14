@@ -2,6 +2,7 @@ package shedding
 
 import (
 	"math/rand/v2"
+	"sort"
 
 	"github.com/darwindeck/darwindeck/pkg/genome"
 	"github.com/darwindeck/darwindeck/pkg/sim"
@@ -183,6 +184,26 @@ func (r *Runner) GenerateMoves(state *sim.GameState, g *genome.Genome) []sim.Mov
 		}
 	}
 
+	// MechRunPlay (DEEP cross-skeleton borrow: climbing's multi-card
+	// combinations -> shedding). In addition to single-card plays, offer
+	// same-rank sets (2+) and same-suit consecutive runs (2+) that match the
+	// discard top as a single multi-card MovePlay -- you may dump several cards
+	// at once, so hand reduction is lumpy and you hold cards to unload a run.
+	// This changes the legal-move set inside the pure runner (the hook system
+	// cannot). It is a pure SUPERSET of the moves above (singles/wilds/draw all
+	// remain), so GenerateMoves is never empty and every play still removes >=1
+	// card -- termination is preserved by construction (combos only empty hands
+	// faster).
+	if g.ComboPlay() && state.TopCard != nil {
+		for _, combo := range findComboPlays(hand, *state.TopCard, params.MatchRule) {
+			moves = append(moves, sim.Move{
+				Type:     sim.MovePlay,
+				Cards:    combo,
+				PlayerID: state.Active,
+			})
+		}
+	}
+
 	// If no playable cards, must draw. The deck is replenished from the
 	// discard pile by Upkeep (start of each loop iteration), never here:
 	// GenerateMoves is a pure query (audit Task 3). If both the deck and
@@ -261,13 +282,19 @@ func (r *Runner) ApplyMove(state *sim.GameState, move sim.Move, g *genome.Genome
 
 	switch move.Type {
 	case sim.MovePlay:
-		card := move.Cards[0]
 		player := state.Active
-		// Remove card from hand
-		state.Hands[player] = removeCard(state.Hands[player], card)
-		// Add to discard pile
-		state.Discard = append(state.Discard, card)
-		state.TopCard = &sim.Card{Suit: card.Suit, Rank: card.Rank}
+		// move.Cards is a single card normally, or a same-rank set / same-suit
+		// run under MechRunPlay (ComboPlay). Discard them all; the LAST card
+		// becomes the new top and is the one whose special effect (if any)
+		// fires. For a single card this is byte-identical to the old path
+		// (Cards[0] == last), so non-combo shedding is unchanged
+		// (TestSingleRoundBehaviorBytePinned).
+		for _, c := range move.Cards {
+			state.Hands[player] = removeCard(state.Hands[player], c)
+		}
+		state.Discard = append(state.Discard, move.Cards...)
+		top := move.Cards[len(move.Cards)-1]
+		state.TopCard = &sim.Card{Suit: top.Suit, Rank: top.Rank}
 
 		// Cross-skeleton hybrid (novelty evolution): a shed-to-win game scored
 		// by tricks. Record each successfully-shed card into the player's
@@ -278,18 +305,19 @@ func (r *Runner) ApplyMove(state *sim.GameState, move sim.Move, g *genome.Genome
 		// read tableau as residual captures) keep an empty tableau and are
 		// byte-unaffected.
 		if g.SheddingTrickScored() && player < len(state.Tableau) {
-			state.Tableau[player] = append(state.Tableau[player], card)
+			state.Tableau[player] = append(state.Tableau[player], move.Cards...)
 		}
 
 		events = append(events, sim.Event{
 			Type:     sim.EventCardPlayed,
 			PlayerID: player,
-			Cards:    []sim.Card{card},
+			Cards:    append([]sim.Card(nil), move.Cards...),
 			Detail:   "discard", // Shedding plays go to shared discard pile
 		})
 
-		// Apply special card effects
-		effects := applySpecialEffects(state, card, g)
+		// Apply special card effects for the played card (the new top under a
+		// combo). Single plays apply them for that one card exactly as before.
+		effects := applySpecialEffects(state, top, g)
 		events = append(events, effects...)
 
 		// If this play emptied a hand, the game is over (CheckEnd returns
@@ -426,6 +454,76 @@ func (r *Runner) CheckEnd(state *sim.GameState, g *genome.Genome) int {
 	// genuine timeout rather than a completion. Awarding the smallest hand
 	// here would mask hung shedding genomes from Tier1 timeout detection.
 	return -1
+}
+
+// findComboPlays returns the multi-card combinations a player may discard in
+// one turn under the MechRunPlay borrow: maximal same-rank sets (2+) and
+// maximal same-suit consecutive runs (2+) for which at least one card legally
+// matches the discard top (so the combo is a valid play, mirroring the
+// single-card match rule). Output is DETERMINISTIC (sets in ascending rank,
+// runs in ascending suit then rank) -- map iteration order must never leak
+// into the move list or the seeded batch loses determinism. Kept deliberately
+// simple (maximal groups): it only needs to surface the lumpy-discard option;
+// random/greedy play explores from there.
+func findComboPlays(hand []sim.Card, top sim.Card, rule genome.MatchRule) [][]sim.Card {
+	const minCombo = 2
+	var combos [][]sim.Card
+
+	playable := func(grp []sim.Card) bool {
+		for _, c := range grp {
+			if matchesTop(c, top, rule) {
+				return true
+			}
+		}
+		return false
+	}
+
+	byRank := map[sim.Rank][]sim.Card{}
+	bySuit := map[sim.Suit][]sim.Card{}
+	for _, c := range hand {
+		byRank[c.Rank] = append(byRank[c.Rank], c)
+		bySuit[c.Suit] = append(bySuit[c.Suit], c)
+	}
+
+	// Sets: all cards of a rank (ascending rank order).
+	ranks := make([]int, 0, len(byRank))
+	for r := range byRank {
+		ranks = append(ranks, int(r))
+	}
+	sort.Ints(ranks)
+	for _, ri := range ranks {
+		cs := byRank[sim.Rank(ri)]
+		if len(cs) >= minCombo && playable(cs) {
+			combos = append(combos, append([]sim.Card(nil), cs...))
+		}
+	}
+
+	// Runs: per suit (ascending), maximal consecutive ascending-rank stretches.
+	suits := make([]int, 0, len(bySuit))
+	for s := range bySuit {
+		suits = append(suits, int(s))
+	}
+	sort.Ints(suits)
+	for _, si := range suits {
+		cs := append([]sim.Card(nil), bySuit[sim.Suit(si)]...)
+		sort.Slice(cs, func(i, j int) bool { return cs[i].Rank < cs[j].Rank })
+		flush := func(run []sim.Card) {
+			if len(run) >= minCombo && playable(run) {
+				combos = append(combos, append([]sim.Card(nil), run...))
+			}
+		}
+		run := []sim.Card{cs[0]}
+		for k := 1; k < len(cs); k++ {
+			if int(cs[k].Rank) == int(cs[k-1].Rank)+1 {
+				run = append(run, cs[k])
+				continue
+			}
+			flush(run)
+			run = []sim.Card{cs[k]}
+		}
+		flush(run)
+	}
+	return combos
 }
 
 // matchesTop checks if a card matches the top of the discard pile.

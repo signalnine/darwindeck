@@ -338,11 +338,12 @@ const (
 	MechAvoidance                         // Points-are-bad scoring
 	MechPlayMultiple                      // reserved: no implementation, not whitelisted
 	MechFollowSuit                        // Must follow suit restriction
+	MechRunPlay                           // DEEP borrow: multi-card combo discards (shedding runner)
 )
 
-var mechanicNames = [8]string{
+var mechanicNames = [9]string{
 	"trick_scoring", "meld_bonus", "draw_penalty", "knock",
-	"trump", "avoidance", "play_multiple", "follow_suit",
+	"trump", "avoidance", "play_multiple", "follow_suit", "run_play",
 }
 
 func (m MechanicType) String() string {
@@ -495,6 +496,31 @@ func (g *Genome) SheddingTrickScored() bool {
 	}
 	for _, b := range g.Borrowed {
 		if b.Mechanic == MechTrickScoring {
+			return true
+		}
+	}
+	return false
+}
+
+// ComboPlay reports whether g is a shedding host carrying a MechRunPlay borrow
+// -- a DEEP cross-skeleton borrow (climbing's multi-card combinations ->
+// shedding) that changes the LEGAL-MOVE set inside the shedding runner: in
+// addition to single-card discards, a player may dump a same-rank set (2+) or
+// a same-suit consecutive run (2+) in one turn (when the group matches the
+// discard top), so hand reduction is lumpy and combinatorial -- you hold cards
+// to unload a run. It is a pure SUPERSET of the normal move set (singles and
+// draw/pass remain), so playability and termination are preserved by
+// construction and games complete at least as often as plain shedding. Because
+// it acts directly inside GenerateMoves/ApplyMove (like MechDrawPenalty, never
+// banking) it is always live (LiveBorrows) and works on a single-round host.
+// Lives in the runner, never a hook (the hook system has no move extension
+// point).
+func (g *Genome) ComboPlay() bool {
+	if g.Skeleton != Shedding {
+		return false
+	}
+	for _, b := range g.Borrowed {
+		if b.Mechanic == MechRunPlay {
 			return true
 		}
 	}

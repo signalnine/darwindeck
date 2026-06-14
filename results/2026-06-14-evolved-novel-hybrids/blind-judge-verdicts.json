@@ -1,0 +1,82 @@
+{
+  "combos_judged_novel": "4/4",
+  "summary": {
+    "rank01_plaintrick": {
+      "kind": "control_plain_trick",
+      "novelty": "faithful_rediscovery",
+      "novelty_votes": [
+        "variant_of_known",
+        "faithful_rediscovery",
+        "faithful_rediscovery"
+      ],
+      "quality": "borderline",
+      "sample_reason": "Standard follow-suit trick-taking with cut-card trump; legal-move set is unchanged Whist and scoring is a plain 1-point-per-trick tally with no realized twist (the \"contract scoring\" flag is contradicted by the rules and absent from traces). Both players act every trick to 100% completion, but the decision surface is the thinnest possible trick-taker."
+    },
+    "rank07_combo3": {
+      "kind": "combo run_play+meld_bonus+avoidance",
+      "novelty": "novel",
+      "novelty_votes": [
+        "novel",
+        "novel",
+        "novel"
+      ],
+      "quality": "borderline",
+      "sample_reason": "Both legal moves and win condition change: Crazy Eights shedding fused with rummy combination discards (sets/runs in one turn, used in traces) and a 3-round banked win from rummy meld bonuses plus Hearts penalty avoidance, not first-to-empty. Termination sound (97% std, flat 4x, win median 103, no runaway). Grindy specials but real layered decisions; novel by cross-family fusion."
+    },
+    "rank08_combo3": {
+      "kind": "combo run_play+meld_bonus+avoidance",
+      "novelty": "novel",
+      "novelty_votes": [
+        "novel",
+        "novel",
+        "novel"
+      ],
+      "quality": "borderline",
+      "sample_reason": "Legal moves AND win/scoring both change from the Crazy Eights base: rummy combination plays (sets/runs) add legal multi-card unloads, and the goal is no longer first-out but a 3-round banked score fusing rummy meld bonuses with Hearts penalty avoidance; concrete and integral, so novel. Borderline: dump-fast vs hold-melds objectives conflict; traces show interleaved 4-player play, 93% completion."
+    },
+    "rank09_combo2": {
+      "kind": "combo run_play+meld_bonus (clean recipe)",
+      "novelty": "novel",
+      "novelty_votes": [
+        "novel",
+        "novel",
+        "novel"
+      ],
+      "quality": "publishable",
+      "sample_reason": "Both legal moves and win condition change. Legal moves: beyond single-card suit/rank match (8 wild), players may discard rummy sets/runs in one turn. Win: victory is highest banked meld-bonus score over 3 rounds, NOT emptying hand. Fuses shedding with rummy meld-scoring as the actual victory rule. Traces show all 4 players acting, no runaway; 95% completion, hands empty by turn 114."
+    },
+    "rank10_combo3": {
+      "kind": "combo run_play+meld_bonus+avoidance",
+      "novelty": "novel",
+      "novelty_votes": [
+        "novel",
+        "novel",
+        "novel"
+      ],
+      "quality": "borderline",
+      "sample_reason": "Both legal moves and win/scoring change: Crazy Eights base gains rummy combo plays (sets/runs, seen in traces) plus a 3-round banked win fusing rummy meld bonuses and Hearts penalties, so emptying a hand only ends a round. Genuine cross-family fusion = novel. Playable/terminating (87%, median turn 126, no runaways), but clashing shed-fast vs hold incentives and draw spam keep it borderline."
+    },
+    "rank19_runplay": {
+      "kind": "pure run_play (contrast)",
+      "novelty": "variant_of_known",
+      "novelty_votes": [
+        "variant_of_known",
+        "variant_of_known",
+        "variant_of_known"
+      ],
+      "quality": "publishable",
+      "sample_reason": "Crazy Eights/Uno shedding base: match suit-or-rank, empty hand to win, 8s wild, draw-2/draw-4/reverse specials. Legal moves modified only by within-family set/run discards; win condition (first to empty) unchanged, no second-family fusion, so variant. Traces show contested alternating play, no runaway runs, 99-100% completion, median win turn 45 \u2014 sound and publishable."
+    },
+    "rank20_runplay": {
+      "kind": "pure run_play (contrast)",
+      "novelty": "variant_of_known",
+      "novelty_votes": [
+        "variant_of_known",
+        "variant_of_known",
+        "variant_of_known"
+      ],
+      "quality": "borderline",
+      "sample_reason": "Crazy Eights/Mau-Mau base (match suit/rank, 8 and JH wild, 2/JS/Heart draw-penalties, 10 reverse); traces complete via hand_empty with alternating turns, win reachable (median 143, completion climbs 67%->83% = slow not broken). Legal-move set IS changed (rummy-style sets/runs dump multiple cards), but win/scoring unchanged and the meld borrow is a thin accelerator, so variant."
+    }
+  }
+}

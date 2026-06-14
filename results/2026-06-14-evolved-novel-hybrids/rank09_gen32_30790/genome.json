@@ -1,0 +1,55 @@
+{
+  "id": "gen32_30790",
+  "generation": 32,
+  "skeleton": 0,
+  "fitness": 0.6512797029075301,
+  "shared_fitness": 0.4973146761234243,
+  "veto_stable": true,
+  "stable_evals": "5/5",
+  "players": 4,
+  "hand_size": 11,
+  "shedding": {
+    "match_rule": 2,
+    "draw_penalty": 2,
+    "rounds_per_game": 3
+  },
+  "borrowed": [
+    {
+      "source": 3,
+      "mechanic": 8
+    },
+    {
+      "source": 2,
+      "mechanic": 1
+    }
+  ],
+  "special_cards": [
+    {
+      "type": 4,
+      "by_rank": 8
+    },
+    {
+      "type": 0,
+      "by_rank": 7
+    },
+    {
+      "type": 2,
+      "by_rank": 2
+    },
+    {
+      "type": 1,
+      "by_rank": 10
+    },
+    {
+      "type": 2,
+      "by_suit": 3
+    },
+    {
+      "type": 4,
+      "by_rank": 11,
+      "by_suit": 3
+    }
+  ],
+  "scoring": {},
+  "trump_rule": 0
+}

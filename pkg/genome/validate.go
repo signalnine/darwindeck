@@ -211,6 +211,17 @@ var validBorrows = map[SkeletonType]map[MechanicType]bool{
 		// CheckEnd. The hook fires and affects the winner -- it is NOT a
 		// reserved/no-hook mechanic.
 		MechTrickScoring: true,
+		// MechRunPlay: a DEEP cross-skeleton borrow (climbing's multi-card
+		// combinations -> shedding). Unlike the three banking borrows above it
+		// does NOT touch state.Scores: it changes the LEGAL-MOVE set INSIDE the
+		// shedding runner (GenerateMoves adds same-rank set and same-suit run
+		// discards of 2+ cards that match the top, so hand reduction is lumpy).
+		// It is a pure SUPERSET of the normal moves, so it affects WHO empties
+		// first (the winner) while preserving the playability/termination
+		// floor -- whitelisted per dd-lnh. Implemented in the runner, NOT a
+		// hook: the hook system (AfterPlay/EndOfRound/Scoring, fired post-move)
+		// cannot change the move set.
+		MechRunPlay: true,
 	},
 	TrickTaking: {
 		MechMeldBonus: true, // Bonus for collecting melds from tricks (HookEndOfRound)
