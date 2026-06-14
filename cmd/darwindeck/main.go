@@ -89,6 +89,8 @@ func cmdEvolve(args []string) {
 		"enable cross-skeleton recombination: crossing two different-skeleton parents produces a HYBRID child (e.g. shed-to-win scored by tricks) and mutation may add cross-family active borrows; default OFF (baseline/hybrid only -- MAP-Elites crosses same-skeleton only)")
 	noveltySelect := fs.Bool("novelty-select", false,
 		"seed-aware novelty selection (hybrid only): add behavioral distance from the nearest of the 8 classic seeds into each VALID, above-floor individual's novelty score, steering the search away from the Crazy-Eights/Whist/Gin attractors; default OFF")
+	seedDir := fs.String("seed-dir", "",
+		"directory of custom seed genomes: load every genome.json under <dir> and AUGMENT (not replace) the built-in classic seed pool with the valid ones, so population init and changeSkeleton mutation sample from the combined pool while cross-family crossover keeps its classic partners; invalid files are skipped with a warning; default off (classics only)")
 
 	fs.Parse(args)
 	evolution.FitnessFloor = *floor
@@ -111,7 +113,7 @@ func cmdEvolve(args []string) {
 		NoveltySelect:  *noveltySelect,
 	}
 
-	allSeeds := getAllSeeds()
+	allSeeds := seedPool(*seedDir)
 
 	fmt.Printf("DarwinDeck v2 Evolution\n")
 	fmt.Printf("  Algorithm: %s\n", *algorithm)
@@ -121,7 +123,12 @@ func cmdEvolve(args []string) {
 	fmt.Printf("  MCTS decile: %.2f\n", config.MCTSDecile)
 	fmt.Printf("  Cross-skeleton: %v\n", config.CrossSkeleton)
 	fmt.Printf("  Novelty-select: %v\n", config.NoveltySelect)
-	fmt.Printf("  Seeds: %d games across 3 skeletons\n", len(allSeeds))
+	if *seedDir != "" {
+		fmt.Printf("  Seed pool: %d (%d classics + %d custom from %s)\n",
+			len(allSeeds), len(getAllSeeds()), len(allSeeds)-len(getAllSeeds()), *seedDir)
+	} else {
+		fmt.Printf("  Seeds: %d games across 3 skeletons\n", len(allSeeds))
+	}
 	fmt.Printf("  Output: %s\n\n", config.OutputDir)
 
 	startTime := time.Now()
