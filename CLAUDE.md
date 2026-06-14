@@ -33,7 +33,9 @@ make test-v2
 
 Single Go binary, three layers: CLI → Evolution Engine → Simulation Core.
 
-**Key design change from v1:** Games are built from 3 constrained skeleton templates (shedding, trick-taking, rummy) instead of an unconstrained genome. Skeletons guarantee playability by construction — the game loop itself ensures every state has legal moves. Parameters control *what* happens, not *whether* the game works.
+**Key design change from v1:** Games are built from 4 constrained skeleton templates (shedding, trick-taking, rummy, and climbing/ladder a la Big Two) instead of an unconstrained genome. Skeletons guarantee playability by construction — the game loop itself ensures every state has legal moves. Parameters control *what* happens, not *whether* the game works.
+
+**Novelty search (toward novel discovery):** `evolve -cross-skeleton` enables cross-family recombination (a base skeleton's core + an outcome-significant borrowed mechanic from another family); `-novelty-select` (hybrid algorithm) rewards behavioral distance from the 8 classic seeds, gated on playability. These produced the first judge-certified *novel* playable games (`results/2026-06-13-novel-games/`). Known limitation: novelty is so far incidental, not reliably selected-for — the cheap structural novelty signal cannot tell novel from rediscovery the way the `darwindeck judge` LLM tool can; wiring the judge into the selection loop is the documented next lever.
 
 **Cross-skeleton novelty:** Genomes can borrow mechanics from other skeletons (e.g., a shedding game with rummy-style meld bonuses). Borrows are whitelisted and validated.
 
