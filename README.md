@@ -100,7 +100,7 @@ needs a human in the loop or a fundamentally richer signal -- not more vetoes.
 
 ### Skeletons
 
-Games are built from three skeleton templates that guarantee mechanical
+Games are built from four skeleton templates that guarantee mechanical
 playability by construction (the game loop itself ensures every state has a
 legal move; parameters control *what* happens, not *whether* the game works):
 
@@ -109,10 +109,24 @@ legal move; parameters control *what* happens, not *whether* the game works):
 - **Trick-taking** (Whist, Hearts, Spades): one card per player per trick,
   highest card wins
 - **Rummy** (Gin Rummy, Knock Rummy): draw-meld-discard, lowest deadwood wins
+- **Climbing / ladder** (Big Two, Tien Len): play an ascending combination that
+  beats the table or pass, first to empty hand wins
 
 Genomes encode parameters (hand size, player count, trump rules, special cards,
 scoring, win conditions) and may borrow whitelisted cross-skeleton mechanics
 (e.g. a multi-round shedding game with rummy-style meld bonuses).
+
+**Cross-skeleton recombination + novelty search (toward novel discovery).**
+With `-cross-skeleton`, crossover of two different-family parents produces a
+hybrid (a base family's core + an outcome-significant cross-family mechanic);
+with `-novelty-select`, the hybrid algorithm rewards behavioral distance from the
+8 classic seeds (gated on playability). This produced the first judge-certified
+*novel* playable games (a trick-taking core grafted with rummy meld bonuses and
+avoidance penalties — see `results/2026-06-13-novel-games`). Honest limitation:
+novelty so far is incidental, not reliably selected-for; the cheap structural
+novelty signal cannot distinguish novel from rediscovery the way the LLM judge
+(`darwindeck judge`) can. Wiring the judge into the selection loop is the
+documented next lever.
 
 ### Fitness function (the rebuilt metric stack)
 
