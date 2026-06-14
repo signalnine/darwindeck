@@ -287,6 +287,19 @@ func buildBorrowingGenome(host, source genome.SkeletonType, mech genome.Mechanic
 			DrawFrom:       genome.DrawEither,
 			KnockThreshold: 10,
 		}
+	case genome.Climbing:
+		// Climbing's only whitelisted borrow is MechDrawPenalty, whose hook
+		// (applyDrawPenalty) fires on face-card plays. A larger hand keeps a
+		// deck to draw from and makes face-card plays frequent so the hook both
+		// fires and mutates a hand. Climbing reads no CardPoints; the shared
+		// Scoring above is inert for it.
+		g.HandSize = 9
+		g.Climbing = &genome.ClimbingParams{
+			AllowPairs:   true,
+			AllowTriples: true,
+			AllowRuns:    true,
+			MinRunLen:    3,
+		}
 	}
 
 	return g

@@ -376,5 +376,6 @@ func getAllSeeds() []*genome.Genome {
 		seeds.OhHell(),
 		seeds.GinRummy(),
 		seeds.KnockRummy(),
+		seeds.BigTwo(), // climbing skeleton seed (novelty evolution)
 	}
 }
