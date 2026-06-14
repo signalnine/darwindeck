@@ -307,8 +307,15 @@ func addBorrowedMechanic(g *genome.Genome, rng *rand.Rand, crossSkeleton bool) {
 				genome.BorrowedMechanic{Source: genome.Shedding, Mechanic: genome.MechAvoidance})
 		}
 	case genome.Rummy:
+		// MechTrickScoring is intentionally NOT a rummy candidate (Wave-3):
+		// rummy "captures" are laid-down melds, which random play almost never
+		// forms before knock/gin, so applyTrickScoring fires too rarely to ever
+		// decide the winner -- a vestigial tally. It stays whitelisted in
+		// validBorrows (a genome already carrying it is valid), but the engine no
+		// longer generates the dead combination. The avoidance and draw-penalty
+		// borrows DO get teeth (giveBorrowTeeth: deadwood-scale penalty + raised
+		// knock for avoidance; a live draw pile + bigger penalty for draw).
 		candidates = []genome.BorrowedMechanic{
-			{Source: genome.TrickTaking, Mechanic: genome.MechTrickScoring},
 			{Source: genome.Shedding, Mechanic: genome.MechDrawPenalty},
 			{Source: genome.TrickTaking, Mechanic: genome.MechAvoidance},
 		}
@@ -352,26 +359,16 @@ func addBorrowedMechanic(g *genome.Genome, rng *rand.Rand, crossSkeleton bool) {
 
 	g.Borrowed = append(g.Borrowed, pick)
 
-	// Coherent-mutation coupling (round 3 commit 6b): a mechanic's
-	// supporting infrastructure lands in the same mutation.
-	//   - A banking borrow on shedding banks Scores at ROUND end; with
-	//     RoundsPerGame < 2 nothing ever reads them (the game ends at the
-	//     first empty hand) -- the r2 rank05 inert combination. Force
-	//     multi-round play. MechTrickScoring joins MeldBonus/Avoidance here
-	//     (novelty evolution): its applyTrickScoring hook also banks per round.
-	//   - MechAvoidance's hook no-ops without CardPoints; seed a default
-	//     rule (the changeEnum convention: Hearts worth 1 penalty point).
-	if g.Skeleton == genome.Shedding && g.Shedding != nil &&
-		(pick.Mechanic == genome.MechMeldBonus || pick.Mechanic == genome.MechAvoidance ||
-			pick.Mechanic == genome.MechTrickScoring) &&
-		g.Shedding.RoundsPerGame < 2 {
-		g.Shedding.RoundsPerGame = 2
-	}
-	if pick.Mechanic == genome.MechAvoidance && len(g.Scoring.CardPoints) == 0 {
-		g.Scoring.CardPoints = []genome.CardScoring{
-			{Suit: uint8(3), Points: 1}, // Hearts carry 1 penalty point
-		}
-	}
+	// Coherent-mutation coupling (round 3 commit 6b), now unified into the
+	// Wave-3 teeth wiring: a mechanic's supporting infrastructure lands in the
+	// same mutation AND is made outcome-significant by construction. A banking
+	// borrow on shedding is forced multi-round (so the banked scores get a
+	// winner signal); an avoidance borrow gets a MEANINGFUL penalty set (a full
+	// penalty suit, not a single token card) plus avoidance-mode wiring on a
+	// trick host; a draw-penalty borrow on climbing gets a live draw pile so its
+	// hook can fire. giveBorrowTeeth is the single source of this wiring, shared
+	// verbatim with the cross-skeleton crossover path (wireHybridBorrow).
+	giveBorrowTeeth(g, pick)
 }
 
 // isBankingMechanic reports whether a borrowed mechanic writes to state.Scores

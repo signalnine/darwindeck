@@ -157,6 +157,16 @@ func applyAvoidance(state *sim.GameState, g *genome.Genome, event sim.Event) {
 // Trick-taking hosts only fire EventRoundEnd once hands are empty, so the
 // bonus must consider state.Tableau captures too -- otherwise the borrow is
 // silently a no-op on every non-Rummy host (dd-no2).
+//
+// TEETH (Wave-3): the bonus rewards PAIRS (2+ same rank) and 2-card partial
+// runs, not only 3+ melds. Under random play only ~7% of residual hands hold a
+// triple but ~78% hold a pair, so the 3+-only threshold fired so rarely that
+// the borrow was a vestigial tally CheckEnd ignored (it almost never changed
+// the banked totals, so the winner was decided by the fallback tiebreak). Pairs
+// score LESS per card than full sets, so a genuine 3+ meld still dominates and
+// the gradient "more/bigger melds win" is preserved -- but the bonus now fires
+// reliably enough to actually DECIDE the winner. Seeds carry no borrows, so the
+// calibration ground-truth is unaffected.
 func applyMeldBonus(state *sim.GameState, g *genome.Genome, event sim.Event) {
 	for i := 0; i < state.NumPlayers; i++ {
 		cards := append([]sim.Card(nil), state.Hands[i]...)
@@ -165,24 +175,31 @@ func applyMeldBonus(state *sim.GameState, g *genome.Genome, event sim.Event) {
 		}
 		bonus := 0
 
-		// Check for sets (3+ same rank)
+		// Check for sets: 3+ same rank score 5/card; pairs (exactly 2) score
+		// 2/card -- enough to fire reliably under random play, less than a real
+		// set so bigger melds still win.
 		rankCount := make(map[sim.Rank]int)
 		for _, c := range cards {
 			rankCount[c.Rank]++
 		}
 		for _, count := range rankCount {
-			if count >= 3 {
+			switch {
+			case count >= 3:
 				bonus += count * 5 // 5 points per card in a set
+			case count == 2:
+				bonus += count * 2 // 2 points per card in a pair
 			}
 		}
 
-		// Check for runs (3+ consecutive same suit)
+		// Check for runs of same suit: 3+ consecutive score 3/card; a 2-card
+		// consecutive partial run scores 1/card (same "fires reliably, full run
+		// still dominates" rationale as pairs above).
 		suitCards := make(map[sim.Suit][]int)
 		for _, c := range cards {
 			suitCards[c.Suit] = append(suitCards[c.Suit], int(c.Rank))
 		}
 		for _, ranks := range suitCards {
-			if len(ranks) < 3 {
+			if len(ranks) < 2 {
 				continue
 			}
 			// Sort and find consecutive
@@ -192,18 +209,29 @@ func applyMeldBonus(state *sim.GameState, g *genome.Genome, event sim.Event) {
 				if ranks[j] == ranks[j-1]+1 {
 					run++
 				} else {
-					if run >= 3 {
-						bonus += run * 3 // 3 points per card in a run
-					}
+					bonus += runBonus(run)
 					run = 1
 				}
 			}
-			if run >= 3 {
-				bonus += run * 3
-			}
+			bonus += runBonus(run)
 		}
 
 		state.Scores[i] += bonus
+	}
+}
+
+// runBonus scores a maximal same-suit consecutive run of length n: 3 points per
+// card for a full 3+ run, 1 point per card for a 2-card partial run, nothing
+// for a lone card. The partial-run tier is the Wave-3 teeth (fires reliably
+// under random play) while keeping full runs strictly more valuable.
+func runBonus(n int) int {
+	switch {
+	case n >= 3:
+		return n * 3
+	case n == 2:
+		return n * 1
+	default:
+		return 0
 	}
 }
 
