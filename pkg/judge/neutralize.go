@@ -8,9 +8,11 @@ import (
 )
 
 // neutralizeRulebook rewrites the rummy "Knock"/"Gin" mechanic vocabulary to
-// neutral going-out phrasing. These tokens are emitted identically for every
-// rummy genome by output.GenerateRulebook, so this does not erase any
-// distinguishing signal -- it only removes a game-name collision (Gin Rummy)
+// neutral going-out phrasing, and strips the climbing rulebook's game-name
+// parenthetical ("Big Two / Tichu / President family"). These tokens are
+// emitted identically for every genome of their skeleton by
+// output.GenerateRulebook, so this does not erase any distinguishing signal --
+// it only removes a game-name collision (Gin Rummy; Big Two/Tichu/President)
 // from the blind text. Suit references (Hearts, Spades, etc.) and the
 // card-attribute word "rank" are left intact: those are legitimate mechanical
 // card text, not identity or metric leaks. The shared output package is never
@@ -23,6 +25,11 @@ func neutralizeRulebook(s string) string {
 		"You can only go out by reaching **zero deadwood** (no leftover cards).",
 		"when someone knocks or goes gin wins", "when someone declares out or reaches zero deadwood wins",
 		"Knock to end the round early", "Declare out to end the round early",
+		// Climbing intro: drop the named-game family AND the skeleton keyword so
+		// neither the game names (Big Two/Tichu/President) nor "climbing" leak,
+		// while keeping the mechanic description accurate.
+		"This is a **climbing game** (Big Two / Tichu / President family) — the goal is to be the first player to empty your hand.",
+		"In this game you beat the current play with a stronger same-shape combination or pass — the goal is to be the first player to empty your hand.",
 	)
 	return repl.Replace(s)
 }
