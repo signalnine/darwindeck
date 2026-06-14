@@ -307,13 +307,13 @@ func TestRulebookOmitsInertScoringBorrowAd(t *testing.T) {
 	inert.ID = "single-round-meld-borrow"
 	inert.Shedding.RoundsPerGame = 1
 	rb := GenerateRulebook(inert)
-	if strings.Contains(rb, "bonus points for forming sets or runs") || strings.Contains(rb, "Additional Rules") {
+	if strings.Contains(rb, "Meld bonus") || strings.Contains(rb, "Additional Rules") {
 		t.Errorf("single-round shedding rulebook advertises an inert scoring borrow:\n%s", rb)
 	}
 
 	live := multiRoundSheddingGenome(genome.MechMeldBonus, genome.Rummy)
 	rbLive := GenerateRulebook(live)
-	if !strings.Contains(rbLive, "bonus points for forming sets or runs") {
+	if !strings.Contains(rbLive, "Meld bonus") {
 		t.Errorf("multi-round shedding rulebook lost its live borrow text:\n%s", rbLive)
 	}
 }
@@ -350,12 +350,54 @@ func TestRulebookNoDeadRuleTextAcrossAllFixtures(t *testing.T) {
 		// Scoring borrows advertised only when they can affect the outcome.
 		if g.Skeleton == genome.Shedding && !g.SheddingMultiRound() {
 			for _, phrase := range []string{
-				"bonus points for forming sets or runs",
-				"penalty points — avoid collecting",
+				"Meld bonus",
+				"Penalty cards",
 			} {
 				if strings.Contains(rb, phrase) {
 					t.Errorf("%s: single-round shedding rulebook advertises inert scoring borrow text %q", g.ID, phrase)
 				}
+			}
+		}
+	}
+}
+
+// TestBorrowedRulesDescribeConcreteMechanics (blind-novelty fix): the borrowed
+// mechanic is the entire source of a cross-skeleton hybrid's novelty, so its
+// rulebook text must state the CONCRETE rule (scoring magnitudes + trigger) the
+// hook in pkg/mechanic/hooks.go implements -- not a generic "earn bonus points"
+// blurb that left judges (human and LLM) unable to tell a real mechanical fusion
+// from an undefined bolt-on. Each anchor is a behavioral fact that must survive
+// in the text; the old generic phrases must never come back. This is the
+// drift-guard for the borrowedDescription <-> hooks coupling.
+func TestBorrowedRulesDescribeConcreteMechanics(t *testing.T) {
+	cases := []struct {
+		mech    genome.MechanicType
+		anchors []string
+	}{
+		// Anchors cover EVERY magnitude/trigger the doc comment promises stays in
+		// sync with the hooks, so a hook-side constant change cannot drift the
+		// rulebook silently (the gap a review caught: partial magnitudes only).
+		{genome.MechMeldBonus, []string{"Meld bonus", "5 points per card", "2 per card", "3 points per card", "1 per card", "run of 3 or more"}},
+		{genome.MechAvoidance, []string{"Penalty cards", "lose points equal to", "Card Point Values"}},
+		{genome.MechTrickScoring, []string{"Capture bonus", "captured the most cards", "equal to the number of cards", "split the bonus evenly"}},
+		{genome.MechDrawPenalty, []string{"Draw penalty", "face card (Jack or higher)", "draw 1 extra card"}},
+	}
+	bannedGeneric := []string{
+		"Earn bonus points for forming sets or runs",
+		"Score bonus points based on trick-like card combinations",
+		"Draw extra cards as a penalty in certain situations",
+		"Certain cards carry penalty points — avoid collecting them",
+	}
+	for _, c := range cases {
+		desc := borrowedDescription(genome.BorrowedMechanic{Mechanic: c.mech})
+		for _, a := range c.anchors {
+			if !strings.Contains(desc, a) {
+				t.Errorf("mechanic %v: description missing concrete anchor %q\n  got: %s", c.mech, a, desc)
+			}
+		}
+		for _, bad := range bannedGeneric {
+			if strings.Contains(desc, bad) {
+				t.Errorf("mechanic %v: description still uses banned generic blurb %q", c.mech, bad)
 			}
 		}
 	}
