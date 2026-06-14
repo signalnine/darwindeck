@@ -123,15 +123,45 @@ func tweakParameter(g *genome.Genome, rng *rand.Rand) {
 				g.Rummy.KnockThreshold = clampInt(g.Rummy.KnockThreshold+rng.IntN(5)-2, 0, 30)
 			}
 		}
+	case genome.Climbing:
+		if g.Climbing != nil {
+			// MinRunLen is the only int param. Keep it in the valid 3-5 band so
+			// a later AllowRuns flip lands on a length the runner accepts (the
+			// run/single boundary). The clamp also normalizes the legacy 0
+			// "unset" encoding to 3.
+			g.Climbing.MinRunLen = clampInt(g.Climbing.MinRunLen+rng.IntN(3)-1, 3, 5)
+		}
 	}
 }
 
 // flipBool toggles a boolean skeleton parameter. Shedding and rummy no longer
 // expose any runner-consumed bool (CanStack/PlayMultiple/CanLayOff were inert
-// and removed -- dd-027), so only trick-taking's MustFollowSuit remains.
+// and removed -- dd-027), so trick-taking's MustFollowSuit and climbing's
+// combination toggles (AllowPairs/AllowTriples/AllowRuns) are the only bools.
 func flipBool(g *genome.Genome, rng *rand.Rand) {
-	if g.Skeleton == genome.TrickTaking && g.TrickTaking != nil {
-		g.TrickTaking.MustFollowSuit = !g.TrickTaking.MustFollowSuit
+	switch g.Skeleton {
+	case genome.TrickTaking:
+		if g.TrickTaking != nil {
+			g.TrickTaking.MustFollowSuit = !g.TrickTaking.MustFollowSuit
+		}
+	case genome.Climbing:
+		if g.Climbing != nil {
+			// Flip one combination-type toggle. Singles are always legal (the
+			// playability floor), so toggling pairs/triples/runs off can never
+			// make the game unplayable. When AllowRuns is turned ON, ensure
+			// MinRunLen is a valid length so the runner produces runs.
+			switch rng.IntN(3) {
+			case 0:
+				g.Climbing.AllowPairs = !g.Climbing.AllowPairs
+			case 1:
+				g.Climbing.AllowTriples = !g.Climbing.AllowTriples
+			case 2:
+				g.Climbing.AllowRuns = !g.Climbing.AllowRuns
+				if g.Climbing.AllowRuns && (g.Climbing.MinRunLen < 3 || g.Climbing.MinRunLen > 5) {
+					g.Climbing.MinRunLen = 3
+				}
+			}
+		}
 	}
 }
 
@@ -281,6 +311,17 @@ func addBorrowedMechanic(g *genome.Genome, rng *rand.Rand, crossSkeleton bool) {
 			{Source: genome.TrickTaking, Mechanic: genome.MechTrickScoring},
 			{Source: genome.Shedding, Mechanic: genome.MechDrawPenalty},
 			{Source: genome.TrickTaking, Mechanic: genome.MechAvoidance},
+		}
+	case genome.Climbing:
+		// Climbing's only whitelisted borrow is MechDrawPenalty (the one hook
+		// that fires AND affects climbing's hand-based winner -- it grows a hand
+		// on face-card plays, slowing that player's race to empty). The banking
+		// scoring borrows are NOT whitelisted on climbing (CheckEnd never reads
+		// state.Scores), so they are not candidates here either. No coherence
+		// coupling is needed: MechDrawPenalty acts directly and reads no
+		// CardPoints / rounds machinery.
+		candidates = []genome.BorrowedMechanic{
+			{Source: genome.Shedding, Mechanic: genome.MechDrawPenalty},
 		}
 	}
 

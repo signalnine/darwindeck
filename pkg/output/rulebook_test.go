@@ -32,6 +32,45 @@ func TestRulebookOmitsUnsupportedMechanics(t *testing.T) {
 	}
 }
 
+// TestClimbingRulebookRendersRules: a climbing genome's rulebook must contain a
+// "How to Play" climbing section describing the beat-or-pass loop and the
+// enabled combination types (a published climbing champion must not ship a
+// rulebook missing its core rules).
+func TestClimbingRulebookRendersRules(t *testing.T) {
+	rb := GenerateRulebook(seeds.BigTwo())
+	for _, phrase := range []string{
+		"climbing game",
+		"current combination",
+		"Pass",
+		"Pair",
+		"Triple",
+		"Run",
+		"first player to empty",
+	} {
+		if !strings.Contains(rb, phrase) {
+			t.Errorf("climbing rulebook missing %q\n---\n%s", phrase, rb)
+		}
+	}
+}
+
+// TestClimbingRulebookOmitsDisabledCombinations: a singles-only climbing genome
+// must not advertise pairs/triples/runs.
+func TestClimbingRulebookOmitsDisabledCombinations(t *testing.T) {
+	g := &genome.Genome{
+		ID: "singles-climb", Skeleton: genome.Climbing, Players: 2, HandSize: 5,
+		Climbing: &genome.ClimbingParams{},
+	}
+	rb := GenerateRulebook(g)
+	for _, phrase := range []string{"Pair:", "Triple:", "Run:"} {
+		if strings.Contains(rb, phrase) {
+			t.Errorf("singles-only climbing rulebook advertises disabled combination %q", phrase)
+		}
+	}
+	if !strings.Contains(rb, "Single:") {
+		t.Error("climbing rulebook must always describe singles")
+	}
+}
+
 func TestRulebookOmitsSpecialCardsForNonShedding(t *testing.T) {
 	// The trick-taking and rummy runners never apply special-card effects, so
 	// the rulebook must not advertise them on those skeletons (dd-24e).

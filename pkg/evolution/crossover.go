@@ -129,6 +129,17 @@ func crossFamilyBorrow(host, other genome.SkeletonType, rng *rand.Rand) (genome.
 			// rummy hosts unable to reach a whole novel direction).
 			{genome.MechDrawPenalty, genome.Shedding},
 		},
+		genome.Climbing: {
+			// climbing with shedding-style draw-penalty bursts (novelty
+			// evolution): a climbing core whose high-card plays inflict an extra
+			// card. The ONLY whitelisted climbing borrow -- it both fires
+			// (applyDrawPenalty on EventCardPlayed, which climbing emits) and
+			// affects the winner (climbing's winner is first-to-empty-hand, and
+			// the hook GROWS a hand, slowing the race to empty). The banking
+			// scoring borrows are not whitelisted on climbing (CheckEnd never
+			// reads state.Scores), so they cannot appear here.
+			{genome.MechDrawPenalty, genome.Shedding},
+		},
 	}
 
 	cands := byHost[host]
@@ -242,6 +253,8 @@ func Crossover(a, b *genome.Genome, rng *rand.Rand) *genome.Genome {
 		crossoverTrickTaking(child, a, b, rng)
 	case genome.Rummy:
 		crossoverRummy(child, a, b, rng)
+	case genome.Climbing:
+		crossoverClimbing(child, a, b, rng)
 	}
 
 	// Special cards: take from one parent. Only shedding consumes them, and
@@ -413,6 +426,32 @@ func crossoverRummy(child *genome.Genome, a, b *genome.Genome, rng *rand.Rand) {
 	}
 	if rng.Float64() < 0.5 {
 		child.Rummy.KnockThreshold = b.Rummy.KnockThreshold
+	}
+}
+
+func crossoverClimbing(child *genome.Genome, a, b *genome.Genome, rng *rand.Rand) {
+	if a.Climbing == nil || b.Climbing == nil {
+		return
+	}
+	if rng.Float64() < 0.5 {
+		child.Climbing.AllowPairs = b.Climbing.AllowPairs
+	}
+	if rng.Float64() < 0.5 {
+		child.Climbing.AllowTriples = b.Climbing.AllowTriples
+	}
+	if rng.Float64() < 0.5 {
+		child.Climbing.AllowRuns = b.Climbing.AllowRuns
+	}
+	if rng.Float64() < 0.5 {
+		child.Climbing.MinRunLen = b.Climbing.MinRunLen
+	}
+	// Singles are always legal, so any combination of these toggles is a
+	// playable game -- no invariant repair needed. But if runs are on, ensure
+	// MinRunLen is a valid run length (the two coin flips above are
+	// independent, so a child can take AllowRuns from one parent and a
+	// run-disabled MinRunLen of 0 from the other).
+	if child.Climbing.AllowRuns && (child.Climbing.MinRunLen < 3 || child.Climbing.MinRunLen > 5) {
+		child.Climbing.MinRunLen = 3
 	}
 }
 
