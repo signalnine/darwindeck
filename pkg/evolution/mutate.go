@@ -296,6 +296,19 @@ func addBorrowedMechanic(g *genome.Genome, rng *rand.Rand, crossSkeleton bool) {
 		}
 	}
 
+	// Coherence nudge (Wave 2 step 3): softly discourage the "muddled scoring
+	// pile-up" that dominated Wave-1 hybrids -- two or more borrows that all
+	// bank into state.Scores (MeldBonus / Avoidance / TrickScoring), so the
+	// game's score is an opaque sum of overlapping bonuses. This is a SOFT
+	// discouragement, not a veto: when the host already carries a banking
+	// borrow and this pick would add a SECOND one, drop it half the time. The
+	// first scoring borrow is never touched, and a complex two-banking game is
+	// still reachable ~50% of the time, so legitimately rich games are not
+	// killed. NOT a hard veto and NOT in the degeneracy gate.
+	if isBankingMechanic(pick.Mechanic) && g.HasBankingBorrow() && rng.Float64() < 0.5 {
+		return
+	}
+
 	g.Borrowed = append(g.Borrowed, pick)
 
 	// Coherent-mutation coupling (round 3 commit 6b): a mechanic's
@@ -318,6 +331,18 @@ func addBorrowedMechanic(g *genome.Genome, rng *rand.Rand, crossSkeleton bool) {
 			{Suit: uint8(3), Points: 1}, // Hearts carry 1 penalty point
 		}
 	}
+}
+
+// isBankingMechanic reports whether a borrowed mechanic writes to state.Scores
+// (the banking-scoring family: MeldBonus, Avoidance, TrickScoring). Mirrors
+// genome.HasBankingBorrow's membership test; used by the coherence nudge to
+// detect a would-be second scoring pile-up.
+func isBankingMechanic(m genome.MechanicType) bool {
+	switch m {
+	case genome.MechMeldBonus, genome.MechAvoidance, genome.MechTrickScoring:
+		return true
+	}
+	return false
 }
 
 func removeBorrowedMechanic(g *genome.Genome, rng *rand.Rand) {
