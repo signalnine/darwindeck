@@ -288,7 +288,11 @@ func addBorrowedMechanic(g *genome.Genome, rng *rand.Rand, crossSkeleton bool) {
 			// + hooked (applyTrickScoring) + outcome-affecting (wired through
 			// multi-round banking below).
 			candidates = append(candidates,
-				genome.BorrowedMechanic{Source: genome.TrickTaking, Mechanic: genome.MechTrickScoring})
+				genome.BorrowedMechanic{Source: genome.TrickTaking, Mechanic: genome.MechTrickScoring},
+				// DEEP move-level borrow: climbing's multi-card combinations
+				// (ComboPlay). Runner-implemented (not a hook); giveBorrowTeeth
+				// bumps hand size + relaxes match so combos actually form.
+				genome.BorrowedMechanic{Source: genome.Climbing, Mechanic: genome.MechRunPlay})
 		}
 	case genome.TrickTaking:
 		// MechPlayMultiple dropped: tricktaking move-gen only ever

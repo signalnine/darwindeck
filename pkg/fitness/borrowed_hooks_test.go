@@ -38,6 +38,14 @@ func borrowCases() []borrowCase {
 	var cases []borrowCase
 	for _, host := range hosts {
 		for _, mech := range whitelist[host] {
+			// Runner-implemented (deep) borrows have NO hook by design: their
+			// effect lives in the skeleton runner's GenerateMoves/ApplyMove, not
+			// pkg/mechanic.BuildHooks. The hook-firing/state-mutation assertions
+			// here only apply to hook-based borrows; runner borrows are covered
+			// by their own skeleton package tests (e.g. shedding RunPlay tests).
+			if runnerImplementedBorrow[mech] {
+				continue
+			}
 			cases = append(cases, borrowCase{
 				host:     host,
 				source:   borrowSource(host, mech),
@@ -46,6 +54,14 @@ func borrowCases() []borrowCase {
 		}
 	}
 	return cases
+}
+
+// runnerImplementedBorrow lists whitelisted borrows whose behavior lives in a
+// skeleton RUNNER (changing the move set / win condition) rather than in a
+// pkg/mechanic hook. They are excluded from the hook-based assertions; their
+// effect is validated in the owning skeleton package.
+var runnerImplementedBorrow = map[genome.MechanicType]bool{
+	genome.MechRunPlay: true,
 }
 
 // borrowSource picks the source skeleton recorded on the BorrowedMechanic.

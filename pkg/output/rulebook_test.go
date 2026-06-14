@@ -381,6 +381,7 @@ func TestBorrowedRulesDescribeConcreteMechanics(t *testing.T) {
 		{genome.MechAvoidance, []string{"Penalty cards", "lose points equal to", "Card Point Values"}},
 		{genome.MechTrickScoring, []string{"Capture bonus", "captured the most cards", "equal to the number of cards", "split the bonus evenly"}},
 		{genome.MechDrawPenalty, []string{"Draw penalty", "face card (Jack or higher)", "draw 1 extra card"}},
+		{genome.MechRunPlay, []string{"Combination plays", "set of 2 or more cards of the same rank", "run of 2 or more consecutive"}},
 	}
 	bannedGeneric := []string{
 		"Earn bonus points for forming sets or runs",

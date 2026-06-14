@@ -431,6 +431,10 @@ func borrowedDescription(bm genome.BorrowedMechanic) string {
 		// applyAvoidance: at round end, subtract the Card Point Values of
 		// penalty cards left in hand + captures (liveness guarantees CardPoints).
 		return "**Penalty cards:** at the end of each round, lose points equal to the value of any scoring cards (see Card Point Values) still in your hand or among the cards you captured — avoid collecting them"
+	case genome.MechRunPlay:
+		// shedding/runner.go ComboPlay: discard same-rank sets / same-suit runs
+		// of 2+ cards in one turn (when the group matches the top).
+		return "**Combination plays:** instead of one card, you may discard a set of 2 or more cards of the same rank, or a run of 2 or more consecutive cards in one suit, in a single turn — as long as one of those cards legally matches the discard top. Unloading several cards at once lets you empty your hand in bursts, so it pays to hold cards and dump a whole run"
 	case genome.MechKnock:
 		return "Knock to end the round early"
 	case genome.MechTrump:
