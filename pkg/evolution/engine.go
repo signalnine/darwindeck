@@ -56,6 +56,25 @@ type Config struct {
 	// crossover dispatch; MAP-Elites only crosses same-skeleton archive
 	// occupants, so the flag is inert there.
 	CrossSkeleton bool
+
+	// NoveltySelect enables SEED-AWARE novelty selection (Wave 2). With it ON,
+	// the NoveltyEngine adds a SEED-DISTANCE term to each individual's novelty
+	// score: the behavioral distance from the nearest of the 8 classic seed
+	// genomes (Crazy Eights, Mau-Mau, Whist, Hearts, Spades, Oh Hell, Gin
+	// Rummy, Knock Rummy). This pushes the search AWAY from the
+	// Crazy-Eights/Whist/Gin attractors specifically, so novelty is AIMED at
+	// rather than incidental. Default OFF (zero value): pure within-population
+	// k-NN novelty, the Wave-1 behavior.
+	//
+	// CRITICAL playability guard: the seed term only ever ADDS to the novelty
+	// of individuals that are already Valid (pass Tier-0/1 + degeneracy vetoes)
+	// AND above FitnessFloor -- the same gate the rest of computeNovelty
+	// applies. A degenerate or unplayable game stays at novelty 0 no matter how
+	// behaviorally far it sits from every seed, so it can never win on novelty
+	// alone. The classic seeds sit at distance 0 from the seed set, so the
+	// calibration gate (which evaluates seeds) is unaffected. Inert on Engine
+	// and MAP-Elites; only the NoveltyEngine reads it.
+	NoveltySelect bool
 }
 
 // DefaultConfig returns sensible defaults.

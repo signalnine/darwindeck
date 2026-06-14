@@ -10,6 +10,7 @@ import (
 
 	"github.com/darwindeck/darwindeck/pkg/fitness"
 	"github.com/darwindeck/darwindeck/pkg/genome"
+	"github.com/darwindeck/darwindeck/pkg/seeds"
 )
 
 const (
@@ -82,6 +83,14 @@ type NoveltyEngine struct {
 	// addThreshold is the current absolute archive-admission threshold,
 	// adapted each generation (see NoveltyAddThreshold).
 	addThreshold float64
+
+	// Seed-aware novelty (Wave 2, Config.NoveltySelect). seedDescCache holds
+	// the behavior descriptor of each of the 8 classic seeds, computed once via
+	// seedDescriptors() and reused every generation -- the fixed anchor the
+	// seed-distance term measures against. seedDescOnce gates the one-time
+	// computation.
+	seedDescCache []BehaviorDescriptor
+	seedDescOnce  bool
 
 	// Stats
 	BestFitness float64
@@ -307,22 +316,35 @@ func (e *NoveltyEngine) computeNovelty() {
 			distances = append(distances, ind.Behavior.Distance(p.Behavior))
 		}
 
-		if len(distances) == 0 {
-			ind.Novelty = 0
-			continue
+		// Within-population k-NN term: mean distance to the k nearest
+		// same-skeleton neighbours. Zero when this is the only same-skeleton
+		// qualified individual (no neighbours to be unlike yet).
+		knn := 0.0
+		if len(distances) > 0 {
+			sort.Float64s(distances)
+			k := NoveltyK
+			if k > len(distances) {
+				k = len(distances)
+			}
+			sum := 0.0
+			for i := 0; i < k; i++ {
+				sum += distances[i]
+			}
+			knn = sum / float64(k)
 		}
 
-		sort.Float64s(distances)
-		k := NoveltyK
-		if k > len(distances) {
-			k = len(distances)
-		}
-
-		sum := 0.0
-		for i := 0; i < k; i++ {
-			sum += distances[i]
-		}
-		ind.Novelty = sum / float64(k)
+		// Seed-aware novelty (Wave 2): ADD the distance to the nearest classic
+		// seed so the search is rewarded for fleeing the
+		// Crazy-Eights/Whist/Gin attractors, not just for being unlike its
+		// current neighbours. seedDistanceTerm is 0 when -novelty-select is off
+		// and is reached ONLY here, inside the Valid + above-FitnessFloor gate
+		// (the continue at the top of this loop zeroes everything else) -- so a
+		// degenerate or unplayable game can never gain novelty from seed
+		// distance. The seed term is added even when the k-NN term is 0 (a
+		// lone qualified individual is still rewarded for sitting far from the
+		// classics). Both terms live in the same behavior-distance units, so
+		// the sum stays commensurate before per-skeleton normalization.
+		ind.Novelty = knn + e.seedDistanceTerm(ind.Behavior)
 
 		if ind.Novelty > maxNoveltyPerSkel[skel] {
 			maxNoveltyPerSkel[skel] = ind.Novelty
@@ -449,6 +471,70 @@ func (e *NoveltyEngine) nearestArchiveDistance(skel genome.SkeletonType, b Behav
 		}
 	}
 	return best
+}
+
+// seedDescriptors returns the behavior descriptors of the 8 CLASSIC seed
+// genomes (seeds.All()), computed once and cached. These are the fixed anchors
+// the seed-distance novelty term (Wave 2) measures distance from: an
+// individual far from ALL of them sits in genuinely novel territory relative to
+// the Crazy-Eights/Whist/Gin family of human-validated games.
+//
+// The classics are read from seeds.All() rather than e.Seeds so the anchor is
+// always the true 8 classics even if a caller seeds the population with a
+// different set (tests do). Descriptors are built through the canonical
+// BehaviorBatch/ComputeBehavior path -- the same descriptor every other QD
+// consumer sees -- so a seed's own descriptor is identical to the descriptor
+// the population computes for that same genome, keeping the seed at distance 0
+// from itself (the calibration anchor).
+func (e *NoveltyEngine) seedDescriptors() []BehaviorDescriptor {
+	if e.seedDescOnce {
+		return e.seedDescCache
+	}
+	classics := seeds.All()
+	descs := make([]BehaviorDescriptor, 0, len(classics))
+	for i, c := range classics {
+		// Distinct per-seed offset; deterministic in BaseSeed.
+		if batch, ok := BehaviorBatch(c, e.Config.BaseSeed+9_000_000+uint64(i)); ok {
+			descs = append(descs, ComputeBehavior(batch))
+		}
+	}
+	e.seedDescCache = descs
+	e.seedDescOnce = true
+	return e.seedDescCache
+}
+
+// minSeedDistance returns the behavior distance from b to the NEAREST classic
+// seed descriptor. Cross-skeleton on purpose: the goal is to flee the classic
+// attractors wherever they sit in behavior space, not just within b's own
+// family. Returns 0 when there are no seed descriptors (so the term is inert
+// rather than rewarding emptiness).
+func (e *NoveltyEngine) minSeedDistance(b BehaviorDescriptor) float64 {
+	descs := e.seedDescriptors()
+	if len(descs) == 0 {
+		return 0
+	}
+	best := math.Inf(1)
+	for _, d := range descs {
+		if dist := b.Distance(d); dist < best {
+			best = dist
+		}
+	}
+	if math.IsInf(best, 1) {
+		return 0
+	}
+	return best
+}
+
+// seedDistanceTerm is the additive seed-aware novelty contribution for behavior
+// b: the distance to the nearest classic seed when Config.NoveltySelect is ON,
+// and 0 otherwise. The caller is responsible for applying this ONLY to Valid,
+// above-floor individuals (the playability guard); this method does not see
+// validity and must never be called for a gated-out individual.
+func (e *NoveltyEngine) seedDistanceTerm(b BehaviorDescriptor) float64 {
+	if !e.Config.NoveltySelect {
+		return 0
+	}
+	return e.minSeedDistance(b)
 }
 
 func (e *NoveltyEngine) selectNext() []*NoveltyIndividual {
