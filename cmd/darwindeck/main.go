@@ -85,6 +85,8 @@ func cmdEvolve(args []string) {
 		"minimum fitness for QD consideration (default derived from the seed-calibration suite)")
 	mctsDecile := fs.Float64("mcts-decile", 0.10,
 		"fraction of each generation (ranked by greedy-only running mean) re-evaluated with MCTS; 0 disables (baseline/hybrid only)")
+	crossSkeleton := fs.Bool("cross-skeleton", false,
+		"enable cross-skeleton recombination: crossing two different-skeleton parents produces a HYBRID child (e.g. shed-to-win scored by tricks) and mutation may add cross-family active borrows; default OFF (baseline/hybrid only -- MAP-Elites crosses same-skeleton only)")
 
 	fs.Parse(args)
 	evolution.FitnessFloor = *floor
@@ -103,6 +105,7 @@ func cmdEvolve(args []string) {
 		SaveTopN:       *topN,
 		OutputDir:      *outDir,
 		MCTSDecile:     *mctsDecile,
+		CrossSkeleton:  *crossSkeleton,
 	}
 
 	allSeeds := getAllSeeds()
@@ -113,6 +116,7 @@ func cmdEvolve(args []string) {
 	fmt.Printf("  Generations: %d\n", config.Generations)
 	fmt.Printf("  Workers: %d\n", config.Workers)
 	fmt.Printf("  MCTS decile: %.2f\n", config.MCTSDecile)
+	fmt.Printf("  Cross-skeleton: %v\n", config.CrossSkeleton)
 	fmt.Printf("  Seeds: %d games across 3 skeletons\n", len(allSeeds))
 	fmt.Printf("  Output: %s\n\n", config.OutputDir)
 

@@ -6,6 +6,196 @@ import (
 	"github.com/darwindeck/darwindeck/pkg/genome"
 )
 
+// CrossoverWith dispatches crossover with the cross-skeleton flag threaded in.
+// It is the single config-aware entry point the engines call:
+//
+//   - SAME-skeleton parents: ordinary uniform crossover (delegates to
+//     Crossover), unaffected by the flag.
+//   - DIFFERENT-skeleton parents, flag OFF: returns nil (the historical
+//     hard-disabled behavior; the caller falls back to mutation).
+//   - DIFFERENT-skeleton parents, flag ON: produces a HYBRID child
+//     (hybridCrossover) -- novelty evolution.
+//
+// Crossover (the 3-arg form) is preserved as the same-skeleton-only operator
+// so existing callers and tests keep their contract.
+func CrossoverWith(a, b *genome.Genome, rng *rand.Rand, crossSkeleton bool) *genome.Genome {
+	if a.Skeleton == b.Skeleton {
+		return Crossover(a, b, rng)
+	}
+	if !crossSkeleton {
+		return nil
+	}
+	return hybridCrossover(a, b, rng)
+}
+
+// hybridCrossover builds a cross-skeleton HYBRID child from two
+// different-skeleton parents (novelty evolution). The child is parent A's
+// skeleton and core params (a full clone of A), PLUS one ACTIVE borrowed
+// mechanic characteristic of parent B's family, drawn from the cross-family
+// options whose hooks actually fire and affect the winner. The borrow is made
+// outcome-affecting (wired through the same banked-score / scoring path the
+// shedding scoring-borrow uses) and the child is repaired to validity.
+//
+// Recombination, not mere mutation: the child inherits A's whole game and gains
+// a B-family mechanic, so a shedding parent crossed with a trick-taking parent
+// yields a shed-to-win game scored by tricks; a trick-taking parent crossed
+// with a rummy/shedding parent yields a trick-taker with penalty-card scoring
+// borrowed from the other family. The host (A's skeleton) is the deterministic
+// frame and B contributes the cross-family mechanic; which parent is A vs B is
+// the caller's choice (the engine picks parent order at random via tournament).
+func hybridCrossover(a, b *genome.Genome, rng *rand.Rand) *genome.Genome {
+	child := cloneGenome(a)
+	child.ID = ""
+	child.Generation = max(a.Generation, b.Generation)
+
+	// Pick the cross-family ACTIVE mechanic the host may borrow to characterize
+	// B's family. crossFamilyBorrow returns a (Source, Mechanic) whose hook
+	// fires and affects the winner on this host, or ok=false when no such
+	// borrow exists (then the child is just a clone of A, still a valid genome).
+	if bm, ok := crossFamilyBorrow(child.Skeleton, b.Skeleton, rng); ok {
+		// Skip if the host already carries this exact borrow (a parent could).
+		dup := false
+		for _, existing := range child.Borrowed {
+			if existing.Source == bm.Source && existing.Mechanic == bm.Mechanic {
+				dup = true
+				break
+			}
+		}
+		if !dup && len(child.Borrowed) < 3 {
+			child.Borrowed = append(child.Borrowed, bm)
+			wireHybridBorrow(child, bm, a, b)
+		}
+	}
+
+	// Reuse the same invariant repair as same-skeleton crossover so the child
+	// is "valid in, valid out" even before the post-crossover Mutate runs.
+	repairCrossoverInvariants(child, a, child, rng)
+
+	return child
+}
+
+// crossFamilyBorrow returns an ACTIVE cross-family borrowed mechanic for a
+// host skeleton that characterizes the other parent's family, drawn from the
+// whitelisted options whose hooks actually fire and affect the winner. The
+// returned Source is the OTHER family (recording the cross-family provenance);
+// it must differ from the host (validation rejects borrowing from one's own
+// skeleton). Returns ok=false when no cross-family active mechanic is
+// available for this (host, other) pair.
+//
+// The table is intentionally narrower than validBorrows: it lists only the
+// mechanics that make a genuinely NOVEL hybrid (a shed-to-win game scored by
+// tricks; a trick-taker with cross-family penalty scoring; a rummy with
+// trick-style capture scoring), preferring those sourced from the OTHER parent
+// when possible. Every entry's hook is wired outcome-affecting by
+// wireHybridBorrow.
+func crossFamilyBorrow(host, other genome.SkeletonType, rng *rand.Rand) (genome.BorrowedMechanic, bool) {
+	// Candidate cross-family mechanics per host, each tagged with the family it
+	// best characterizes (the natural Source). Only whitelisted + hooked +
+	// outcome-affecting mechanics appear here.
+	type cand struct {
+		mech   genome.MechanicType
+		source genome.SkeletonType
+	}
+	byHost := map[genome.SkeletonType][]cand{
+		genome.Shedding: {
+			// shed-to-win scored by tricks (the headline hybrid)
+			{genome.MechTrickScoring, genome.TrickTaking},
+			// shedding with rummy meld bonuses
+			{genome.MechMeldBonus, genome.Rummy},
+			// shedding with penalty-card avoidance scoring
+			{genome.MechAvoidance, genome.TrickTaking},
+		},
+		genome.TrickTaking: {
+			// trick-taker with cross-family penalty-card scoring
+			{genome.MechAvoidance, genome.Shedding},
+			// trick-taker collecting rummy meld bonuses from captures
+			{genome.MechMeldBonus, genome.Rummy},
+		},
+		genome.Rummy: {
+			// rummy with trick-style capture scoring
+			{genome.MechTrickScoring, genome.TrickTaking},
+			// rummy with penalty-card avoidance scoring
+			{genome.MechAvoidance, genome.TrickTaking},
+		},
+	}
+
+	cands := byHost[host]
+	if len(cands) == 0 {
+		return genome.BorrowedMechanic{}, false
+	}
+
+	// Prefer a candidate naturally sourced from the OTHER parent's family so
+	// the hybrid genuinely combines the two families; fall back to any
+	// candidate (still cross-family relative to the host).
+	var preferred []cand
+	for _, c := range cands {
+		if c.source == other && c.source != host {
+			preferred = append(preferred, c)
+		}
+	}
+	pick := func(list []cand) genome.BorrowedMechanic {
+		c := list[rng.IntN(len(list))]
+		src := c.source
+		if src == host {
+			// Defensive: never borrow from own skeleton. Record the other
+			// parent's family instead (guaranteed != host since the parents
+			// differ).
+			src = other
+		}
+		return genome.BorrowedMechanic{Source: src, Mechanic: c.mech}
+	}
+	if len(preferred) > 0 {
+		return pick(preferred), true
+	}
+	// No candidate is sourced from the other family for this host; still emit a
+	// cross-family borrow but stamp its Source as the other parent's family so
+	// the provenance is honest and validation (no self-borrow) is satisfied.
+	c := cands[rng.IntN(len(cands))]
+	src := other
+	if src == host {
+		return genome.BorrowedMechanic{}, false
+	}
+	return genome.BorrowedMechanic{Source: src, Mechanic: c.mech}, true
+}
+
+// wireHybridBorrow makes a freshly-added hybrid borrow OUTCOME-AFFECTING,
+// mirroring the coherent-mutation coupling addBorrowedMechanic applies:
+//
+//   - On a shedding host, any banking borrow (MechMeldBonus / MechAvoidance /
+//     MechTrickScoring) needs RoundsPerGame >= 2 so the banked scores get a
+//     winner signal (SheddingMultiRound reads them in CheckEnd). Without this
+//     the borrow banks into state.Scores that nothing ever reads.
+//   - A borrow whose hook reads CardPoints (MechAvoidance) no-ops without them;
+//     seed a default penalty rule (Hearts worth 1), preferring a non-empty
+//     CardPoints slice from either parent.
+func wireHybridBorrow(child *genome.Genome, bm genome.BorrowedMechanic, a, b *genome.Genome) {
+	if child.Skeleton == genome.Shedding && child.Shedding != nil {
+		switch bm.Mechanic {
+		case genome.MechMeldBonus, genome.MechAvoidance, genome.MechTrickScoring:
+			if child.Shedding.RoundsPerGame < 2 {
+				switch {
+				case a.Shedding != nil && a.Shedding.RoundsPerGame >= 2:
+					child.Shedding.RoundsPerGame = a.Shedding.RoundsPerGame
+				case b.Shedding != nil && b.Shedding.RoundsPerGame >= 2:
+					child.Shedding.RoundsPerGame = b.Shedding.RoundsPerGame
+				default:
+					child.Shedding.RoundsPerGame = 2
+				}
+			}
+		}
+	}
+	if bm.Mechanic == genome.MechAvoidance && len(child.Scoring.CardPoints) == 0 {
+		switch {
+		case len(a.Scoring.CardPoints) > 0:
+			child.Scoring.CardPoints = append([]genome.CardScoring(nil), a.Scoring.CardPoints...)
+		case len(b.Scoring.CardPoints) > 0:
+			child.Scoring.CardPoints = append([]genome.CardScoring(nil), b.Scoring.CardPoints...)
+		default:
+			child.Scoring.CardPoints = []genome.CardScoring{{Suit: 3, Points: 1}}
+		}
+	}
+}
+
 // Crossover performs uniform crossover between two same-skeleton genomes.
 // Each parameter comes from parent A or B with 50/50 probability.
 // Returns nil if skeletons don't match.

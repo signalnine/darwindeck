@@ -145,7 +145,7 @@ func (e *NoveltyEngine) initialize() {
 
 	for i := 0; i < e.Config.PopulationSize; i++ {
 		seed := e.Seeds[e.rng.IntN(len(e.Seeds))]
-		g := Mutate(seed, e.rng, e.Seeds)
+		g := e.mutate(seed)
 		g.ID = fmt.Sprintf("init_%d", i)
 		g.Generation = 0
 		e.Population[i] = &NoveltyIndividual{
@@ -486,12 +486,12 @@ func (e *NoveltyEngine) selectNext() []*NoveltyIndividual {
 		var child *genome.Genome
 		if e.rng.Float64() < 0.3 {
 			parent2 := e.tournament()
-			child = Crossover(parent.Genome, parent2.Genome, e.rng)
+			child = CrossoverWith(parent.Genome, parent2.Genome, e.rng, e.Config.CrossSkeleton)
 		}
 		if child == nil {
-			child = Mutate(parent.Genome, e.rng, e.Seeds)
+			child = e.mutate(parent.Genome)
 		} else {
-			child = Mutate(child, e.rng, e.Seeds)
+			child = e.mutate(child)
 		}
 
 		child.ID = fmt.Sprintf("gen%d_%d", e.Generation+1, e.rng.IntN(100000))
@@ -502,6 +502,12 @@ func (e *NoveltyEngine) selectNext() []*NoveltyIndividual {
 	}
 
 	return nextGen
+}
+
+// mutate applies MutateWith threaded with this engine's cross-skeleton flag,
+// so cross-family borrow mutations are reachable whenever -cross-skeleton is on.
+func (e *NoveltyEngine) mutate(g *genome.Genome) *genome.Genome {
+	return MutateWith(g, e.rng, e.Seeds, e.Config.CrossSkeleton)
 }
 
 func (e *NoveltyEngine) tournament() *NoveltyIndividual {

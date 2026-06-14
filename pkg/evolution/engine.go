@@ -41,6 +41,21 @@ type Config struct {
 	// production strength (200 iterations / 10 determinizations); tests
 	// dial it down.
 	MCTSEval fitness.MCTSEvalConfig
+
+	// CrossSkeleton enables cross-skeleton recombination (novelty evolution).
+	// Default OFF (zero value): crossing two DIFFERENT-skeleton parents returns
+	// nil and the caller falls back to mutation, exactly the pre-novelty
+	// behavior v2 shipped with (cross-breeding was hard-disabled because the
+	// hybrids it produced were unplayable). When ON, such a cross produces a
+	// HYBRID child instead -- one parent's skeleton + core params PLUS an
+	// active cross-family borrowed mechanic from the other parent's family,
+	// made outcome-affecting and repaired to validity (hybridCrossover). The
+	// degeneracy vetoes + calibration gate + LLM judge are the safety net that
+	// makes re-enabling this safe. Same-skeleton crossover is unaffected by
+	// this flag. Threaded into Engine and NoveltyEngine via the engine's
+	// crossover dispatch; MAP-Elites only crosses same-skeleton archive
+	// occupants, so the flag is inert there.
+	CrossSkeleton bool
 }
 
 // DefaultConfig returns sensible defaults.
@@ -183,7 +198,7 @@ func (e *Engine) Initialize() {
 	for i := 0; i < e.Config.PopulationSize; i++ {
 		// Pick a random seed and mutate it
 		seed := e.Seeds[e.rng.IntN(len(e.Seeds))]
-		g := Mutate(seed, e.rng, e.Seeds)
+		g := e.mutate(seed)
 		g.ID = fmt.Sprintf("init_%d", i)
 		g.Generation = 0
 		e.Population[i] = &Individual{Genome: g}
@@ -470,18 +485,18 @@ func (e *Engine) Select() []*Individual {
 		parent := e.tournament()
 
 		if e.rng.Float64() < 0.3 {
-			// Crossover
+			// Crossover (cross-skeleton produces a hybrid when enabled)
 			parent2 := e.tournament()
-			child := Crossover(parent.Genome, parent2.Genome, e.rng)
+			child := CrossoverWith(parent.Genome, parent2.Genome, e.rng, e.Config.CrossSkeleton)
 			if child != nil {
-				child = Mutate(child, e.rng, e.Seeds)
+				child = e.mutate(child)
 				nextGen[i] = &Individual{Genome: child}
 				continue
 			}
 		}
 
 		// Mutation only
-		child := Mutate(parent.Genome, e.rng, e.Seeds)
+		child := e.mutate(parent.Genome)
 		nextGen[i] = &Individual{Genome: child}
 	}
 
@@ -489,6 +504,12 @@ func (e *Engine) Select() []*Individual {
 	e.dedup(nextGen)
 
 	return nextGen
+}
+
+// mutate applies MutateWith threaded with this engine's cross-skeleton flag,
+// so cross-family borrow mutations are reachable whenever -cross-skeleton is on.
+func (e *Engine) mutate(g *genome.Genome) *genome.Genome {
+	return MutateWith(g, e.rng, e.Seeds, e.Config.CrossSkeleton)
 }
 
 func (e *Engine) tournament() *Individual {
@@ -516,7 +537,7 @@ func (e *Engine) dedup(pop []*Individual) {
 		if seen[hash] {
 			parent := e.dedupParent(pop, top, seen, hash, i)
 			if parent != nil {
-				child := Mutate(parent, e.rng, e.Seeds)
+				child := e.mutate(parent)
 				pop[i].Genome = child
 				pop[i].Valid = false
 				// The genome changed: prior evaluations are meaningless --

@@ -7,9 +7,20 @@ import (
 	"github.com/darwindeck/darwindeck/pkg/genome"
 )
 
-// Mutate applies random mutations to a genome copy.
-// Multiple mutations can fire independently.
+// Mutate applies random mutations to a genome copy with cross-skeleton borrows
+// OFF (the historical default). Preserved as the signature every existing
+// caller and test uses; delegates to MutateWith(..., false).
 func Mutate(g *genome.Genome, rng *rand.Rand, allSeeds []*genome.Genome) *genome.Genome {
+	return MutateWith(g, rng, allSeeds, false)
+}
+
+// MutateWith applies random mutations to a genome copy. When crossSkeleton is
+// true, addBorrowedMechanic may also add the highest-novelty cross-family
+// ACTIVE borrows (shedding -> MechTrickScoring, trick-taking -> MechAvoidance),
+// so novelty is reachable via mutation and not only via crossover (novelty
+// evolution). All other mutation behavior is identical.
+// Multiple mutations can fire independently.
+func MutateWith(g *genome.Genome, rng *rand.Rand, allSeeds []*genome.Genome, crossSkeleton bool) *genome.Genome {
 	child := cloneGenome(g)
 	child.ID = fmt.Sprintf("gen%d_%d", child.Generation+1, rng.IntN(100000))
 	child.Generation++
@@ -45,7 +56,7 @@ func Mutate(g *genome.Genome, rng *rand.Rand, allSeeds []*genome.Genome) *genome
 		removeSpecialCard(child, rng)
 	}
 	if rng.Float64() < 0.05 {
-		addBorrowedMechanic(child, rng)
+		addBorrowedMechanic(child, rng, crossSkeleton)
 	}
 	if rng.Float64() < 0.05 {
 		removeBorrowedMechanic(child, rng)
@@ -226,7 +237,7 @@ func removeSpecialCard(g *genome.Genome, rng *rand.Rand) {
 	g.SpecialCards = append(g.SpecialCards[:idx], g.SpecialCards[idx+1:]...)
 }
 
-func addBorrowedMechanic(g *genome.Genome, rng *rand.Rand) {
+func addBorrowedMechanic(g *genome.Genome, rng *rand.Rand, crossSkeleton bool) {
 	if len(g.Borrowed) >= 3 {
 		return // Cap at 3 borrowed mechanics
 	}
@@ -242,6 +253,13 @@ func addBorrowedMechanic(g *genome.Genome, rng *rand.Rand) {
 			{Source: genome.Rummy, Mechanic: genome.MechMeldBonus},
 			{Source: genome.TrickTaking, Mechanic: genome.MechAvoidance},
 		}
+		if crossSkeleton {
+			// Novelty evolution: shed-to-win game scored by tricks. Whitelisted
+			// + hooked (applyTrickScoring) + outcome-affecting (wired through
+			// multi-round banking below).
+			candidates = append(candidates,
+				genome.BorrowedMechanic{Source: genome.TrickTaking, Mechanic: genome.MechTrickScoring})
+		}
 	case genome.TrickTaking:
 		// MechPlayMultiple dropped: tricktaking move-gen only ever
 		// produces single-card plays (see dd-lnh).
@@ -249,6 +267,14 @@ func addBorrowedMechanic(g *genome.Genome, rng *rand.Rand) {
 		// the empty-hand round-end invariant (see dd-wfi).
 		candidates = []genome.BorrowedMechanic{
 			{Source: genome.Rummy, Mechanic: genome.MechMeldBonus},
+		}
+		if crossSkeleton {
+			// Novelty evolution: trick-taker with cross-family penalty-card
+			// scoring (applyAvoidance reads tableau captures; findWinner reads
+			// state.Scores). Sourced from Shedding to record the cross-family
+			// provenance (Avoidance's semantic home is trick-taking == host).
+			candidates = append(candidates,
+				genome.BorrowedMechanic{Source: genome.Shedding, Mechanic: genome.MechAvoidance})
 		}
 	case genome.Rummy:
 		candidates = []genome.BorrowedMechanic{
@@ -274,14 +300,16 @@ func addBorrowedMechanic(g *genome.Genome, rng *rand.Rand) {
 
 	// Coherent-mutation coupling (round 3 commit 6b): a mechanic's
 	// supporting infrastructure lands in the same mutation.
-	//   - A scoring borrow on shedding banks Scores at ROUND end; with
+	//   - A banking borrow on shedding banks Scores at ROUND end; with
 	//     RoundsPerGame < 2 nothing ever reads them (the game ends at the
 	//     first empty hand) -- the r2 rank05 inert combination. Force
-	//     multi-round play.
+	//     multi-round play. MechTrickScoring joins MeldBonus/Avoidance here
+	//     (novelty evolution): its applyTrickScoring hook also banks per round.
 	//   - MechAvoidance's hook no-ops without CardPoints; seed a default
 	//     rule (the changeEnum convention: Hearts worth 1 penalty point).
 	if g.Skeleton == genome.Shedding && g.Shedding != nil &&
-		(pick.Mechanic == genome.MechMeldBonus || pick.Mechanic == genome.MechAvoidance) &&
+		(pick.Mechanic == genome.MechMeldBonus || pick.Mechanic == genome.MechAvoidance ||
+			pick.Mechanic == genome.MechTrickScoring) &&
 		g.Shedding.RoundsPerGame < 2 {
 		g.Shedding.RoundsPerGame = 2
 	}
