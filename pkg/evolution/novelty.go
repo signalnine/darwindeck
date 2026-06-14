@@ -17,6 +17,14 @@ const (
 	NoveltyK      = 15  // k-nearest neighbors for novelty
 	NoveltyWeight = 0.5 // weight of novelty vs fitness
 
+	// CIDWeight scales the counterfactual-integration-depth term added into an
+	// individual's Novelty (NoveltySelect mode only). CID is in [0,1]; at 0.5 it
+	// is comparable to the seed-distance term -- a meaningful pull toward
+	// genuine mechanic fusion without dominating the behavior-distance and
+	// fitness signals (it enters only the novelty half of SharedFitness, behind
+	// the Valid + FitnessFloor gate, so a broken game can never bank it).
+	CIDWeight = 0.5
+
 	// NoveltyAddThreshold is the INITIAL absolute archive-admission
 	// threshold: an individual enters the archive iff its behavior is
 	// farther than this from every same-skeleton archive entry, including
@@ -69,6 +77,13 @@ type NoveltyIndividual struct {
 	Individual
 	Behavior BehaviorDescriptor
 	Novelty  float64
+	// CID is the counterfactual integration depth of this genome's borrowed
+	// mechanics (CounterfactualIntegration): how much removing the borrow
+	// changes play. 0 for borrowless genomes and whenever NoveltySelect is off
+	// (it is computed only in that mode). Added into Novelty as a mechanic-aware
+	// novelty term, so a genuine fusion (deep borrow) is SELECTED for rather
+	// than the incidental 2-D behavior distance alone.
+	CID float64
 }
 
 // NoveltyEngine runs novelty search with a fitness floor.
@@ -210,6 +225,14 @@ func (e *NoveltyEngine) evaluatePopulation() {
 			// BehaviorBatch is the single descriptor-batch site).
 			if batchResult, ok := BehaviorBatch(ind.Genome, seed+5000); ok {
 				ind.Behavior = ComputeBehavior(batchResult)
+				// Mechanic-aware novelty: in novelty-select mode, measure how
+				// much the genome's borrows actually change play (a paired
+				// counterfactual at the SAME seed as the hooked batch). Only
+				// borrowed genomes pay the extra batch (CID is 0 otherwise), so
+				// the cost scales with the cross-skeleton subpopulation.
+				if e.Config.NoveltySelect {
+					ind.CID = CounterfactualIntegration(ind.Genome, batchResult, seed+5000)
+				}
 			}
 		}(i, ind)
 	}
@@ -344,7 +367,7 @@ func (e *NoveltyEngine) computeNovelty() {
 		// lone qualified individual is still rewarded for sitting far from the
 		// classics). Both terms live in the same behavior-distance units, so
 		// the sum stays commensurate before per-skeleton normalization.
-		ind.Novelty = knn + e.seedDistanceTerm(ind.Behavior)
+		ind.Novelty = knn + e.seedDistanceTerm(ind.Behavior) + CIDWeight*ind.CID
 
 		if ind.Novelty > maxNoveltyPerSkel[skel] {
 			maxNoveltyPerSkel[skel] = ind.Novelty
