@@ -1,0 +1,169 @@
+{
+  "description": "Blind LLM-judge novelty assessment. Judges saw only the neutralized rulebook (no fitness, no skeleton/borrow provenance). 3 independent judges per game.",
+  "mapping": {
+    "A": "casino+meld+avoidance",
+    "B": "casino+avoidance",
+    "C": "shedding+combos+knock",
+    "D": "shedding+knock",
+    "E": "plain-casino-CONTROL",
+    "F": "casino-seed-CONTROL"
+  },
+  "games": [
+    {
+      "game": "A",
+      "judges": [
+        {
+          "verdict": "novel",
+          "closest_game": "Casino (Cassino), the fishing/capture game",
+          "confidence": "medium",
+          "key_mechanics": "Fishing/capture base (rank-match + sum-capture, trail, multi-round deal, final sweep) fused with rummy-style meld scoring of sets/runs across hand AND captured pile, plus a Hearts-as-penalty avoidance layer.",
+          "reasoning": "The capture engine is unmistakably Casino/Cassino: play a card to take same-rank cards or a set summing to its value, trail otherwise, refill across rounds, sweep the table at the end. What no published Casino/Scopa variant does is bolt on rummy meld scoring (sets/runs of 3+ scoring per card, evaluated over both hand and captured pile) together with a Hearts-as-penalty avoidance layer. A fishing-capture game scored by melds plus suit-avoidance is a combination I cannot place in any published game, so I rate it novel rather than a Casino variant; confidence is medium because each ingredient is individually classic and the meld layer could be read as a heavy houserule."
+        },
+        {
+          "verdict": "novel",
+          "closest_game": "Casino (Italian/Scopa-family fishing-capture)",
+          "confidence": "medium",
+          "key_mechanics": "Fishing/capture core (rank-match or sum-to-value, trail, last-capturer final sweep) fused with end-of-round rummy meld scoring (sets and runs across hand + captured pile) and a Hearts-style suit-avoidance penalty (all hearts count against you).",
+          "reasoning": "The base loop is pure Casino: play one card to capture by matching rank or by summing number cards to your card's value, trail if you cannot, and the last capturer sweeps the table at the end. What makes it novel is layering two foreign scoring systems on top of that capture engine: a rummy meld bonus that scores sets/runs from your captured pile and hand, plus a Hearts-style penalty on a scoring suit. No published fishing game scores captures by melds or penalizes a suit, so this is a genuine cross-family combination rather than a Casino tweak; I hold confidence at medium because the redundant duplicated penalty rule and \"all hearts = 1 point\" hint at machine generation."
+        },
+        {
+          "verdict": "novel",
+          "closest_game": "Casino (with Scopa-family capture); meld scoring borrowed from Rummy",
+          "confidence": "medium",
+          "key_mechanics": "Fishing/capture base (rank-match or pip-sum capture, trail otherwise, final sweep to last capturer) + Hearts-style penalty (each heart -1) + Rummy-style meld bonus (sets of 3+ at 5/card, suit runs of 3+ at 3/card) scored across the union of hand and captured pile.",
+          "reasoning": "The capture engine is straight Casino/Scopa (same-rank or sum-to-value capture, trail when you can't, last-capturer sweep), and a bare heart penalty would only make it a Casino variant. The decisive twist is the Rummy meld bonus scored over your captured pile plus hand: sets and suit-runs reward you for hoarding combinations, not just card count, which no published fishing/capture game does -- Scopa/Casino score sweeps and special cards, never melds, and Rummy never captures from a shared table by pip-sum. That cross-family fusion (capture base + meld scoring of captured cards) is a combination I cannot place in any existing game, so I rate it novel with medium confidence given the duplicated penalty line and untested balance."
+        }
+      ]
+    },
+    {
+      "game": "B",
+      "judges": [
+        {
+          "verdict": "variant",
+          "closest_game": "Casino (Cassino)",
+          "confidence": "high",
+          "key_mechanics": "Capture by rank-match or by summing number cards to the played card's value; trail when not capturing; deal fresh hands from stock until exhausted; last-capturer sweeps the table at the end; score by cards captured. Overlay: Hearts count as penalty points.",
+          "reasoning": "The entire loop is textbook Casino: play one card to capture same-rank cards or a set summing to its value, otherwise trail, with Ace=1, face cards capturing only by rank, fresh deals from the stock, and the last capturer sweeping the table at game end scored by cards captured. The only deviation is a Hearts-avoidance penalty, which is just an inversion of Casino's own bonus-card scoring tradition (aces, Big/Little Casino, most spades) and does not alter the capture/trail core or the game's identity. A penalty suit grafted onto a fishing-capture game is a minor scoring tweak, not a new mechanic combination, so this remains a Casino variant rather than a novel game."
+        },
+        {
+          "verdict": "novel",
+          "closest_game": "Casino (the Italian/English fishing game), with Hearts-style avoidance scoring",
+          "confidence": "medium",
+          "key_mechanics": "Casino-style fishing capture (play one card; take by rank-match OR by pip-sum, Ace=1, face cards match-only; trail otherwise) combined with Hearts-style suit-avoidance scoring (each captured heart is -1).",
+          "reasoning": "The capture engine is textbook Casino -- the sum-capture is Casino's signature mechanic (Scopa is rank-match only), and scoring by cards captured is its simplest form. The genuinely new element is the avoidance overlay: published Casino games reward capturing specific cards (Aces, Big/Little Casino, spades majority) but never penalize capturing a suit, while suit-avoidance scoring belongs to trick-taking games like Hearts, not fishing games. A fishing/capture game where you must dodge hearts while sweeping the table is a cross-family fusion I cannot map to any published game, and it changes the calculus (sometimes trailing or leaving hearts is better than capturing). I keep confidence at medium because the engine itself is pure, unmodified Casino, so a strict reviewer could read this as a Casino variant with a penalty house rule."
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Casino (the fishing/capture game)",
+          "confidence": "high",
+          "key_mechanics": "Sum-and-rank capture with trail option, stock refills, last-capturer sweeps the table at the end, score by cards captured -- with a Hearts-avoidance penalty overlay.",
+          "reasoning": "The entire engine is textbook Casino: play one card to capture table cards of equal rank or any set summing to your card's value (Ace=1, face cards match rank only), or trail; the stock refills hands and the player who captured last sweeps remaining table cards at game end. The only deviation is the scoring table -- it strips Casino's spades/aces/Big-and-Little-Casino points down to plain \"most cards captured\" and bolts on a Hearts penalty (each heart is -1), an avoidance term borrowed from Hearts. That penalty-suit overlay is a minor scoring tweak grafted onto an unmodified Casino capture engine, not a new combination of mechanics, so it retains Casino's core identity. Casino variants already reward/penalize specific suits and cards, making a heart-penalty Casino a recognizable variant rather than a genuinely novel game."
+        }
+      ]
+    },
+    {
+      "game": "C",
+      "judges": [
+        {
+          "verdict": "novel",
+          "closest_game": "Crazy Eights (Mau-Mau family)",
+          "confidence": "medium",
+          "key_mechanics": "Crazy Eights shedding core (match suit/rank, wild 8, draw-on-fail, first-to-empty win) plus UNO-style action cards (skip, draw-2, reverse, draw-4), combined with two foreign grafts: a Gin-style knock that ends the game instantly with the fewest-cards holder winning, and climbing-style multi-card set/run combination plays.",
+          "reasoning": "The base is unmistakably Crazy Eights/Mau-Mau: match suit or rank, the 8 is wild, draw when you cannot play, and the standard action-card suite (7 skip, 2 draw-2, 10 reverse, 8H draw-4) are all in-family tweaks that on their own would make this a plain variant. What pushes it past variant is the knock rule, which overrides the \"first to empty your hand wins\" win condition with a declare-to-end-fewest-cards-wins termination lifted from Gin/knock rummy -- you can win the shedding race without ever emptying your hand. That fusion of a Crazy Eights shedding race with a rummy-style knock-to-end fewest-wins win condition, plus set/run combination unloading, is a combination I cannot place in any published game, so I rate it novel with medium confidence rather than a Crazy Eights variant."
+        },
+        {
+          "verdict": "novel",
+          "closest_game": "Crazy Eights (Mau-Mau), with a Knock/Gin-Rummy \"fewest cards wins\" declaration grafted on",
+          "confidence": "low",
+          "key_mechanics": "Suit/rank-match shedding core with wild 8s and skip/draw-2/reverse/draw-4 specials (pure Crazy Eights); multi-card set/run combination plays (climbing-style unload); and a knock-to-end declaration where the fewest-cards holder wins (a Gin/Knock-Rummy goal condition).",
+          "reasoning": "Strip the knock and this is plainly Crazy Eights/Mau-Mau plus a common combo-play borrow -- a variant. The knock-to-end \"fewest cards wins\" option is the load-bearing oddity: it grafts a Knock-Rummy/Gin declaration win onto a race-to-empty shedding game, creating two competing victory paths (empty first OR declare while ahead) with bluff-like risk if an opponent is shorter. I don't know a published shedding game that lets you declare a fewest-cards stop, so I rate it novel, but with low confidence because every layer except the knock is textbook Crazy Eights and the fusion is thin."
+        },
+        {
+          "verdict": "novel",
+          "closest_game": "Crazy Eights (with Knock Rummy and Big Two elements grafted on)",
+          "confidence": "medium",
+          "key_mechanics": "Crazy Eights shedding base (match suit/rank, draw on no-play, 8s wild, skip/draw-2/reverse specials) + a Knock-Rummy \"knock to end, fewest cards wins\" alternate win condition + Big Two-style multi-card set/run combination plays.",
+          "reasoning": "The base loop is pure Crazy Eights/Mau-Mau (suit-or-rank match, draw-on-fail, 8-wild, skip/draw-two/reverse specials), so on its own it would be a variant. But the \"knock\" rule imports a fewest-cards declare-to-end win condition from Knock Rummy/Gin that directly contradicts the empty-your-hand shedding race, and combination plays add Big Two-style set/run dumps. No published Crazy Eights variant lets you win by knocking with the fewest cards instead of shedding to zero; that win-condition inversion fused onto a shedding base is a new mechanic combination rather than a cosmetic tweak. Confidence is medium because each ingredient is individually classic and the knock/shed tension could prove incoherent, but the specific fusion is not a game I can name."
+        }
+      ]
+    },
+    {
+      "game": "D",
+      "judges": [
+        {
+          "verdict": "novel",
+          "closest_game": "Crazy Eights (Mau-Mau / Uno family)",
+          "confidence": "medium",
+          "key_mechanics": "Crazy Eights shedding core (match suit/rank, wild 8s, draw-if-stuck, first-to-empty wins) plus the full Uno-style special suite (7=skip, 2=draw-2, 10=reverse, 8H=draw-4), fused with a Gin-rummy-style knock-to-end-with-fewest-cards alternate win condition.",
+          "reasoning": "The engine is textbook Crazy Eights/Mau-Mau: suit-or-rank matching, wild eights, draw when you cannot play, first to shed wins, plus the standard skip/draw/reverse/draw-4 special cards that any reader will recognize from Uno. What no published game in this family has is the \"Knock\" rule -- a declare-to-end-immediately action where the fewest-cards holder wins, a win condition borrowed from Gin Rummy and grafted onto a shedding race. That fusion creates a genuinely new strategic tension (race to empty versus declare while ahead, with the trap of gifting the win to a shorter opponent), which is more than a cosmetic tweak; I keep confidence at medium only because the underlying engine is so heavily Crazy Eights that a strict reader could file it as a variant."
+        },
+        {
+          "verdict": "novel",
+          "closest_game": "Crazy Eights (Mau-Mau)",
+          "confidence": "low",
+          "key_mechanics": "Suit/rank-match shedding with wild 8s and a standard special-card battery (skip on 7, draw-2 on 2, reverse on 10, draw-4 on 8 of Hearts), PLUS a Gin-style \"knock to end immediately, fewest cards wins\" declaration.",
+          "reasoning": "The base loop is unmistakably Crazy Eights / Mau-Mau: match suit or rank, draw when you cannot play, 8s wild, and the usual 7-skip / 2-draws-two / reverse / 8H-draw-four specials. What pushes it past a plain variant is the knock rule grafted on from Gin/Knock Rummy: any player may declare to end the game at once, with the fewest-card holder winning. That overlay inverts the win condition mid-game (race to empty vs. be shortest now) and adds a bluff/timing decision that no published Crazy Eights variant has -- a shedding race fused with a declare-to-end fewest-wins mechanic. It sits on the line, but that specific cross-family combination is not one I can name in any existing published game, so novel with low confidence."
+        },
+        {
+          "verdict": "novel",
+          "closest_game": "Crazy Eights / Mau-Mau (with a Gin/Knock Rummy-style knock grafted on)",
+          "confidence": "medium",
+          "key_mechanics": "Crazy Eights shedding core (match suit/rank, wild 8s, action cards: 7 skip, 2 draw-two, 10 reverse, 8H draw-four) fused with a Knock-Rummy declare-to-end win condition (knock to halt the game, fewest cards held wins).",
+          "reasoning": "The matching/wild-8/action-card layer is textbook Crazy Eights/Mau-Mau and on its own would be a plain variant. What makes it new is the Knock: an alternative win condition where any player can end the game immediately and the player with the fewest cards wins -- a Gin/Knock Rummy mechanic that does not exist in any published shedding game, where you win only by emptying your hand. This fusion creates a genuine race-vs-snipe tension (rush to empty, or knock while ahead, with the risk of handing a shorter opponent the win) that I cannot match to any single published title. Hence novel rather than a Crazy Eights variant, though the individual ingredients are common, so confidence is medium."
+        }
+      ]
+    },
+    {
+      "game": "E",
+      "judges": [
+        {
+          "verdict": "variant",
+          "closest_game": "Casino (the classic fishing/capture card game)",
+          "confidence": "high",
+          "key_mechanics": "Capture-by-matching-rank and capture-by-summing-number-cards-to-played-value; face cards capture rank-only; Ace=1; trail when not capturing; deal fresh hands from stock; last-capturer sweeps the table at game end.",
+          "reasoning": "This is Casino with two simplifications, not a new mechanic combination. Same-rank capture plus sum-capture by pip value (Ace=1, face cards rank-only), trailing as the always-legal fallback, refilling hands from the stock, and the last-capturer final sweep are all canonical Casino rules. It drops Casino's signature \"builds\" and replaces the traditional point scoring (most cards/most spades/Big-Little Casino/aces) with a plain \"most cards captured wins,\" but those are reductions that preserve Casino's core identity rather than fusing it with mechanics from another family."
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Casino (also Cassino)",
+          "confidence": "high",
+          "key_mechanics": "Rank-match capture + additive sum-capture of number cards (Ace=1, faces capture by rank only); trail-if-no-capture; deal-from-stock refills; last-capturer sweeps the remaining table at game end.",
+          "reasoning": "Every mechanic here is core Casino/Cassino: capture by matching rank or by summing number cards to your card's value, trailing when you can't capture, refilling hands from the stock, and the final-sweep-to-last-capturer rule. The face-cards-capture-by-rank-only detail is a standard Casino convention, not an innovation. The sole deviation is the win condition -- pure \"most cards captured\" instead of Casino's full points schedule (cards majority, most spades, aces, big/little casino, sweeps) -- which is a simplification of Casino's scoring, not a new combination of mechanics. It keeps Casino's complete identity, so it is a variant, not novel and not a verbatim reproduction."
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Casino (also spelled Cassino)",
+          "confidence": "high",
+          "key_mechanics": "Play-one-card capture by rank-match OR numeric sum (Ace=1, face cards capture by rank only), trail when not capturing, periodic redeal from the stock, last-capturer sweeps the remaining table at game end, win by most cards captured.",
+          "reasoning": "Every mechanic here is core Casino: matching/summing capture with Ace=1 and value-less face cards, trailing as the always-legal fallback, redealing fresh hands from stock, and the last-capturer end-of-game table sweep are all canonical Casino rules. The only differences are subtractive simplifications -- no building mechanic and scoring reduced to a flat \"most cards captured\" rather than Casino's full points (most cards, most spades, Big/Little Casino, aces) -- but \"most cards\" is itself one of Casino's standard scoring categories, so this is a stripped-down Casino, not a new mechanic combination. It keeps Casino's full core identity and reads as a beginner/simplified Casino, so it is a variant, not novel."
+        }
+      ]
+    },
+    {
+      "game": "F",
+      "judges": [
+        {
+          "verdict": "variant",
+          "closest_game": "Casino (the fishing/capture game)",
+          "confidence": "high",
+          "key_mechanics": "Capture by rank-match OR numeric sum (Ace=1, face cards capture only by rank), trail when not capturing, refill hands from stock, last-capturer sweeps the remaining table cards at the end.",
+          "reasoning": "This reproduces Casino's exact capture engine: take same-rank cards or any set of number cards summing to your played card's value, with Ace=1 and face cards limited to rank-match, plus the trail option and the canonical end-of-deal rule where the last player to capture sweeps the table. The only departure from published Casino is scoring, which is collapsed from Casino's multi-category point system (cards, spades, Big/Little Casino, aces, sweeps) down to the single \"most cards captured\" axis -- and \"most cards\" is itself a standard Casino scoring category, not a new mechanic. It also drops builds, a defining Casino feature, which makes this a stripped-down/beginner simplification rather than a new combination. Nothing here pairs Casino's fishing with a mechanic from another family, so it keeps Casino's core identity intact."
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Casino (the classic fishing/capture game)",
+          "confidence": "high",
+          "key_mechanics": "Play-one-card-to-capture-or-trail from a shared table; capture by rank-match or by number-cards summing to your card's value; face cards capture by rank only; final sweep to last capturer; win by most cards captured.",
+          "reasoning": "Every mechanic here is core Casino: the shared face-up table, the choice to capture-or-trail each turn, capture by same-rank or by additive pip-sum (Ace=1, face cards value-less and rank-only), redeal from stock until exhausted, and the last-capturer sweeps the remaining table. Scoring by raw \"most cards captured\" is a simplification of Casino's points (Casino normally awards points for most cards, most spades, the 10D/2S, and sweeps), but that is a scoring tweak, not a new mechanic. There is no shedding, melding, trick-taking, or declaration layer that would change the game's identity, so it keeps Casino's core identity rather than fusing families."
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Casino (English fishing/capture game)",
+          "confidence": "high",
+          "key_mechanics": "Rank-match-or-numeric-sum capture from a shared table; trail when not capturing; deal-4-plus-4, refill from stock, final sweep to last capturer; face cards capture by rank only while number cards combine by sum (Ace=1).",
+          "reasoning": "The capture engine -- take all same-rank table cards or any set of number cards summing to the played card's value, otherwise trail -- is identical to standard Casino, including the signature detail that face cards capture only by rank match while number cards combine by addition. Setup (4 hand + 4 table), refill from stock, and the final sweep to the most-recent capturer are all standard Casino deal handling. The only deviation is reductive: it scores by \"most cards captured\" alone, dropping Casino's point categories (cards, spades, big/little casino, aces, sweeps) instead of adding any new mechanic. With no cross-family fusion (no melds, shedding, or declare-to-end), it keeps Casino's core identity and is a stripped-down variant, not a novel combination."
+        }
+      ]
+    }
+  ]
+}
