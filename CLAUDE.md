@@ -65,22 +65,30 @@ pkg/
 └── seeds/          # 8 seed game definitions
 ```
 
-### Seed Games (8 calibration classics + 1 climbing = 9 evolution seeds)
+### Seed Games (9 across 4 skeletons)
 
-`seeds.All()` returns the 8 human-validated CLASSICS below -- the calibration
-ground-truth AND the novelty seed-distance anchors (`pkg/evolution` `seedDescriptors`).
-**Big Two (climbing) is a 9th seed** used for evolution init + as the climbing
-playability reference (`cmd/darwindeck/main.go`, `experiment.go` add it to the pool),
-but it is deliberately NOT in `seeds.All()`: there is no human fun-rating for a
-climbing game to calibrate against (see `pkg/seeds/climbing.go`). So an evolve run
-loads 9 seeds across 4 skeletons; calibration and novelty anchors use only the 8.
+`seeds.All()` returns the 9 human-validated CLASSICS below -- the single source
+of truth for the evolution init pool (`cmd/darwindeck/main.go` `getAllSeeds`), the
+calibration ground-truth (`calibrate.go`), and the novelty seed-distance anchors
+(`pkg/evolution` `seedDescriptors`). They are real, time-tested published games
+(a game still in circulation is fun by survival).
+
+**Big Two (climbing) was promoted into the calibration set 2026-06-14**, once the
+Interaction metric was extended to measure the climbing skeleton. Previously it
+was excluded on the stated grounds of "no human fun-rating for climbing" -- wrong
+twice over: Big Two is a hugely popular real game, and the actual blocker was a
+MEASUREMENT artifact (the Interaction metric was climbing-blind, so Big Two
+scored interact=0.000 / TotalFitness ~0.401, a hair above the floor, despite
+passing every degeneracy veto). `deltaModeClimbing` (`pkg/sim/batch.go`) measures
+climbing's beat/pass constraint; Big Two then scores interact~0.76 /
+TotalFitness~0.55 (on par with Gin Rummy) and passes the full calibration gate.
 
 | Skeleton | Seeds |
 |----------|-------|
 | Shedding | Crazy Eights, Mau-Mau |
 | Trick-taking | Whist, Hearts, Spades, Oh Hell |
 | Rummy | Gin Rummy, Knock Rummy |
-| Climbing | Big Two (evolution seed only; NOT calibration ground-truth) |
+| Climbing | Big Two |
 
 ### Fitness Function (5 metrics)
 

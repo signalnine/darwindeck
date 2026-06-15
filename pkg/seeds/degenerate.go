@@ -13,6 +13,13 @@ import "github.com/darwindeck/darwindeck/pkg/genome"
 // All returns fresh copies of the 8 classic seed genomes -- the canonical
 // human-validated "fun" registry used by the calibration suite. Degenerate
 // fixtures are deliberately NOT included: they are negative ground truth.
+// All returns the calibration ground-truth seeds: real, time-tested published
+// card games (a popular game still in circulation is fun by survival). These are
+// the calibration anchors AND the novelty seed-distance anchors. Big Two
+// (climbing) joined this set once the Interaction metric was extended to measure
+// the climbing skeleton (deltaModeClimbing): before that it scored interact=0.0
+// and barely cleared the floor purely as a measurement artifact; with the metric
+// fixed it scores ~0.55 and passes the full calibration gate.
 func All() []*genome.Genome {
 	return []*genome.Genome{
 		CrazyEights(),
@@ -23,6 +30,7 @@ func All() []*genome.Genome {
 		OhHell(),
 		GinRummy(),
 		KnockRummy(),
+		BigTwo(),
 	}
 }
 

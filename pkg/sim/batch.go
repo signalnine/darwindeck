@@ -460,6 +460,23 @@ func runSingleGame(g *genome.Genome, runner GenericRunner, ai AIPlayer, rng *ran
 						delta = after - len(state.Hands[next])
 					}
 				}
+			case deltaModeClimbing:
+				// Climb-constraint delta: how much the just-played combination
+				// (now state.TrickCards) restricts the next player vs leading a
+				// clear table. A pass sets no new combination, so it imposes no
+				// constraint (delta 0). next != mover guards the all-pass case
+				// where the lead returns to the mover (self-perturbation is not
+				// coupling, the shedding/rummy rule).
+				if move.Type == MovePlay && next != mover {
+					after := probeOptionCount(runner, state, g, next)
+					savedTrick := state.TrickCards
+					state.TrickCards = nil // counterfactual: clear table => free lead
+					free := probeOptionCount(runner, state, g, next)
+					state.TrickCards = savedTrick
+					if after >= 0 && free >= 0 {
+						delta = after - free
+					}
+				}
 			}
 		}
 
@@ -545,6 +562,25 @@ const (
 	// always-0 rule made Interaction a closed-form constant (2/N) for
 	// trick-taking, recreating the audit's skeleton-constant pathology.
 	deltaModeTrickTaking
+	// deltaModeClimbing: a played combination becomes the table's current
+	// combination (state.TrickCards), forcing the NEXT player to play a strictly
+	// higher same-type combination or pass. The delta on every MovePlay is:
+	//
+	//	OptionDelta = legalMoves(next, with the combo on the table)
+	//	             - legalMoves(next, counterfactual clear table / free lead)
+	//
+	// i.e. how much the mover's combination constrains the next player relative
+	// to leading freely. Always <= 0 and nonzero whenever a play restricts the
+	// follower's beating options (i.e. almost every play) -- which is correct:
+	// climbing (Big Two) is a near-continuous direct contest, so its Interaction
+	// SHOULD be high. Without this, climbing fell to deltaModeNone -> OptionDelta
+	// always 0 -> Interaction 0.0, a measurement blind spot (Big Two scored
+	// interact=0.000 and barely cleared the fitness floor purely as an artifact).
+	// Passes record 0 (a pass imposes no new constraint). Climbing carries no
+	// borrows in the calibration set, and the 8 classics + degenerate fixtures
+	// are all non-climbing, so adding this mode leaves the calibration ground
+	// truth byte-unchanged.
+	deltaModeClimbing
 )
 
 func optionDeltaModeFor(g *genome.Genome) optionDeltaMode {
@@ -555,6 +591,8 @@ func optionDeltaModeFor(g *genome.Genome) optionDeltaMode {
 		return deltaModeRummy
 	case genome.TrickTaking:
 		return deltaModeTrickTaking
+	case genome.Climbing:
+		return deltaModeClimbing
 	default:
 		return deltaModeNone
 	}

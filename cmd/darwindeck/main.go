@@ -377,16 +377,11 @@ func sortAndTrim(inds []*evolution.Individual, n int) []*evolution.Individual {
 	return result
 }
 
+// getAllSeeds returns the built-in seed pool. Single source of truth =
+// seeds.All() (the 8 classics + Big Two), so the evolution init pool, the
+// calibration set, and the novelty anchors can never drift apart (they used to:
+// this list and seeds.All() were maintained separately, and Big Two was in one
+// but not the other).
 func getAllSeeds() []*genome.Genome {
-	return []*genome.Genome{
-		seeds.CrazyEights(),
-		seeds.MauMau(),
-		seeds.Whist(),
-		seeds.Hearts(),
-		seeds.Spades(),
-		seeds.OhHell(),
-		seeds.GinRummy(),
-		seeds.KnockRummy(),
-		seeds.BigTwo(), // climbing skeleton seed (novelty evolution)
-	}
+	return seeds.All()
 }

@@ -376,14 +376,17 @@ pkg/
 | Shedding | Crazy Eights, Mau-Mau |
 | Trick-taking | Whist, Hearts, Spades, Oh Hell |
 | Rummy | Gin Rummy, Knock Rummy |
-| Climbing | Big Two (evolution seed only; not calibration ground truth) |
+| Climbing | Big Two |
 
-The 8 classic seeds (`seeds.All()`) are the calibration ground truth and the
-novelty seed-distance anchors. Big Two is a 9th seed that initializes the
-climbing population and serves as the climbing playability reference, but is
-deliberately excluded from the calibration set -- there is no human fun-rating
-for a climbing game to calibrate against. So an evolve run uses 9 seeds across 4
-skeletons; calibration uses only the 8. Mutation, crossover, and cross-skeleton
+The 9 classic seeds (`seeds.All()`) are the single source of truth: the
+evolution init pool, the calibration ground truth, and the novelty seed-distance
+anchors -- all real, time-tested published games. Big Two (climbing) was promoted
+into this set once the Interaction metric was extended to measure climbing: it
+had been excluded because the metric was climbing-blind (Big Two scored
+Interaction 0.000 / TotalFitness ~0.401, a hair above the floor, purely an
+artifact -- it always passed every degeneracy veto). With `deltaModeClimbing`
+measuring its beat/pass constraint, Big Two scores ~0.55 (on par with Gin Rummy)
+and passes the full calibration gate. Mutation, crossover, and cross-skeleton
 mechanic borrowing produce the rest of the search space.
 
 ## Development

@@ -501,11 +501,12 @@ func (e *NoveltyEngine) nearestArchiveDistance(skel genome.SkeletonType, b Behav
 	return best
 }
 
-// seedDescriptors returns the behavior descriptors of the 8 CLASSIC seed
-// genomes (seeds.All()), computed once and cached. These are the fixed anchors
-// the seed-distance novelty term (Wave 2) measures distance from: an
-// individual far from ALL of them sits in genuinely novel territory relative to
-// the Crazy-Eights/Whist/Gin family of human-validated games.
+// seedDescriptors returns the behavior descriptors of the CLASSIC seed genomes
+// (seeds.All() -- the 8 three-skeleton classics plus Big Two), computed once and
+// cached. These are the fixed anchors the seed-distance novelty term (Wave 2)
+// measures distance from: an individual far from ALL of them sits in genuinely
+// novel territory relative to the Crazy-Eights/Whist/Gin/Big-Two family of
+// human-validated games.
 //
 // The classics are read from seeds.All() rather than e.Seeds so the anchor is
 // always the true 8 classics even if a caller seeds the population with a
