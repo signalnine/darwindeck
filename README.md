@@ -152,18 +152,31 @@ and a plain-trick control as a Whist rediscovery. That is a controlled,
 in-the-wild proof of the mechanism: move-change alone = variant; move-change +
 win-condition change = novel. Artifacts: [`results/2026-06-14-evolved-novel-hybrids/`](results/2026-06-14-evolved-novel-hybrids/).
 
-**Novelty is now selected-for, not incidental.** The prior novelty signal was a
-2-D behavior shadow (decision-density x interaction) blind to mechanic
-structure. **CID (counterfactual integration depth)** replaces it for borrowed
-genomes: run the genome hooked vs with its borrows removed at the same seed and
-measure how much play changes (win-distribution + length + option-flow). A deep
-fusion scores high (~0.30), an inert/bolt-on borrow ~0, a borrowless genome
-exactly 0. Wired as an additive novelty term behind `-novelty-select` and the
-playability gate (`pkg/evolution`, `CounterfactualIntegration`). A same-seed A/B
-(CID on vs off) shifts selection toward integration: a deep hybrid climbed into
-the top 5, the top-N became borrow-rich where the baseline's top was clean
-rediscoveries, and the hybrids grew deeper (3 cross-family borrows vs 2) -- at
-the expected novelty-vs-fitness cost (top honest fitness 0.717 -> 0.665).
+**Integration is now selected-for (a novelty *pre-filter*, not an oracle).** The
+prior novelty signal was a 2-D behavior shadow (decision-density x interaction)
+blind to mechanic structure. **CID (counterfactual integration depth)** replaces
+it for borrowed genomes: remove each borrow singly (leave-one-out, max marginal),
+re-run at the same seed, and measure how much play changes (win-distribution +
+length + option-flow). A deep borrow scores high, an inert/bolt-on or
+pile-on-of-tallies ~0, a borrowless genome exactly 0. Wired as an additive
+novelty term behind `-novelty-select` and the playability gate (`pkg/evolution`,
+`CounterfactualIntegration`). Same-seed A/Bs show it pulls integrated hybrids up
+the rankings, monotonically with weight (best move+win hybrid rank 7 -> 5 -> 1 at
+CID weight 0 -> 0.5 -> 2.0; the production config, leave-one-out at weight 1.5,
+puts all of the top 10 on borrows).
+
+**But CID measures *integration*, not novelty -- and the two differ.** A
+borrow can be fully integral yet reproduce a known game: trick-taking + penalty
+avoidance *is* Hearts, so CID scores it high (the avoidance genuinely changes the
+win) while it is a rediscovery, not a fusion. A blind-judge check of the
+production config's top 4 came back **1/4 novel**: only the shed + run_play +
+meld_bonus move+win recipe was certified novel; the other three were Hearts-family
+rediscoveries CID had promoted for their genuine-but-known integration. So the
+working architecture is a **two-stage pipeline**: CID cheaply enriches the
+candidate pool for integration in-loop (10/10 top borrowed), and the LLM judge --
+the only signal that separates novel fusion from integrated rediscovery -- is the
+out-of-loop arbiter. CID closes the "novelty incidental" gap by making integrated
+games *rise* to where the judge can find them; it does not replace the judge.
 
 **Honest scope.** Novelty here is *LLM-judge-certified* (blind, 3-rep, with a
 controlled variant/rediscovery contrast), not human-validated; the structural
