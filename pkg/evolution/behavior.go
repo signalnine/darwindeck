@@ -83,47 +83,65 @@ func (b BehaviorDescriptor) Distance(other BehaviorDescriptor) float64 {
 }
 
 // CounterfactualIntegration measures how much a genome's BORROWED mechanics
-// actually change its play, vs the same genome with the borrows removed -- a
-// paired (common-random-numbers) counterfactual. This is a MECHANIC-AWARE
-// novelty signal, unlike the 2-D behavior descriptor (a blind playstyle
-// shadow): a borrow that genuinely fuses families (changes the legal-move set
-// AND/OR the win condition) moves play a lot when removed; an inert or bolt-on
-// borrow moves it ~nothing. Returns 0 for a borrowless genome (no
-// counterfactual) and in [0,1] otherwise, the mean of three divergences
-// between the HOOKED and NEUTERED batches:
+// actually change its play -- a paired (common-random-numbers) counterfactual,
+// the MECHANIC-AWARE novelty signal the 2-D behavior descriptor (a blind
+// playstyle shadow) lacks. Returns 0 for a borrowless genome and in [0,1]
+// otherwise.
+//
+// LEAVE-ONE-OUT (max single-borrow marginal): for each borrow it removes ONLY
+// that borrow (keeping the rest), measures how much play diverges from the full
+// hooked genome, and returns the MAX over borrows. This is the marginal
+// contribution of the single most integrated borrow, which is what we want to
+// reward: a genome with ONE genuinely deep borrow (e.g. MechRunPlay changing
+// the move set) scores high, while a PILE-ON of shallow scoring tallies scores
+// low (each tally's marginal is small, and the max ignores the rest) -- the
+// remove-ALL-borrows version conflated those two by summing divergences. It
+// also resists rewarding an inert borrow carried alongside a live one (the
+// inert borrow's marginal is ~0). A judge blind-test caught exactly that
+// failure (a dead trick_scoring borrow inflating a genome's apparent depth).
+//
+// Each marginal is the mean of three divergences between the hooked and the
+// borrow-removed batch:
 //   - win-distribution total-variation (does the borrow change WHO wins?)
 //   - game-length shift (does it change tempo/length?)
 //   - option-flow shift (mean legal-move count -- does it change the MOVE set?
 //     a move-adding borrow like MechRunPlay raises this; a pure end-of-round
-//     scoring tally leaves it ~0, which is exactly the discrimination we want)
+//     scoring tally leaves it ~0, the discrimination we want)
 //
-// `hooked` is the genome's own already-run descriptor batch (so the hooked arm
-// is not re-run); `seed` MUST be the seed used for `hooked` (paired CRN). The
-// neutered arm is the genome with Borrowed=nil at the same params -- because
-// the rounds machinery and ComboPlay are gated on the borrow, clearing Borrowed
-// removes both the move-change and the win-condition-change while holding hand
-// size etc. fixed, isolating the borrow's contribution. Guard: if either arm
-// cannot complete a game, the borrow may be load-bearing for non-brokenness, so
-// return 0 (degeneracy is the vetoes' job, not a novelty reward).
+// `hooked` is the genome's own already-run descriptor batch (the hooked arm is
+// not re-run); `seed` MUST be the seed used for `hooked` (paired CRN). A
+// borrow whose removal BREAKS the game (the variant can't complete) is skipped,
+// not counted -- being load-bearing for non-brokenness is the vetoes' concern,
+// not a novelty reward.
 func CounterfactualIntegration(g *genome.Genome, hooked sim.BatchResult, seed uint64) float64 {
 	if len(g.Borrowed) == 0 {
 		return 0
 	}
 	runner := fitness.GetRunner(g)
-	if runner == nil {
+	if runner == nil || hooked.Completions == 0 {
 		return 0
 	}
-	neut := g.Clone()
-	neut.Borrowed = nil
-	neutered := sim.RunBatch(neut, runner, &sim.RandomAI{}, behaviorBatchGames, seed, mechanic.HooksFor(neut)...)
-	if hooked.Completions == 0 || neutered.Completions == 0 {
-		return 0
+	best := 0.0
+	for i := range g.Borrowed {
+		variant := g.Clone()
+		// drop only borrow i, keep the rest
+		kept := make([]genome.BorrowedMechanic, 0, len(g.Borrowed)-1)
+		kept = append(kept, g.Borrowed[:i]...)
+		kept = append(kept, g.Borrowed[i+1:]...)
+		variant.Borrowed = kept
+		res := sim.RunBatch(variant, runner, &sim.RandomAI{}, behaviorBatchGames, seed, mechanic.HooksFor(variant)...)
+		if res.Completions == 0 {
+			continue // removing this borrow breaks the game -> don't credit it
+		}
+		marginal := (winDistTV(hooked, res) + lengthShift(hooked, res) + optionFlowShift(hooked, res)) / 3.0
+		if marginal > best {
+			best = marginal
+		}
 	}
-	cid := (winDistTV(hooked, neutered) + lengthShift(hooked, neutered) + optionFlowShift(hooked, neutered)) / 3.0
-	if cid > 1 {
-		cid = 1
+	if best > 1 {
+		best = 1
 	}
-	return cid
+	return best
 }
 
 // winDistTV is the total-variation distance between the two batches' normalized

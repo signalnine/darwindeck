@@ -64,6 +64,32 @@ func TestCIDDiscriminatesDeepFromShallow(t *testing.T) {
 	}
 }
 
+// TestCIDLeaveOneOutIgnoresInertBorrow: carrying an INERT borrow alongside a
+// deep one must NOT inflate CID. Leave-one-out takes the max single-borrow
+// marginal, so an inert borrow (marginal ~0) is ignored: CID(run_play + inert
+// single-round meld_bonus) should be ~ CID(run_play alone). This is the
+// pile-on guard a blind-judge test motivated (a dead borrow inflating apparent
+// depth).
+func TestCIDLeaveOneOutIgnoresInertBorrow(t *testing.T) {
+	solo := withBorrows(sheddingBase(),
+		genome.BorrowedMechanic{Source: genome.Climbing, Mechanic: genome.MechRunPlay})
+	soloCID := cidOf(t, solo)
+
+	withInert := withBorrows(sheddingBase(),
+		genome.BorrowedMechanic{Source: genome.Climbing, Mechanic: genome.MechRunPlay},
+		genome.BorrowedMechanic{Source: genome.Rummy, Mechanic: genome.MechMeldBonus})
+	withInert.Shedding.RoundsPerGame = 1 // meld_bonus single-round = inert (nothing reads the banked score)
+	withInertCID := cidOf(t, withInert)
+
+	t.Logf("CID: run_play solo=%.3f  run_play+inert-meldbonus=%.3f", soloCID, withInertCID)
+	if soloCID <= 0 {
+		t.Fatalf("run_play alone should have positive CID (it changes the move set), got %.3f", soloCID)
+	}
+	if withInertCID > soloCID+0.10 {
+		t.Fatalf("inert borrow inflated CID via pile-on: solo=%.3f vs with-inert=%.3f (leave-one-out should ignore it)", soloCID, withInertCID)
+	}
+}
+
 // TestCIDBoundedAndStable: CID stays in [0,1] and is deterministic for a fixed
 // seed (no map-iteration leakage).
 func TestCIDBoundedAndStable(t *testing.T) {

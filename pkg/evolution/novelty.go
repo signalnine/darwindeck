@@ -18,12 +18,17 @@ const (
 	NoveltyWeight = 0.5 // weight of novelty vs fitness
 
 	// CIDWeight scales the counterfactual-integration-depth term added into an
-	// individual's Novelty (NoveltySelect mode only). CID is in [0,1]; at 0.5 it
-	// is comparable to the seed-distance term -- a meaningful pull toward
-	// genuine mechanic fusion without dominating the behavior-distance and
-	// fitness signals (it enters only the novelty half of SharedFitness, behind
-	// the Valid + FitnessFloor gate, so a broken game can never bank it).
-	CIDWeight = 0.5
+	// individual's Novelty (NoveltySelect mode only). CID is in [0,1]; it enters
+	// only the novelty half of SharedFitness, behind the Valid + FitnessFloor
+	// gate, so a broken game can never bank it (and classics carry no borrows ->
+	// CID 0, so calibration is untouched). A same-seed A/B showed the deep-borrow
+	// hybrids climb the rankings monotonically with this weight (best move+win
+	// hybrid: rank 7 at 0 -> rank 5 at 0.5 -> rank 1 at 2.0, with healthy
+	// fitness). 1.5 makes novelty meaningfully selected-for (the conservative 0.5
+	// was only a tie-breaker) without fully suppressing the fitness signal; the
+	// leave-one-out CID guards against rewarding inert-borrow pile-ons at this
+	// stronger weight.
+	CIDWeight = 1.5
 
 	// NoveltyAddThreshold is the INITIAL absolute archive-admission
 	// threshold: an individual enters the archive iff its behavior is
