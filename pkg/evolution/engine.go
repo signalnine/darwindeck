@@ -75,6 +75,16 @@ type Config struct {
 	// calibration gate (which evaluates seeds) is unaffected. Inert on Engine
 	// and MAP-Elites; only the NoveltyEngine reads it.
 	NoveltySelect bool
+
+	// JudgeVerdicts maps a genome COMPOSITION (skeleton + borrow-mechanic set,
+	// see composition()) to an LLM-judge novelty score: novel > 0, variant/known
+	// < 0. It adds the JudgeWeight*score term into novelty (NoveltyEngine only,
+	// behind the Valid+FitnessFloor gate), steering the search toward
+	// judge-certified-novel compositions and away from judge-certified
+	// rediscoveries -- the semantic novelty signal the structural metrics
+	// (anchored on 11 seeds) cannot supply. nil/empty leaves the run
+	// byte-identical. Loaded from the evolve command's -judge-verdicts file.
+	JudgeVerdicts map[string]float64
 }
 
 // DefaultConfig returns sensible defaults.

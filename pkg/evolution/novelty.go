@@ -6,6 +6,8 @@ import (
 	"math/rand/v2"
 	"runtime"
 	"sort"
+	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/darwindeck/darwindeck/pkg/fitness"
@@ -29,6 +31,20 @@ const (
 	// leave-one-out CID guards against rewarding inert-borrow pile-ons at this
 	// stronger weight.
 	CIDWeight = 1.5
+
+	// JudgeWeight scales the LLM-judge novelty term (Config.JudgeVerdicts).
+	// The structural novelty (knn + seed-distance + CID) anchors on the 11
+	// classic SEEDS, so a game far from those seeds scores high even when it is a
+	// rediscovery of a published game NOT in the seed set (Scopa-scoring,
+	// draw poker, Hearts) -- the gap the LLM judge exists to close. JudgeVerdicts
+	// maps a genome's COMPOSITION (skeleton + borrow-mechanic set, see
+	// composition()) to a judge score (novel > 0, variant/known < 0), so a single
+	// out-of-loop verdict steers the whole lineage: certified-novel compositions
+	// gain novelty (explored more), certified-rediscovery compositions lose it
+	// (starved). Behind the Valid + FitnessFloor gate like CID, and zero for any
+	// unjudged composition, so it never resurrects a broken game and leaves an
+	// un-judged run byte-identical.
+	JudgeWeight = 1.5
 
 	// NoveltyAddThreshold is the INITIAL absolute archive-admission
 	// threshold: an individual enters the archive iff its behavior is
@@ -289,6 +305,36 @@ func (e *NoveltyEngine) updateBestFitness() {
 // computeNovelty calculates novelty score for each individual based on
 // k-nearest neighbor distance in behavior space, computed WITHIN-SKELETON only.
 // Also applies fitness sharing by skeleton niche to prevent monopoly.
+// composition returns a genome's mechanic fingerprint -- its skeleton plus the
+// sorted set of DISTINCT borrowed mechanics, e.g. "0:1,8" (a shedding host with
+// meld_bonus + run_play) or "5:" (plain vying). It is the key Config.JudgeVerdicts
+// maps to a judge score. Novelty is a property of the MECHANIC combination, not
+// the params or the borrow provenance, so one verdict on a representative genome
+// covers every genome of that composition. Borrow Source is deliberately ignored
+// (it is crossover provenance, not behaviour).
+func composition(g *genome.Genome) string {
+	seen := map[int]bool{}
+	var mechs []int
+	for _, b := range g.Borrowed {
+		m := int(b.Mechanic)
+		if !seen[m] {
+			seen[m] = true
+			mechs = append(mechs, m)
+		}
+	}
+	sort.Ints(mechs)
+	var sb strings.Builder
+	sb.WriteString(strconv.Itoa(int(g.Skeleton)))
+	sb.WriteByte(':')
+	for i, m := range mechs {
+		if i > 0 {
+			sb.WriteByte(',')
+		}
+		sb.WriteString(strconv.Itoa(m))
+	}
+	return sb.String()
+}
+
 func (e *NoveltyEngine) computeNovelty() {
 	// Collect behavior points per skeleton (population + archive). Track the
 	// owning *NoveltyIndividual so each individual can skip its own entry by
@@ -373,6 +419,21 @@ func (e *NoveltyEngine) computeNovelty() {
 		// classics). Both terms live in the same behavior-distance units, so
 		// the sum stays commensurate before per-skeleton normalization.
 		ind.Novelty = knn + e.seedDistanceTerm(ind.Behavior) + CIDWeight*ind.CID
+
+		// LLM-judge novelty term: bias the search toward judge-certified-novel
+		// compositions and away from judge-certified rediscoveries (see
+		// JudgeWeight). Keyed on composition so one verdict covers a whole
+		// lineage; zero for unjudged compositions and when no verdicts are loaded.
+		// Clamp the total at 0 so a strongly-suppressed rediscovery cannot push
+		// novelty negative (which would invert the per-skeleton normalization
+		// below); a suppressed composition simply gets no novelty protection and
+		// survives on fitness sharing alone.
+		if len(e.Config.JudgeVerdicts) > 0 {
+			ind.Novelty += JudgeWeight * e.Config.JudgeVerdicts[composition(ind.Genome)]
+			if ind.Novelty < 0 {
+				ind.Novelty = 0
+			}
+		}
 
 		if ind.Novelty > maxNoveltyPerSkel[skel] {
 			maxNoveltyPerSkel[skel] = ind.Novelty

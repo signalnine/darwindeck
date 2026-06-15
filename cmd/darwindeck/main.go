@@ -91,6 +91,8 @@ func cmdEvolve(args []string) {
 		"seed-aware novelty selection (hybrid only): add behavioral distance from the nearest of the 8 classic seeds into each VALID, above-floor individual's novelty score, steering the search away from the Crazy-Eights/Whist/Gin attractors; default OFF")
 	seedDir := fs.String("seed-dir", "",
 		"directory of custom seed genomes: load every genome.json under <dir> and AUGMENT (not replace) the built-in classic seed pool with the valid ones, so population init and changeSkeleton mutation sample from the combined pool while cross-family crossover keeps its classic partners; invalid files are skipped with a warning; default off (classics only)")
+	judgeVerdicts := fs.String("judge-verdicts", "",
+		"JSON file mapping a genome COMPOSITION (\"<skeleton>:<sorted borrow mechanic ids>\", e.g. \"0:1,8\") to an LLM-judge novelty score (novel > 0, variant/known < 0); adds a judge-novelty term steering the search toward certified-novel compositions and away from rediscoveries (hybrid + novelty-select only); default off")
 
 	fs.Parse(args)
 	evolution.FitnessFloor = *floor
@@ -111,6 +113,7 @@ func cmdEvolve(args []string) {
 		MCTSDecile:     *mctsDecile,
 		CrossSkeleton:  *crossSkeleton,
 		NoveltySelect:  *noveltySelect,
+		JudgeVerdicts:  loadJudgeVerdicts(*judgeVerdicts),
 	}
 
 	allSeeds := seedPool(*seedDir)
@@ -382,6 +385,28 @@ func sortAndTrim(inds []*evolution.Individual, n int) []*evolution.Individual {
 // calibration set, and the novelty anchors can never drift apart (they used to:
 // this list and seeds.All() were maintained separately, and Big Two was in one
 // but not the other).
+// loadJudgeVerdicts reads the -judge-verdicts JSON (a composition -> score map)
+// into Config.JudgeVerdicts. Empty path => nil (the un-judged default, which
+// leaves the run byte-identical). A read or parse error is fatal: a silently
+// dropped verdict file would run a different experiment than the one requested.
+func loadJudgeVerdicts(path string) map[string]float64 {
+	if path == "" {
+		return nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "judge-verdicts: %v\n", err)
+		os.Exit(1)
+	}
+	var m map[string]float64
+	if err := json.Unmarshal(data, &m); err != nil {
+		fmt.Fprintf(os.Stderr, "judge-verdicts: invalid JSON in %s: %v\n", path, err)
+		os.Exit(1)
+	}
+	fmt.Printf("  Judge verdicts: %d compositions from %s\n", len(m), path)
+	return m
+}
+
 func getAllSeeds() []*genome.Genome {
 	return seeds.All()
 }
