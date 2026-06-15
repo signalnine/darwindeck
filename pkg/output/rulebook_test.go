@@ -53,6 +53,49 @@ func TestClimbingRulebookRendersRules(t *testing.T) {
 	}
 }
 
+// TestCasinoRulebookRendersRules: a casino genome's rulebook must describe the
+// fishing/capture core loop (capture-or-trail, the sum rule, the final sweep)
+// and -- for the plain seed -- the most-cards win. Regression for the gap where
+// casino games rendered no "How to Play" section at all (the switch had no
+// Casino case).
+func TestCasinoRulebookRendersRules(t *testing.T) {
+	rb := GenerateRulebook(seeds.Casino())
+	for _, phrase := range []string{
+		"How to Play",
+		"capture game",
+		"Capture:",
+		"Trail:",
+		"sum",            // AllowSumCapture seed describes pip-sum capture
+		"Final Sweep",    // refill + end-sweep section
+		"most cards",     // unscored win condition
+	} {
+		if !strings.Contains(rb, phrase) {
+			t.Errorf("casino rulebook missing %q\n---\n%s", phrase, rb)
+		}
+	}
+}
+
+// TestCasinoScoredRulebookDescribesScoring: a casino host carrying a scoring
+// borrow must render the scored win condition (score = captures + bonuses) and
+// the borrowed meld bonus, not the plain most-cards rule.
+func TestCasinoScoredRulebookDescribesScoring(t *testing.T) {
+	g := &genome.Genome{
+		ID: "casino-scored-rb", Skeleton: genome.Casino, Players: 2, HandSize: 4,
+		Casino:   &genome.CasinoParams{TableSize: 4, AllowSumCapture: true},
+		Borrowed: []genome.BorrowedMechanic{{Source: genome.Rummy, Mechanic: genome.MechMeldBonus}},
+	}
+	rb := GenerateRulebook(g)
+	if !strings.Contains(rb, "highest score wins") {
+		t.Errorf("scored casino rulebook must describe a score-based win\n---\n%s", rb)
+	}
+	if strings.Contains(rb, "most cards** wins") {
+		t.Errorf("scored casino rulebook must NOT claim the plain most-cards win\n---\n%s", rb)
+	}
+	if !strings.Contains(rb, "Meld bonus") {
+		t.Errorf("scored casino rulebook must render the meld bonus borrow\n---\n%s", rb)
+	}
+}
+
 // TestClimbingRulebookOmitsDisabledCombinations: a singles-only climbing genome
 // must not advertise pairs/triples/runs.
 func TestClimbingRulebookOmitsDisabledCombinations(t *testing.T) {

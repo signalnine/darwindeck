@@ -26,6 +26,8 @@ func GenerateRulebook(g *genome.Genome) string {
 		writeRummyRules(&b, g)
 	case genome.Climbing:
 		writeClimbingRules(&b, g)
+	case genome.Casino:
+		writeCasinoRules(&b, g)
 	}
 
 	// Special cards are only simulated by the shedding runner, so only render
@@ -243,6 +245,44 @@ func writeClimbingRules(b *strings.Builder, g *genome.Genome) {
 
 	b.WriteString("### Winning\n\n")
 	b.WriteString("The first player to empty their hand wins.\n\n")
+}
+
+func writeCasinoRules(b *strings.Builder, g *genome.Genome) {
+	b.WriteString("## How to Play\n\n")
+	b.WriteString("This is a **fishing / capture game** (Casino / Scopa family) — you capture cards from a shared table into your own pile.\n\n")
+
+	tableN := 0
+	allowSum := false
+	if g.Casino != nil {
+		tableN = g.Casino.TableSize
+		allowSum = g.Casino.AllowSumCapture
+	}
+
+	b.WriteString("### Setup\n\n")
+	b.WriteString(fmt.Sprintf("Deal %d cards to each player and lay %d card(s) face-up on the table. The rest forms the stock.\n\n", g.HandSize, tableN))
+
+	b.WriteString("### On Your Turn\n\n")
+	b.WriteString("Play **one card** from your hand and either:\n\n")
+	b.WriteString("- **Capture:** take every table card of the **same rank** as the card you played")
+	if allowSum {
+		b.WriteString(", or take any set of number cards whose values **sum** to your card's value")
+	}
+	b.WriteString(" — moving them and the card you played into your captured pile, or\n")
+	b.WriteString("- **Trail:** if you do not capture, leave the card you played face-up on the table.\n\n")
+	b.WriteString("Trailing is always legal, so you always have a move.\n\n")
+	if allowSum {
+		b.WriteString("For summing, **Ace = 1** and number cards are worth their pips; face cards (J/Q/K) have no value and capture only by matching rank.\n\n")
+	}
+
+	b.WriteString("### Refilling and the Final Sweep\n\n")
+	b.WriteString("When every hand is empty, deal fresh hands from the stock. Once the stock can no longer deal a full round, the player who captured most recently takes any cards still on the table, and the game ends.\n\n")
+
+	b.WriteString("### Winning\n\n")
+	if g.CasinoScored() {
+		b.WriteString("Your score is the number of cards you captured plus the bonuses in the Additional Rules below (penalty cards count against you). The highest score wins.\n\n")
+	} else {
+		b.WriteString("Whoever has captured the **most cards** wins.\n\n")
+	}
 }
 
 func writeSpecialCards(b *strings.Builder, g *genome.Genome) {
