@@ -148,9 +148,26 @@ func NewNoveltyEngine(config Config, seeds []*genome.Genome) *NoveltyEngine {
 
 // Run executes the novelty search loop.
 func (e *NoveltyEngine) Run(progress func(gen int, best float64, avg float64)) {
-	e.initialize()
+	e.RunChunk(progress, e.Config.Generations)
+}
 
-	for gen := 0; gen < e.Config.Generations; gen++ {
+// RunChunk is the single generation-loop implementation, supporting the
+// judge-in-loop orchestration. On the first call (empty population) it
+// initializes; otherwise it continues from e.Generation (a loaded checkpoint).
+// It runs up to untilGen (capped at Config.Generations) and returns done=true
+// once the full run has completed (including the final evaluation), or false at
+// an intermediate chunk boundary -- where the caller should checkpoint, let the
+// judge grow Config.JudgeVerdicts, and relaunch to resume. Run() is the
+// whole-run case (untilGen == Generations).
+func (e *NoveltyEngine) RunChunk(progress func(gen int, best float64, avg float64), untilGen int) (done bool) {
+	if len(e.Population) == 0 {
+		e.initialize()
+	}
+	if untilGen > e.Config.Generations {
+		untilGen = e.Config.Generations
+	}
+
+	for gen := e.Generation; gen < untilGen; gen++ {
 		e.Generation = gen
 		e.evaluatePopulation()
 		e.computeNovelty()
@@ -175,14 +192,22 @@ func (e *NoveltyEngine) Run(progress func(gen int, best float64, avg float64)) {
 
 		e.Population = e.selectNext()
 	}
+	e.Generation = untilGen
 
-	// Final evaluation. Bump Generation past the loop range so elites get
-	// fresh seeds here instead of repeating the last generation's
-	// evaluation, which would double-count the same sample in the running
-	// mean (mirrors engine.go, Task 13.3).
-	e.Generation = e.Config.Generations
+	// At an intermediate chunk boundary the population stays mid-evolution
+	// (selectNext just produced the next, unevaluated generation); the resumed
+	// chunk re-enters the loop and evaluates it. No final eval here.
+	if untilGen < e.Config.Generations {
+		return false
+	}
+
+	// Final evaluation. Generation already sits past the loop range so elites
+	// get fresh seeds here instead of repeating the last generation's
+	// evaluation, which would double-count the same sample in the running mean
+	// (mirrors engine.go, Task 13.3).
 	e.evaluatePopulation()
 	e.computeNovelty()
+	return true
 }
 
 func (e *NoveltyEngine) initialize() {

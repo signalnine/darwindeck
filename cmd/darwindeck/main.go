@@ -93,6 +93,12 @@ func cmdEvolve(args []string) {
 		"directory of custom seed genomes: load every genome.json under <dir> and AUGMENT (not replace) the built-in classic seed pool with the valid ones, so population init and changeSkeleton mutation sample from the combined pool while cross-family crossover keeps its classic partners; invalid files are skipped with a warning; default off (classics only)")
 	judgeVerdicts := fs.String("judge-verdicts", "",
 		"JSON file mapping a genome COMPOSITION (\"<skeleton>:<sorted borrow mechanic ids>\", e.g. \"0:1,8\") to an LLM-judge novelty score (novel > 0, variant/known < 0); adds a judge-novelty term steering the search toward certified-novel compositions and away from rediscoveries (hybrid + novelty-select only); default off")
+	checkpoint := fs.String("checkpoint", "",
+		"checkpoint file for judge-in-loop chunked evolution (hybrid only): resume from it if it exists, save to it after this invocation; lets an out-of-loop judge grow -judge-verdicts between chunks while the whole population persists")
+	chunk := fs.Int("chunk", 0,
+		"run at most this many generations this invocation, then checkpoint + emit the top genomes for judging + exit (0 = run to -generations in one process)")
+	emitDir := fs.String("emit-dir", "",
+		"directory to write the top genomes (genome.json per rank) at a chunk boundary, for out-of-loop novelty judging; default <output>/judge-queue")
 
 	fs.Parse(args)
 	evolution.FitnessFloor = *floor
@@ -159,6 +165,45 @@ func cmdEvolve(args []string) {
 		bestFitness = engine.BestFitness
 	case "hybrid", "novelty":
 		engine := evolution.NewNoveltyEngine(config, allSeeds)
+		// Judge-in-loop chunked mode: resume from the checkpoint (if any), run a
+		// chunk, save the checkpoint, and at an intermediate boundary emit the top
+		// genomes for out-of-loop judging and exit (the orchestrator judges, grows
+		// -judge-verdicts, and relaunches). config.JudgeVerdicts is re-read from
+		// the file each invocation, so verdicts added between chunks take effect on
+		// resume.
+		if *checkpoint != "" {
+			if _, err := os.Stat(*checkpoint); err == nil {
+				if err := engine.LoadCheckpoint(*checkpoint); err != nil {
+					fmt.Fprintf(os.Stderr, "checkpoint: %v\n", err)
+					os.Exit(1)
+				}
+				fmt.Printf("  Resumed from %s at generation %d\n", *checkpoint, engine.Generation)
+			}
+			until := config.Generations
+			if *chunk > 0 {
+				until = engine.Generation + *chunk
+			}
+			done := engine.RunChunk(progress, until)
+			if err := engine.SaveCheckpoint(*checkpoint); err != nil {
+				fmt.Fprintf(os.Stderr, "checkpoint save: %v\n", err)
+				os.Exit(1)
+			}
+			if !done {
+				queue := *emitDir
+				if queue == "" {
+					queue = filepath.Join(config.OutputDir, "judge-queue")
+				}
+				inds, _ := engine.AllQualified()
+				emitForJudging(queue, engine.Generation, sortAndTrim(inds, config.SaveTopN))
+				fmt.Printf("\nChunk boundary at generation %d/%d.\nJudge the new compositions in %s, append verdicts to the table, then relaunch with the same -checkpoint to resume.\n",
+					engine.Generation, config.Generations, queue)
+				return
+			}
+			inds, _ := engine.AllQualified()
+			top = sortAndTrim(inds, config.SaveTopN)
+			bestFitness = engine.BestFitness
+			break
+		}
 		engine.Run(progress)
 		inds, _ := engine.AllQualified()
 		// Sort by raw fitness and take top N
@@ -405,6 +450,25 @@ func loadJudgeVerdicts(path string) map[string]float64 {
 	}
 	fmt.Printf("  Judge verdicts: %d compositions from %s\n", len(m), path)
 	return m
+}
+
+// emitForJudging writes the top genomes at a chunk boundary to
+// <dir>/gen<NNN>/rankNN.json so the out-of-loop judge can dossier and classify
+// the new compositions, then append verdicts to the table before the next chunk.
+func emitForJudging(dir string, gen int, top []*evolution.Individual) {
+	gdir := filepath.Join(dir, fmt.Sprintf("gen%03d", gen))
+	if err := os.MkdirAll(gdir, 0o755); err != nil {
+		fmt.Fprintf(os.Stderr, "emit: %v\n", err)
+		return
+	}
+	for i, ind := range top {
+		data, err := json.MarshalIndent(ind.Genome, "", "  ")
+		if err != nil {
+			continue
+		}
+		os.WriteFile(filepath.Join(gdir, fmt.Sprintf("rank%02d.json", i+1)), data, 0o644)
+	}
+	fmt.Printf("  Emitted %d top genomes to %s\n", len(top), gdir)
 }
 
 func getAllSeeds() []*genome.Genome {
