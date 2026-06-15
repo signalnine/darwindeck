@@ -3,8 +3,8 @@
 **Evolutionary card-game search with adversarially-hardened fun-proxy metrics -- and an honest negative result**
 
 DarwinDeck evolves *playable* card games for a standard 52-card deck. Games are
-built from three constrained skeleton templates (shedding, trick-taking, rummy)
-and scored by five fitness metrics that try to proxy "fun." After a four-round
+built from four constrained skeleton templates (shedding, trick-taking, rummy,
+climbing) and scored by five fitness metrics that try to proxy "fun." After a four-round
 adversarial hardening of those metrics, the headline finding is a negative one:
 
 > **The system reliably evolves playable games, and its hardened fitness
@@ -14,6 +14,17 @@ adversarial hardening of those metrics, the headline finding is a negative one:
 > rediscovers a public-domain classic. Automated fun-proxies are exploitable by
 > construction; novel-fun discovery needs a human in the loop or a
 > fundamentally richer signal.
+
+> **Update (2026-06-14):** that "fundamentally richer signal" was then built --
+> an LLM-as-judge, the first *deep* cross-skeleton borrows (mechanics that change
+> the legal-move set and win condition, not just end-of-round scoring), and a
+> counterfactual novelty pressure -- and the system now evolves
+> **blind-frontier-judge-certified NOVEL playable games** (4/4 in a controlled
+> run; pure move-tweaks correctly judged 2/2 *variant*). The original negative
+> result holds for the shallow-borrow regime it was measured in; see
+> [Update: the richer signal](#update-2026-06-14-the-richer-signal--novel-discovery-achieved).
+> Novelty is now judge-certified and selected-for; "fun" beyond the proxies is
+> still unvalidated by human players.
 
 This README documents that result and the methodology that produced it. The
 single most reusable artifact here is not a champion game -- it is the
@@ -95,6 +106,73 @@ rediscoveries of games humans already validated (multi-round Whist; Gin/Knock
 Rummy). The system has no signal for *novelty relative to existing games* and no
 signal for the fun a human sees that the simulation cannot. Novel-fun discovery
 needs a human in the loop or a fundamentally richer signal -- not more vetoes.
+
+**That last clause is what the 2026-06-14 follow-up acted on.** The richer
+signal -- an LLM-as-judge for the novelty axis, plus *deep* cross-skeleton
+borrows and a counterfactual novelty pressure so novelty is selected-for -- was
+built and produced judge-certified novel playable games. The exploitable-proxy
+lesson stands (the structural fitness metrics still can't tell novel from
+rediscovery, and "fun" is still proxy-limited); what changed is that the novelty
+gap the lesson named now has a working signal. See the next section.
+
+## Update (2026-06-14): the richer signal -- novel discovery achieved
+
+The negative result above was measured in a regime with two unrecognized
+limits. Removing them produced blind-judge-certified novel games:
+
+1. **The novelty bug was a *legibility* bug, not a game bug.** Cross-skeleton
+   borrows are the novelty lever, but the rulebook generator rendered every
+   borrow as a generic, parameter-free blurb (`"Earn bonus points for forming
+   sets or runs"`), so every judge -- human or LLM -- was assessing novelty on
+   text that did not describe the mechanic. Fixed (`pkg/output/rulebook.go`
+   `borrowedDescription` now renders the concrete rule each hook implements);
+   re-judging the *same* games on legible dossiers moved a blind frontier judge
+   from "all variant" to **5/7 novel**.
+
+2. **All borrows were shallow (end-of-round scoring tallies).** None changed the
+   legal-move set, turn order, or win condition -- so a hybrid was a classic plus
+   a scoring footnote, which a judge correctly reads as a *variant*. Added
+   **`MechRunPlay`**, the first *deep* borrow: climbing's multi-card combinations
+   (dump a same-rank set or same-suit run in one turn) consulted inside the
+   shedding runner (not the hook system, which structurally cannot change moves).
+   A rejected experiment marks the boundary: **`MechMeldGate`** (a rummy go-out
+   *gate*) reads as novel but does NOT terminate under the random-AI playability
+   gate (~7% completion) -- win-condition *gates* are non-viable; win-condition
+   *points-over-rounds* (emptying still ends a round) are.
+
+**The recipe (validated by hand and under selection):** a move-changing borrow
+(`run_play`) + a terminating multi-round meld-**points** win condition
+(`meld_bonus`, `rounds_per_game >= 2`, "you can win without going out") =
+**novel + playable**. A full `evolve -cross-skeleton -novelty-select` run
+discovered this combination in the wild; blind frontier judges (3 reps each,
+name-scrubbed dossiers) certified **4/4 move+win hybrids novel** (the clean
+2-borrow recipe = novel + *publishable*), while the contrast -- pure-`run_play`
+move-tweaks with no win-condition change -- came back **2/2 `variant_of_known`**,
+and a plain-trick control as a Whist rediscovery. That is a controlled,
+in-the-wild proof of the mechanism: move-change alone = variant; move-change +
+win-condition change = novel. Artifacts: [`results/2026-06-14-evolved-novel-hybrids/`](results/2026-06-14-evolved-novel-hybrids/).
+
+**Novelty is now selected-for, not incidental.** The prior novelty signal was a
+2-D behavior shadow (decision-density x interaction) blind to mechanic
+structure. **CID (counterfactual integration depth)** replaces it for borrowed
+genomes: run the genome hooked vs with its borrows removed at the same seed and
+measure how much play changes (win-distribution + length + option-flow). A deep
+fusion scores high (~0.30), an inert/bolt-on borrow ~0, a borrowless genome
+exactly 0. Wired as an additive novelty term behind `-novelty-select` and the
+playability gate (`pkg/evolution`, `CounterfactualIntegration`). A same-seed A/B
+(CID on vs off) shifts selection toward integration: a deep hybrid climbed into
+the top 5, the top-N became borrow-rich where the baseline's top was clean
+rediscoveries, and the hybrids grew deeper (3 cross-family borrows vs 2) -- at
+the expected novelty-vs-fitness cost (top honest fitness 0.717 -> 0.665).
+
+**Honest scope.** Novelty here is *LLM-judge-certified* (blind, 3-rep, with a
+controlled variant/rediscovery contrast), not human-validated; the structural
+fitness metrics still cannot judge novelty (that is why the LLM judge exists).
+Quality is borderline-to-publishable -- the clean 2-borrow recipe is publishable,
+the 3-borrow stacks are borderline ("dump-fast vs hold-melds" incentive clash).
+The CID selection effect is real but modest at its default weight. "Fun" beyond
+the proxies remains unvalidated by human players -- the original lesson's deepest
+caveat is unchanged.
 
 ## How It Works
 
