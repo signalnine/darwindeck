@@ -131,6 +131,26 @@ func tweakParameter(g *genome.Genome, rng *rand.Rand) {
 			// "unset" encoding to 3.
 			g.Climbing.MinRunLen = clampInt(g.Climbing.MinRunLen+rng.IntN(3)-1, 3, 5)
 		}
+	case genome.Vying:
+		if g.Vying != nil {
+			// Mutate one betting param, then restore the stack-sufficiency
+			// invariant (StartingChips >= rounds*min_bet*(max_raises+1)) so the
+			// mutant stays valid and never reaches an all-in -- validateVying
+			// would otherwise zero its fitness.
+			switch rng.IntN(4) {
+			case 0:
+				g.Vying.MinBet = clampInt(g.Vying.MinBet+(rng.IntN(3)-1)*5, 5, 50)
+			case 1:
+				g.Vying.MaxRaises = clampInt(g.Vying.MaxRaises+rng.IntN(3)-1, 1, 6)
+			case 2:
+				g.Vying.RoundsPerGame = clampInt(g.Vying.RoundsPerGame+rng.IntN(5)-2, 2, 30)
+			case 3:
+				g.Vying.StartingChips = clampInt(g.Vying.StartingChips+(rng.IntN(5)-2)*100, 200, 5000)
+			}
+			if worst := g.Vying.RoundsPerGame * g.Vying.MinBet * (g.Vying.MaxRaises + 1); g.Vying.StartingChips < worst {
+				g.Vying.StartingChips = worst
+			}
+		}
 	}
 }
 
