@@ -1,37 +1,16 @@
 # DarwinDeck
 
-**Evolutionary card-game search with adversarially-hardened fun-proxy metrics -- and an honest negative result**
+Evolutionary search for *playable* card games on a standard 52-card deck, scored by five fitness metrics that try to proxy "fun."
 
-DarwinDeck evolves *playable* card games for a standard 52-card deck. Games are
-built from four constrained skeleton templates (shedding, trick-taking, rummy,
-climbing) and scored by five fitness metrics that try to proxy "fun." After a four-round
-adversarial hardening of those metrics, the headline finding is a negative one:
+Games are built from four skeleton templates (shedding, trick-taking, rummy, climbing) that guarantee playability by construction. I hardened the metrics against gaming over four adversarial review rounds. The result:
 
-> **The system reliably evolves playable games, and its hardened fitness
-> function correctly ranks faithful Whist/Gin rediscoveries as the most
-> game-like outputs -- but across four adversarial rounds it did NOT discover a
-> novel fun game.** Evolution either games the newest validity rule or
-> rediscovers a public-domain classic. Automated fun-proxies are exploitable by
-> construction; novel-fun discovery needs a human in the loop or a
-> fundamentally richer signal.
+> The system reliably evolves playable games, and the hardened metrics correctly rank faithful Whist/Gin rediscoveries as the most game-like outputs. Across four rounds it never discovered a novel fun game. Evolution games the newest validity rule or rediscovers a public-domain classic. A weighted-sum fun-proxy computed from self-play is exploitable by construction.
 
-> **Update (2026-06-14):** that "fundamentally richer signal" was then built --
-> an LLM-as-judge, the first *deep* cross-skeleton borrows (mechanics that change
-> the legal-move set and win condition, not just end-of-round scoring), and a
-> counterfactual novelty pressure -- and the system now evolves
-> **blind-frontier-judge-certified NOVEL playable games** (4/4 in a controlled
-> run; pure move-tweaks correctly judged 2/2 *variant*). The original negative
-> result holds for the shallow-borrow regime it was measured in; see
-> [Update: the richer signal](#update-2026-06-14-the-richer-signal--novel-discovery-achieved).
-> Novelty is now judge-certified and selected-for; "fun" beyond the proxies is
-> still unvalidated by human players.
+Then I built the richer signal that result demanded: an LLM-as-judge, the first *deep* cross-skeleton borrows (mechanics that change the legal-move set and win condition, not just end-of-round scoring), and a counterfactual novelty pressure. The system now evolves blind-frontier-judge-certified **novel playable games** (4/4 in a controlled run; pure move-tweaks correctly judged 2/2 variant). Novelty is judge-certified and selected-for. Whether those games are *fun* to a human is untested. See [the richer signal](#the-richer-signal-novel-discovery).
 
-This README documents that result and the methodology that produced it. The
-single most reusable artifact here is not a champion game -- it is the
-failed-review loop and the falsification/calibration harness that makes "this
-metric is gamed" a test failure instead of an opinion.
+The most reusable thing here is the failed-review loop and the falsification harness that makes "this metric is gamed" a failing test instead of an argument.
 
-## Quick Start
+## Quick start
 
 ```bash
 # Build
@@ -40,7 +19,7 @@ make build-v2
 # Evolve a population of playable card games (default: hybrid algorithm)
 ./bin/darwindeck evolve -population 500 -generations 100 -workers 256
 
-# Calibration report: raw metric means for the 8 classics + degenerate fixtures
+# Calibration report: raw metric means for the 9 classics + degenerate fixtures
 ./bin/darwindeck calibrate
 
 # Play an evolved game against AI
@@ -54,16 +33,9 @@ make build-v2
 ./bin/darwindeck experiment -configs baseline,hybrid,mapelites,random -seeds 15
 ```
 
-## The headline result: a four-round failed-review loop
+## The four-round failed-review loop
 
-The intended payoff of the project was a re-run of the flagship evolution on the
-remediated metric stack, followed by a human designer review of the top
-champions. Each time the review found a degenerate champion, publication was
-hard-blocked, the rejected champion was encoded as a permanent negative
-calibration fixture, and the metric stack was re-falsified and re-hardened
-around it -- WITHOUT moving any metric weight or scale (those froze after round
-1). Only *validity rules* (Tier-0 liveness rules and Tier-2 degeneracy vetoes)
-were added. The loop ran the budgeted three rounds plus one authorized extra:
+The intended payoff was a flagship evolution on the remediated metric stack, then a human review of the top champions. Each time the review found a degenerate champion, publication was hard-blocked, the rejected champion became a permanent negative calibration fixture, and the metric stack was re-falsified and re-hardened around it without moving any weight or scale (those froze after round 1). Only validity rules were added (Tier-0 liveness rules, Tier-2 degeneracy vetoes). The loop ran three budgeted rounds plus one authorized extra:
 
 | Round | Verdict | What gamed the stack | Validity rules added in response |
 |-------|---------|----------------------|----------------------------------|
@@ -72,243 +44,96 @@ were added. The loop ran the budgeted three rounds plus one authorized extra:
 | 3 | 0 publishable / 19 borderline / 11 degenerate | no NEW exploit (the vetoes held); only playable-but-unremarkable games + publication-integrity bugs | output-path fixes: greedy-only leaderboard key, functional output dedup, MCTS-provenance sample floor |
 | 4 | 0 publishable; top 30 = 10 wild-union-residue shedding / 10 Whist / 10 Gin-Knock | wild-union shedding (statically valid), trivial-meld rummy, episodic monopoly | Tier-0 trivial-meld liveness (`min_meld >= 3`); `playable_share` (per-card) + `longest_run` (episodic monopoly) vetoes |
 
-The honest fitness ceiling fell every round as exploit corners closed:
+The fitness ceiling fell every round as exploit corners closed: 0.97 -> 0.91 -> 0.92 (inflated) -> 0.739. The 0.92 was inflated by an incommensurable MCTS/greedy leaderboard and a single-eval winner's curse (a 0.918 headline reproduced at 0.73-0.82 on fresh seeds). 0.739 is the greedy-only best.
 
-> **0.97 -> 0.91 -> 0.92 (inflated) -> 0.739 (honest).**
+Reusable artifacts of the loop:
 
-The round-3 0.92 was inflated by an incommensurable MCTS/greedy leaderboard and
-a single-eval winner's curse (a 0.918 headline reproduced at 0.73-0.82 over
-fresh seeds); round 4's 0.739 is the honest greedy-only best.
+- a **7-fixture falsification suite** of known-degenerate genomes (the rejected champions) that must always score below every classic seed, turning "the metric is gamed by shape X" into a failing test;
+- a **degeneracy-veto stack** (Tier-0 liveness + Tier-2 random- and greedy-batch vetoes) that closes each exploit as a validity rule, not a weight tweak;
+- the **calibration gate** (below), run untagged in the default test suite as a permanent regression test of the whole metric stack.
 
-The reusable artifacts of this loop are:
-
-- a **7-fixture falsification suite** of known-degenerate genomes (the rejected
-  champions) that must always score below every classic seed -- a regression
-  gate that turns "the metric is gamed by shape X" into a failing test;
-- a **degeneracy-veto stack** (Tier-0 liveness rules + Tier-2 random- and
-  greedy-batch vetoes) that closes each discovered exploit as a validity rule
-  rather than a weight tweak;
-- the **calibration gate** (below), run untagged in the default test suite as a
-  permanent regression test of the whole metric stack.
-
-The full round-by-round record is in
-[`docs/plans/2026-06-11-audit-remediation-checkpoint.md`](docs/plans/2026-06-11-audit-remediation-checkpoint.md);
-the round-4 bundle and review are in
-[`results/2026-06-12-flagship-r4/`](results/2026-06-12-flagship-r4/) (see its
-`REVIEW.md` and `STABILITY.md`).
+Full round-by-round record: [`docs/plans/2026-06-11-audit-remediation-checkpoint.md`](docs/plans/2026-06-11-audit-remediation-checkpoint.md). Round-4 bundle and review: [`results/2026-06-12-flagship-r4/`](results/2026-06-12-flagship-r4/) (`REVIEW.md`, `STABILITY.md`).
 
 ## The lesson
 
-Closing one exploit corner just routes evolution to the next: a weighted-sum
-proxy of "fun" computed from self-play simulation is exploitable by
-construction, and the only outputs the four-times-hardened stack endorses are
-rediscoveries of games humans already validated (multi-round Whist; Gin/Knock
-Rummy). The system has no signal for *novelty relative to existing games* and no
-signal for the fun a human sees that the simulation cannot. Novel-fun discovery
-needs a human in the loop or a fundamentally richer signal -- not more vetoes.
+Closing one exploit corner routes evolution to the next. A weighted-sum fun-proxy from self-play is exploitable by construction, and the only outputs the four-times-hardened stack endorses are games humans already validated (multi-round Whist, Gin/Knock Rummy). The stack has no signal for novelty relative to existing games, and none for the fun a human sees that the simulation can't. More vetoes won't fix that; a richer signal will.
 
-**That last clause is what the 2026-06-14 follow-up acted on.** The richer
-signal -- an LLM-as-judge for the novelty axis, plus *deep* cross-skeleton
-borrows and a counterfactual novelty pressure so novelty is selected-for -- was
-built and produced judge-certified novel playable games. The exploitable-proxy
-lesson stands (the structural fitness metrics still can't tell novel from
-rediscovery, and "fun" is still proxy-limited); what changed is that the novelty
-gap the lesson named now has a working signal. See the next section.
+That richer signal is what the follow-up built. The exploitable-proxy lesson stands: the structural metrics still can't tell novel from rediscovery, and "fun" is still a proxy. What changed is that the novelty gap now has a working signal.
 
-## Update (2026-06-14): the richer signal -- novel discovery achieved
+## The richer signal (novel discovery)
 
-The negative result above was measured in a regime with two unrecognized
-limits. Removing them produced blind-judge-certified novel games:
+The negative result was measured with two limits I hadn't spotted. Removing them produced blind-judge-certified novel games.
 
-1. **The novelty bug was a *legibility* bug, not a game bug.** Cross-skeleton
-   borrows are the novelty lever, but the rulebook generator rendered every
-   borrow as a generic, parameter-free blurb (`"Earn bonus points for forming
-   sets or runs"`), so every judge -- human or LLM -- was assessing novelty on
-   text that did not describe the mechanic. Fixed (`pkg/output/rulebook.go`
-   `borrowedDescription` now renders the concrete rule each hook implements);
-   re-judging the *same* games on legible dossiers moved a blind frontier judge
-   from "all variant" to **5/7 novel**.
+**1. The novelty bug was a legibility bug.** Cross-skeleton borrows are the novelty lever, but the rulebook generator rendered every borrow as a generic parameter-free blurb (`"Earn bonus points for forming sets or runs"`), so every judge, human or LLM, scored novelty on text that didn't describe the mechanic. Fixed in `pkg/output/rulebook.go` (`borrowedDescription` now renders each hook's concrete rule). Re-judging the same games on legible dossiers moved a blind frontier judge from "all variant" to 5/7 novel.
 
-2. **All borrows were shallow (end-of-round scoring tallies).** None changed the
-   legal-move set, turn order, or win condition -- so a hybrid was a classic plus
-   a scoring footnote, which a judge correctly reads as a *variant*. Added
-   **`MechRunPlay`**, the first *deep* borrow: climbing's multi-card combinations
-   (dump a same-rank set or same-suit run in one turn) consulted inside the
-   shedding runner (not the hook system, which structurally cannot change moves).
-   A rejected experiment marks the boundary: **`MechMeldGate`** (a rummy go-out
-   *gate*) reads as novel but does NOT terminate under the random-AI playability
-   gate (~7% completion) -- win-condition *gates* are non-viable; win-condition
-   *points-over-rounds* (emptying still ends a round) are.
+**2. Every borrow was shallow** (an end-of-round scoring tally). None touched the legal-move set, turn order, or win condition, so a hybrid was a classic plus a scoring footnote, which a judge reads as a variant. `MechRunPlay` is the first deep borrow: climbing's multi-card combinations (dump a same-rank set or same-suit run in one turn), consulted inside the shedding runner (the hook system can only do post-move scoring). `MechMeldGate` (a rummy go-out gate) marks the boundary. It reads novel but dies under the random-AI playability gate (~7% completion), so win-condition *gates* are out; win-condition *points-over-rounds* (emptying still ends a round) are in.
 
-**The recipe (validated by hand and under selection):** a move-changing borrow
-(`run_play`) + a terminating multi-round meld-**points** win condition
-(`meld_bonus`, `rounds_per_game >= 2`, "you can win without going out") =
-**novel + playable**. A full `evolve -cross-skeleton -novelty-select` run
-discovered this combination in the wild; blind frontier judges (3 reps each,
-name-scrubbed dossiers) certified **4/4 move+win hybrids novel** (the clean
-2-borrow recipe = novel + *publishable*), while the contrast -- pure-`run_play`
-move-tweaks with no win-condition change -- came back **2/2 `variant_of_known`**,
-and a plain-trick control as a Whist rediscovery. That is a controlled,
-in-the-wild proof of the mechanism: move-change alone = variant; move-change +
-win-condition change = novel. Artifacts: [`results/2026-06-14-evolved-novel-hybrids/`](results/2026-06-14-evolved-novel-hybrids/).
+The recipe, validated by hand and under selection: a move-changing borrow (`run_play`) plus a terminating multi-round meld-**points** win condition (`meld_bonus`, `rounds_per_game >= 2`, you can win without going out) = novel and playable. A full `evolve -cross-skeleton -novelty-select` run found this combination on its own. Blind frontier judges (3 reps, name-scrubbed dossiers) certified 4/4 move+win hybrids novel (the clean 2-borrow recipe publishable), the pure-`run_play` contrast 2/2 `variant_of_known`, and a plain-trick control as a Whist rediscovery. Move-change alone gives a variant; move-change plus a win-condition change gives novel. Artifacts: [`results/2026-06-14-evolved-novel-hybrids/`](results/2026-06-14-evolved-novel-hybrids/).
 
-**Integration is now selected-for (a novelty *pre-filter*, not an oracle).** The
-prior novelty signal was a 2-D behavior shadow (decision-density x interaction)
-blind to mechanic structure. **CID (counterfactual integration depth)** replaces
-it for borrowed genomes: remove each borrow singly (leave-one-out, max marginal),
-re-run at the same seed, and measure how much play changes (win-distribution +
-length + option-flow). A deep borrow scores high, an inert/bolt-on or
-pile-on-of-tallies ~0, a borrowless genome exactly 0. Wired as an additive
-novelty term behind `-novelty-select` and the playability gate (`pkg/evolution`,
-`CounterfactualIntegration`). Same-seed A/Bs show it pulls integrated hybrids up
-the rankings, monotonically with weight (best move+win hybrid rank 7 -> 5 -> 1 at
-CID weight 0 -> 0.5 -> 2.0; the production config, leave-one-out at weight 1.5,
-puts all of the top 10 on borrows).
+**Novelty is selected-for now, through a pre-filter.** The old novelty signal was a 2-D behavior shadow (decision-density x interaction), blind to mechanic structure: a genuine fusion landing at Crazy Eights' coordinates scored distance 0. CID (counterfactual integration depth) replaces it for borrowed genomes. Drop each borrow singly (leave-one-out, max marginal), re-run at the same seed, and measure how much play changes (win distribution, length, option flow). A deep borrow scores high, an inert or pile-on borrow scores ~0, a borrowless genome scores 0. It's wired as an additive novelty term behind `-novelty-select` (`pkg/evolution`, `CounterfactualIntegration`). Same-seed A/Bs pull integrated hybrids up the rankings monotonically with weight: best move+win hybrid at rank 7 (weight 0), rank 5 (0.5), rank 1 (2.0); the production weight of 1.5 puts all of the top 10 on borrows.
 
-**But CID measures *integration*, not novelty -- and the two differ.** A
-borrow can be fully integral yet reproduce a known game: trick-taking + penalty
-avoidance *is* Hearts, so CID scores it high (the avoidance genuinely changes the
-win) while it is a rediscovery, not a fusion. A blind-judge check of the
-production config's top 4 came back **1/4 novel**: only the shed + run_play +
-meld_bonus move+win recipe was certified novel; the other three were Hearts-family
-rediscoveries CID had promoted for their genuine-but-known integration. So the
-working architecture is a **two-stage pipeline**: CID cheaply enriches the
-candidate pool for integration in-loop (10/10 top borrowed), and the LLM judge --
-the only signal that separates novel fusion from integrated rediscovery -- is the
-out-of-loop arbiter. CID closes the "novelty incidental" gap by making integrated
-games *rise* to where the judge can find them; it does not replace the judge.
+CID rewards integration, which is a different thing from novelty. A fully integral borrow can reproduce a known game: trick-taking plus penalty avoidance is Hearts, and CID scores it high because the avoidance genuinely changes the win. A blind-judge check of the production top 4 came back 1/4 novel: only the shed + run_play + meld_bonus recipe was certified novel, the other three were Hearts-family rediscoveries CID had promoted for real-but-known integration. So the architecture is two stages. CID enriches the candidate pool for integration in-loop (10/10 top borrowed); the LLM judge, the only signal that separates novel fusion from integrated rediscovery, is the out-of-loop arbiter. CID makes integrated games rise to where the judge can find them. It doesn't replace the judge.
 
-**Honest scope.** Novelty here is *LLM-judge-certified* (blind, 3-rep, with a
-controlled variant/rediscovery contrast), not human-validated; the structural
-fitness metrics still cannot judge novelty (that is why the LLM judge exists).
-Quality is borderline-to-publishable -- the clean 2-borrow recipe is publishable,
-the 3-borrow stacks are borderline ("dump-fast vs hold-melds" incentive clash).
-The CID selection effect is real but modest at its default weight. "Fun" beyond
-the proxies remains unvalidated by human players -- the original lesson's deepest
-caveat is unchanged.
+Scope: novelty here is LLM-judge-certified (blind, 3-rep, with a variant/rediscovery contrast), not human-validated. The structural metrics still can't judge novelty, which is why the judge exists. Quality runs borderline-to-publishable (clean 2-borrow recipe publishable, 3-borrow stacks borderline from a dump-fast-vs-hold incentive clash). Whether any of it is fun to a human is untested.
 
-## How It Works
+## How it works
 
 ### Skeletons
 
-Games are built from four skeleton templates that guarantee mechanical
-playability by construction (the game loop itself ensures every state has a
-legal move; parameters control *what* happens, not *whether* the game works):
+Four skeleton templates guarantee mechanical playability by construction: the game loop ensures every state has a legal move, and parameters control *what* happens, not *whether* the game works.
 
-- **Shedding** (Crazy Eights, Mau-Mau): match suit/rank to the discard, first to
-  empty hand wins
-- **Trick-taking** (Whist, Hearts, Spades): one card per player per trick,
-  highest card wins
+- **Shedding** (Crazy Eights, Mau-Mau): match suit/rank to the discard, first to empty hand wins
+- **Trick-taking** (Whist, Hearts, Spades): one card per player per trick, highest card wins
 - **Rummy** (Gin Rummy, Knock Rummy): draw-meld-discard, lowest deadwood wins
-- **Climbing / ladder** (Big Two, Tien Len): play an ascending combination that
-  beats the table or pass, first to empty hand wins
+- **Climbing** (Big Two, Tien Len): play an ascending combination that beats the table or pass, first to empty hand wins
 
-Genomes encode parameters (hand size, player count, trump rules, special cards,
-scoring, win conditions) and may borrow whitelisted cross-skeleton mechanics
-(e.g. a multi-round shedding game with rummy-style meld bonuses).
+Genomes encode parameters (hand size, player count, trump rules, special cards, scoring, win conditions) and may borrow whitelisted cross-skeleton mechanics, like a multi-round shedding game with rummy-style meld bonuses.
 
-**Cross-skeleton recombination + novelty search (toward novel discovery).**
-With `-cross-skeleton`, crossover of two different-family parents produces a
-hybrid (a base family's core + an outcome-significant cross-family mechanic);
-with `-novelty-select`, the hybrid algorithm rewards behavioral distance from the
-8 classic seeds (gated on playability). This produced the first judge-certified
-*novel* playable games (a trick-taking core grafted with rummy meld bonuses and
-avoidance penalties — see `results/2026-06-13-novel-games`). Honest limitation:
-novelty so far is incidental, not reliably selected-for; the cheap structural
-novelty signal cannot distinguish novel from rediscovery the way the LLM judge
-(`darwindeck judge`) can.
+**Cross-skeleton recombination and novelty search.** With `-cross-skeleton`, crossover of two different-family parents produces a hybrid (a base family's core plus an outcome-significant cross-family mechanic). With `-novelty-select`, the hybrid algorithm rewards behavioral distance from the classic seeds (gated on playability) plus the CID integration term. Borrows come in two depths: shallow scoring tallies (`meld_bonus`, `avoidance`, `trick_scoring`, `draw_penalty`) implemented as hooks, and deep mechanics (`run_play`) implemented inside the runner that change moves or the win condition. The deep borrows plus CID plus the LLM judge are what produce reliably novel games (see above).
 
-**Judge-in-the-loop (tried; partial).** `evolve -seed-dir <dir>` seeds a run from
-a custom genome set, enabling a judge-gated restart loop: evolve → judge the
-elite for novelty → seed the next round from the novel survivors. Tested over 3
-rounds (`results/2026-06-14-judge-in-loop`), it surfaced more novel games and
-more diverse lineages but did **not reliably compound** novelty (trajectory
-1 → 2 → 0): the in-round playability fitness erodes the (muddled-scoring) novel
-hybrids faster than between-round judge selection accumulates them. The
-remaining lever is novelty pressure at **generation** granularity (a strong
-novelty term or the judge inside the per-generation fitness), not just at round
-boundaries — heavier and still unbuilt.
+**Judge-in-the-loop (tried, partial).** `evolve -seed-dir <dir>` seeds a run from a custom genome set, enabling a judge-gated restart loop: evolve, judge the elite for novelty, seed the next round from the novel survivors. Over 3 rounds (`results/2026-06-14-judge-in-loop`) it surfaced more novel games and more diverse lineages but did not reliably compound novelty (trajectory 1 -> 2 -> 0): in-round playability fitness erodes the muddled-scoring novel hybrids faster than between-round judge selection accumulates them. Novelty pressure needs generation granularity, which is what CID now provides; the judge-gated restart loop was the wrong granularity.
 
 ### Fitness function (the rebuilt metric stack)
 
-Five metrics, each normalized to [0, 1], combined by a frozen weighted sum.
-These are the *rebuilt* definitions: the audit found three of the original five
-were skeleton-identity constants, and they were reimplemented from per-turn
-simulation instrumentation (decisions, lead trajectories, option perturbation).
+Five metrics, each normalized to [0, 1], combined by a frozen weighted sum. These are the *rebuilt* definitions: the audit found three of the original five were skeleton-identity constants, and they were reimplemented from per-turn simulation instrumentation (decisions, lead trajectories, option perturbation).
 
-| Metric | Weight | What it measures (current implementation) |
-|--------|--------|-------------------------------------------|
-| Meaningful Decisions | 0.25 | Fraction of decision points whose choice plausibly matters -- a turn counts only if it has >= 2 legal moves AND sampled moves differ in type / special-effect profile / next-player option set (rummy uses a deadwood-consequence probe). Forced turns and consequence-free choices do not count. |
+| Metric | Weight | What it measures |
+|--------|--------|------------------|
+| Meaningful Decisions | 0.25 | Fraction of decision points whose choice plausibly matters: a turn counts only with >= 2 legal moves AND sampled moves that differ in type / special-effect profile / next-player option set (rummy uses a deadwood-consequence probe). Forced turns and consequence-free choices do not count. |
 | Game Arc | 0.25 | Within-game trajectory from per-turn lead tracking: early uncertainty (winner not already leading at midgame) + late resolution (leader near the end wins) + lead changes. A wire-to-wire foregone conclusion and a last-turn coin flip both score low. |
-| Interaction | 0.20 | Fraction of turns whose move perturbed the next player's legal options or carried a direct-attack event. Self-tempo effects (2p skip/reverse) and discards that change nothing for the opponent do not count. |
-| Skill Gradient | 0.20 | Two-tier: greedy win rate over an empirical same-seed random baseline (0.4 term) plus an ISMCTS-over-greedy uplift (0.6 term). All rates are seat-0; baselines are empirical, not assumed. |
-| Session Length | 0.10 | Game length in *decisions per player* (uniform across skeletons), scored against a calibrated target band. |
+| Interaction | 0.20 | Fraction of turns whose move perturbed the next player's legal options or carried a direct-attack event. Self-tempo effects (2p skip/reverse) and discards that change nothing for the opponent do not count. Climbing's beat/pass constraint is measured via `deltaModeClimbing`. |
+| Skill Gradient | 0.20 | Two-tier: greedy win rate over an empirical same-seed random baseline (0.4 term) plus an ISMCTS-over-greedy uplift (0.6 term). All rates are seat-0; baselines are empirical. |
+| Session Length | 0.10 | Game length in decisions per player (uniform across skeletons), scored against a calibrated target band. |
 
-Weights are frozen at 0.25 / 0.25 / 0.20 / 0.20 / 0.10 and were not tuned in
-response to any review after round 1.
+Weights are frozen at 0.25 / 0.25 / 0.20 / 0.20 / 0.10 and were not tuned in response to any review after round 1.
 
 ### Validation pipeline
 
-- **Tier 0** (free): static analysis on the genome struct -- deck overflow,
-  parameter ranges, borrow whitelist, plus *liveness rules* (no catch-all wild
-  special with no qualifier; `min_meld_size >= 3` so melding is consequence-
-  bearing).
-- **Tier 1** (10 random-AI games): smoke test; kill if any game errors, or
-  timeouts/completions breach a tolerance band, or completed games end
-  instantly.
-- **Tier 2** (200 random + 200 greedy games -> metrics): full evaluation. Before
-  fitness is computed the batches are checked by the **degeneracy veto stack**
-  -- random-batch vetoes (`non_agentic`, `tempo_monopoly`, `seat_participation`,
-  `draw_supply_churn`, `dead_match_rule`, `playable_share`) and greedy-batch
-  vetoes (`greedy_timeout`, `greedy_tempo_monopoly`, `greedy_seat_participation`,
-  `greedy_longest_run`). A vetoed genome reads fitness 0, exactly like a Tier-1
-  kill.
-  Every veto threshold has a measured >= ~1.2x margin to every classic seed.
-- **Skill tier**: the 20-game ISMCTS batch is expensive (~2s/genome with
-  game-parallel batches), so the production mode is **MCTS-for-top-decile** --
-  rank a generation by the greedy two-tier evaluation, then grant the second
-  ISMCTS tier only to the top decile. The mode is recorded in each run's
-  `meta.json`.
+- **Tier 0** (free): static analysis on the genome struct (deck overflow, parameter ranges, borrow whitelist) plus liveness rules (no catch-all wild special with no qualifier; `min_meld_size >= 3` so melding is consequence-bearing).
+- **Tier 1** (10 random-AI games): smoke test; kill if any game errors, timeouts/completions breach a tolerance band, or completed games end instantly.
+- **Tier 2** (200 random + 200 greedy games -> metrics): full evaluation. Before fitness is computed the batches pass the degeneracy veto stack: random-batch vetoes (`non_agentic`, `tempo_monopoly`, `seat_participation`, `draw_supply_churn`, `dead_match_rule`, `playable_share`) and greedy-batch vetoes (`greedy_timeout`, `greedy_tempo_monopoly`, `greedy_seat_participation`, `greedy_longest_run`). A vetoed genome reads fitness 0, same as a Tier-1 kill. Every veto threshold has a measured >= ~1.2x margin to every classic seed.
+- **Skill tier**: the 20-game ISMCTS batch is expensive (~2s/genome with game-parallel batches), so the production mode is MCTS-for-top-decile: rank a generation by the greedy two-tier evaluation, then grant the second ISMCTS tier only to the top decile. The mode is recorded in each run's `meta.json`.
 
-### Calibration gate (the metric stack's conscience)
+### Calibration gate
 
-The 8 classic seed games are the only human-validated "fun" ground truth in the
-repo. The calibration suite (`pkg/fitness/calibration_test.go`, run untagged in
-the default `go test`) asserts that every classic outscores every
-known-degenerate fixture by a margin, that the fitness floor admits every
-classic, and that Gin beats the instant-knock degenerate. It is a permanent
-regression test: any future metric change that lets a degenerate fixture
-outrank a classic is a build failure.
+The 9 classic seed games are the fun ground truth: real, time-tested published games (a game still in circulation is fun by survival). The calibration suite (`pkg/fitness/calibration_test.go`, run untagged in the default `go test`) asserts that every classic outscores every known-degenerate fixture by a margin, that the fitness floor admits every classic, and that Gin beats the instant-knock degenerate. Any future metric change that lets a degenerate fixture outrank a classic is a build failure.
+
+Big Two (climbing) joined the calibration set once the Interaction metric was extended to measure climbing. It had been excluded because the metric was climbing-blind: Big Two scored Interaction 0.000 / TotalFitness ~0.401, skimming the floor as a measurement artifact, despite passing every degeneracy veto. `deltaModeClimbing` measures its beat/pass constraint, Big Two now scores ~0.55 (on par with Gin Rummy), and it passes the full gate.
 
 ### Veto-stable publication
 
-Production publishes each top-N genome from a single evaluation, which let a
-genome that fails its own veto on a minority of seeds ride a lucky eval into the
-top-N (the round-4 rank02 shedding game failed `greedy_longest_run` on a
-minority of fresh seeds). `SaveResults` now re-evaluates each top-N genome K=5
-times at fresh seeds, stamps `veto_stable` + `stable_evals` on every published
-`genome.json`/`report.md`, and demotes games whose fresh published eval fails
-below every stable game. `darwindeck restamp` applies the same path to an
-already-saved run.
+A genome that fails its own veto on a minority of seeds could once ride a lucky single eval into the top-N (the round-4 rank02 shedding game failed `greedy_longest_run` on a minority of fresh seeds). `SaveResults` now re-evaluates each top-N genome K=5 times at fresh seeds, stamps `veto_stable` + `stable_evals` on every published `genome.json`/`report.md`, and demotes games whose fresh eval fails below every stable game. `darwindeck restamp` applies the same path to an already-saved run.
 
 ### Algorithms
 
 - **Baseline**: fitness sharing by skeleton type.
-- **Hybrid (default)**: within-skeleton novelty search (k-NN behavioral
-  distance) combined with fitness sharing.
-- **MAP-Elites**: a 10x10 behavioral grid per skeleton (axes: decision density x
-  interaction), keeping the best genome per cell.
-- **Random**: the null control -- pure random genome sampling at the engines'
-  evaluation budget, for the experiment harness.
+- **Hybrid (default)**: within-skeleton novelty search (k-NN behavioral distance) plus fitness sharing, plus the CID/seed-distance novelty terms under `-novelty-select`.
+- **MAP-Elites**: a 10x10 behavioral grid per skeleton (axes: decision density x interaction), keeping the best genome per cell.
+- **Random**: the null control, pure random genome sampling at the engines' evaluation budget, for the experiment harness.
 
 ## Algorithm comparison
 
-Post-remediation experiment matrix, every algorithm run on the final frozen
-metric stack with the random-search **null control**. Behavioral coverage =
-fraction of the 10x10 (decision-density x interaction) grid filled, per
-skeleton, averaged. Means over the seeds completed before the run was truncated
-(see note); the separations are clean enough that the truncation does not change
-any conclusion.
+Post-remediation experiment matrix, every algorithm on the final frozen metric stack against the random-search null control. Behavioral coverage = fraction of the 10x10 (decision-density x interaction) grid filled, per skeleton, averaged. Means over the seeds completed before the run was truncated (see note); the separations are clean enough that truncation changes no conclusion.
 
 | Algorithm | seeds | coverage (mean) | QD-score | distinct games (median) | vs random (coverage) |
 |-----------|:-----:|:---------------:|:--------:|:-----------------------:|----------------------|
@@ -317,34 +142,11 @@ any conclusion.
 | Random (null) | 5 | 0.084 | 13.9 | 25 | -- |
 | Baseline (fitness sharing only) | 6 | 0.050 | 8.8 | 436 | **below**, U=0/30, p=0.004 |
 
-Mann-Whitney U is two-sided, exact (small-N enumeration); every comparison
-above is a *complete separation* (no overlap between the two groups' values),
-so U is at its extreme and the same ordering holds on QD-score.
+Mann-Whitney U is two-sided, exact (small-N enumeration); every comparison is a complete separation (no overlap between the two groups' values), so U is at its extreme and the same ordering holds on QD-score.
 
-**The result, stated honestly:**
+> Diversity machinery is necessary to beat random sampling of this constrained genome space. Novelty search (the default) and MAP-Elites both significantly exceed the random-search null on coverage and QD-score. Plain **fitness sharing**, the baseline and the family of approach v1 relied on, is significantly *worse* than random sampling (coverage 0.050 vs 0.084, every baseline run below every random run). A genetic algorithm that selects only on a fun-proxy with no explicit novelty pressure explores the space less well than drawing genomes at random.
 
-> Diversity machinery is *necessary* to beat random sampling of this constrained
-> genome space. Novelty search (the default) and MAP-Elites both significantly
-> exceed the random-search null on coverage and QD-score. Plain **fitness
-> sharing -- the baseline, and the family of approach v1 relied on -- is
-> significantly *worse* than random sampling** (coverage 0.050 vs 0.084, every
-> baseline run below every random run). A genetic algorithm that selects only on
-> a fun-proxy, with no explicit novelty pressure, explores the space *less* well
-> than drawing genomes at random.
-
-Two honest caveats. (1) **Truncation:** the matrix was designed for 15
-seeds/config but was stopped at 4-6/config for a security reboot of the compute
-host; the raw per-run log is committed at
-`results/2026-06-13-experiments-final/raw-run-log.txt` and the table is
-reproducible from it. The pre-registered N was 15; the completed N is smaller,
-but because every reported comparison is a complete separation with exact
-p < 0.02, more seeds tighten the intervals without changing the ranking.
-(2) **Pairwise distance is misleading here and is omitted from the headline:**
-baseline posts a *high* mean pairwise distance (~0.48) despite its low coverage
--- it finds few cells, far apart -- which is why coverage and QD-score, not raw
-pairwise spread, are the load-bearing diversity measures. The experiment
-harness and its tested statistics (median, IQR, coverage, QD-score,
-Mann-Whitney) are in `cmd/darwindeck/experiment.go`.
+Two caveats. **Truncation:** the matrix was designed for 15 seeds/config but stopped at 4-6/config for a security reboot of the compute host; the raw per-run log is at `results/2026-06-13-experiments-final/raw-run-log.txt` and the table reproduces from it. Every reported comparison is a complete separation with exact p < 0.02, so more seeds tighten the intervals without changing the ranking. **Pairwise distance is misleading here** and is omitted from the headline: baseline posts a high mean pairwise distance (~0.48) despite low coverage (few cells, far apart), which is why coverage and QD-score are the load-bearing diversity measures. The harness and its tested statistics (median, IQR, coverage, QD-score, Mann-Whitney) are in `cmd/darwindeck/experiment.go`.
 
 ## Architecture
 
@@ -353,23 +155,25 @@ cmd/darwindeck/         CLI entry point (evolve, experiment, calibrate, restamp,
 pkg/
 ├── genome/             Genome struct, skeleton params, Tier-0 static validation + liveness rules
 ├── skeleton/
-│   ├── shedding/       Shedding runner (match suit/rank, special cards, multi-round scoring)
+│   ├── shedding/       Shedding runner (match suit/rank, special cards, multi-round scoring, run_play)
 │   ├── tricktaking/    Trick-taking runner (suit following, trump, tricks)
-│   └── rummy/          Rummy runner (draw-meld-discard, knock/gin)
+│   ├── rummy/          Rummy runner (draw-meld-discard, knock/gin)
+│   └── climbing/       Climbing runner (beat-or-pass combinations, ladder)
 ├── sim/                Card types, GameState, AI players (Random/Greedy/ISMCTS), batch runner
 ├── mechanic/           Borrowed-mechanic hook system (single HooksFor construction site)
-├── evolution/          Mutation, crossover, selection, fitness sharing
+├── evolution/          Mutation, crossover, selection, novelty (k-NN + seed-distance + CID)
 │   ├── engine.go       Baseline engine; running-mean elite re-evaluation
-│   ├── novelty.go      Hybrid: within-skeleton novelty + fitness sharing
+│   ├── novelty.go      Hybrid: within-skeleton novelty + fitness sharing + CID term
 │   ├── mapelites.go    Quality-diversity archive engine
-│   └── behavior.go     Behavior descriptor (decision density x interaction)
+│   └── behavior.go     Behavior descriptor + CounterfactualIntegration (CID)
 ├── fitness/            5 rebuilt metrics, tiered pipeline, degeneracy vetoes, calibration gate
 ├── output/             Rulebook/report generation, veto-stable publication
 ├── playtest/           Interactive playtest session (runs the same hooks fitness does)
-└── seeds/              8 seed games + the degenerate calibration fixtures
+├── judge/              LLM-as-judge: blind dossier emitter + verdict ingest/rank
+└── seeds/              9 seed games + the degenerate calibration fixtures
 ```
 
-## Seed Games
+## Seed games
 
 | Skeleton | Seeds |
 |----------|-------|
@@ -378,16 +182,7 @@ pkg/
 | Rummy | Gin Rummy, Knock Rummy |
 | Climbing | Big Two |
 
-The 9 classic seeds (`seeds.All()`) are the single source of truth: the
-evolution init pool, the calibration ground truth, and the novelty seed-distance
-anchors -- all real, time-tested published games. Big Two (climbing) was promoted
-into this set once the Interaction metric was extended to measure climbing: it
-had been excluded because the metric was climbing-blind (Big Two scored
-Interaction 0.000 / TotalFitness ~0.401, a hair above the floor, purely an
-artifact -- it always passed every degeneracy veto). With `deltaModeClimbing`
-measuring its beat/pass constraint, Big Two scores ~0.55 (on par with Gin Rummy)
-and passes the full calibration gate. Mutation, crossover, and cross-skeleton
-mechanic borrowing produce the rest of the search space.
+The 9 classic seeds (`seeds.All()`) are the single source of truth: the evolution init pool, the calibration ground truth, and the novelty seed-distance anchors. Mutation, crossover, and cross-skeleton mechanic borrowing produce the rest of the search space.
 
 ## Development
 
@@ -395,7 +190,7 @@ mechanic borrowing produce the rest of the search space.
 # Build
 make build-v2
 
-# Run tests (includes the calibration gate -- it runs untagged)
+# Run tests (includes the calibration gate, which runs untagged)
 go test ./pkg/... ./cmd/...
 
 # Single test
@@ -405,13 +200,12 @@ go test ./pkg/evolution/ -run TestSmallEvolution -v
 ./bin/darwindeck calibrate
 ```
 
-## Project Layout
+## Project layout
 
 - `cmd/darwindeck/` -- CLI entry point
 - `pkg/` -- pure Go library code (stdlib + math/rand/v2 only)
-- `docs/plans/` -- design documents and the audit-remediation plan + checkpoint
-- `results/` -- tracked result artifacts (each with a `meta.json`); the
-  round-4 honest-exit bundle lives here
+- `docs/plans/` -- design documents, the audit-remediation plan and checkpoint
+- `results/` -- tracked result artifacts (each with a `meta.json`); the round-4 exit bundle lives here
 - `output/` -- raw evolution run outputs (gitignored)
 
 ## License
