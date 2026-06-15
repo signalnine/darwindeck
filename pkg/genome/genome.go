@@ -11,9 +11,10 @@ const (
 	Rummy
 	Climbing
 	Casino
+	Vying
 )
 
-var skeletonNames = [5]string{"shedding", "trick_taking", "rummy", "climbing", "casino"}
+var skeletonNames = [6]string{"shedding", "trick_taking", "rummy", "climbing", "casino", "vying"}
 
 func (s SkeletonType) String() string {
 	if int(s) >= len(skeletonNames) {
@@ -208,6 +209,30 @@ type CasinoParams struct {
 	// captures. This is the decision-rich core of Casino/Scopa; with it off the
 	// game degrades to plain rank-matching fishing (Go Fish-like).
 	AllowSumCapture bool `json:"allow_sum_capture"`
+}
+
+// --- Vying Parameters ---
+
+// VyingParams controls a vying / betting game (poker / brag family). Each deal,
+// every player gets HandSize hidden cards; one rotating player posts a big blind
+// (MinBet) so the first actor always faces a bet; then a single betting round
+// runs (fold / call / raise, raises capped at MaxRaises) and the best poker hand
+// among non-folded players takes the pot. Chips carry across RoundsPerGame deals
+// and the largest stack wins. StartingChips must cover the worst-case
+// commitment across all deals so no all-in / side pot ever arises (enforced in
+// validation). Player count and hand size use the top-level Genome fields.
+type VyingParams struct {
+	// StartingChips is each player's chip stack at the start (e.g. 1000).
+	StartingChips int `json:"starting_chips"`
+	// MinBet is the big blind and the raise increment (e.g. 10).
+	MinBet int `json:"min_bet"`
+	// MaxRaises caps raises per betting round so the round always closes
+	// (e.g. 3). Bounds the game's length and guarantees termination.
+	MaxRaises int `json:"max_raises"`
+	// RoundsPerGame is the number of deals played; chips carry over and the
+	// biggest stack wins. Tuned so total decisions land in the session-length
+	// band.
+	RoundsPerGame int `json:"rounds_per_game"`
 }
 
 // --- Shared Mechanics ---
@@ -429,6 +454,7 @@ type Genome struct {
 	Rummy       *RummyParams       `json:"rummy,omitempty"`
 	Climbing    *ClimbingParams    `json:"climbing,omitempty"`
 	Casino      *CasinoParams      `json:"casino,omitempty"`
+	Vying       *VyingParams       `json:"vying,omitempty"`
 
 	// Cross-skeleton mechanics
 	Borrowed []BorrowedMechanic `json:"borrowed,omitempty"`
@@ -466,6 +492,10 @@ func (g *Genome) Clone() *Genome {
 	if g.Casino != nil {
 		c := *g.Casino
 		cp.Casino = &c
+	}
+	if g.Vying != nil {
+		v := *g.Vying
+		cp.Vying = &v
 	}
 	if g.Borrowed != nil {
 		cp.Borrowed = append([]BorrowedMechanic(nil), g.Borrowed...)
@@ -666,6 +696,16 @@ func (g *Genome) MaxTurns() int {
 		// the finite stock, so total plays <= 52 (every card played once).
 		// Scale generously so the cap is never the binding constraint.
 		return 52 * 4
+	case Vying:
+		// Each deal runs one betting round whose actions are bounded by the
+		// raise cap (every non-folded player acts O(MaxRaises+1) times), and
+		// RoundsPerGame deals run back to back. Scale generously so the backstop
+		// never binds on a healthy game (real termination is structural).
+		if g.Vying != nil {
+			perDeal := g.Players * (g.Vying.MaxRaises + 3)
+			return g.Vying.RoundsPerGame * perDeal * 2
+		}
+		return g.Players * 60
 	default:
 		return 200
 	}
@@ -701,6 +741,11 @@ func (g *Genome) ActiveParams() string {
 		if g.Casino != nil {
 			return fmt.Sprintf("casino{table=%d, sum_capture=%v}",
 				g.Casino.TableSize, g.Casino.AllowSumCapture)
+		}
+	case Vying:
+		if g.Vying != nil {
+			return fmt.Sprintf("vying{chips=%d, min_bet=%d, max_raises=%d, rounds=%d}",
+				g.Vying.StartingChips, g.Vying.MinBet, g.Vying.MaxRaises, g.Vying.RoundsPerGame)
 		}
 	}
 	return "none"

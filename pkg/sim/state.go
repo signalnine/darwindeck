@@ -28,6 +28,10 @@ const (
 	MoveMeld                    // Lay down a meld (rummy)
 	MoveDiscard                 // Discard a card
 	MoveCapture                 // Play a card and capture table cards (casino); Cards[0]=played, Cards[1:]=captured
+	MoveCheck                   // Vying: decline to bet when nothing is owed
+	MoveCall                    // Vying: match the current bet
+	MoveRaise                   // Vying: increase the current bet by the min bet
+	MoveFold                    // Vying: surrender the hand and forfeit the pot
 )
 
 // Move represents a player action.
@@ -208,6 +212,17 @@ type GameState struct {
 	// Rummy-specific
 	Melds     [][]Card // All melds on the table
 	MeldOwner []int    // Owner of each meld
+
+	// Vying-specific (poker/betting). Scores holds each player's chip stack;
+	// the rest is the current betting round's transient state. Round is the
+	// deal index (0..MaxRound-1) and the rotating big-blind seat is Round %
+	// NumPlayers, so positions balance across deals.
+	Pot        int   // chips wagered into the current deal's pot
+	CurrentBet int   // the amount a player must have Committed to stay in
+	Committed  []int // chips each player has put in THIS betting round
+	Folded     []bool
+	RaiseCount int // raises so far this round (bounded by MaxRaises)
+	ToAct      int // non-folded players still owed an action before the round closes
 
 	// Events log for fitness analysis
 	Events []Event

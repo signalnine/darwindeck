@@ -32,6 +32,7 @@ func All() []*genome.Genome {
 		KnockRummy(),
 		BigTwo(),
 		Casino(),
+		SimplePoker(),
 	}
 }
 

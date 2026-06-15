@@ -28,6 +28,8 @@ func GenerateRulebook(g *genome.Genome) string {
 		writeClimbingRules(&b, g)
 	case genome.Casino:
 		writeCasinoRules(&b, g)
+	case genome.Vying:
+		writeVyingRules(&b, g)
 	}
 
 	// Special cards are only simulated by the shedding runner, so only render
@@ -283,6 +285,32 @@ func writeCasinoRules(b *strings.Builder, g *genome.Genome) {
 	} else {
 		b.WriteString("Whoever has captured the **most cards** wins.\n\n")
 	}
+}
+
+func writeVyingRules(b *strings.Builder, g *genome.Genome) {
+	b.WriteString("## How to Play\n\n")
+	b.WriteString("This is a **vying / betting game** (poker family) — wager chips on hidden hands; the best poker hand at showdown takes the pot.\n\n")
+
+	chips, minBet, maxRaises, rounds := 0, 0, 0, 0
+	if g.Vying != nil {
+		chips, minBet, maxRaises, rounds = g.Vying.StartingChips, g.Vying.MinBet, g.Vying.MaxRaises, g.Vying.RoundsPerGame
+	}
+
+	b.WriteString("### Setup\n\n")
+	b.WriteString(fmt.Sprintf("Each player starts with %d chips. Every deal, each player is dealt %d cards face-down.\n\n", chips, g.HandSize))
+
+	b.WriteString("### Each Deal\n\n")
+	b.WriteString(fmt.Sprintf("One player (rotating each deal) posts a big blind of %d chips, so the first to act always faces a bet. Going around, each player in turn either:\n\n", minBet))
+	b.WriteString("- **Fold:** drop out, forfeiting any chips already in the pot, or\n")
+	b.WriteString("- **Call:** match the current bet, or\n")
+	b.WriteString(fmt.Sprintf("- **Raise:** match the bet and increase it by %d (at most %d raises per deal).\n\n", minBet, maxRaises))
+	b.WriteString("When nothing is owed you may **check** (stay in for free) instead of calling.\n\n")
+
+	b.WriteString("### Showdown\n\n")
+	b.WriteString("Once the betting is settled, the players still in reveal their hands and the best poker hand — pair, two pair, three of a kind, straight, flush, full house, four of a kind, straight flush — takes the pot. If everyone but one player has folded, that player takes the pot uncontested.\n\n")
+
+	b.WriteString("### Winning\n\n")
+	b.WriteString(fmt.Sprintf("Chips carry over across %d deals. The player with the most chips at the end wins.\n\n", rounds))
 }
 
 func writeSpecialCards(b *strings.Builder, g *genome.Genome) {

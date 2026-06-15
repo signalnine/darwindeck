@@ -157,6 +157,13 @@ func fullyPopulatedState() *sim.GameState {
 		Melds:     [][]sim.Card{{{Suit: sim.Hearts, Rank: sim.Six}, {Suit: sim.Hearts, Rank: sim.Seven}, {Suit: sim.Hearts, Rank: sim.Eight}}},
 		MeldOwner: []int{0},
 
+		Pot:        50,
+		CurrentBet: 20,
+		Committed:  []int{20, 10},
+		Folded:     []bool{false, true},
+		RaiseCount: 1,
+		ToAct:      1,
+
 		Events: []sim.Event{{Type: sim.EventCardPlayed, PlayerID: 1, Detail: "discard"}},
 		RNG:    rand.New(rand.NewPCG(7, 0)),
 	}
@@ -238,6 +245,8 @@ func TestCloneIsDeep(t *testing.T) {
 	cp.TrickPlayers[0] = 1
 	cp.Melds[0][0] = sim.Card{Suit: sim.Spades, Rank: sim.Nine}
 	cp.MeldOwner[0] = 1
+	cp.Committed[0] = 777
+	cp.Folded[0] = true
 	cp.Turn = 1000
 	cp.Active = 0
 	cp.Phase = sim.PhaseEnd
@@ -246,6 +255,10 @@ func TestCloneIsDeep(t *testing.T) {
 	cp.TrumpSuit = 0
 	cp.TrickBroken = false
 	cp.PassCount = 0
+	cp.Pot = 0
+	cp.CurrentBet = 0
+	cp.RaiseCount = 9
+	cp.ToAct = 9
 
 	for name, pair := range map[string][2]interface{}{
 		"Deck":         {st.Deck, snapshot.Deck},
@@ -257,6 +270,8 @@ func TestCloneIsDeep(t *testing.T) {
 		"TrickPlayers": {st.TrickPlayers, snapshot.TrickPlayers},
 		"Melds":        {st.Melds, snapshot.Melds},
 		"MeldOwner":    {st.MeldOwner, snapshot.MeldOwner},
+		"Committed":    {st.Committed, snapshot.Committed},
+		"Folded":       {st.Folded, snapshot.Folded},
 	} {
 		if !reflect.DeepEqual(pair[0], pair[1]) {
 			t.Errorf("%s: original mutated through clone:\n got  %v\n want %v", name, pair[0], pair[1])
@@ -268,7 +283,9 @@ func TestCloneIsDeep(t *testing.T) {
 	if st.Turn != snapshot.Turn || st.Active != snapshot.Active || st.Phase != snapshot.Phase ||
 		st.Direction != snapshot.Direction || st.Round != snapshot.Round ||
 		st.TrumpSuit != snapshot.TrumpSuit || st.TrickBroken != snapshot.TrickBroken ||
-		st.PassCount != snapshot.PassCount {
+		st.PassCount != snapshot.PassCount ||
+		st.Pot != snapshot.Pot || st.CurrentBet != snapshot.CurrentBet ||
+		st.RaiseCount != snapshot.RaiseCount || st.ToAct != snapshot.ToAct {
 		t.Error("scalar fields of original mutated through clone")
 	}
 }
@@ -278,7 +295,7 @@ func TestCloneIsDeep(t *testing.T) {
 // (pkg/sim/clone.go), Determinize (if the field carries hidden information),
 // the field-by-field tests above, and this constant are all updated together.
 func TestGameStateFieldCountPinsClone(t *testing.T) {
-	const want = 23
+	const want = 29 // +6 vying betting fields: Pot, CurrentBet, Committed, Folded, RaiseCount, ToAct
 	if got := reflect.TypeOf(sim.GameState{}).NumField(); got != want {
 		t.Fatalf("GameState has %d fields, want %d -- update Clone/Determinize/clone_test.go for the new field, then bump this constant", got, want)
 	}

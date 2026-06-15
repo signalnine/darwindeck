@@ -44,6 +44,13 @@ func (gs *GameState) Clone() *GameState {
 	cp.Melds = cloneCardMatrix(gs.Melds)
 	cp.MeldOwner = cloneInts(gs.MeldOwner)
 
+	// Vying betting-round state. Pot/CurrentBet/RaiseCount/ToAct are scalars
+	// copied by the struct copy above; Committed/Folded are per-player slices.
+	// They are PUBLIC (everyone sees the bets and who folded), so Determinize
+	// copies them verbatim -- only the hidden hole cards are resampled.
+	cp.Committed = cloneInts(gs.Committed)
+	cp.Folded = cloneBools(gs.Folded)
+
 	cp.Events = nil
 	cp.RNG = nil
 	return &cp
@@ -115,6 +122,15 @@ func cloneInts(src []int) []int {
 		return nil
 	}
 	out := make([]int, len(src))
+	copy(out, src)
+	return out
+}
+
+func cloneBools(src []bool) []bool {
+	if src == nil {
+		return nil
+	}
+	out := make([]bool, len(src))
 	copy(out, src)
 	return out
 }

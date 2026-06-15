@@ -8,6 +8,7 @@ import (
 	"github.com/darwindeck/darwindeck/pkg/skeleton/rummy"
 	"github.com/darwindeck/darwindeck/pkg/skeleton/shedding"
 	"github.com/darwindeck/darwindeck/pkg/skeleton/tricktaking"
+	"github.com/darwindeck/darwindeck/pkg/skeleton/vying"
 )
 
 // GetRunner returns the appropriate skeleton runner for a genome.
@@ -23,6 +24,8 @@ func GetRunner(g *genome.Genome) sim.GenericRunner {
 		return &climbing.Runner{}
 	case genome.Casino:
 		return &casino.Runner{}
+	case genome.Vying:
+		return &vying.Runner{}
 	default:
 		return nil
 	}
@@ -44,6 +47,8 @@ func GetGreedyAI(g *genome.Genome) sim.AIPlayer {
 		return &sim.GreedyAI{Scorer: &sim.ClimbingScorer{}}
 	case genome.Casino:
 		return &sim.GreedyAI{Scorer: &sim.CasinoScorer{}}
+	case genome.Vying:
+		return &sim.GreedyAI{Scorer: &vying.VyingScorer{}}
 	default:
 		return &sim.RandomAI{}
 	}

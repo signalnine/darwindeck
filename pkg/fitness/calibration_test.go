@@ -413,8 +413,8 @@ func TestDegenerateFixturesAreTier0Valid(t *testing.T) {
 			t.Errorf("%s: tier-0 violations: %v", g.ID, errs)
 		}
 	}
-	if n := len(seeds.All()); n != 10 {
-		t.Errorf("seeds.All() returned %d classics, want 10 (8 three-skeleton classics + Big Two/climbing + Casino)", n)
+	if n := len(seeds.All()); n != 11 {
+		t.Errorf("seeds.All() returned %d classics, want 11 (8 three-skeleton classics + Big Two/climbing + Casino + SimplePoker/vying)", n)
 	}
 }
 

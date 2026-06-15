@@ -480,6 +480,13 @@ func runSingleGame(g *genome.Genome, runner GenericRunner, ai AIPlayer, rng *ran
 						delta = after - free
 					}
 				}
+			case deltaModeVying:
+				// Betting interaction is move-TYPE, not option-count (see the
+				// deltaModeVying doc): a raise pressures every opponent and a fold
+				// removes a contender, both interactive; check/call are passive.
+				if move.Type == MoveRaise || move.Type == MoveFold {
+					delta = 1
+				}
 			}
 		}
 
@@ -592,6 +599,17 @@ const (
 	// is most turns -- correct, since casino is a fight over the shared table.
 	// Without it casino would fall to deltaModeNone and read Interaction 0.0.
 	deltaModeCasino
+	// deltaModeVying: betting interaction is by move TYPE, not option count. A
+	// RAISE pressures every opponent (they must commit more chips or fold) and a
+	// FOLD removes a contender for everyone -- both materially change the other
+	// players' situation. A CHECK or CALL is passive. An option-count probe
+	// under-measures this: while a bet is live the option set stays {fold, call,
+	// raise} (count 3) regardless, so the count barely moves; the coupling lives
+	// in the stakes, not the option count. So OptionDelta is set to 1 on a raise
+	// or fold, 0 on a check or call. Vying carries no borrows in the calibration
+	// set and the classics + degenerate fixtures are all non-vying, so adding
+	// this mode leaves the calibration ground truth byte-unchanged.
+	deltaModeVying
 )
 
 func optionDeltaModeFor(g *genome.Genome) optionDeltaMode {
@@ -606,6 +624,8 @@ func optionDeltaModeFor(g *genome.Genome) optionDeltaMode {
 		return deltaModeClimbing
 	case genome.Casino:
 		return deltaModeCasino
+	case genome.Vying:
+		return deltaModeVying
 	default:
 		return deltaModeNone
 	}

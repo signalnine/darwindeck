@@ -58,6 +58,12 @@ func Validate(g *Genome) []string {
 		} else {
 			errs = append(errs, validateCasino(g)...)
 		}
+	case Vying:
+		if g.Vying == nil {
+			errs = append(errs, "vying skeleton requires vying params")
+		} else {
+			errs = append(errs, validateVying(g)...)
+		}
 	default:
 		errs = append(errs, fmt.Sprintf("unknown skeleton type: %d", g.Skeleton))
 	}
@@ -78,6 +84,11 @@ func Validate(g *Genome) []string {
 	// rummy/climbing rules above).
 	if g.TrumpRule != TrumpNone && g.Skeleton == Casino {
 		errs = append(errs, "trump rule not applicable to casino skeleton")
+	}
+	// Vying showdowns rank whole poker hands; there is no trump suit, so a trump
+	// rule is an inert bit (mirrors the rules above).
+	if g.TrumpRule != TrumpNone && g.Skeleton == Vying {
+		errs = append(errs, "trump rule not applicable to vying skeleton")
 	}
 
 	// Special cards are only consumed by the shedding runner. On any other
@@ -216,6 +227,45 @@ func validateCasino(g *Genome) []string {
 	if deal := g.HandSize*g.Players + p.TableSize; deal > 52 {
 		errs = append(errs, fmt.Sprintf("casino deal hand_size(%d)*players(%d) + table_size(%d) = %d exceeds 52-card deck",
 			g.HandSize, g.Players, p.TableSize, deal))
+	}
+	return errs
+}
+
+// validateVying checks vying (poker) params plus the stack-sufficiency rule that
+// guarantees no all-in / side pot ever arises. A player's worst-case total
+// commitment -- calling the maximum raise on every deal and winning nothing --
+// must not exceed their starting stack. With that Tier-0 invariant the betting
+// round is a clean fold/call/raise loop: a call is always affordable, so the
+// runner needs no short-stack all-in branch (and the all-fold/all-call
+// degenerate fixtures cannot bust a player into a structural win).
+func validateVying(g *Genome) []string {
+	var errs []string
+	p := g.Vying
+	if p.StartingChips <= 0 {
+		errs = append(errs, "vying starting_chips must be > 0")
+	}
+	if p.MinBet <= 0 {
+		errs = append(errs, "vying min_bet must be > 0")
+	}
+	if p.MaxRaises < 1 {
+		errs = append(errs, fmt.Sprintf("vying max_raises must be >= 1, got %d", p.MaxRaises))
+	}
+	if p.RoundsPerGame < 1 {
+		errs = append(errs, fmt.Sprintf("vying rounds_per_game must be >= 1, got %d", p.RoundsPerGame))
+	}
+	if g.HandSize < 2 {
+		errs = append(errs, fmt.Sprintf("vying hand_size must be >= 2 to form a showdown hand, got %d", g.HandSize))
+	}
+	// Worst-case per-deal commitment is MinBet*(MaxRaises+1) (the big blind plus
+	// MaxRaises raises of MinBet); over RoundsPerGame deals a player who funds
+	// every deal's max and wins nothing must stay solvent.
+	if p.MinBet > 0 && p.MaxRaises >= 1 && p.RoundsPerGame >= 1 {
+		worst := p.RoundsPerGame * p.MinBet * (p.MaxRaises + 1)
+		if p.StartingChips < worst {
+			errs = append(errs, fmt.Sprintf(
+				"vying starting_chips(%d) < worst-case total commitment %d (rounds_per_game*min_bet*(max_raises+1)); raise chips or lower betting params to prevent all-ins/side pots",
+				p.StartingChips, worst))
+		}
 	}
 	return errs
 }
