@@ -117,6 +117,20 @@ func (s *SheddingScorer) ScoreMove(move Move, state *GameState) float64 {
 	case MovePass:
 		return -1
 
+	case MoveKnock:
+		// MechKnock: knocking ends the game now and the fewest-cards player
+		// wins. Only knock when we are STRICTLY fewest -- a knock while anyone
+		// is tied or ahead hands them the win. The magnitudes dominate the
+		// normal play scores (capped ~25) so a winning knock is always taken
+		// and a losing one never is -- the skill the random AI lacks.
+		mine := len(state.Hands[move.PlayerID])
+		for i := 0; i < state.NumPlayers; i++ {
+			if i != move.PlayerID && len(state.Hands[i]) <= mine {
+				return -100.0 // someone tied or ahead -> losing knock
+			}
+		}
+		return 200.0 // strictly fewest -> knock to win
+
 	default:
 		return 0
 	}

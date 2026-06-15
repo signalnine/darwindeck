@@ -296,7 +296,11 @@ func addBorrowedMechanic(g *genome.Genome, rng *rand.Rand, crossSkeleton bool) {
 				// DEEP move-level borrow: trick-taking's follow-suit obligation
 				// (FollowConstrained). Runner-implemented; giveBorrowTeeth makes
 				// suit cards playable so the constraint binds.
-				genome.BorrowedMechanic{Source: genome.TrickTaking, Mechanic: genome.MechFollowSuit})
+				genome.BorrowedMechanic{Source: genome.TrickTaking, Mechanic: genome.MechFollowSuit},
+				// DEEP win-condition borrow: rummy's knock (Knockable). Runner-
+				// implemented in CheckEnd; declare early, fewest cards wins.
+				// Outcome-significant by construction, so no teeth needed.
+				genome.BorrowedMechanic{Source: genome.Rummy, Mechanic: genome.MechKnock})
 		}
 	case genome.TrickTaking:
 		// MechPlayMultiple dropped: tricktaking move-gen only ever

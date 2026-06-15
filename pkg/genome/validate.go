@@ -258,6 +258,14 @@ var validBorrows = map[SkeletonType]map[MechanicType]bool{
 		// RunPlay expands them; it fires and affects who empties first (the
 		// winner) -- whitelisted per dd-lnh. Runner-implemented, not a hook.
 		MechFollowSuit: true,
+		// MechKnock: a DEEP cross-skeleton borrow (rummy's knock -> shedding).
+		// It changes the WIN CONDITION, not the move set: GenerateMoves adds a
+		// MoveKnock once the hand is small, ApplyMove flags the game over, and
+		// CheckEnd awards the win to the fewest-cards player instead of the
+		// first-to-empty. Outcome-significant by construction (a knock decides
+		// the winner) and termination-safe (a knock only ends the game sooner)
+		// -- whitelisted per dd-lnh. Runner-implemented, not a hook.
+		MechKnock: true,
 	},
 	TrickTaking: {
 		MechMeldBonus: true, // Bonus for collecting melds from tricks (HookEndOfRound)

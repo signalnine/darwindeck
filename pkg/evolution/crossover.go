@@ -121,6 +121,11 @@ func crossFamilyBorrow(host, other genome.SkeletonType, rng *rand.Rand) (genome.
 			// shedding runner (FollowConstrained); teeth ensure suit cards are
 			// playable so following is coherent.
 			{genome.MechFollowSuit, genome.TrickTaking},
+			// DEEP win-condition borrow: rummy's knock (declare to end the game
+			// early, fewest cards wins). Changes CheckEnd in the shedding runner
+			// (Knockable), not the move set or scores. Outcome-significant by
+			// construction (a knock decides the winner), so it needs no teeth.
+			{genome.MechKnock, genome.Rummy},
 		},
 		genome.TrickTaking: {
 			// trick-taker with cross-family penalty-card scoring

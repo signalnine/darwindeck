@@ -63,6 +63,7 @@ func borrowCases() []borrowCase {
 var runnerImplementedBorrow = map[genome.MechanicType]bool{
 	genome.MechRunPlay:    true,
 	genome.MechFollowSuit: true,
+	genome.MechKnock:      true,
 }
 
 // borrowSource picks the source skeleton recorded on the BorrowedMechanic.

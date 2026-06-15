@@ -436,7 +436,9 @@ func borrowedDescription(bm genome.BorrowedMechanic) string {
 		// of 2+ cards in one turn (when the group matches the top).
 		return "**Combination plays:** instead of one card, you may discard a set of 2 or more cards of the same rank, or a run of 2 or more consecutive cards in one suit, in a single turn — as long as one of those cards legally matches the discard top. Unloading several cards at once lets you empty your hand in bursts, so it pays to hold cards and dump a whole run"
 	case genome.MechKnock:
-		return "Knock to end the round early"
+		// shedding/runner.go Knockable: once your hand is down to a few cards
+		// you may knock to end the game immediately; fewest cards then wins.
+		return "**Knock:** once your hand is down to a few cards, instead of playing you may knock to end the game at once. When you knock, whoever holds the fewest cards wins — so knock when you are ahead, but knocking while someone else is shorter hands them the win"
 	case genome.MechTrump:
 		return "One suit is designated as trump and beats other suits"
 	case genome.MechPlayMultiple:

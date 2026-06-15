@@ -10,11 +10,11 @@ import (
 
 // hookedMechanics is the set of borrows that actually affect the outcome:
 // either a WORKING hook in mechanic.BuildHooks (the banking borrows) OR a
-// runner-side implementation that changes the move set (the DEEP borrows
-// MechRunPlay/MechFollowSuit, consulted inside the shedding runner). The
-// cross-family paths may only emit these -- a borrow with neither is inert and
-// lies in the rulebook. (MechKnock has no impl; MechTrump / MechPlayMultiple
-// are reserved.)
+// runner-side implementation that changes the move set or win condition (the
+// DEEP borrows MechRunPlay/MechFollowSuit/MechKnock, consulted inside the
+// shedding runner). The cross-family paths may only emit these -- a borrow with
+// neither is inert and lies in the rulebook. (MechTrump / MechPlayMultiple are
+// reserved enum values with no implementation.)
 var hookedMechanics = map[genome.MechanicType]bool{
 	genome.MechTrickScoring: true,
 	genome.MechMeldBonus:    true,
@@ -22,6 +22,7 @@ var hookedMechanics = map[genome.MechanicType]bool{
 	genome.MechAvoidance:    true,
 	genome.MechRunPlay:      true,
 	genome.MechFollowSuit:   true,
+	genome.MechKnock:        true,
 }
 
 // TestCrossFamilyBorrowsAreWhitelistedAndHooked: every (host, other) pair the

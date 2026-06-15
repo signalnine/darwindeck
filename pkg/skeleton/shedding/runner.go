@@ -262,8 +262,26 @@ func (r *Runner) GenerateMoves(state *sim.GameState, g *genome.Genome) []sim.Mov
 		}
 	}
 
+	// MechKnock (DEEP cross-skeleton borrow: rummy's knock -> shedding). Once
+	// the hand is small enough you may KNOCK to end the game immediately
+	// instead of racing to empty; the fewest-cards player then wins (CheckEnd).
+	// It is ADDITIVE -- appended after the plays/draw above, never replacing
+	// them -- so the move set is never emptied and a knock only ENDS the game
+	// sooner, preserving the playability floor and termination. A wrong knock
+	// (you are not actually fewest) hands the win away, the risk that makes the
+	// declare a real decision. Acts in the runner, not a hook.
+	if g.Knockable() && len(hand) >= 1 && len(hand) <= knockThreshold {
+		moves = append(moves, sim.Move{Type: sim.MoveKnock, PlayerID: state.Active})
+	}
+
 	return moves
 }
+
+// knockThreshold is the hand size at or below which a MechKnock host may knock.
+// Small enough that a knock comes near the end of the race (most cards already
+// shed), so it sharpens the endgame rather than letting either side end the
+// game on turn one.
+const knockThreshold = 3
 
 // PlayableCount reports how many of the active player's hand cards legally
 // satisfy the match rule against the discard top OR are wild (Task 28 round 4
@@ -390,6 +408,19 @@ func (r *Runner) ApplyMove(state *sim.GameState, move sim.Move, g *genome.Genome
 			Cards:    drawn,
 		})
 
+	case sim.MoveKnock:
+		// MechKnock: the active player declares. Flag the game over by setting
+		// Phase=PhaseEnd; CheckEnd reads that and awards the win to the
+		// fewest-cards player. Emit an interactive event (it ends everyone's
+		// game) WITHOUT an EventRoundEnd, so the banking scoring hooks do NOT
+		// fire -- the knock winner is decided by hand size, not banked Scores.
+		state.Phase = sim.PhaseEnd
+		events = append(events, sim.Event{
+			Type:     sim.EventSpecialTriggered,
+			PlayerID: state.Active,
+			Detail:   "knock",
+		})
+
 	case sim.MovePass:
 		// Nothing happens
 	}
@@ -454,6 +485,22 @@ func (r *Runner) Progress(state *sim.GameState, g *genome.Genome) []float64 {
 }
 
 func (r *Runner) CheckEnd(state *sim.GameState, g *genome.Genome) int {
+	// MechKnock: a knock set Phase=PhaseEnd. The game ends immediately and the
+	// fewest-cards-in-hand player wins (ties break to the lowest seat). Checked
+	// before the multi-round / first-to-empty paths so a knock ends the WHOLE
+	// game regardless of round bookkeeping or banked scores. A knock when you
+	// are not actually fewest hands the win to someone else -- the risk behind
+	// the declare.
+	if state.Phase == sim.PhaseEnd {
+		winner := 0
+		for i := 1; i < state.NumPlayers; i++ {
+			if len(state.Hands[i]) < len(state.Hands[winner]) {
+				winner = i
+			}
+		}
+		return winner
+	}
+
 	if g.SheddingMultiRound() {
 		// Round transitions live in Upkeep. The game is over once Upkeep has
 		// advanced Round past the final round (no redeal happens then, so the
