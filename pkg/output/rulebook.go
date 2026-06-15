@@ -310,7 +310,15 @@ func writeVyingRules(b *strings.Builder, g *genome.Genome) {
 	b.WriteString("Once the betting is settled, the players still in reveal their hands and the best poker hand — pair, two pair, three of a kind, straight, flush, full house, four of a kind, straight flush — takes the pot. If everyone but one player has folded, that player takes the pot uncontested.\n\n")
 
 	b.WriteString("### Winning\n\n")
-	b.WriteString(fmt.Sprintf("Chips carry over across %d deals. The player with the most chips at the end wins.\n\n", rounds))
+	if g.VyingScored() {
+		// The meld / avoidance borrows bank into the chip stacks at each
+		// showdown (folded hands are mucked, so only shown hands score), so the
+		// "points" the Additional Rules describe are CHIP adjustments, not a
+		// separate track. Say so, or a reader takes them for an inert overlay.
+		b.WriteString(fmt.Sprintf("At each showdown your shown hand is scored beyond the pot: the bonuses and penalties in the Additional Rules below are added to or subtracted from your CHIPS. A strong poker hand can net fewer chips if it carries penalty cards, and a poker-weak hand can still gain chips from melds. Chips carry over across %d deals; the player with the most chips at the end wins.\n\n", rounds))
+	} else {
+		b.WriteString(fmt.Sprintf("Chips carry over across %d deals. The player with the most chips at the end wins.\n\n", rounds))
+	}
 }
 
 func writeSpecialCards(b *strings.Builder, g *genome.Genome) {

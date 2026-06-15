@@ -1,0 +1,169 @@
+{
+  "description": "Blind judge of the first evolve with vying-as-scoring-host (seed 42, pop 400 gen 100). Vying-scoring hybrids swept the top 6 (0.90-0.92) but judge VARIANT: the frozen poker hand gives no agency over melds/penalties, so the scoring overlay does not change betting decisions.",
+  "mapping": {
+    "A": "vying+meld+avoidance-0.921",
+    "B": "vying+meld-0.920",
+    "C": "climbing+knock+draw_penalty",
+    "D": "casino+meld+avoidance",
+    "E": "SimplePoker-seed-CONTROL",
+    "F": "Casino-seed-CONTROL"
+  },
+  "games": [
+    {
+      "game": "A",
+      "judges": [
+        {
+          "verdict": "variant",
+          "closest_game": "Straight / Showdown Poker (no-draw, no-community-card poker), with vestigial Rummy meld-scoring and Hearts penalty-card overlays",
+          "confidence": "high",
+          "key_mechanics": "Core is unmistakably poker: starting chips, rotating big blind, fold/call/raise/check, a single betting round, showdown decided by standard poker hand rankings (pair through straight flush), chips carried across 20 deals, most chips wins. With 13-card hands dealt face-down and no draw/community step, that is straight (showdown) poker. The two \"Additional Rules\" overlays -- a Rummy-style meld bonus (sets/runs) and a Hearts-style penalty for held scoring cards (Hearts = 2 pts) -- are scoring tallies grafted on top.",
+          "reasoning": "The betting/showdown loop is poker by construction; nothing about it is new. The overlays do not change the core decisions: there is no capture phase and no draw/discard, so the meld bonus and Hearts penalty reference game states (\"cards you captured\", shedding Hearts) that the poker core never produces. The 13-card hand is frozen at the deal, so a player has zero agency to chase melds or dump penalty cards -- the overlays are inert parallel tallies, not a mechanic that alters fold/call/raise choices. This is the classic shallow-borrow artifact (hook-based scoring stapled to a skeleton whose legal moves never change), which reads as a scoring overlay on standard poker. Per the brief, a scoring overlay that does not change the core decisions is a variant, and the game's identity is poker."
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Fixed-limit poker (blind-structured draw/showdown poker, with rummy-style meld and Hearts-style penalty scoring grafted on)",
+          "confidence": "high",
+          "key_mechanics": "Core loop is textbook fixed-limit poker: rotating blind, fold/call/raise (capped at 1 raise)/check, showdown on standard poker hand rankings (pair through straight flush), pot to best hand or last player standing, chips carried over 20 deals, most chips wins. The only deviation is 13-card hands instead of 5 plus an \"Additional Rules\" scoring overlay (rummy-style set/run meld bonus and Hearts-style penalty for held hearts).",
+          "reasoning": "The game keeps its full poker identity -- every decision a player makes is a poker betting decision (fold/call/raise/check toward showdown). The meld-bonus and penalty-card overlay is a classic scoring annotation that does NOT change the core decisions, and worse, it is non-functional: both overlay rules reference \"cards you have captured,\" but the game has no capture, no tricks, no melding play, no draw, and no discard -- so there is nothing to capture and no action to optimize melds or shed penalty hearts. With no draw/discard, players cannot influence their meld or heart count, so bet sizing is unaffected by the overlay. This is a poker variant with dead grafted-on scoring text, not a novel fusion. The rummy-scoring and Hearts-penalty mechanics are stapled to a poker engine but connect to no game action, so they fail the \"overlay genuinely changes the core decisions\" test for novelty."
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Poker (single-round fixed-limit vying game; closest to a no-draw \"showdown poker\" / Five Card Showdown with 13-card hands)",
+          "confidence": "high",
+          "key_mechanics": "Rotating blind, fold/call/raise (one-raise cap) with a check option, hidden hands, standard poker hand ranking at showdown, chips carried across 20 deals, last-player-standing takes the pot uncontested. The bolted-on rummy meld bonus and Hearts penalty are scored in \"points\" while the win condition is \"most chips,\" and no phase (no draw, capture, or trick) ever populates the \"captured cards\" they reference, so they never influence decisions or the winner.",
+          "reasoning": "The core loop is a textbook fixed-limit poker vying game: post a blind, bet around once (fold/call/raise capped at one raise, or check), reveal, best poker hand takes the pot, chips persist across deals. The two \"additional rules\" are a scoring overlay, not a new mechanic, and they are mechanically inert: there is no draw/discard or capture/trick phase, so players hold only their dealt 13 cards and cannot pursue melds or dodge Hearts, and the meld/penalty \"points\" run on a separate track from the chip-based win condition. An overlay only earns \"novel\" when it changes the core decisions; here it changes nothing a player can act on. The 13-card hand and one-raise structure are cosmetic tweaks to poker, not a new fusion of mechanics, so this is a poker variant."
+        }
+      ]
+    },
+    {
+      "game": "B",
+      "judges": [
+        {
+          "verdict": "variant",
+          "closest_game": "Fixed-limit Poker (a blind-posted, single-raise-cap vying game in the poker family; essentially Five Card Stud/Draw-style showdown poker without the draw)",
+          "confidence": "high",
+          "key_mechanics": "Blind posting (rotating 5-chip big blind), fold/call/raise with a one-raise cap, check when nothing is owed, poker-hand ranking showdown (pair through straight flush), chips carried across 20 deals with most-chips-wins. A bolted-on rummy-style meld bonus (sets/runs scored per card) is appended as a parallel tally.",
+          "reasoning": "The play loop is textbook fixed-limit poker: post a blind, act in turn (fold/call/raise capped at one raise, check if nothing owed), reveal at showdown, best poker hand takes the pot, accumulate chips over 20 deals. The 13-card hand and 4-player count are just parameters within poker's normal design space. The meld-bonus overlay (printed twice, identically) is the only candidate for novelty, but it is inert: it references \"captured cards\" though no capture, draw, or discard phase exists in the rules, so the player cannot influence their meld, and the meld points never feed back into any betting decision. A scoring overlay that does not change the core decisions keeps the game's identity as poker, so this is a variant, not novel."
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Poker (blind-posted single-raise showdown poker, closest to simplified Texas Hold'em / draw poker)",
+          "confidence": "high",
+          "key_mechanics": "Core loop is textbook vying/betting poker: rotating big blind, fold/call/raise(capped)/check around the table, pot, showdown won by best standard poker hand (pair through straight flush), chips carried over 20 deals, most chips wins. The only non-poker element is a \"meld bonus\" (sets/runs scored as points), but it is inert: meld points are a separate currency never converted to chips, the win condition is chips-only, and it scores over \"captured\" cards in a game that has no capture/tableau/trick mechanic (always empty), on a 13-card hand you cannot rearrange.",
+          "reasoning": "Strip the duplicated, orphaned meld overlay and what remains is plain poker with a 13-card deal evaluated on standard 5-card hand rankings. The meld scoring would have to alter betting or the win condition to make this novel, but it does neither: \"points\" never touch the chip count that decides the winner, and the rummy-style meld + capture language references mechanics (capture pile) that simply do not exist in the rules, so they produce nothing. A rummy/poker fusion would be genuinely interesting, but here the rummy half is a dead appendage rather than an integrated mechanic. That makes this a poker variant with an inert scoring decoration, not a novel combination -- the meld pressure that the system intended is structurally unreachable because it shares no currency or decision surface with the betting game."
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Poker (single-round vying / showdown game, stud-family; 13-card flat-deal showdown akin to a simplified stud or Teen Patti-style vie)",
+          "confidence": "high",
+          "key_mechanics": "Core loop is pure poker vying: 13 face-down cards, rotating big blind, fold/call/raise (1-raise cap)/check, showdown on standard poker hand rankings (pair through straight flush), chips carried across 20 deals, most chips wins. No draw, no exchange, no community cards. A rummy/cribbage-style meld-scoring overlay (sets and runs from \"hand and captured cards\") is appended but is inert.",
+          "reasoning": "The betting structure is textbook poker (vying/showdown family): hidden hands, blinds, fold/call/raise/check, and a poker-ranking showdown \u2014 that IS the game's identity. The meld overlay does not change any core decision and so cannot lift this to novel: (1) it is duplicated verbatim, a generation artifact rather than a designed rule; (2) it scores \"captured\" cards, but the game has no capture phase whatsoever (players only receive 13 cards and bet), so it collapses to scoring a static, un-modifiable hand; (3) with no draw/discard/exchange, the player cannot influence the meld score, so it adds zero meaningful decisions. A scoring overlay that introduces no new decisions over a standard game is the definition of a variant, not a novel combination. The poker layer fully determines play."
+        }
+      ]
+    },
+    {
+      "game": "C",
+      "judges": [
+        {
+          "verdict": "novel",
+          "closest_game": "Big Two / President (climbing family) crossed with Knock Rummy",
+          "confidence": "medium",
+          "key_mechanics": "Climbing beat-or-pass loop (singles only, lead/raise/pass, table clears on consecutive passes) from the Big Two/President family; a Knock-Rummy-style \"knock to end the game, fewest cards held wins\" bail-out win condition; a shedding-style self-inflicted draw penalty (play a Jack-or-higher, draw 1).",
+          "reasoning": "The shell is unmistakably climbing/President (empty your hand, play a strictly higher combo of the same type or pass, leader plays freely after consecutive passes). But two grafts change the core decision rather than just overlay scoring. The knock adds a Knock-Rummy fewest-cards win condition that competes with the climbing empty-hand goal -- you constantly weigh \"race to empty\" vs \"bail out while ahead on count,\" a decision no published climbing game has. The face-card draw penalty actively fights the win condition (your high cards refill your hand), making the count target you knock against move unpredictably. No published game I know combines a climbing beat-or-pass loop with a knock/fewest-cards out and a self-inflicted face-card draw penalty. Confidence is only medium because the base family is very recognizable and the singles-only combination set is thin (degenerate as pure climbing); the novelty lives entirely in the dual win-condition fusion, and the duplicated draw-penalty line is a redundant restatement, not a third mechanic."
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "President / Big Two (climbing family), with a Knock-Rummy go-out overlay",
+          "confidence": "medium",
+          "key_mechanics": "Climbing/beat-or-pass core (current combination, strictly-higher rank, lead-anything-when-clear, first-to-empty-hand wins); singles-only combination set; rank-height-triggered draw penalty (play Jack+ -> draw 1); Knock-Rummy-style \"knock to end, fewest cards wins\" alternate win condition.",
+          "reasoning": "The base is unmistakably the climbing family (Big Two/President/Tien Len): a current combination on the table, beat with strictly higher rank or pass, lead anything when clear, first to empty hand wins. With only singles allowed, the climbing structure collapses to a thin single-card beat-or-pass shedder. The two overlays are each borrowed from elsewhere: the draw penalty echoes Crazy Eights/Mau-Mau penalty cards (here tied to rank height, which mildly fights the win-high incentive), and the knock/\"fewest cards wins\" is lifted directly from Knock Rummy/Gin. None of these is a new mechanic; the only mildly fresh thing is the coexistence of two contradictory win conditions (empty-hand vs knock-fewest-cards) over a stripped climbing base. That is an unusual coupling but not a coherent new game -- it reads as an evolved bolt-on assembly (note the verbatim-duplicated draw-penalty rule on lines 39-40), so it keeps the identity of a President/Big Two variant rather than rising to genuinely novel."
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Big Two / Tien Len (climbing family), reduced to a singles-only shedding game (Crazy Eights / Mau-Mau style)",
+          "confidence": "high",
+          "key_mechanics": "Climbing \"beat-or-pass\" loop with table-clearing leads; singles-only combinations; first to empty hand wins; rummy-style knock to end the game (fewest cards wins); Crazy-Eights-style draw penalty for playing face cards.",
+          "reasoning": "The skeleton is a climbing game (Big Two family), but with only the \"single card\" combination defined, the climb collapses to a trivial higher-card-or-pass exchange \u2014 mechanically this is the shedding family (Crazy Eights / Mau-Mau with rank-beat instead of suit-match). The win condition (empty your hand first) is bog-standard shedding. The two overlays are recognizable borrowed mechanics, not a new fusion: the face-card draw penalty is a classic Crazy Eights penalty-card device, and the \"knock = fewest cards wins\" is lifted from Knock Rummy. Worse, the knock is nearly redundant with the win condition (both reward holding few/zero cards), so it adds little new decision-making; the only real tension is that drawing penalty cards fights the empty-hand goal, which is a minor tweak rather than a core-changing innovation. The draw-penalty rule is also literally duplicated (lines 39-40), indicating a bolted-on overlay rather than an integrated design. This is a stripped climbing/shedding game with two standard borrowed tweaks \u2014 a variant, not a novel mechanic combination."
+        }
+      ]
+    },
+    {
+      "game": "D",
+      "judges": [
+        {
+          "verdict": "variant",
+          "closest_game": "Casino (the classic fishing/capture game), with Scopa-family and Hearts-style scoring overlays",
+          "confidence": "high",
+          "key_mechanics": "Play-one-card capture by rank-match OR pip-sum (Ace=1, face cards capture only by rank), trail when you can't capture, refill hands from stock, and last-capturer sweeps the table at the end - this is Casino almost verbatim. Two scoring overlays are grafted on: a Hearts-style penalty (Hearts worth 3 against you) and a rummy-style meld bonus (sets/runs scored across hand + captured pile).",
+          "reasoning": "The actual game you play is Casino - the pip-sum fishing capture with Ace=1 and face-cards-match-only is the identity-defining, published mechanic, and the refill/final-sweep structure is Casino's exactly. The two \"Additional Rules\" are post-hoc scoring tallies layered on an unchanged capture engine; they do not alter the legal-move set or turn structure. The penalty-card rule is just a different bonus table (Casino already scores specific captured cards) and barely shifts decisions. The meld bonus is the only genuinely redirecting overlay (capture to build runs/sets, not raw card count), and while no published Casino variant scores rummy melds, a scoring overlay that leaves the core capture loop intact is a variant, not a novel mechanic combination. The duplicated \"Penalty cards\" bullet (lines 36 and 38) further signals stacked overlays rather than designed novelty."
+        },
+        {
+          "verdict": "novel",
+          "closest_game": "Cassino (Casino), the fishing/capture game; with a Hearts-style penalty overlay and a Rummy-style meld-scoring overlay",
+          "confidence": "low",
+          "key_mechanics": "Fishing-capture engine (rank-match or sum-to-value capture, face cards by rank only, trail when not capturing, last-capturer sweep) = pure Cassino. Bolted onto it: (1) a Hearts=3 penalty that inverts Cassino's normal \"capture good cards\" incentive into Hearts avoidance, and (2) a Rummy-style meld bonus scoring sets and suit-runs of 3+ across captured pile and hand.",
+          "reasoning": "The base is textbook Cassino/Scopa-family capture, so a strict reading wants \"variant.\" But the overlay is not a single cosmetic scoring tweak: it stacks THREE distinct scoring logics on one engine -- card-count/sweep (Cassino), Hearts-penalty avoidance (Hearts), and rummy meld scoring of sets/runs over the captured pile (Rummy). The meld layer redirects what you fish for (assembling rank-sets and suit-runs from captured cards) and the Hearts layer inverts the usual capture incentive, so the overlay changes the core fishing decisions rather than just retallying them. I can name no published game that fuses fishing-capture with rummy-meld scoring plus a Hearts penalty -- Scopa variants (Scopone, Cirulla, Escoba) add capture-side bonuses, never rummy melds over the pile. Confidence is low because the meld bonus auto-scores without rearrangement and is partly a passive end-of-round tally, which keeps Cassino's identity strongly dominant; a tough judge could reasonably call this a heavy Cassino variant. The genuinely unfamiliar capture-plus-meld combination tips it to a borderline-novel fusion."
+        },
+        {
+          "verdict": "novel",
+          "closest_game": "Cassino (Casino), the classic fishing/capture game; with borrowed overlays from Rummy (meld scoring) and Hearts (heart-avoidance penalty)",
+          "confidence": "medium",
+          "key_mechanics": "Capture-by-rank-match or capture-by-numeric-sum (Ace=1, faces match-only), trail-when-not-capturing, multi-deal stock, last-capturer final sweep -- pure Cassino. Layered on top: a rummy meld bonus scored across hand + captured pile (sets 5/pair 2 per card, runs 3 per card), and a Hearts-style penalty where captured hearts cost 3 each in both hand and captured pile.",
+          "reasoning": "The base loop is unmistakably Cassino (capture by rank or by sum, trail otherwise, refill, final sweep), and either overlay alone would make this a mere variant. What pushes it to borderline-novel is the conjunction: the heart penalty makes captured hearts toxic while the meld bonus rewards hoarding sets/runs from the captured pile, so a single capture decision is pulled by three conflicting incentives (capture to build melds, capture to deny the opponent, but refuse hearts). No published fishing game melds the captured pile, and no melding or Hearts-family game uses sum-capture from a shared table. The poison-capture-vs-meld-greed tension reshapes the core decision rather than just tallying points, so this is a genuine new combination, not a scoring overlay -- though it sits close enough to a Cassino variant that I rate confidence medium."
+        }
+      ]
+    },
+    {
+      "game": "E",
+      "judges": [
+        {
+          "verdict": "known",
+          "closest_game": "Five-card poker (single fixed-limit betting round, no draw) -- essentially \"five-card stud\"/closed-hand poker with a big blind",
+          "confidence": "high",
+          "key_mechanics": "Hidden 5-card hands, single fixed-limit betting round (blind, fold/call/raise/check, capped raises), standard poker hand ranking at showdown, chips carried over multiple deals.",
+          "reasoning": "This is straight-up vying-family poker with zero deviation from the published template. Every element is canonical: 1000 starting chips, a rotating big blind of 10, fold/call/raise/check with a 3-raise cap (standard fixed-limit structure), and the orthodox poker hand hierarchy (pair through straight flush) deciding the pot, with uncontested pots when all but one fold. The only structural simplification is that there is no draw/exchange and only one betting round, which makes it a single-street closed poker (closest to five-card draw with the draw removed, or a one-card-down stud variant). Carrying chips across 12 deals and \"most chips wins\" is just a fixed-deal chip-count session -- a session-scoring convention, not a new mechanic. There is no mechanic combination here absent from existing poker; it is a published game."
+        },
+        {
+          "verdict": "known",
+          "closest_game": "Five-card poker (a single-round, no-draw poker showdown -- essentially five-card stud/draw with the draw removed)",
+          "confidence": "high",
+          "key_mechanics": "Deal 5 hidden cards, one betting round (fold/call/raise/check) with a rotating blind, standard poker hand rankings at showdown, chips accumulated over a fixed number of deals.",
+          "reasoning": "This is a vanilla poker vying game with the standard hand-ranking ladder (pair through straight flush) and standard betting actions. There is no card exchange, draw, discard, community cards, or any overlay -- it is the canonical single-round five-card poker showdown, simpler than five-card draw. The blind, 3-raise cap, and 12-deal chip total are stock poker parameters, not novel mechanics. Nothing here combines mechanics absent from published poker."
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Five-card draw poker (specifically a no-draw, all-face-down variant -- a \"flat\" five-card poker with a single betting round)",
+          "confidence": "high",
+          "key_mechanics": "Vying/betting game with 5 face-down cards, posted big blind, fold/call/raise/check actions, fixed 10-chip raise increment, 3-raise cap, standard poker hand-ranking showdown, chips carried across deals, most-chips-wins.",
+          "reasoning": "Every element is standard poker furniture. Five face-down cards plus one betting round plus a poker-hand showdown is the canonical vying-game template; it is five-card draw poker with the draw/exchange phase removed (and no stud-style face-up cards, so no hidden-information twist either). Blinds, fixed-increment raises, a raise cap, and most-chips-after-N-deals are all generic poker mechanics. There is no scoring overlay or rule that alters the core fold/call/raise decision, so this keeps poker's identity entirely -- a simplified single-street poker, not a new combination of mechanics."
+        }
+      ]
+    },
+    {
+      "game": "F",
+      "judges": [
+        {
+          "verdict": "variant",
+          "closest_game": "Casino (the classic fishing/capture game)",
+          "confidence": "high",
+          "key_mechanics": "Capture-by-rank-match plus capture-by-summing-number-cards-to-the-played-card's-value, trail when not capturing, deal 4 to hand and 4 to table with refills from stock, last-capturer sweeps the table at the end, Ace=1, face cards capture only by rank.",
+          "reasoning": "Every mechanic here is core Casino: the rank-match-or-sum capture is Casino's signature, the trail rule, the 4-hand/4-table deal with stock refills, the Ace=1 and face-cards-capture-by-rank-only conventions, and the final sweep to the last capturer are all standard published Casino rules. The only changes are simplifications -- it drops Casino's point-category scoring (Big/Little Casino, aces, most spades, sweep bonuses) and the building mechanic, collapsing the win condition to \"most cards captured,\" which is itself Casino's largest scoring category. A scoring reduction plus omission of building does not change the core decision (capture vs trail, rank vs sum) and keeps Casino's identity intact, so this is a stripped-down variant, not a novel combination."
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Casino (Cassino)",
+          "confidence": "high",
+          "key_mechanics": "Additive sum-capture (play a card to take table cards whose pip values sum to it) plus same-rank pairing capture; Ace=1 and face cards capture only by rank match; trailing when not capturing; refill hands from stock; last-capturer sweeps remaining table cards at deal's end.",
+          "reasoning": "Every mechanic is core Casino/Cassino: the defining additive sum-capture with Ace=1 and valueless face cards, the trail move, the deal-from-stock refills, and the last-capturer end sweep are all standard Casino rules, not the broader fishing family. The only change is collapsing Casino's multi-category scoring (3 pts most cards, most spades, Big/Little Casino, aces, sweeps) down to just 'most cards captured' -- which is itself one of Casino's own scoring categories. That is a scoring simplification that preserves the central capture-vs-trail and sum-assembly decisions, so it keeps Casino's identity rather than creating a new mechanic combination. No novel pairing of mechanics is present."
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Casino (a.k.a. Cassino), the classic fishing/capture game",
+          "confidence": "high",
+          "key_mechanics": "Capture-by-rank-match OR capture-by-summing-number-cards-to-played-value; trail when not capturing; 4-card hands with 4 table cards and re-deal from stock; last-capturer end-of-deal sweep; Ace=1 and face cards capture by rank only.",
+          "reasoning": "Every defining mechanic here is textbook Casino/Cassino: playing one card to capture table cards of matching rank or any combination summing to your card's value, trailing otherwise, 4-and-4 deal with refills from stock, Ace counted as 1, face cards matching by rank only, and the final-sweep-to-last-capturer rule. The only deviation from full Casino is the scoring: it drops the standard point categories (most cards, most spades, big/little casino, aces, sweeps) in favor of a pure most-cards-captured win. That is a simplification of the scoring overlay, not a change to the core capture-or-trail/build-to-a-sum decision space, so the game keeps Casino's identity. It is not novel and not a mere rediscovery of an obscure game -- it is plain Casino with a stripped-down win condition, hence a variant."
+        }
+      ]
+    }
+  ]
+}
