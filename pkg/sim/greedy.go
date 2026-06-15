@@ -405,3 +405,25 @@ func comboTopRank(cards []Card) Rank {
 	}
 	return top
 }
+
+// CasinoScorer plays the casino capture game greedily: capture whenever
+// possible, capture as many cards as possible, and otherwise trail a low card
+// (less useful to opponents). Any capture outscores any trail, so greedy
+// reliably out-captures random play -- the skill-gradient signal.
+type CasinoScorer struct{}
+
+func (s *CasinoScorer) ScoreMove(move Move, state *GameState) float64 {
+	switch move.Type {
+	case MoveCapture:
+		// move.Cards[0] is the played card; the rest are captured.
+		return 100.0 + float64(len(move.Cards)-1)
+	case MovePlay: // trail
+		if len(move.Cards) == 0 {
+			return 0
+		}
+		// Dump low ranks first; always below any capture.
+		return 10.0 - float64(move.Cards[0].Rank)
+	default:
+		return 0
+	}
+}

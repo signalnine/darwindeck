@@ -3,6 +3,7 @@ package fitness
 import (
 	"github.com/darwindeck/darwindeck/pkg/genome"
 	"github.com/darwindeck/darwindeck/pkg/sim"
+	"github.com/darwindeck/darwindeck/pkg/skeleton/casino"
 	"github.com/darwindeck/darwindeck/pkg/skeleton/climbing"
 	"github.com/darwindeck/darwindeck/pkg/skeleton/rummy"
 	"github.com/darwindeck/darwindeck/pkg/skeleton/shedding"
@@ -20,6 +21,8 @@ func GetRunner(g *genome.Genome) sim.GenericRunner {
 		return &rummy.Runner{}
 	case genome.Climbing:
 		return &climbing.Runner{}
+	case genome.Casino:
+		return &casino.Runner{}
 	default:
 		return nil
 	}
@@ -39,6 +42,8 @@ func GetGreedyAI(g *genome.Genome) sim.AIPlayer {
 		return &sim.GreedyAI{Scorer: &sim.RummyScorer{}}
 	case genome.Climbing:
 		return &sim.GreedyAI{Scorer: &sim.ClimbingScorer{}}
+	case genome.Casino:
+		return &sim.GreedyAI{Scorer: &sim.CasinoScorer{}}
 	default:
 		return &sim.RandomAI{}
 	}

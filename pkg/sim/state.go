@@ -27,6 +27,7 @@ const (
 	MoveKnock                   // Knock (rummy)
 	MoveMeld                    // Lay down a meld (rummy)
 	MoveDiscard                 // Discard a card
+	MoveCapture                 // Play a card and capture table cards (casino); Cards[0]=played, Cards[1:]=captured
 )
 
 // Move represents a player action.

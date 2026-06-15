@@ -52,6 +52,12 @@ func Validate(g *Genome) []string {
 		} else {
 			errs = append(errs, validateClimbing(g.Climbing)...)
 		}
+	case Casino:
+		if g.Casino == nil {
+			errs = append(errs, "casino skeleton requires casino params")
+		} else {
+			errs = append(errs, validateCasino(g)...)
+		}
 	default:
 		errs = append(errs, fmt.Sprintf("unknown skeleton type: %d", g.Skeleton))
 	}
@@ -66,6 +72,12 @@ func Validate(g *Genome) []string {
 	// rule above).
 	if g.TrumpRule != TrumpNone && g.Skeleton == Climbing {
 		errs = append(errs, "trump rule not applicable to climbing skeleton")
+	}
+	// Casino captures by rank-match / pip-sum, never by suit-trump; a trump rule
+	// is an inert bit the rulebook would still render, so reject it (mirrors the
+	// rummy/climbing rules above).
+	if g.TrumpRule != TrumpNone && g.Skeleton == Casino {
+		errs = append(errs, "trump rule not applicable to casino skeleton")
 	}
 
 	// Special cards are only consumed by the shedding runner. On any other
@@ -187,6 +199,23 @@ func validateClimbing(p *ClimbingParams) []string {
 		// Runs off: 0 is the natural "unset" encoding; otherwise keep it in the
 		// 3-5 band so it is ready if runs are switched on.
 		errs = append(errs, fmt.Sprintf("min_run_len must be 0 (unset) or 3-5, got %d", p.MinRunLen))
+	}
+	return errs
+}
+
+// validateCasino checks casino params plus the casino-specific deal budget: the
+// per-player hands AND the face-up table cards are dealt from the same 52-card
+// deck at setup, so hand_size*players + table_size must fit (the generic
+// hand_size*players check above does not account for the table).
+func validateCasino(g *Genome) []string {
+	var errs []string
+	p := g.Casino
+	if p.TableSize < 0 || p.TableSize > 6 {
+		errs = append(errs, fmt.Sprintf("casino table_size must be 0-6, got %d", p.TableSize))
+	}
+	if deal := g.HandSize*g.Players + p.TableSize; deal > 52 {
+		errs = append(errs, fmt.Sprintf("casino deal hand_size(%d)*players(%d) + table_size(%d) = %d exceeds 52-card deck",
+			g.HandSize, g.Players, p.TableSize, deal))
 	}
 	return errs
 }

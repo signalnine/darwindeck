@@ -2,7 +2,7 @@
 
 Evolutionary search for *playable* card games on a standard 52-card deck, scored by five fitness metrics that try to proxy "fun."
 
-Games are built from four skeleton templates (shedding, trick-taking, rummy, climbing) that guarantee playability by construction. I hardened the metrics against gaming over four adversarial review rounds. The result:
+Games are built from five skeleton templates (shedding, trick-taking, rummy, climbing, casino) that guarantee playability by construction. I hardened the metrics against gaming over four adversarial review rounds. The result:
 
 > The system reliably evolves playable games, and the hardened metrics correctly rank faithful Whist/Gin rediscoveries as the most game-like outputs. Across four rounds it never discovered a novel fun game. Evolution games the newest validity rule or rediscovers a public-domain classic. A weighted-sum fun-proxy computed from self-play is exploitable by construction.
 
@@ -80,12 +80,13 @@ Scope: novelty here is LLM-judge-certified (blind, 3-rep, with a variant/redisco
 
 ### Skeletons
 
-Four skeleton templates guarantee mechanical playability by construction: the game loop ensures every state has a legal move, and parameters control *what* happens, not *whether* the game works.
+Five skeleton templates guarantee mechanical playability by construction: the game loop ensures every state has a legal move, and parameters control *what* happens, not *whether* the game works.
 
 - **Shedding** (Crazy Eights, Mau-Mau): match suit/rank to the discard, first to empty hand wins
 - **Trick-taking** (Whist, Hearts, Spades): one card per player per trick, highest card wins
 - **Rummy** (Gin Rummy, Knock Rummy): draw-meld-discard, lowest deadwood wins
 - **Climbing** (Big Two, Tien Len): play an ascending combination that beats the table or pass, first to empty hand wins
+- **Casino** (Casino, Scopa): play a card to capture table cards by rank-match or pip-sum, else trail it; most captured cards wins
 
 Genomes encode parameters (hand size, player count, trump rules, special cards, scoring, win conditions) and may borrow whitelisted cross-skeleton mechanics, like a multi-round shedding game with rummy-style meld bonuses.
 
@@ -158,7 +159,8 @@ pkg/
 │   ├── shedding/       Shedding runner (match suit/rank, special cards, multi-round scoring, run_play)
 │   ├── tricktaking/    Trick-taking runner (suit following, trump, tricks)
 │   ├── rummy/          Rummy runner (draw-meld-discard, knock/gin)
-│   └── climbing/       Climbing runner (beat-or-pass combinations, ladder)
+│   ├── climbing/       Climbing runner (beat-or-pass combinations, ladder)
+│   └── casino/         Casino runner (fishing capture: rank-match or pip-sum, trail)
 ├── sim/                Card types, GameState, AI players (Random/Greedy/ISMCTS), batch runner
 ├── mechanic/           Borrowed-mechanic hook system (single HooksFor construction site)
 ├── evolution/          Mutation, crossover, selection, novelty (k-NN + seed-distance + CID)
@@ -170,7 +172,7 @@ pkg/
 ├── output/             Rulebook/report generation, veto-stable publication
 ├── playtest/           Interactive playtest session (runs the same hooks fitness does)
 ├── judge/              LLM-as-judge: blind dossier emitter + verdict ingest/rank
-└── seeds/              9 seed games + the degenerate calibration fixtures
+└── seeds/              10 seed games + the degenerate calibration fixtures
 ```
 
 ## Seed games
@@ -181,8 +183,9 @@ pkg/
 | Trick-taking | Whist, Hearts, Spades, Oh Hell |
 | Rummy | Gin Rummy, Knock Rummy |
 | Climbing | Big Two |
+| Casino | Casino |
 
-The 9 classic seeds (`seeds.All()`) are the single source of truth: the evolution init pool, the calibration ground truth, and the novelty seed-distance anchors. Mutation, crossover, and cross-skeleton mechanic borrowing produce the rest of the search space.
+The 10 classic seeds (`seeds.All()`) are the single source of truth: the evolution init pool, the calibration ground truth, and the novelty seed-distance anchors. Mutation, crossover, and cross-skeleton mechanic borrowing produce the rest of the search space.
 
 ## Development
 

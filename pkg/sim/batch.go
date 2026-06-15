@@ -289,7 +289,7 @@ func runSingleGame(g *genome.Genome, runner GenericRunner, ai AIPlayer, rng *ran
 	// reused across the whole game to keep the hot loop allocation-free.
 	mode := optionDeltaModeFor(g)
 	var baseline []int
-	if mode == deltaModeShedding {
+	if mode == deltaModeShedding || mode == deltaModeCasino {
 		baseline = make([]int, state.NumPlayers)
 	}
 	// PlayableShareProber (Task 28 round 4 FIX 1): only the shedding runner
@@ -378,10 +378,12 @@ func runSingleGame(g *genome.Genome, runner GenericRunner, ai AIPlayer, rng *ran
 			// follower's pre-move reference is their unconstrained hand
 			// size, so no pre-move probe is needed.
 			wasLead = move.Type == MovePlay && len(state.TrickCards) == 0
-		case deltaModeShedding:
-			// Specials (skip/reverse/draw) make the next actor unpredictable
-			// before ApplyMove, so capture every player's baseline. The
-			// mover's baseline is the move list already in hand.
+		case deltaModeShedding, deltaModeCasino:
+			// Capture every player's pre-move option baseline. For casino the
+			// move changes the shared table (capture removes, trail adds), so
+			// the next player's option count shifts; for shedding specials make
+			// the next actor unpredictable. The mover's baseline is the move
+			// list already in hand.
 			for p := 0; p < state.NumPlayers; p++ {
 				if p == mover {
 					baseline[p] = len(moves)
@@ -427,15 +429,16 @@ func runSingleGame(g *genome.Genome, runner GenericRunner, ai AIPlayer, rng *ran
 		if mode != deltaModeNone && runner.CheckEnd(state, g) < 0 {
 			next := state.Active
 			switch mode {
-			case deltaModeShedding:
+			case deltaModeShedding, deltaModeCasino:
 				// Self-perturbation is not coupling (the rummy mode's rule,
 				// applied here too -- Task 28 round 2, archetype A1): when a
 				// skip/reverse hands the turn straight back to the mover, the
 				// probe would measure the mover's own hand shrinking, which
 				// pinned the catch-all-skip champion's interaction at 1.00.
-				// The opponent's coupling delta is still measured on the move
-				// that finally passes them the turn (their baseline refreshes
-				// every iteration).
+				// (Casino never skips, so next != mover always holds there; the
+				// guard is shared and harmless.) The opponent's coupling delta
+				// is still measured on the move that finally passes them the turn
+				// (their baseline refreshes every iteration).
 				if next != mover {
 					after := probeOptionCount(runner, state, g, next)
 					if after >= 0 && baseline[next] >= 0 {
@@ -581,6 +584,14 @@ const (
 	// are all non-climbing, so adding this mode leaves the calibration ground
 	// truth byte-unchanged.
 	deltaModeClimbing
+	// deltaModeCasino: a capture removes table cards and a trail adds one, both
+	// changing which captures the NEXT player can make from the shared table.
+	// Measured like shedding: probe every player's option count pre-move, then
+	// OptionDelta = options(next, post-move) - baseline(next). Nonzero whenever
+	// the move's change to the table shifts the next player's capture set, which
+	// is most turns -- correct, since casino is a fight over the shared table.
+	// Without it casino would fall to deltaModeNone and read Interaction 0.0.
+	deltaModeCasino
 )
 
 func optionDeltaModeFor(g *genome.Genome) optionDeltaMode {
@@ -593,6 +604,8 @@ func optionDeltaModeFor(g *genome.Genome) optionDeltaMode {
 		return deltaModeTrickTaking
 	case genome.Climbing:
 		return deltaModeClimbing
+	case genome.Casino:
+		return deltaModeCasino
 	default:
 		return deltaModeNone
 	}

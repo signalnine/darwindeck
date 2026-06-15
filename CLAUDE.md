@@ -33,7 +33,7 @@ make test-v2
 
 Single Go binary, three layers: CLI → Evolution Engine → Simulation Core.
 
-**Key design change from v1:** Games are built from 4 constrained skeleton templates (shedding, trick-taking, rummy, and climbing/ladder a la Big Two) instead of an unconstrained genome. Skeletons guarantee playability by construction — the game loop itself ensures every state has legal moves. Parameters control *what* happens, not *whether* the game works.
+**Key design change from v1:** Games are built from 5 constrained skeleton templates (shedding, trick-taking, rummy, climbing/ladder a la Big Two, and casino/fishing-capture a la Scopa) instead of an unconstrained genome. Skeletons guarantee playability by construction — the game loop itself ensures every state has legal moves. Parameters control *what* happens, not *whether* the game works.
 
 **Novelty search (toward novel discovery):** `evolve -cross-skeleton` enables cross-family recombination (a base skeleton's core + an outcome-significant borrowed mechanic from another family); `-novelty-select` (hybrid algorithm) rewards behavioral distance from the 8 classic seeds, gated on playability. These produced the first judge-certified *novel* playable games (`results/2026-06-13-novel-games/`).
 
@@ -55,7 +55,9 @@ pkg/
 ├── skeleton/
 │   ├── shedding/   # Shedding runner (Crazy Eights, Mau-Mau style)
 │   ├── tricktaking/# Trick-taking runner (Whist, Hearts, Spades style)
-│   └── rummy/      # Rummy runner (Gin Rummy, Knock Rummy style)
+│   ├── rummy/      # Rummy runner (Gin Rummy, Knock Rummy style)
+│   ├── climbing/   # Climbing runner (Big Two / Tien Len, beat-or-pass)
+│   └── casino/     # Casino runner (fishing capture: rank-match or pip-sum)
 ├── sim/            # Card types, GameState, Move, AI players (Random, Greedy), batch runner
 ├── mechanic/       # Borrowed mechanics hook system
 ├── evolution/      # Mutation, crossover, selection, population, engine
@@ -65,23 +67,24 @@ pkg/
 └── seeds/          # 8 seed game definitions
 ```
 
-### Seed Games (9 across 4 skeletons)
+### Seed Games (10 across 5 skeletons)
 
-`seeds.All()` returns the 9 human-validated CLASSICS below -- the single source
+`seeds.All()` returns the 10 human-validated CLASSICS below -- the single source
 of truth for the evolution init pool (`cmd/darwindeck/main.go` `getAllSeeds`), the
 calibration ground-truth (`calibrate.go`), and the novelty seed-distance anchors
 (`pkg/evolution` `seedDescriptors`). They are real, time-tested published games
 (a game still in circulation is fun by survival).
 
-**Big Two (climbing) was promoted into the calibration set 2026-06-14**, once the
-Interaction metric was extended to measure the climbing skeleton. Previously it
-was excluded on the stated grounds of "no human fun-rating for climbing" -- wrong
-twice over: Big Two is a hugely popular real game, and the actual blocker was a
-MEASUREMENT artifact (the Interaction metric was climbing-blind, so Big Two
-scored interact=0.000 / TotalFitness ~0.401, a hair above the floor, despite
-passing every degeneracy veto). `deltaModeClimbing` (`pkg/sim/batch.go`) measures
-climbing's beat/pass constraint; Big Two then scores interact~0.76 /
-TotalFitness~0.55 (on par with Gin Rummy) and passes the full calibration gate.
+**Big Two (climbing) and Casino joined the calibration set as their skeletons
+landed.** A new skeleton's seed enters seeds.All() only once the metrics can
+measure it: Big Two was blocked until `deltaModeClimbing` (`pkg/sim/batch.go`)
+measured climbing's beat/pass constraint (before that it scored interact=0.000 /
+TotalFitness ~0.401, a measurement artifact, despite passing every veto; after,
+~0.55, on par with Gin Rummy). Casino shipped with its own `deltaModeCasino`
+(capture/trail changes the shared table) and `CasinoScorer`, scoring ~0.77 (the
+strongest classic). The lesson both teach: a new skeleton needs a runner AND an
+OptionDelta mode for Interaction AND a greedy scorer for the skill gradient, or
+the metrics are blind to it.
 
 | Skeleton | Seeds |
 |----------|-------|
@@ -89,6 +92,7 @@ TotalFitness~0.55 (on par with Gin Rummy) and passes the full calibration gate.
 | Trick-taking | Whist, Hearts, Spades, Oh Hell |
 | Rummy | Gin Rummy, Knock Rummy |
 | Climbing | Big Two |
+| Casino | Casino |
 
 ### Fitness Function (5 metrics)
 

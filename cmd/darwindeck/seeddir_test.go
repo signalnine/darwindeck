@@ -178,12 +178,16 @@ func TestSeedDirRunIncludesCustomInInitialPopulation(t *testing.T) {
 
 	pool := seedPool(dir)
 
-	// Sanity: no classic is within one mutation step of the fingerprint, so a
-	// gen-0 HandSize of exactly 3 cannot have come from a mutated classic.
+	// Sanity: no classic of the SAME skeleton is within one mutation step of the
+	// fingerprint, so a gen-0 (shedding, HandSize==3) genome cannot have come
+	// from a mutated classic. (HandSize alone is no longer a fingerprint -- the
+	// 10 classics' hand sizes {4,5,7,10,13} blanket 3-13 under +-1 mutation,
+	// e.g. Casino=4 is adjacent to 3 -- but Casino is not shedding, and reaching
+	// shedding+HandSize-3 from any classic needs more than one step.)
 	for _, c := range getAllSeeds() {
-		if c.HandSize >= fingerprint-1 && c.HandSize <= fingerprint+1 {
-			t.Fatalf("test invariant broken: classic %q HandSize %d is within one step of fingerprint %d",
-				c.ID, c.HandSize, fingerprint)
+		if c.Skeleton == custom.Skeleton && c.HandSize >= fingerprint-1 && c.HandSize <= fingerprint+1 {
+			t.Fatalf("test invariant broken: %s classic %q HandSize %d is within one step of fingerprint %d",
+				c.Skeleton, c.ID, c.HandSize, fingerprint)
 		}
 	}
 
@@ -217,7 +221,7 @@ func TestSeedDirRunIncludesCustomInInitialPopulation(t *testing.T) {
 	// deterministic in practice.
 	custodyHits := 0
 	for _, ind := range engine.Population {
-		if ind.Genome.HandSize == fingerprint {
+		if ind.Genome.Skeleton == custom.Skeleton && ind.Genome.HandSize == fingerprint {
 			custodyHits++
 		}
 	}

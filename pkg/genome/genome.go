@@ -10,9 +10,10 @@ const (
 	TrickTaking
 	Rummy
 	Climbing
+	Casino
 )
 
-var skeletonNames = [4]string{"shedding", "trick_taking", "rummy", "climbing"}
+var skeletonNames = [5]string{"shedding", "trick_taking", "rummy", "climbing", "casino"}
 
 func (s SkeletonType) String() string {
 	if int(s) >= len(skeletonNames) {
@@ -185,6 +186,28 @@ type ClimbingParams struct {
 	// MinRunLen is the minimum length of a run combination (3-5). Only consulted
 	// when AllowRuns is true.
 	MinRunLen int `json:"min_run_len"`
+}
+
+// --- Casino Parameters ---
+
+// CasinoParams controls a fishing/capture game (Casino / Scopa family). On your
+// turn you play one card from hand and either CAPTURE table cards (any table
+// card of the same rank, or -- when AllowSumCapture -- a subset of number cards
+// whose pip values sum to your card's value) into your pile, or TRAIL the card
+// face-up onto the table. Trailing is always legal, so a legal move always
+// exists. Hands are dealt from the stock, refilled when empty, until the stock
+// runs out; the last player to capture sweeps any cards left on the table. Most
+// captured cards wins. Player count and hand size use the top-level Genome
+// fields; TableSize is the face-up cards dealt to the table at the start.
+type CasinoParams struct {
+	// TableSize is the number of cards dealt face-up to the table at setup
+	// (0-6; standard Casino deals 4).
+	TableSize int `json:"table_size"`
+	// AllowSumCapture enables capturing a subset of number cards (aces..tens)
+	// whose pip values sum to the played card's value, not only same-rank
+	// captures. This is the decision-rich core of Casino/Scopa; with it off the
+	// game degrades to plain rank-matching fishing (Go Fish-like).
+	AllowSumCapture bool `json:"allow_sum_capture"`
 }
 
 // --- Shared Mechanics ---
@@ -405,6 +428,7 @@ type Genome struct {
 	TrickTaking *TrickTakingParams `json:"trick_taking,omitempty"`
 	Rummy       *RummyParams       `json:"rummy,omitempty"`
 	Climbing    *ClimbingParams    `json:"climbing,omitempty"`
+	Casino      *CasinoParams      `json:"casino,omitempty"`
 
 	// Cross-skeleton mechanics
 	Borrowed []BorrowedMechanic `json:"borrowed,omitempty"`
@@ -438,6 +462,10 @@ func (g *Genome) Clone() *Genome {
 	if g.Climbing != nil {
 		c := *g.Climbing
 		cp.Climbing = &c
+	}
+	if g.Casino != nil {
+		c := *g.Casino
+		cp.Casino = &c
 	}
 	if g.Borrowed != nil {
 		cp.Borrowed = append([]BorrowedMechanic(nil), g.Borrowed...)
@@ -573,6 +601,11 @@ func (g *Genome) MaxTurns() int {
 		// per trick. Scale generously so the turn-cap backstop never
 		// misclassifies a healthy climbing game as a timeout.
 		return g.HandSize * g.Players * 8
+	case Casino:
+		// Every turn plays exactly one card from a hand; hands refill only from
+		// the finite stock, so total plays <= 52 (every card played once).
+		// Scale generously so the cap is never the binding constraint.
+		return 52 * 4
 	default:
 		return 200
 	}
@@ -603,6 +636,11 @@ func (g *Genome) ActiveParams() string {
 			return fmt.Sprintf("climbing{pairs=%v, triples=%v, runs=%v, min_run=%d}",
 				g.Climbing.AllowPairs, g.Climbing.AllowTriples,
 				g.Climbing.AllowRuns, g.Climbing.MinRunLen)
+		}
+	case Casino:
+		if g.Casino != nil {
+			return fmt.Sprintf("casino{table=%d, sum_capture=%v}",
+				g.Casino.TableSize, g.Casino.AllowSumCapture)
 		}
 	}
 	return "none"
