@@ -1,0 +1,169 @@
+{
+  "description": "Blind LLM-judge novelty assessment of the first vying-inclusive evolve batch (seed 42, pop 400 gen 100, all 6 skeletons). 3 judges/game, rulebook-only dossiers.",
+  "mapping": {
+    "A": "plain-vying-poker-NEW",
+    "B": "casino+meld+avoidance",
+    "C": "shedding+knock+run_play",
+    "D": "climbing+draw_penalty+knock",
+    "E": "trick+avoidance+meld",
+    "F": "casino-seed-CONTROL"
+  },
+  "games": [
+    {
+      "game": "A",
+      "judges": [
+        {
+          "verdict": "known",
+          "closest_game": "Five-Card Poker (single-betting-round \"Five-Card Stud\"-style vying game)",
+          "confidence": "high",
+          "key_mechanics": "5-card hidden hands, chip wagering with fold/call/raise/check, big-blind posting, capped raises, standard poker hand ranking at showdown, chips carried across deals.",
+          "reasoning": "This is plain poker, not a variant or a novel combination. Every element is canonical: 5 cards dealt face-down, a single round of betting (fold/call/raise with a check option), a 10-chip blind that rotates and forces action, a 3-raise cap (standard table limit), and the orthodox poker hand hierarchy (pair through straight flush) deciding the showdown, with an uncontested pot going to the last player standing. Most-chips-after-N-deals is the universal cash/tournament scoring convention. There is no draw, no community cards, no wild cards, no exchange, and no non-poker mechanic grafted on -- so it does not even rise to \"variant.\" It is essentially a stripped five-card vying game (closest to Five-Card Stud with all cards down, or pre-draw Five-Card Draw); naming it anything other than \"poker\" would be inventing distinction where none exists."
+        },
+        {
+          "verdict": "known",
+          "closest_game": "Five-Card Poker (single-round Five-Card Draw with no draw / basic five-card vying game)",
+          "confidence": "high",
+          "key_mechanics": "Standard poker hand rankings (pair through straight flush); hidden 5-card hands; a single betting round with fold/call/raise/check; rotating blind; showdown takes the pot; uncontested pot if all but one fold.",
+          "reasoning": "This is textbook five-card poker, essentially Five-Card Draw stripped of the draw (one betting round, then showdown), with the exact standard poker hand hierarchy named verbatim. Every element -- hidden five-card hands, fold/call/raise/check, a rotating big blind, a raise cap, showdown by poker rank, and chips carried across deals -- is core poker, not a new combination. The 3-raise cap and 12-deal session length are ordinary house rules, not mechanical innovation. There is no draw, no community cards, no wild cards, no capture, melding, trick-taking, or any non-poker mechanic, so nothing distinguishes it from a published five-card vying game."
+        },
+        {
+          "verdict": "known",
+          "closest_game": "Five-Card Stud / Five-Card Draw poker (specifically a no-draw, single-betting-round flop-less poker, i.e. a stripped Five-Card Stud)",
+          "confidence": "high",
+          "key_mechanics": "5-card hands, chip wagering with fold/call/raise/check, rotating blind, showdown on standard poker hand rankings, pot to best hand, chips carried across deals.",
+          "reasoning": "This is textbook poker, not a variant or novel combination. Every element is canonical: a 1000-chip stack, a rotating 10-chip blind that forces the first actor to face a bet, the fold/call/raise action set capped at 3 raises, a check option when nothing is owed, and a showdown decided by the standard poker hand hierarchy (pair through straight flush) with the uncontested-pot rule when all but one fold. With five face-down cards, no draw/replacement step, and a single betting round before showdown, it is essentially Five-Card Stud's economy played as a one-shot blind-ante game (closest published relative). The only knobs touched -- 4 players, 12 deals, most-chips-wins -- are session/format parameters, not mechanics; they do not alter poker's identity. There is no mechanical innovation here whatsoever; it simply IS poker."
+        }
+      ]
+    },
+    {
+      "game": "B",
+      "judges": [
+        {
+          "verdict": "variant",
+          "closest_game": "Casino (with Scopa-family capture and grafted-on rummy meld scoring + Hearts penalty)",
+          "confidence": "high",
+          "key_mechanics": "Core loop is pure Casino/Scopa: play one card to capture same-rank cards OR a set of number cards summing to its value (Ace=1, face cards match-rank-only), otherwise trail; refill hands from stock; last capturer sweeps the table at the end. These are textbook Casino rules.",
+          "reasoning": "The moment-to-moment play (fish or trail) and capture rules are identical to Casino, which is the game's load-bearing identity. The novelty is only in the scoring overlay: native Casino bonuses (aces, big/little casino, most cards/spades) are swapped for end-of-round rummy meld bonuses (sets/runs across hand + captures) and a Hearts-style penalty (Hearts cost points, even in your captured pile). That penalty-on-captured-cards twist is genuinely unusual and creates a capture-vs-avoid tension Casino lacks, but it is a pure scoring reweighting -- no mechanic changes the legal-move set or turn structure. Meld bonuses are tallied passively at round end, not played, so this is Casino with a substituted scoring system rather than a new mechanical combination. The duplicated penalty-card rule and trivial one-row point table further mark it as an evolved artifact built on the Casino skeleton."
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Casino (the fishing/capture family; specifically scoring-Casino such as Royal/Italian Casino)",
+          "confidence": "high",
+          "key_mechanics": "Same-rank and sum-to-value capture with Ace=1 and face cards capturing only by rank match; trail when you cannot capture; refill hands from stock; final sweep to the last capturer; score by captured cards. Bolted-on overlays: a rummy-style meld bonus (sets/runs of 3+ scored across hand and captured pile) and a Hearts-style heart penalty (each heart worth -5).",
+          "reasoning": "The engine is pure Casino/Scopa: one card per turn, capture same-rank or number-cards summing to your card's value, trail otherwise, refill, final sweep to last capturer, count captured cards. That is the defining identity and it is intact. The two extras are scoring overlays, not structural innovations: the meld bonus is a borrowed rummy-set/run tally and the heart penalty is a Hearts-style avoidance term, both computed at round end without altering legal moves or turn flow. Scoring-Casino variants already award combination bonuses, so this reads as Casino with a rummy bonus and a heart penalty grafted on -- a variant. The duplicated penalty rule and the vestigial 'across your hand' meld scoring are generation artifacts. Not novel: no new combination of mechanics that fuses at the move level; the borrows sit on top of an otherwise standard capture game."
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Casino (the fishing/capture game), specifically resembling Scopa/Casino with a Royal Casino sum-capture rule",
+          "confidence": "high",
+          "key_mechanics": "Core loop is textbook Casino/Scopa: play one card to capture table cards by matching rank or by building/summing number cards to your card's value (Ace=1, face cards capture by rank only), or trail if you can't capture; refill hands from stock; the last capturer sweeps the table at the end. Scoring is \"most cards captured,\" which is the central Casino objective. The only departures are two grafted-on scoring layers: a rummy-style meld bonus (sets and runs scored across hand+pile) and a Hearts-style penalty where hearts cost points.",
+          "reasoning": "The capture engine here IS Casino/Scopa, not merely Casino-like: same play-one-card, rank-match-or-sum-capture, trail-otherwise, last-capturer-sweeps, score-by-cards-captured. That fixed core identity makes this a variant rather than novel. The added meld bonus (rummy borrow) and heart penalty (Hearts borrow) are bolt-on scoring tweaks layered onto the same fishing loop; they change point accounting, not the fundamental capture mechanic, so the game keeps its Casino identity. Combining capture with a meld bonus is unusual but not a genuinely new mechanical fusion -- the meld scoring is a passive end-of-round tally that does not interact with the capture decisions (you cannot, for instance, capture to complete melds as a move). The duplicated penalty-card line and a heart penalty that simultaneously rewards capturing many cards yet punishes capturing hearts is the kind of incoherent incentive clash typical of an evolved Casino variant, not a designed novel game. Closest published game: Casino, with Royal/Scopa-style sum captures."
+        }
+      ]
+    },
+    {
+      "game": "C",
+      "judges": [
+        {
+          "verdict": "variant",
+          "closest_game": "Crazy Eights (Mau-Mau / Uno family)",
+          "confidence": "high",
+          "key_mechanics": "Match-suit-or-rank discard play, wild 8s (\"any 8 playable on anything\"), draw-when-stuck, and first-to-empty-hand win condition \u2014 the textbook Crazy Eights/Mau-Mau/Uno core. Action cards (draw-2, skip, reverse direction) are the standard Uno/Mau-Mau vocabulary. Wild 7s and draw-2 sevens are the classic Mau-Mau \"7 = draw two\" rule. Multi-card combination plays (sets and consecutive-suit runs) and the knock-to-end-with-fewest-cards rule are grafted-on touches from the climbing (Big Two) and rummy (Knock Rummy) families.",
+          "reasoning": "The base game is unambiguously Crazy Eights: suit-or-rank matching on a discard pile, wild eights, draw-N when unable to play, and shedding to win. The special cards (draw-2, skip, reverse) are the standard Crazy Eights/Uno/Mau-Mau action-card set, and \"7 = draw two\" is the canonical Mau-Mau rule. The two non-standard additions \u2014 multi-card combination plays (runs/sets) and a rummy-style knock ending \u2014 are each well-known published mechanics borrowed from climbing and rummy games, but they sit on top of an intact Crazy Eights identity rather than fusing into something new; multi-card \"run\" dumping already exists in Switch/Crazy Eights house variants. The combination-play rule is even printed twice verbatim, a generation artifact rather than a distinct mechanic. A well-read skeptic recognizes this as Crazy Eights with two grafted tweaks, not a genuinely new mechanic combination."
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Crazy Eights (Mau-Mau)",
+          "confidence": "high",
+          "key_mechanics": "Match-suit-or-rank discard play, draw-when-stuck, first-to-empty-hand win, 8s as universal wilds, 2 = next player draws two, Jack/Queen skip-and-reverse specials; plus added multi-card combination plays (same-rank sets and same-suit runs) and a Knock alternate end-game (fewest cards wins).",
+          "reasoning": "The spine is textbook Crazy Eights / Mau-Mau: play a card matching the suit or rank of the discard top, draw if you cannot, race to empty your hand, with 8 as the canonical wild and 2 = draw-two plus reverse/skip face-card effects -- all stock Crazy Eights/Uno-family conventions. The genuine additions are rummy-flavored combination plays (dumping same-rank sets or in-suit runs, a Big Two/rummy borrow) and a Knock-to-end-with-fewest-cards win (a Knock Rummy borrow). These are bolted onto an unmistakable Crazy Eights skeleton and do not displace its identity; the duplicated combo-play rule and the redundant knock win-path (clashing with the empty-hand win) read as evolved-game artifacts rather than a designed novel core. Adding 7 as a second wild and draw-3 are pure parameter tweaks. This keeps its core identity as Crazy Eights, so it is a variant, not novel."
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Crazy Eights (Mau-Mau / Switch family)",
+          "confidence": "high",
+          "key_mechanics": "Suit-or-rank matching on a discard pile, first-to-empty-hand win, draw-when-stuck, wild 8s, plus draw-two/skip/reverse action cards (2, 2 of Spades, Q/J of Diamonds, wild 7s) \u2014 the unmistakable Crazy Eights/Mau-Mau/Uno engine. Adds multi-card combination plays (same-rank sets or suit runs, Big Two-style) and a rummy-style \"knock\" to end the round on fewest cards held.",
+          "reasoning": "The core is textbook Crazy Eights: match suit or rank, wild eights, draw when you can't play, and a suite of draw-two/skip/reverse action cards that are standard Mau-Mau/Switch/Uno furniture. The two grafts are house-rule-tier overlays: dumping same-rank sets or in-suit runs is a common Switch/Crazy Eights house rule (with a Big Two flavor), and the \"knock to end, fewest cards wins\" borrows a Knock Rummy go-out. The knock is the only mildly unusual graft, but it's a thin scoring overlay that does not displace the game's plain Crazy Eights identity \u2014 none of these additions combine into a mechanic set absent from the published Switch/Crazy Eights family. Not novel."
+        }
+      ]
+    },
+    {
+      "game": "D",
+      "judges": [
+        {
+          "verdict": "novel",
+          "closest_game": "President / Tien Len (climbing / beat-or-pass family); also draws on Crazy Eights (penalty draw) and Gin Rummy (knock)",
+          "confidence": "low",
+          "key_mechanics": "Beat-or-pass climbing core (play same-type-higher single or pass; clear the table on all-pass; empty your hand to win). Singles-only combination set. Crazy-Eights-style penalty: playing a face card (J+) forces you to draw an extra card. Gin-Rummy-style knock that overrides the empty-hand win with a fewest-cards-wins endgame.",
+          "reasoning": "The skeleton is unmistakably the climbing/beat-or-pass family (President / Tien Len / Big Two), but stripped to singles-only it is a thin climbing identity, close to simplified President. What pushes it past \"variant\" is the combination of two borrowed mechanics that no published climbing game uses together: a self-defeating Crazy-Eights penalty draw (the high cards you must play to beat the table also grow your hand, working against the shed-to-win goal) plus a Gin-style knock that replaces empty-hand victory with a fewest-cards-wins race. I cannot name any published game that fuses a beat-or-pass climbing core with a penalty-draw-on-high-cards AND a fewest-cards knock endgame. Confidence is low because each ingredient is a classic borrow, the singles-only loop is nearly indistinguishable from generic beat-or-pass shedding, and the duplicated draw-penalty line plus the inherent incentive clash (drawing penalizes the exact plays the game demands) read like an evolved artifact rather than a coherent designed game \u2014 so a well-read judge could reasonably call it a degenerate President variant."
+        },
+        {
+          "verdict": "novel",
+          "closest_game": "Big Two / President (Daihinmin) singles climbing, with a Knock Rummy go-out graft",
+          "confidence": "medium",
+          "key_mechanics": "Beat-or-pass climbing with empty-hand win (Big Two/President family); singles-only combinations; a self-punishing draw penalty that forces you to draw a card whenever you play a face card (Jack+); and a Rummy-style \"knock\" that ends the game immediately with fewest-cards-wins.",
+          "reasoning": "The skeleton is unmistakably the climbing/shedding family (Big Two, President/Daihinmin, Tien Len, Tichu): a current combination must be beaten by a strictly higher one of the same type or you pass, table clears when all pass, first to empty hand wins. But two grafts have no home in that family's published canon. First, the face-card draw penalty is anti-thematic and inverted: in a hand-emptying race, playing your strongest cards makes your hand GROW. No published climbing game punishes you for playing high cards (the closest relative, the penalty draw, lives in Crazy Eights-style shedding and is applied to opponents, not yourself). Second, the \"knock to end now, fewest cards wins\" is lifted straight from Knock Rummy / Gin Rummy and replaces the empty-hand win condition with a card-count comparison - a foreign go-out mechanic for this family. I cannot name any published game that combines climbing-beat-or-pass + self-inflicted high-card draw penalty + rummy knock. That said, the fusion is thin and arguably incoherent rather than a deep new system (and the rulebook duplicates the draw-penalty line, an evolution artifact), so confidence is medium rather than high; it reads as a genuinely new mechanic combination, not a rediscovery of a specific classic."
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Big Two / President (climbing / beat-or-pass family), singles-only",
+          "confidence": "medium",
+          "key_mechanics": "Beat-or-pass climbing ladder (play strictly higher of the same type or pass; lead anything on a clear table; empty your hand to win) restricted to singles only. Bolted-on borrows: a Crazy-Eights-style penalty draw (playing a face card forces drawing 1 extra), and a Gin/Knock-Rummy-style \"knock\" that ends the game with fewest-cards-in-hand winning.",
+          "reasoning": "The core is unmistakably a climbing/beat-or-pass game in the Big Two / President family, but stripped to singles only it is a degenerate \"high card sheds\" ladder rather than a distinct game. Two off-family mechanics are stapled on: a shedding-style face-card penalty draw (which interestingly inverts the shed-your-hand incentive) and a rummy-style knock with fewest-cards-wins. While I cannot name a single published game that fuses exactly these three, the combination reads as evolved bolt-ons on a dominant climbing skeleton rather than a coherent new design: the knock introduces a second, competing win condition alongside empty-hand, and the duplicated draw-penalty line is an artifact. As a tough skeptic, the recognizable climbing core plus minor borrowed penalties keeps this a variant, not a genuinely novel mechanic combination; closest published anchor is Big Two / President."
+        }
+      ]
+    },
+    {
+      "game": "E",
+      "judges": [
+        {
+          "verdict": "novel",
+          "closest_game": "Hearts (with a Pinochle/Rummy-style meld layer grafted on)",
+          "confidence": "medium",
+          "key_mechanics": "Trump trick-taking (cut-for-trump, follow-suit, trump-not-led-until-broken) + Hearts-identity penalty scoring (each Heart = 1, Q of Spades = 15, avoid capturing them) + a Pinochle/Rummy-style meld bonus scoring sets (3+ same rank) and runs (3+ consecutive in suit) across hand AND captured cards at round end + penalty for scoring cards left in hand.",
+          "reasoning": "The engine is a standard trump trick-taking game and the penalty table (Heart=1, QofSpades=15) is unmistakably Hearts, so the instinct is \"Hearts variant.\" But two scoring systems are stacked that pull in opposite directions: a Hearts-style AVOID-capturing-penalty-cards layer and a Pinochle/Rummy-style COLLECT-melds (sets and runs) layer evaluated over captured cards at round end. Published meld-plus-trick games (Pinochle, Bezique, Sixty-Six) use declared marriages/specific melds, not arbitrary rummy runs/sets, and none of them carry Hearts' penalty-card identity. I know of no standard published game that fuses Hearts-style point avoidance with rummy-meld collection in one trick-taking trump game; the contradictory incentives change the strategic identity beyond a minor tweak. Confidence is medium because every component is a well-known classic and only the combination is unfamiliar, leaving room that a niche/regional game exists."
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Pinochle / Bezique family (melding trick-taking with trump), with a Hearts/Black Lady point-card schedule grafted on",
+          "confidence": "medium",
+          "key_mechanics": "Trumped trick-taking with mandatory follow-suit and a trump-broken lead restriction; round-end scoring that combines captured card point values with rummy-style meld bonuses (sets of a rank, runs in suit) drawn from hand plus captured cards; plus a Hearts-style penalty schedule (each Heart = 1, Q-spades = 15).",
+          "reasoning": "The skeleton is ordinary trump trick-taking. Crucially, \"trick-taking + trump + meld declarations scored at round end\" is the defining combination of the Pinochle/Bezique/Belote/Sixty-Six family, so melds-on-a-trick-taker is an established, well-known pairing rather than a novel one. What differs is that melds are scored over captured cards (not just hand) using generic rummy set/run values, and the point-card schedule (Hearts = 1, Q-spades = 15) is lifted verbatim from Hearts/Black Lady, then paired with a penalty for point cards left uncaptured. These are tweaks and a mashup on top of a known family, not a mechanic combination absent from all published games. The \"highest score wins on captured points\" while also penalizing those same points is an incoherent evolved artifact rather than a designed innovation. Reserve \"novel\" for a genuinely unseen pairing; this is a Pinochle-family melding trick-taker dressed in Hearts scoring, hence variant."
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Hearts",
+          "confidence": "medium",
+          "key_mechanics": "Hearts penalty cards (hearts=1, Q-spades=15) + follow-suit + trump with a \"trump not broken\" lead restriction + grafted rummy meld bonus from the captured pile.",
+          "reasoning": "The load-bearing, instantly recognizable mechanic is the Hearts penalty deck: every heart scores 1 and the Queen of Spades scores a large penalty (15 here vs Hearts' 13), with follow-suit play and a lead restriction that is the \"hearts broken\" rule reapplied to trump. That penalty-card identity is unmistakably Hearts. The novelty claim rests on the end-of-round rummy meld bonus (sets of 3+ and suit runs scored from hand + captured cards), which is a cross-family graft -- trick-and-meld games exist (Pinochle, Bezique, Belote), but none combine Hearts-style avoidance penalties with rummy melds from the captured pile, so the specific combination is not a single published game. However, the meld bonus is an additive scoring graft, not a transformation of the core, and the game even contradicts itself (\"highest score wins\" alongside Hearts avoidance penalties), which reads as an evolved bolt-on rather than a coherent new game. Core identity remains Hearts, so this is a variant, not a clean novel design."
+        }
+      ]
+    },
+    {
+      "game": "F",
+      "judges": [
+        {
+          "verdict": "variant",
+          "closest_game": "Casino (also spelled Cassino)",
+          "confidence": "high",
+          "key_mechanics": "Capture-by-rank-match plus capture-by-numeric-sum (the signature dual capture rule of Casino), the trail option when not capturing, Ace=1 with face cards capturing only by rank match, a 4-card hand over a 4-card face-up table refilled from stock, and the last-capturer-sweeps-the-table endgame.",
+          "reasoning": "Every mechanic here is core Casino: dual capture by matching rank or by summing number cards to the played card's value, trailing when you cannot/choose not to capture, Ace=1, face cards limited to rank-match capture, the 4-hand/4-table deal with stock refill, and the last-capture sweep at game end. The only deviations are subtractions, not novel additions: it drops Casino's \"builds\" (stacking table cards to capture on a later turn) and flattens Casino's point scoring (most cards, most spades, Big/Little Casino, aces) into a raw most-cards-captured race. Removing features and simplifying scoring keeps the game's identity squarely as Casino, so this is a variant, not a novel combination of mechanics."
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Casino (Cassino), the classic fishing/capture game",
+          "confidence": "high",
+          "key_mechanics": "Play-one-card-to-capture-or-trail; capture by matching rank OR by summing number cards to the played card's value (Ace=1, face cards capture by rank only); last player to capture sweeps the remaining table cards at game end; win by most cards captured.",
+          "reasoning": "This is Casino with its scoring simplified to a pure card-count race. Every load-bearing mechanic -- the rank-match capture, the additive sum-capture with Ace=1 and valueless face cards, the legal-always trail, the deal-out-then-refill structure, and the defining \"last capturer takes the remaining table cards\" final sweep -- is a textbook feature of Casino. It drops Casino's build mechanic and its point categories (aces, Big/Little Casino, most spades), scoring only \"most cards,\" but feature removal plus a count-only win condition does not change the core identity. There is no mechanic here that the fishing-capture family does not already contain, so this is a stripped-down variant, not a novel combination."
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Casino (a.k.a. Cassino)",
+          "confidence": "high",
+          "key_mechanics": "Play-one-card capture-or-trail; capture by matching rank OR by summing number cards to the played card's value (Ace=1, pips for number cards, face cards match by rank only); deal fresh hands when both hands empty; last-capturer sweeps remaining table cards; score by cards captured.",
+          "reasoning": "This is the classic fishing/capture game Casino with two simplifications, not a new mechanic combination. The defining Casino features are all present and unchanged: the shared face-up table, the capture-or-trail choice, capture by rank-match, and the signature pip-SUM capture where number cards summing to your card's value are taken (Ace=1, face cards capture by rank only). The deviations are subtractive: the win condition is reduced to raw \"most cards captured\" instead of Casino's standard point tally (most cards, most spades, aces, Big/Little Casino), and card-building is omitted. Dropping building and flattening the scoring are pruned features, not novel additions, so the game keeps Casino's core identity as a straightforward variant rather than a genuinely new design."
+        }
+      ]
+    }
+  ]
+}
