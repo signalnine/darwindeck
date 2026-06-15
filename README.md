@@ -2,7 +2,7 @@
 
 Evolutionary search for *playable* card games on a standard 52-card deck, scored by five fitness metrics that try to proxy "fun."
 
-Games are built from five skeleton templates (shedding, trick-taking, rummy, climbing, casino) that guarantee playability by construction. I hardened the metrics against gaming over four adversarial review rounds. The result:
+Games are built from six skeleton templates (shedding, trick-taking, rummy, climbing, casino, vying) that guarantee playability by construction. I hardened the metrics against gaming over four adversarial review rounds. The result:
 
 > The system reliably evolves playable games, and the hardened metrics correctly rank faithful Whist/Gin rediscoveries as the most game-like outputs. Across four rounds it never discovered a novel fun game. Evolution games the newest validity rule or rediscovers a public-domain classic. A weighted-sum fun-proxy computed from self-play is exploitable by construction.
 
@@ -19,7 +19,7 @@ make build-v2
 # Evolve a population of playable card games (default: hybrid algorithm)
 ./bin/darwindeck evolve -population 500 -generations 100 -workers 256
 
-# Calibration report: raw metric means for the 10 classics + degenerate fixtures
+# Calibration report: raw metric means for the 11 classics + degenerate fixtures
 ./bin/darwindeck calibrate
 
 # Play an evolved game against AI
@@ -82,13 +82,14 @@ Scope: novelty here is LLM-judge-certified (blind, 3-rep, with a variant/redisco
 
 ### Skeletons
 
-Five skeleton templates guarantee mechanical playability by construction: the game loop ensures every state has a legal move, and parameters control *what* happens, not *whether* the game works.
+Six skeleton templates guarantee mechanical playability by construction: the game loop ensures every state has a legal move, and parameters control *what* happens, not *whether* the game works.
 
 - **Shedding** (Crazy Eights, Mau-Mau): match suit/rank to the discard, first to empty hand wins
 - **Trick-taking** (Whist, Hearts, Spades): one card per player per trick, highest card wins
 - **Rummy** (Gin Rummy, Knock Rummy): draw-meld-discard, lowest deadwood wins
 - **Climbing** (Big Two, Tien Len): play an ascending combination that beats the table or pass, first to empty hand wins
 - **Casino** (Casino, Scopa): play a card to capture table cards by rank-match or pip-sum, else trail it; most captured cards wins
+- **Vying** (poker): wager chips on hidden hands across betting rounds (fold/call/raise), best poker hand at showdown takes the pot, most chips wins. The one family whose core decision is a wager, not a card play
 
 Genomes encode parameters (hand size, player count, trump rules, special cards, scoring, win conditions) and may borrow whitelisted cross-skeleton mechanics, like a multi-round shedding game with rummy-style meld bonuses.
 
@@ -119,7 +120,7 @@ Weights are frozen at 0.25 / 0.25 / 0.20 / 0.20 / 0.10 and were not tuned in res
 
 ### Calibration gate
 
-The 10 classic seed games are the fun ground truth: real, time-tested published games (a game still in circulation is fun by survival). The calibration suite (`pkg/fitness/calibration_test.go`, run untagged in the default `go test`) asserts that every classic outscores every known-degenerate fixture by a margin, that the fitness floor admits every classic, and that Gin beats the instant-knock degenerate. Any future metric change that lets a degenerate fixture outrank a classic is a build failure.
+The 11 classic seed games are the fun ground truth: real, time-tested published games (a game still in circulation is fun by survival). The calibration suite (`pkg/fitness/calibration_test.go`, run untagged in the default `go test`) asserts that every classic outscores every known-degenerate fixture by a margin, that the fitness floor admits every classic, and that Gin beats the instant-knock degenerate. Any future metric change that lets a degenerate fixture outrank a classic is a build failure.
 
 Big Two (climbing) and Casino joined the calibration set as their skeletons gained the instrumentation to measure them. Big Two had been excluded because the Interaction metric was climbing-blind: it scored Interaction 0.000 / TotalFitness ~0.401, skimming the floor as a measurement artifact, despite passing every degeneracy veto. `deltaModeClimbing` measures its beat/pass constraint, Big Two now scores ~0.55 (on par with Gin Rummy). Casino shipped with its own `deltaModeCasino` and a greedy capture scorer and calibrates at ~0.772, the strongest classic. The lesson both teach: a new skeleton needs a runner AND an OptionDelta mode for Interaction AND a greedy scorer for the skill gradient, or the metrics are blind to it.
 
@@ -162,7 +163,8 @@ pkg/
 │   ├── tricktaking/    Trick-taking runner (suit following, trump, tricks)
 │   ├── rummy/          Rummy runner (draw-meld-discard, knock/gin)
 │   ├── climbing/       Climbing runner (beat-or-pass combinations, ladder)
-│   └── casino/         Casino runner (fishing capture: rank-match or pip-sum, trail; scoring-borrow host)
+│   ├── casino/         Casino runner (fishing capture: rank-match or pip-sum, trail; scoring-borrow host)
+│   └── vying/          Vying runner (poker: hidden hands, betting rounds, showdown by hand rank)
 ├── sim/                Card types, GameState, AI players (Random/Greedy/ISMCTS), batch runner
 ├── mechanic/           Borrowed-mechanic hook system (single HooksFor construction site)
 ├── evolution/          Mutation, crossover, selection, novelty (k-NN + seed-distance + CID)
@@ -186,8 +188,9 @@ pkg/
 | Rummy | Gin Rummy, Knock Rummy |
 | Climbing | Big Two |
 | Casino | Casino |
+| Vying | SimplePoker |
 
-The 10 classic seeds (`seeds.All()`) are the single source of truth: the evolution init pool, the calibration ground truth, and the novelty seed-distance anchors. Mutation, crossover, and cross-skeleton mechanic borrowing produce the rest of the search space.
+The 11 classic seeds (`seeds.All()`) are the single source of truth: the evolution init pool, the calibration ground truth, and the novelty seed-distance anchors. Mutation, crossover, and cross-skeleton mechanic borrowing produce the rest of the search space.
 
 ## Development
 
