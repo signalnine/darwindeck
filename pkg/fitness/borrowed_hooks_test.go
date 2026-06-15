@@ -318,6 +318,14 @@ func buildBorrowingGenome(host, source genome.SkeletonType, mech genome.Mechanic
 			AllowRuns:    true,
 			MinRunLen:    3,
 		}
+	case genome.Casino:
+		// Casino hosts the scoring borrows (MechMeldBonus / MechAvoidance). It
+		// emits one end-of-game EventRoundEnd under CasinoScored, on which the
+		// hook banks the captured pile (state.Tableau) into state.Scores. The
+		// shared CardPoints above (a heart penalty) feeds the avoidance hook;
+		// AllowSumCapture keeps captures frequent so the pile is non-trivial.
+		// HandSize*Players + TableSize = 5*2 + 4 = 14 <= 52.
+		g.Casino = &genome.CasinoParams{TableSize: 4, AllowSumCapture: true}
 	}
 
 	return g

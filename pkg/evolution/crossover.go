@@ -166,6 +166,18 @@ func crossFamilyBorrow(host, other genome.SkeletonType, rng *rand.Rand) (genome.
 			// reads state.Scores), so they cannot appear here.
 			{genome.MechDrawPenalty, genome.Shedding},
 		},
+		genome.Casino: {
+			// casino scored Scopa-style: the captured pile scored by melds. Both
+			// FIRE (casino emits one end-of-game EventRoundEnd under CasinoScored)
+			// and DECIDE the winner (CheckEnd reads captured count + banked bonus),
+			// so they are real fusions, not vestigial tallies. No teeth beyond the
+			// avoidance penalty set (giveBorrowTeeth): casino banks at game end, so
+			// forceBankingRounds (multi-round) is a no-op here, correctly.
+			{genome.MechMeldBonus, genome.Rummy},
+			// casino where captured penalty cards count against you (Scopa's "the
+			// cards you take can hurt you").
+			{genome.MechAvoidance, genome.TrickTaking},
+		},
 	}
 
 	cands := byHost[host]

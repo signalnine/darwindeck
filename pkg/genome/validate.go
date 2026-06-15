@@ -306,6 +306,22 @@ var validBorrows = map[SkeletonType]map[MechanicType]bool{
 		// variant first (NOTE for a later wave).
 		MechDrawPenalty: true,
 	},
+	Casino: {
+		// Casino is a borrow HOST for the two scoring borrows: a fishing/capture
+		// game scored Scopa-style. Captures accumulate in state.Tableau all game;
+		// on the single end-of-game EventRoundEnd the casino runner emits under
+		// CasinoScored, the MeldBonus / Avoidance hook banks that pile into
+		// state.Scores ONCE, and CheckEnd picks the winner by captured COUNT plus
+		// the banked meld bonus / minus the avoidance penalty. Both hooks both
+		// FIRE (casino emits the event) and AFFECT THE WINNER (the bonus can flip
+		// a close capture race), so they are not inert no-ops -- whitelisted per
+		// dd-lnh. MechTrickScoring is NOT whitelisted: casino has no per-round
+		// trick capture for applyTrickScoring to tally. MechDrawPenalty is NOT
+		// whitelisted: it grows one hand, breaking casino's equal-hands invariant
+		// (canRedeal/Upkeep assume every seat has a card mid-round).
+		MechMeldBonus: true,
+		MechAvoidance: true,
+	},
 }
 
 // ValidBorrows returns the borrow whitelist as a fresh copy: for each host

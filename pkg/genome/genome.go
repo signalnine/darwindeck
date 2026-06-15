@@ -491,6 +491,21 @@ func (g *Genome) HasScoringBorrow() bool {
 	return false
 }
 
+// CasinoScored reports whether g is a casino host carrying a scoring borrow
+// (MechMeldBonus or MechAvoidance) -- a fishing/capture game scored Scopa-style.
+// The casino runner gates its single end-of-game EventRoundEnd and early table
+// sweep on this predicate: that one event lets the borrow's hook bank the full
+// captured pile (state.Tableau) into state.Scores ONCE, and CheckEnd then picks
+// the winner by captured-card COUNT plus that banked meld bonus (or minus the
+// avoidance penalty) instead of by raw count. An unscored casino is
+// byte-identical (no EventRoundEnd, sweep stays in Upkeep). Like the
+// trick-taking and rummy hosts, casino reads state.Scores in CheckEnd, so the
+// scoring borrow is live at casino's single end-of-game tally (LiveBorrows only
+// prunes such borrows on a single-round Shedding host).
+func (g *Genome) CasinoScored() bool {
+	return g.Skeleton == Casino && g.HasScoringBorrow()
+}
+
 // HasBankingBorrow reports whether g carries ANY borrow whose hook banks into
 // state.Scores at round end -- the scoring borrows (MechMeldBonus,
 // MechAvoidance) PLUS MechTrickScoring (the cross-skeleton hybrid borrow:

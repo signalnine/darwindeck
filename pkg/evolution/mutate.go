@@ -342,6 +342,19 @@ func addBorrowedMechanic(g *genome.Genome, rng *rand.Rand, crossSkeleton bool) {
 		candidates = []genome.BorrowedMechanic{
 			{Source: genome.Shedding, Mechanic: genome.MechDrawPenalty},
 		}
+	case genome.Casino:
+		// Casino borrows a scoring mechanic only under cross-skeleton: a
+		// fishing/capture game scored Scopa-style. Both bank into state.Scores on
+		// the single end-of-game EventRoundEnd casino emits under CasinoScored,
+		// and CheckEnd reads captured count + that banked score. giveBorrowTeeth
+		// seeds the avoidance penalty set; forceBankingRounds is a no-op on casino
+		// (it banks at game end, not over RoundsPerGame).
+		if crossSkeleton {
+			candidates = []genome.BorrowedMechanic{
+				{Source: genome.Rummy, Mechanic: genome.MechMeldBonus},
+				{Source: genome.TrickTaking, Mechanic: genome.MechAvoidance},
+			}
+		}
 	}
 
 	if len(candidates) == 0 {

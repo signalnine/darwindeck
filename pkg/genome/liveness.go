@@ -18,8 +18,10 @@ package genome
 //     state.Scores at round end. On a SINGLE-round shedding host nothing ever
 //     reads those scores (the game ends at the first empty hand), so they are
 //     live only when SheddingMultiRound() -- the same predicate the runner
-//     uses. Trick-taking and rummy hosts read Scores in CheckEnd, so they are
-//     live there at any round count. MechTrickScoring joined this set when the
+//     uses. Trick-taking, rummy, and casino hosts read Scores in CheckEnd
+//     (casino under CasinoScored: captured count + banked bonus), so they are
+//     live there at any round count -- the pruning below only excludes
+//     single-round Shedding. MechTrickScoring joined this set when the
 //     shed-to-win-by-tricks hybrid was enabled (novelty evolution): its
 //     applyTrickScoring hook also banks per round and is inert on a
 //     single-round shedding host.

@@ -134,13 +134,20 @@ func RunHooks(hooks []Hook, point HookPoint, state *sim.GameState, g *genome.Gen
 // In shedding: cards still in hand at end are penalties.
 // In rummy: same as deadwood but with card-specific multipliers.
 func applyAvoidance(state *sim.GameState, g *genome.Genome, event sim.Event) {
+	// Event gating lives in HooksFor (this EndOfRound/Scoring hook is only
+	// invoked on EventRoundEnd), so casino fires it exactly once at game end --
+	// no per-event self-filter here (the direct-call unit tests exercise the raw
+	// tally logic).
 	if len(g.Scoring.CardPoints) == 0 {
 		return
 	}
 
 	for i := 0; i < state.NumPlayers; i++ {
 		penalty := 0
-		// Check cards in hand (shedding/rummy) and captured cards (trick-taking tableau)
+		// Check cards in hand (shedding/rummy) and captured cards (trick-taking,
+		// and the casino captured pile under the CasinoScored variant -- where
+		// hands are empty at the single end-of-game EventRoundEnd and the penalty
+		// is the cumulative captured pile, Scopa's "cards you take can hurt you").
 		for _, card := range state.Hands[i] {
 			penalty += cardPenalty(card, g)
 		}
@@ -156,7 +163,11 @@ func applyAvoidance(state *sim.GameState, g *genome.Genome, event sim.Event) {
 // applyMeldBonus awards bonus points for sets/runs in a player's hand or tableau.
 // Trick-taking hosts only fire EventRoundEnd once hands are empty, so the
 // bonus must consider state.Tableau captures too -- otherwise the borrow is
-// silently a no-op on every non-Rummy host (dd-no2).
+// silently a no-op on every non-Rummy host (dd-no2). On a CASINO host (the
+// CasinoScored scored-fishing variant) hands are empty and state.Tableau is the
+// cumulative all-game captured pile; casino emits a single end-of-game
+// EventRoundEnd, so this fires exactly once over that pile -- no per-round
+// reset, no double-bank.
 //
 // TEETH (Wave-3): the bonus rewards PAIRS (2+ same rank) and 2-card partial
 // runs, not only 3+ melds. Under random play only ~7% of residual hands hold a
@@ -168,6 +179,10 @@ func applyAvoidance(state *sim.GameState, g *genome.Genome, event sim.Event) {
 // reliably enough to actually DECIDE the winner. Seeds carry no borrows, so the
 // calibration ground-truth is unaffected.
 func applyMeldBonus(state *sim.GameState, g *genome.Genome, event sim.Event) {
+	// Event gating lives in HooksFor (this EndOfRound/Scoring hook is only
+	// invoked on EventRoundEnd), so casino fires it exactly once at game end --
+	// no per-event self-filter here (the direct-call unit tests exercise the raw
+	// tally logic).
 	for i := 0; i < state.NumPlayers; i++ {
 		cards := append([]sim.Card(nil), state.Hands[i]...)
 		if i < len(state.Tableau) {

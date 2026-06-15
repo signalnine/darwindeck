@@ -148,6 +148,33 @@ func (r *Runner) ApplyMove(state *sim.GameState, move sim.Move, g *genome.Genome
 		})
 	}
 
+	// Casino-as-borrow-host (CasinoScored): on the TERMINAL move -- the one that
+	// empties the last hand with no full round left in the stock -- sweep the
+	// table to the last capturer NOW (so the captured piles are final), clear the
+	// table, and emit ONE EventRoundEnd. The batch loop runs the MeldBonus /
+	// Avoidance hook on that event, banking the full captured pile into
+	// state.Scores; CheckEnd reads count+Scores. This guard is true only on the
+	// terminal move (intermediate redeal boundaries are allHandsEmpty &&
+	// canRedeal, which !canRedeal excludes), so EventRoundEnd fires EXACTLY once
+	// and the accumulating hook never double-banks. Clearing Discard makes
+	// Upkeep's own end-sweep a no-op (len(Discard)==0), so the table is swept
+	// exactly once. Entirely gated on CasinoScored, so an UNSCORED casino is
+	// byte-identical: no EventRoundEnd, and its sweep stays in Upkeep.
+	if g.CasinoScored() && allHandsEmpty(state) && !canRedeal(state, g) {
+		if len(state.Discard) > 0 {
+			// Sweep leftover table cards to the last capturer (standard Casino
+			// end rule). If nobody ever captured (TrickLeader < 0) there is no
+			// pile to sweep to and the table is simply consumed. Either way clear
+			// Discard so the table is swept EXACTLY once -- Upkeep's own end-sweep
+			// then no-ops on len(Discard)==0.
+			if state.TrickLeader >= 0 && state.TrickLeader < state.NumPlayers {
+				state.Tableau[state.TrickLeader] = append(state.Tableau[state.TrickLeader], state.Discard...)
+			}
+			state.Discard = state.Discard[:0]
+		}
+		events = append(events, sim.Event{Type: sim.EventRoundEnd, PlayerID: player, Detail: "game_end"})
+	}
+
 	state.Turn++
 	state.NextPlayer()
 	return events
@@ -158,6 +185,20 @@ func (r *Runner) CheckEnd(state *sim.GameState, g *genome.Genome) int {
 	// Upkeep has already swept the table to the last capturer by this point, so
 	// the captured piles are final. Most captured cards wins; ties to lowest seat.
 	if allHandsEmpty(state) && !canRedeal(state, g) {
+		if g.CasinoScored() {
+			// Scopa-style: captured-card COUNT plus the meld bonus / minus the
+			// avoidance penalty the hook banked into state.Scores on the
+			// end-of-game EventRoundEnd. The bonus can flip a close capture race,
+			// so the borrow decides the winner (dd-lnh). Ties to lowest seat.
+			winner := 0
+			best := len(state.Tableau[0]) + state.Scores[0]
+			for i := 1; i < state.NumPlayers; i++ {
+				if s := len(state.Tableau[i]) + state.Scores[i]; s > best {
+					best, winner = s, i
+				}
+			}
+			return winner
+		}
 		winner := 0
 		for i := 1; i < state.NumPlayers; i++ {
 			if len(state.Tableau[i]) > len(state.Tableau[winner]) {
@@ -173,6 +214,34 @@ func (r *Runner) CheckEnd(state *sim.GameState, g *genome.Genome) int {
 // winner rule (most captured), so the winner's final Progress is the max.
 func (r *Runner) Progress(state *sim.GameState, g *genome.Genome) []float64 {
 	out := make([]float64, state.NumPlayers)
+	if g.CasinoScored() {
+		// Leader track matches the scored win rule: each player's (captured count
+		// + banked score), min-max normalized so argmax is the count+Scores
+		// leader. Scores can be negative (avoidance), so a share normalization
+		// would misbehave; min-max stays well-defined. All-equal -> all zeros (no
+		// leader). Scores stay 0 until the end-of-game hook banks them, so during
+		// play this tracks the capture lead, matching the documented "banking
+		// shows up one move late in the leader track" skew (CheckEnd is exact).
+		lo := len(state.Tableau[0]) + state.Scores[0]
+		hi := lo
+		vals := make([]int, state.NumPlayers)
+		for i := 0; i < state.NumPlayers; i++ {
+			vals[i] = len(state.Tableau[i]) + state.Scores[i]
+			if vals[i] < lo {
+				lo = vals[i]
+			}
+			if vals[i] > hi {
+				hi = vals[i]
+			}
+		}
+		if hi == lo {
+			return out
+		}
+		for i := 0; i < state.NumPlayers; i++ {
+			out[i] = float64(vals[i]-lo) / float64(hi-lo)
+		}
+		return out
+	}
 	total := 0
 	for i := 0; i < state.NumPlayers; i++ {
 		total += len(state.Tableau[i])
