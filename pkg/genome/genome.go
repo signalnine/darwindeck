@@ -536,6 +536,21 @@ func (g *Genome) CasinoScored() bool {
 	return g.Skeleton == Casino && g.HasScoringBorrow()
 }
 
+// VyingScored reports whether g is a vying (poker) host carrying a scoring
+// borrow (MechMeldBonus or MechAvoidance). Such a game scores the showdown by
+// more than the pot: at each deal's showdown the vying runner mucks the folded
+// hands and emits one EventRoundEnd, so the borrow's hook reads only the SHOWN
+// hands and banks a meld bonus (reward sets/runs -- a different ordering than
+// poker rank, since a pair melds but a flush does not) or an avoidance penalty
+// (a suit costs chips, so the best poker hand can net fewer chips) into
+// state.Scores, which IS the chip stack CheckEnd ranks. Both create a real
+// divergence from "best hand wins": you may fold a strong-but-penalised hand or
+// chase a meld a weak poker hand still scores. An unscored vying game is
+// byte-identical (no muck, no EventRoundEnd).
+func (g *Genome) VyingScored() bool {
+	return g.Skeleton == Vying && g.HasScoringBorrow()
+}
+
 // HasBankingBorrow reports whether g carries ANY borrow whose hook banks into
 // state.Scores at round end -- the scoring borrows (MechMeldBonus,
 // MechAvoidance) PLUS MechTrickScoring (the cross-skeleton hybrid borrow:

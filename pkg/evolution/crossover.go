@@ -183,6 +183,18 @@ func crossFamilyBorrow(host, other genome.SkeletonType, rng *rand.Rand) (genome.
 			// cards you take can hurt you").
 			{genome.MechAvoidance, genome.TrickTaking},
 		},
+		genome.Vying: {
+			// poker scored at showdown by more than the pot. Meld rewards sets/runs
+			// in the shown hand (a pair melds, a flush does not -- a different
+			// ordering than poker rank); avoidance penalises a suit so the best
+			// hand can net fewer chips. Hook-banked into the chip stacks on the
+			// deal's EventRoundEnd (VyingScored mucks the folded hands so scoring
+			// is showdown-only); both flip the chip winner and shift the
+			// fold/commit decision. The avoidance penalty set is seeded by
+			// giveBorrowTeeth.
+			{genome.MechMeldBonus, genome.Rummy},
+			{genome.MechAvoidance, genome.TrickTaking},
+		},
 	}
 
 	cands := byHost[host]

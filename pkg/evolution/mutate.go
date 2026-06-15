@@ -379,6 +379,17 @@ func addBorrowedMechanic(g *genome.Genome, rng *rand.Rand, crossSkeleton bool) {
 				{Source: genome.TrickTaking, Mechanic: genome.MechAvoidance},
 			}
 		}
+	case genome.Vying:
+		// Vying (poker) borrows a scoring mechanic only under cross-skeleton: a
+		// poker game scored at showdown by melds (sets/runs in the shown hand) or
+		// by a penalty suit. Banked into the chip stacks on the deal's
+		// EventRoundEnd (VyingScored mucks folded hands -> showdown-only).
+		if crossSkeleton {
+			candidates = []genome.BorrowedMechanic{
+				{Source: genome.Rummy, Mechanic: genome.MechMeldBonus},
+				{Source: genome.TrickTaking, Mechanic: genome.MechAvoidance},
+			}
+		}
 	}
 
 	if len(candidates) == 0 {

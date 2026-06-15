@@ -227,6 +227,32 @@ func (r *Runner) ApplyMove(state *sim.GameState, move sim.Move, g *genome.Genome
 
 	state.Turn++
 	state.Active = nextNonFolded(state, a)
+
+	// Vying-as-scoring-host (VyingScored): when this move closes the betting
+	// round, MUCK the folded hands (empty their card slices -- folded players
+	// reveal nothing, standard poker) and emit ONE EventRoundEnd. The
+	// MeldBonus / Avoidance hook fires on that event and scores state.Hands[i]
+	// for EVERY i; mucking the folded hands is what makes them contribute zero,
+	// so the hook stays host-agnostic (it must not read state.Folded, which is
+	// nil on the non-vying hosts that share these hooks). The non-folded hands
+	// are still populated (the redeal is in the next Upkeep), so only the SHOWN
+	// hands are scored into state.Scores -- the chip stacks CheckEnd ranks.
+	// Fires exactly once per deal (only on the closing move), so the accumulating
+	// hook never double-banks; the next Upkeep then runs resolveShowdown (which
+	// ranks the still-intact non-folded hands) and redeals. Entirely gated on
+	// VyingScored, so an unscored vying game is byte-identical. NOTE the scored
+	// game is deliberately NOT a closed chip economy: a meld bonus creates chips
+	// and an avoidance penalty destroys them, both bounded (teeth-fixed
+	// CardPoints, << StartingChips), and CheckEnd/Progress both tolerate a
+	// player going negative.
+	if g.VyingScored() && roundClosed(state) {
+		for i := 0; i < state.NumPlayers; i++ {
+			if state.Folded[i] {
+				state.Hands[i] = state.Hands[i][:0]
+			}
+		}
+		return []sim.Event{{Type: sim.EventRoundEnd, PlayerID: a, Detail: "showdown"}}
+	}
 	return nil
 }
 

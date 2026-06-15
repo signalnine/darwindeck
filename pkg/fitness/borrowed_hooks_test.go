@@ -326,6 +326,14 @@ func buildBorrowingGenome(host, source genome.SkeletonType, mech genome.Mechanic
 		// AllowSumCapture keeps captures frequent so the pile is non-trivial.
 		// HandSize*Players + TableSize = 5*2 + 4 = 14 <= 52.
 		g.Casino = &genome.CasinoParams{TableSize: 4, AllowSumCapture: true}
+	case genome.Vying:
+		// Vying (poker) hosts the scoring borrows. It emits one EventRoundEnd per
+		// deal's closing move under VyingScored, on which the hook reads the shown
+		// hands (folded hands mucked) and banks meld/avoidance into the chip
+		// stacks (state.Scores). StartingChips covers the worst-case commitment
+		// (6*10*4 = 240 <= 1000). The shared CardPoints (a heart penalty) feeds
+		// the avoidance hook.
+		g.Vying = &genome.VyingParams{StartingChips: 1000, MinBet: 10, MaxRaises: 3, RoundsPerGame: 6}
 	}
 
 	return g

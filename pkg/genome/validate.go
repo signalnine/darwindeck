@@ -381,6 +381,20 @@ var validBorrows = map[SkeletonType]map[MechanicType]bool{
 		MechMeldBonus: true,
 		MechAvoidance: true,
 	},
+	Vying: {
+		// Vying (poker) is a borrow HOST for the two scoring borrows: a poker
+		// game scored at showdown by more than the pot. On each deal's closing
+		// move (under VyingScored) the runner mucks the folded hands and emits one
+		// EventRoundEnd, so the MeldBonus / Avoidance hook reads only the SHOWN
+		// hands and banks into state.Scores (the chip stacks CheckEnd ranks).
+		// Both are non-redundant with poker rank and outcome-significant: meld
+		// rewards sets/runs (a pair melds, a flush does not -- a different
+		// ordering), avoidance penalises a suit (the best hand can net fewer
+		// chips). Both can flip the chip winner and shift the fold/commit
+		// decision -- whitelisted per dd-lnh.
+		MechMeldBonus: true,
+		MechAvoidance: true,
+	},
 }
 
 // ValidBorrows returns the borrow whitelist as a fresh copy: for each host
