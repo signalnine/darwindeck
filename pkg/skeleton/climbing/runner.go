@@ -124,21 +124,38 @@ func (r *Runner) GenerateMoves(state *sim.GameState, g *genome.Genome) []sim.Mov
 		// available (>= 1 card in hand), so moves is never empty.
 		moves = r.allCombinations(hand, params, state.Active)
 		// allCombinations always includes every single, so len(moves) >= 1.
-		return moves
+	} else {
+		// Following: play a SAME-TYPE, strictly-higher combination, or pass. Pass
+		// is always legal, so moves is never empty even with no beating combo.
+		current := classify(state.TrickCards, params)
+		for _, combo := range r.allCombinations(hand, params, state.Active) {
+			cand := classify(combo.Cards, params)
+			if beats(cand, current) {
+				moves = append(moves, combo)
+			}
+		}
+		moves = append(moves, sim.Move{Type: sim.MovePass, PlayerID: state.Active})
 	}
 
-	// Following: play a SAME-TYPE, strictly-higher combination, or pass. Pass is
-	// always legal, so moves is never empty even with no beating combo.
-	current := classify(state.TrickCards, params)
-	for _, combo := range r.allCombinations(hand, params, state.Active) {
-		cand := classify(combo.Cards, params)
-		if beats(cand, current) {
-			moves = append(moves, combo)
-		}
+	// MechKnock (DEEP cross-skeleton borrow: rummy's knock -> climbing). Once
+	// the hand is small you may KNOCK to end the game immediately instead of
+	// racing to empty; the fewest-cards player then wins (CheckEnd). Climbing is
+	// an empty-hand race like shedding, so "fewest cards" is a meaningful lead. It
+	// is ADDITIVE (appended after the plays/pass above, never replacing them), so
+	// the move set is never emptied and a knock can only END the game sooner --
+	// playability and termination hold. A wrong knock hands the win away, the
+	// risk that makes the declare a real decision. Acts in the runner, not a hook.
+	if g.Knockable() && len(hand) >= 1 && len(hand) <= knockThreshold {
+		moves = append(moves, sim.Move{Type: sim.MoveKnock, PlayerID: state.Active})
 	}
-	moves = append(moves, sim.Move{Type: sim.MovePass, PlayerID: state.Active})
+
 	return moves
 }
+
+// knockThreshold is the hand size at or below which a MechKnock host may knock.
+// Small enough that a knock sharpens the endgame (most cards already shed)
+// rather than ending the game on turn one. Mirrors the shedding runner.
+const knockThreshold = 3
 
 // ApplyMove applies a play or pass and advances to the next player. The
 // table-clear transition is deferred to Upkeep (next iteration).
@@ -167,6 +184,19 @@ func (r *Runner) ApplyMove(state *sim.GameState, move sim.Move, g *genome.Genome
 
 	case sim.MovePass:
 		state.PassCount++
+
+	case sim.MoveKnock:
+		// MechKnock: the active player declares. Flag the game over by setting
+		// Phase=PhaseEnd; CheckEnd reads that and awards the win to the
+		// fewest-cards player. Emit an interactive event (it ends everyone's
+		// game). Setup leaves Phase=PhasePlay and nothing else touches it, so
+		// PhaseEnd uniquely means "knocked".
+		state.Phase = sim.PhaseEnd
+		events = append(events, sim.Event{
+			Type:     sim.EventSpecialTriggered,
+			PlayerID: state.Active,
+			Detail:   "knock",
+		})
 	}
 
 	state.Turn++
@@ -208,6 +238,21 @@ func (r *Runner) Progress(state *sim.GameState, g *genome.Genome) []float64 {
 // skeletons use, so a hung climbing genome is not masked from Tier-1 timeout
 // detection.
 func (r *Runner) CheckEnd(state *sim.GameState, g *genome.Genome) int {
+	// MechKnock: a knock set Phase=PhaseEnd. The game ends immediately and the
+	// fewest-cards-in-hand player wins (ties break to the lowest seat). Checked
+	// before the first-to-empty path so a knock decides the winner. A knock when
+	// you are not actually fewest hands the win to someone else -- the risk
+	// behind the declare.
+	if state.Phase == sim.PhaseEnd {
+		winner := 0
+		for i := 1; i < state.NumPlayers; i++ {
+			if len(state.Hands[i]) < len(state.Hands[winner]) {
+				winner = i
+			}
+		}
+		return winner
+	}
+
 	for i, hand := range state.Hands {
 		if len(hand) == 0 {
 			return i

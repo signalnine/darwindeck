@@ -32,7 +32,7 @@ var hookedMechanics = map[genome.MechanicType]bool{
 func TestCrossFamilyBorrowsAreWhitelistedAndHooked(t *testing.T) {
 	rng := rand.New(rand.NewPCG(1, 2))
 	whitelist := genome.ValidBorrows()
-	skeletons := []genome.SkeletonType{genome.Shedding, genome.TrickTaking, genome.Rummy, genome.Casino}
+	skeletons := []genome.SkeletonType{genome.Shedding, genome.TrickTaking, genome.Rummy, genome.Casino, genome.Climbing}
 
 	for _, host := range skeletons {
 		allowed := make(map[genome.MechanicType]bool)
@@ -91,7 +91,7 @@ var ungeneratedBorrows = map[genome.SkeletonType]map[genome.MechanicType]bool{
 func TestCrossFamilyBorrowReachesFullWhitelist(t *testing.T) {
 	rng := rand.New(rand.NewPCG(99, 7))
 	whitelist := genome.ValidBorrows()
-	skeletons := []genome.SkeletonType{genome.Shedding, genome.TrickTaking, genome.Rummy, genome.Casino}
+	skeletons := []genome.SkeletonType{genome.Shedding, genome.TrickTaking, genome.Rummy, genome.Casino, genome.Climbing}
 	// Cross partners include Climbing: crossover can pair any two skeletons, and
 	// some cross-family borrows are sourced from climbing (e.g. MechRunPlay's
 	// multi-card combinations borrowed onto a shedding host). Omitting climbing

@@ -593,17 +593,18 @@ func (g *Genome) FollowConstrained() bool {
 	return false
 }
 
-// Knockable reports whether g is a shedding host carrying a MechKnock borrow --
-// a DEEP cross-skeleton borrow (rummy's knock -> shedding) that changes the WIN
-// condition. When your hand is small you may KNOCK to end the game immediately;
-// the fewest-cards player then wins (CheckEnd), so a wrong knock (you are not
-// actually fewest) hands the win to someone else -- a real risk decision the
-// plain first-to-empty race lacks. The MoveKnock is additive (every other move
-// remains) and can only END the game sooner, so playability and termination are
-// preserved. Acts directly in the runner (GenerateMoves/ApplyMove/CheckEnd),
-// not a hook.
+// Knockable reports whether g is a shedding OR climbing host carrying a
+// MechKnock borrow -- a DEEP cross-skeleton borrow (rummy's knock) that changes
+// the WIN condition. When your hand is small you may KNOCK to end the game
+// immediately; the fewest-cards player then wins (CheckEnd), so a wrong knock
+// (you are not actually fewest) hands the win to someone else -- a real risk
+// decision the plain first-to-empty race lacks. Whitelisted on the two
+// empty-hand-race skeletons (shedding and climbing), where "fewest cards" is a
+// meaningful lead. The MoveKnock is additive (every other move remains) and can
+// only END the game sooner, so playability and termination are preserved. Acts
+// directly in the runner (GenerateMoves/ApplyMove/CheckEnd), not a hook.
 func (g *Genome) Knockable() bool {
-	if g.Skeleton != Shedding {
+	if g.Skeleton != Shedding && g.Skeleton != Climbing {
 		return false
 	}
 	for _, b := range g.Borrowed {

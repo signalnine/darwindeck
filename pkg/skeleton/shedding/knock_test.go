@@ -112,6 +112,20 @@ func TestKnockGreedyScorer(t *testing.T) {
 	if got := sc.ScoreMove(sim.Move{Type: sim.MoveKnock, PlayerID: 0}, state); got >= 0 {
 		t.Fatalf("losing knock must score below drawing, got %v", got)
 	}
+
+	// Tied for fewest: CheckEnd breaks ties to the lowest seat, so the
+	// lowest-seat tied player WINS the knock and a higher-seat tied player
+	// loses it. The scorer must agree with that resolution.
+	tied := sim.NewGameState(3)
+	tied.Hands[0] = make([]sim.Card, 1)
+	tied.Hands[1] = make([]sim.Card, 1)
+	tied.Hands[2] = make([]sim.Card, 3)
+	if got := sc.ScoreMove(sim.Move{Type: sim.MoveKnock, PlayerID: 0}, tied); got <= 25 {
+		t.Fatalf("tied-for-fewest at the lowest seat must be a winning knock, got %v", got)
+	}
+	if got := sc.ScoreMove(sim.Move{Type: sim.MoveKnock, PlayerID: 1}, tied); got >= 0 {
+		t.Fatalf("tied-for-fewest at a later seat must be a losing knock, got %v", got)
+	}
 }
 
 // TestKnockNeverEmptyAndCompletes: a knock can only END the game sooner, so

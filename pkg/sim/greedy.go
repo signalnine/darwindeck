@@ -137,18 +137,23 @@ func (s *SheddingScorer) ScoreMove(move Move, state *GameState) float64 {
 		return -1
 
 	case MoveKnock:
-		// MechKnock: knocking ends the game now and the fewest-cards player
-		// wins. Only knock when we are STRICTLY fewest -- a knock while anyone
-		// is tied or ahead hands them the win. The magnitudes dominate the
-		// normal play scores (capped ~25) so a winning knock is always taken
-		// and a losing one never is -- the skill the random AI lacks.
+		// MechKnock: knocking ends the game now and the fewest-cards player wins,
+		// ties broken to the lowest seat (CheckEnd). Knock iff WE would win that
+		// resolution: nobody holds strictly fewer, and nobody tied with us sits at
+		// an earlier seat. (A plain "strictly fewest" test would refuse a winning
+		// knock when we are tied for fewest but are the lowest such seat.) The
+		// magnitudes dominate the normal play scores (capped ~25) so a winning
+		// knock is always taken and a losing one never is -- the skill random lacks.
 		mine := len(state.Hands[move.PlayerID])
 		for i := 0; i < state.NumPlayers; i++ {
-			if i != move.PlayerID && len(state.Hands[i]) <= mine {
-				return -100.0 // someone tied or ahead -> losing knock
+			if i == move.PlayerID {
+				continue
+			}
+			if len(state.Hands[i]) < mine || (len(state.Hands[i]) == mine && i < move.PlayerID) {
+				return -100.0 // someone wins the fewest-cards tie-break ahead of us
 			}
 		}
-		return 200.0 // strictly fewest -> knock to win
+		return 200.0 // we are the fewest-cards winner -> knock to win
 
 	default:
 		return 0
@@ -421,6 +426,25 @@ func (s *ClimbingScorer) ScoreMove(move Move, state *GameState) float64 {
 		// Conserve: passing beats burning a high card (top rank ~>= 12), but a
 		// cheap low beat (top rank <= 11) is preferred over passing.
 		return 8.0
+
+	case MoveKnock:
+		// MechKnock: knocking ends the game now and the fewest-cards player wins,
+		// ties broken to the lowest seat (CheckEnd). Knock iff WE would win that
+		// resolution: nobody holds strictly fewer, and nobody tied with us sits at
+		// an earlier seat. (A plain "strictly fewest" test would refuse a winning
+		// knock when we are tied for fewest but are the lowest such seat.) The
+		// magnitudes dominate the normal play scores (capped ~30) so a winning
+		// knock is always taken and a losing one never is -- the skill random lacks.
+		mine := len(state.Hands[move.PlayerID])
+		for i := 0; i < state.NumPlayers; i++ {
+			if i == move.PlayerID {
+				continue
+			}
+			if len(state.Hands[i]) < mine || (len(state.Hands[i]) == mine && i < move.PlayerID) {
+				return -100.0 // someone wins the fewest-cards tie-break ahead of us
+			}
+		}
+		return 200.0 // we are the fewest-cards winner -> knock to win
 
 	default:
 		return 0

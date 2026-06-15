@@ -332,15 +332,19 @@ func addBorrowedMechanic(g *genome.Genome, rng *rand.Rand, crossSkeleton bool) {
 			{Source: genome.TrickTaking, Mechanic: genome.MechAvoidance},
 		}
 	case genome.Climbing:
-		// Climbing's only whitelisted borrow is MechDrawPenalty (the one hook
-		// that fires AND affects climbing's hand-based winner -- it grows a hand
-		// on face-card plays, slowing that player's race to empty). The banking
+		// Climbing borrows MechDrawPenalty (the one hook that fires AND affects
+		// climbing's hand-based winner -- it grows a hand on face-card plays,
+		// slowing that player's race to empty) and, under cross-skeleton, the
+		// DEEP MechKnock (declare-to-end, fewest cards wins; runner-implemented in
+		// CheckEnd, outcome-significant by construction so no teeth). The banking
 		// scoring borrows are NOT whitelisted on climbing (CheckEnd never reads
-		// state.Scores), so they are not candidates here either. No coherence
-		// coupling is needed: MechDrawPenalty acts directly and reads no
-		// CardPoints / rounds machinery.
+		// state.Scores), so they are not candidates here.
 		candidates = []genome.BorrowedMechanic{
 			{Source: genome.Shedding, Mechanic: genome.MechDrawPenalty},
+		}
+		if crossSkeleton {
+			candidates = append(candidates,
+				genome.BorrowedMechanic{Source: genome.Rummy, Mechanic: genome.MechKnock})
 		}
 	case genome.Casino:
 		// Casino borrows a scoring mechanic only under cross-skeleton: a

@@ -290,13 +290,12 @@ var validBorrows = map[SkeletonType]map[MechanicType]bool{
 		MechAvoidance:    true, // Certain cards are penalties
 	},
 	Climbing: {
-		// MechDrawPenalty is the ONLY borrow whitelisted on climbing, and it is
-		// whitelisted because its hook (applyDrawPenalty) both FIRES and AFFECTS
-		// THE WINNER on a climbing host (novelty evolution): applyDrawPenalty
-		// fires on EventCardPlayed (which climbing emits on every play) and
-		// appends a card to the player's hand on face-card plays. Climbing's
-		// winner is first-to-empty-hand (hand-based, NOT state.Scores), so a
-		// hook that GROWS a hand directly slows that player's race to empty --
+		// MechDrawPenalty is whitelisted because its hook (applyDrawPenalty) both
+		// FIRES and AFFECTS THE WINNER on a climbing host (novelty evolution):
+		// applyDrawPenalty fires on EventCardPlayed (which climbing emits on every
+		// play) and appends a card to the player's hand on face-card plays.
+		// Climbing's winner is first-to-empty-hand (hand-based, NOT state.Scores),
+		// so a hook that GROWS a hand directly slows that player's race to empty --
 		// outcome-affecting by construction. The banking-scoring borrows
 		// (MechMeldBonus / MechAvoidance / MechTrickScoring) are deliberately
 		// NOT whitelisted here: they bank into state.Scores, which a climbing
@@ -305,6 +304,16 @@ var validBorrows = map[SkeletonType]map[MechanicType]bool{
 		// climbing-with-meld-bonuses hybrid would need a banked-score climbing
 		// variant first (NOTE for a later wave).
 		MechDrawPenalty: true,
+		// MechKnock: a DEEP cross-skeleton borrow (rummy's knock -> climbing).
+		// Climbing is an empty-hand race like shedding, so "fewest cards wins"
+		// is a meaningful lead. GenerateMoves adds a MoveKnock once the hand is
+		// small, ApplyMove flags the game over, and CheckEnd awards the win to
+		// the fewest-cards player instead of the first-to-empty. Outcome-
+		// significant by construction (a knock decides the winner) and
+		// termination-safe (a knock only ends the game sooner). Runner-
+		// implemented (changes the win condition, not state.Scores), so the
+		// Scores-blindness that bars the banking borrows does not apply.
+		MechKnock: true,
 	},
 	Casino: {
 		// Casino is a borrow HOST for the two scoring borrows: a fishing/capture

@@ -158,13 +158,18 @@ func crossFamilyBorrow(host, other genome.SkeletonType, rng *rand.Rand) (genome.
 		genome.Climbing: {
 			// climbing with shedding-style draw-penalty bursts (novelty
 			// evolution): a climbing core whose high-card plays inflict an extra
-			// card. The ONLY whitelisted climbing borrow -- it both fires
-			// (applyDrawPenalty on EventCardPlayed, which climbing emits) and
-			// affects the winner (climbing's winner is first-to-empty-hand, and
-			// the hook GROWS a hand, slowing the race to empty). The banking
-			// scoring borrows are not whitelisted on climbing (CheckEnd never
-			// reads state.Scores), so they cannot appear here.
+			// card. It both fires (applyDrawPenalty on EventCardPlayed, which
+			// climbing emits) and affects the winner (climbing's winner is
+			// first-to-empty-hand, and the hook GROWS a hand, slowing the race to
+			// empty). The banking scoring borrows are not whitelisted on climbing
+			// (CheckEnd never reads state.Scores), so they cannot appear here.
 			{genome.MechDrawPenalty, genome.Shedding},
+			// DEEP win-condition borrow: rummy's knock (declare to end early,
+			// fewest cards wins). Changes CheckEnd in the climbing runner
+			// (Knockable), not state.Scores. Outcome-significant by construction,
+			// so it needs no teeth -- climbing is an empty-hand race where
+			// "fewest cards" is a real lead, same as shedding.
+			{genome.MechKnock, genome.Rummy},
 		},
 		genome.Casino: {
 			// casino scored Scopa-style: the captured pile scored by melds. Both
