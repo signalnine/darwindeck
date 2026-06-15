@@ -69,7 +69,8 @@ func NewSheddingScorer(g *genome.Genome) *SheddingScorer {
 func (s *SheddingScorer) ScoreMove(move Move, state *GameState) float64 {
 	switch move.Type {
 	case MovePlay:
-		if len(move.Cards) == 0 {
+		n := len(move.Cards)
+		if n == 0 {
 			return 0
 		}
 		card := move.Cards[0]
@@ -92,10 +93,28 @@ func (s *SheddingScorer) ScoreMove(move Move, state *GameState) float64 {
 		// Play isolated cards first (saves flexible ones for later)
 		score -= float64(connections) * 2.0
 
-		// If opponent is close to winning (few cards), prefer specials
-		// that disrupt them (draw-two, skip).
-		// Check if this is a special card that hurts opponent.
-		if s.isOffensiveSpecial(card) {
+		// MechRunPlay (combo): dumping MORE cards in one turn is real progress
+		// toward an empty hand -- and toward the fewest-cards lead a MechKnock
+		// rewards. Random play takes the big unload only by chance, so valuing
+		// combo size is the skill signal the run_play games lacked (greedy
+		// played no better than random -> skill 0). The per-extra-card bonus
+		// dominates the connection tiebreak so greedy always prefers the larger
+		// combo. n == 1 is byte-identical to the previous scorer, so single-card
+		// classics (the calibration seeds) are unaffected.
+		score += float64(n-1) * 12.0
+
+		// If an opponent is close to winning (few cards), prefer specials that
+		// disrupt them (draw-two, skip). Check every card in the play, not just
+		// the first (a combo can carry a special); for a single play this is the
+		// same one-card check as before.
+		offensive := false
+		for _, c := range move.Cards {
+			if s.isOffensiveSpecial(c) {
+				offensive = true
+				break
+			}
+		}
+		if offensive {
 			for i := 0; i < state.NumPlayers; i++ {
 				if i == move.PlayerID {
 					continue

@@ -43,6 +43,35 @@ func TestSheddingScorerPrefersIsolatedCard(t *testing.T) {
 	}
 }
 
+// TestSheddingScorerPrefersLargerCombo: under MechRunPlay a multi-card combo
+// sheds more cards in one turn, which is strictly more progress toward an empty
+// hand (and toward the fewest-cards lead a knock rewards). The scorer must rank
+// a 3-card combo above even the best single play -- otherwise greedy plays no
+// better than random in combo games and the skill gradient reads 0. The combo's
+// cards are necessarily connected (same rank), so the per-card bonus must
+// dominate the connection tiebreak.
+func TestSheddingScorerPrefersLargerCombo(t *testing.T) {
+	scorer := &SheddingScorer{}
+	state := &GameState{
+		Hands: [][]Card{{
+			{Suit: Hearts, Rank: Five},
+			{Suit: Diamonds, Rank: Five},
+			{Suit: Clubs, Rank: Five},
+			{Suit: Spades, Rank: Nine}, // isolated single -- the best single play
+		}},
+		NumPlayers: 1,
+		Active:     0,
+	}
+	combo := Move{Type: MovePlay, PlayerID: 0, Cards: []Card{
+		{Suit: Hearts, Rank: Five}, {Suit: Diamonds, Rank: Five}, {Suit: Clubs, Rank: Five},
+	}}
+	bestSingle := Move{Type: MovePlay, PlayerID: 0, Cards: []Card{{Suit: Spades, Rank: Nine}}}
+
+	if cs, ss := scorer.ScoreMove(combo, state), scorer.ScoreMove(bestSingle, state); cs <= ss {
+		t.Fatalf("greedy must prefer the larger combo: 3-card combo=%.2f vs best single=%.2f", cs, ss)
+	}
+}
+
 func TestSheddingScorerPrefersPlay(t *testing.T) {
 	scorer := &SheddingScorer{}
 	state := &GameState{
