@@ -8,16 +8,20 @@ import (
 	"github.com/darwindeck/darwindeck/pkg/mechanic"
 )
 
-// hookedMechanics is the set of mechanics with a WORKING hook in
-// mechanic.BuildHooks. crossFamilyBorrow and the cross-skeleton mutation path
-// may only emit these -- a borrow with no hook is inert and lies in the
-// rulebook. (MechKnock / MechFollowSuit have no Apply; MechTrump /
-// MechPlayMultiple are reserved.)
+// hookedMechanics is the set of borrows that actually affect the outcome:
+// either a WORKING hook in mechanic.BuildHooks (the banking borrows) OR a
+// runner-side implementation that changes the move set (the DEEP borrows
+// MechRunPlay/MechFollowSuit, consulted inside the shedding runner). The
+// cross-family paths may only emit these -- a borrow with neither is inert and
+// lies in the rulebook. (MechKnock has no impl; MechTrump / MechPlayMultiple
+// are reserved.)
 var hookedMechanics = map[genome.MechanicType]bool{
 	genome.MechTrickScoring: true,
 	genome.MechMeldBonus:    true,
 	genome.MechDrawPenalty:  true,
 	genome.MechAvoidance:    true,
+	genome.MechRunPlay:      true,
+	genome.MechFollowSuit:   true,
 }
 
 // TestCrossFamilyBorrowsAreWhitelistedAndHooked: every (host, other) pair the

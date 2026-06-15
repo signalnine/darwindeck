@@ -442,7 +442,10 @@ func borrowedDescription(bm genome.BorrowedMechanic) string {
 	case genome.MechPlayMultiple:
 		return "Play multiple matching cards at once"
 	case genome.MechFollowSuit:
-		return "Must play a card of the led suit if possible"
+		// shedding/runner.go FollowConstrained: if you hold the discard top's
+		// suit you must play it (or a wild); only when void do other plays and
+		// drawing reopen.
+		return "**Follow the discard suit:** if you hold any card of the current discard's suit, you must play one of them (or a wild) -- you may only play off-suit or draw when you have no card of that suit"
 	default:
 		return "Additional mechanic"
 	}

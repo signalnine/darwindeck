@@ -204,6 +204,45 @@ func (r *Runner) GenerateMoves(state *sim.GameState, g *genome.Genome) []sim.Mov
 		}
 	}
 
+	// MechFollowSuit (DEEP cross-skeleton borrow: trick-taking's follow-suit
+	// obligation -> shedding). If the active player holds a card of the discard
+	// top's suit, they MUST play one (or a wild): keep only plays that include a
+	// top-suit card or a wild, and drop the draw option (you can follow). When
+	// void in the suit the filter removes nothing and the normal moves + draw
+	// stand. This RESTRICTS the legal-move set (the mirror of ComboPlay's
+	// expansion); playability holds because a forced play still sheds a card and
+	// a void hand keeps the full move set, so the len(moves)==0 fallback below
+	// still guarantees a move.
+	if g.FollowConstrained() && state.TopCard != nil {
+		suit := state.TopCard.Suit
+		holdsSuit := false
+		for _, c := range hand {
+			if c.Suit == suit {
+				holdsSuit = true
+				break
+			}
+		}
+		if holdsSuit {
+			kept := moves[:0]
+			for _, m := range moves {
+				if m.Type != sim.MovePlay {
+					continue
+				}
+				follows := false
+				for _, c := range m.Cards {
+					if c.Suit == suit || isWild(c, g.SpecialCards) {
+						follows = true
+						break
+					}
+				}
+				if follows {
+					kept = append(kept, m)
+				}
+			}
+			moves = kept
+		}
+	}
+
 	// If no playable cards, must draw. The deck is replenished from the
 	// discard pile by Upkeep (start of each loop iteration), never here:
 	// GenerateMoves is a pure query (audit Task 3). If both the deck and

@@ -292,7 +292,11 @@ func addBorrowedMechanic(g *genome.Genome, rng *rand.Rand, crossSkeleton bool) {
 				// DEEP move-level borrow: climbing's multi-card combinations
 				// (ComboPlay). Runner-implemented (not a hook); giveBorrowTeeth
 				// bumps hand size + relaxes match so combos actually form.
-				genome.BorrowedMechanic{Source: genome.Climbing, Mechanic: genome.MechRunPlay})
+				genome.BorrowedMechanic{Source: genome.Climbing, Mechanic: genome.MechRunPlay},
+				// DEEP move-level borrow: trick-taking's follow-suit obligation
+				// (FollowConstrained). Runner-implemented; giveBorrowTeeth makes
+				// suit cards playable so the constraint binds.
+				genome.BorrowedMechanic{Source: genome.TrickTaking, Mechanic: genome.MechFollowSuit})
 		}
 	case genome.TrickTaking:
 		// MechPlayMultiple dropped: tricktaking move-gen only ever

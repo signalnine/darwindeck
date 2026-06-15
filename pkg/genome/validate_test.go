@@ -79,7 +79,7 @@ func TestInvalidBorrow(t *testing.T) {
 		HandSize: 7,
 		Shedding: &SheddingParams{MatchRule: MatchEither, DrawPenalty: 1},
 		Borrowed: []BorrowedMechanic{
-			{Source: TrickTaking, Mechanic: MechFollowSuit}, // Not allowed for shedding
+			{Source: TrickTaking, Mechanic: MechTrump}, // reserved, never whitelisted on any host
 		},
 	}
 	errs := Validate(g)

@@ -360,7 +360,7 @@ const (
 	MechTrump                             // reserved: no implementation, not whitelisted
 	MechAvoidance                         // Points-are-bad scoring
 	MechPlayMultiple                      // reserved: no implementation, not whitelisted
-	MechFollowSuit                        // Must follow suit restriction
+	MechFollowSuit                        // DEEP borrow: must follow the discard suit (shedding runner)
 	MechRunPlay                           // DEEP borrow: multi-card combo discards (shedding runner)
 )
 
@@ -549,6 +549,29 @@ func (g *Genome) ComboPlay() bool {
 	}
 	for _, b := range g.Borrowed {
 		if b.Mechanic == MechRunPlay {
+			return true
+		}
+	}
+	return false
+}
+
+// FollowConstrained reports whether g is a shedding host carrying a
+// MechFollowSuit borrow -- a DEEP cross-skeleton borrow (trick-taking's
+// follow-suit obligation -> shedding). Under it, if you hold a card of the
+// discard top's suit you MUST play one (or a wild); only when void in that suit
+// do the normal match plays and the draw reopen. This changes the legal-move set
+// inside the shedding runner (a constraint, the mirror of MechRunPlay's
+// expansion): hand management becomes about voiding suits, and opponents can
+// pin you to a suit. Playability holds -- a forced play still sheds a card, and
+// a void hand falls through to the normal moves + draw, so GenerateMoves is
+// never empty. Acts directly in GenerateMoves (like MechRunPlay), so it is
+// always live and lives in the runner, never a hook.
+func (g *Genome) FollowConstrained() bool {
+	if g.Skeleton != Shedding {
+		return false
+	}
+	for _, b := range g.Borrowed {
+		if b.Mechanic == MechFollowSuit {
 			return true
 		}
 	}

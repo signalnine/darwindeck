@@ -251,6 +251,13 @@ var validBorrows = map[SkeletonType]map[MechanicType]bool{
 		// hook: the hook system (AfterPlay/EndOfRound/Scoring, fired post-move)
 		// cannot change the move set.
 		MechRunPlay: true,
+		// MechFollowSuit: a DEEP cross-skeleton borrow (trick-taking's
+		// follow-suit obligation -> shedding). Like MechRunPlay it changes the
+		// legal-move set in the shedding runner (FollowConstrained: must play the
+		// discard suit if held), not state.Scores. It RESTRICTS moves where
+		// RunPlay expands them; it fires and affects who empties first (the
+		// winner) -- whitelisted per dd-lnh. Runner-implemented, not a hook.
+		MechFollowSuit: true,
 	},
 	TrickTaking: {
 		MechMeldBonus: true, // Bonus for collecting melds from tricks (HookEndOfRound)

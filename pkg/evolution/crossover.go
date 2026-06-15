@@ -116,6 +116,11 @@ func crossFamilyBorrow(host, other genome.SkeletonType, rng *rand.Rand) (genome.
 			// (ComboPlay), a genuine cross-family fusion. Given teeth by
 			// giveBorrowTeeth (hand size + permissive match so combos form).
 			{genome.MechRunPlay, genome.Climbing},
+			// DEEP move-level borrow: trick-taking's follow-suit obligation
+			// (must play the discard suit if held). RESTRICTS the move set in the
+			// shedding runner (FollowConstrained); teeth ensure suit cards are
+			// playable so following is coherent.
+			{genome.MechFollowSuit, genome.TrickTaking},
 		},
 		genome.TrickTaking: {
 			// trick-taker with cross-family penalty-card scoring
@@ -366,6 +371,21 @@ func giveBorrowTeeth(g *genome.Genome, bm genome.BorrowedMechanic) {
 			}
 			if g.Shedding.MatchRule == genome.MatchBoth {
 				g.Shedding.MatchRule = genome.MatchEither
+			}
+		}
+
+	case genome.MechFollowSuit:
+		// Following (FollowConstrained) requires the held suit card to be
+		// playable: a MatchRank/MatchBoth rule would make a same-suit card
+		// unplayable and collapse the constraint into all-draw, so relax to
+		// MatchEither. Bump a small hand so a player usually holds the discard
+		// suit (otherwise the constraint rarely binds and the borrow is inert).
+		if g.Skeleton == genome.Shedding && g.Shedding != nil {
+			if g.Shedding.MatchRule == genome.MatchRank || g.Shedding.MatchRule == genome.MatchBoth {
+				g.Shedding.MatchRule = genome.MatchEither
+			}
+			if g.HandSize < 6 {
+				g.HandSize = 6
 			}
 		}
 	}

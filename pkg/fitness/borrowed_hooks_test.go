@@ -61,7 +61,8 @@ func borrowCases() []borrowCase {
 // pkg/mechanic hook. They are excluded from the hook-based assertions; their
 // effect is validated in the owning skeleton package.
 var runnerImplementedBorrow = map[genome.MechanicType]bool{
-	genome.MechRunPlay: true,
+	genome.MechRunPlay:    true,
+	genome.MechFollowSuit: true,
 }
 
 // borrowSource picks the source skeleton recorded on the BorrowedMechanic.
