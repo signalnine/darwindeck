@@ -1,0 +1,185 @@
+{
+  "description": "Blind LLM-judge novelty assessment of the 2026-06-15 evolve batch (seed 42, pop 400 gen 100). 3 judges/game, rulebook-only dossiers. Game G is a clean Big Two + knock-only genome judged separately to isolate climbing-knock novelty.",
+  "mapping": {
+    "A": "casino+meld+avoidance",
+    "B": "climbing+knock+draw_penalty",
+    "C": "shedding+knock+run_play",
+    "D": "trick+avoidance+meld",
+    "E": "plain-trick-CONTROL",
+    "F": "big-two-seed-CONTROL"
+  },
+  "batch": [
+    {
+      "game": "A",
+      "judges": [
+        {
+          "verdict": "novel",
+          "closest_game": "Casino (Cassino), the classic fishing/capture game; with a Rummy-style meld-scoring overlay",
+          "confidence": "medium",
+          "key_mechanics": "Core loop is pure Casino: play one card to capture table cards by rank-match OR by summing number cards to the played card's value (Ace=1, face cards capture by rank only), or trail; refill hands from stock; last capturer sweeps the table at the end. Grafted onto this are two end-of-round scoring layers absent from any Casino variant: (1) a Rummy-style meld bonus scoring sets (5/card for 3+, 2/card for pairs) and suited runs (3/card for 3+, 1/card for 2-runs) across hand plus captured pile, and (2) a Hearts/Scopa-style penalty system where every card is worth 1 negative point.",
+          "reasoning": "The capture engine is textbook Casino - sum-capture and rank-capture on a shared table are diagnostic of the Cassino/Scopa family, and the deal/refill/final-sweep flow is standard. A penalty-card overlay alone would only make this a Casino variant. The decisive element is the Rummy-style meld bonus: scoring sets and suited runs out of hand+captured cards. No published fishing/capture game (Cassino, Scopa, Scopone, Escoba, Cicera) scores Rummy melds, and no Rummy descendant uses a shared-table sum-capture loop. That specific cross-family fusion - a Casino sum-capture base with a Rummy meld-scoring tally plus a universal penalty-point layer - is a mechanical combination I cannot match to any published game, which tips it from variant to novel. Confidence is medium rather than high because the base is so faithfully Casino that a stricter reading could call it a heavily augmented Casino variant."
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Casino (the classic 52-card fishing/capture game)",
+          "confidence": "high",
+          "key_mechanics": "Capture by rank-match or numeric sum (Ace=1, face cards capture only by rank and carry no pip value), trail when not capturing, redeal from stock, and last-capturer sweeps the leftover table at the end -- this is the textbook Casino fingerprint, win by most captured cards.",
+          "reasoning": "The base game, win condition, and every in-turn decision (play one card; capture by rank/sum or trail) are pure Casino, including the diagnostic last-capturer-sweep and sum-capture rules. Two borrows are bolted on: a rummy-style meld bonus scored from hand+captured pile at round end, and a Hearts-style penalty/avoidance layer -- but both are post-hoc end-of-round tallies, not new in-turn choices, and the flat \"any card = 1 point\" table makes the penalty (cards captured) and capture reward nearly cancel, so the avoidance layer is near-degenerate. A capture game that also awards rummy melds is an unusual pairing, but the meld borrow is weakly integrated (no mechanic steers you to build melds while capturing), so it keeps Casino's core identity rather than forming a genuinely new mechanic combination. This is a Casino variant, not a novel game."
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Casino (Cassino)",
+          "confidence": "medium",
+          "key_mechanics": "Capture-by-rank-match or capture-by-pip-sum from a shared table, trailing when no capture, dealing fresh hands from stock, and the last-capturer sweeps the remaining table cards at the end; face cards (J/Q/K) valueless and capture only by rank match; Ace=1 for summing. These are the defining mechanics of Casino/Scopa.",
+          "reasoning": "The engine is unmistakably Casino: capture-by-sum, trail-or-capture turns, refill from stock, and the signature last-capture final sweep. Two borrowed overlays are bolted on -- a Hearts-style penalty-card avoidance (scoring cards count against you) and a rummy-style meld bonus (sets/runs scored across hand and captured pile at round end). The meld bonus over the captured pile is genuinely unusual for a fishing game and edges toward novelty, but it is scored only at round end and does not change the capture/trail loop, so the core identity remains Casino. Pure Casino scores via Big/Little Casino, aces, and most-cards/spades, not rummy melds, so this is a recognizable Casino variant with avoidance and meld scoring grafted on rather than a new mechanical combination."
+        }
+      ]
+    },
+    {
+      "game": "B",
+      "judges": [
+        {
+          "verdict": "novel",
+          "closest_game": "Big Two (climbing/ladder family; also Tichu/President)",
+          "confidence": "medium",
+          "key_mechanics": "Climbing core (beat the current Single/Pair/Triple at strictly higher rank or pass; all-pass clears the table and the last player leads; first to empty hand wins) + a rummy-style \"knock\" alternate win condition (unilaterally end the game with whoever holds the fewest cards winning) + a Crazy-Eights-style draw penalty (playing a Jack-or-higher forces an extra draw).",
+          "reasoning": "The base loop is unmistakably Big Two / President: same-type, strictly-higher-rank beats or pass, all-pass clears, first to empty hand wins, with Single/Pair/Triple combos (a trimmed Big Two with no straights/flushes/5-card hands). If it were only that, I'd say \"variant of Big Two.\" What pushes it to novel is the cross-family fusion of two foreign mechanics onto that core: a rummy/Gin-style knock that ends the game instantly and awards the win to the player with the fewest cards (an ALTERNATE win condition competing with the climbing empty-hand goal, not just a scoring tally), plus a shedding/Crazy-Eights face-card draw penalty that actively fights the shed-your-hand objective. I cannot name any published climbing game that lets you knock to end on fewest-cards or that imposes a draw penalty for high cards. Confidence is medium, not high: both grafts are recognizable bolt-ons rather than deeply integrated systems, the draw penalty is listed twice (likely a generation artifact), and in a 2-player game \"fewest cards wins\" via knock largely collapses toward the climbing leader's position - so the combination is genuinely new but its design coherence is borderline."
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Big Two (Tien Len / President climbing family), with a Gin Rummy-style knock and a Crazy Eights-style penalty draw bolted on",
+          "confidence": "medium",
+          "key_mechanics": "Beat-or-pass on a current combination, strictly higher rank of the same type (single/pair/triple), pass-out clears the table, lead-anything-when-clear, empty-your-hand win \u2014 this is the Big Two/President climbing core verbatim. Two foreign grafts: a Gin/Knock-Rummy \"knock to end, fewest cards wins\" shortcut win condition, and a Crazy Eights/Mau-Mau-style penalty draw (play a Jack-or-higher, draw a card) that perversely grows your hand against the empty-hand goal.",
+          "reasoning": "The skeleton is unambiguously Big Two: beat-or-pass, same-type strictly-higher combinations, pass-out table clear, empty hand to win. That core dominates the game's identity, so it is recognizably a known game with tweaks rather than a ground-up new design. The two borrows (knock-fewest-cards and penalty-draw) are not found together in any published climbing game, and the knock genuinely alters the win condition, which is why I considered \"novel.\" But the borrows are bolt-on and incentive-incoherent \u2014 a hand-growing penalty draw and a \"fewest cards wins\" knock both fight the empty-your-hand objective (and the draw-penalty line is duplicated, an artifact). That clash, plus the overwhelmingly Big Two felt identity, keeps this a variant, not a coherent novel game. I name it a Big Two variant."
+        }
+      ]
+    },
+    {
+      "game": "C",
+      "judges": [
+        {
+          "verdict": "variant",
+          "closest_game": "Crazy Eights (Mau-Mau family)",
+          "confidence": "high",
+          "key_mechanics": "Match-suit-or-rank on a discard pile, draw-when-stuck, first-to-empty-hand wins, with 8s as universal wild cards -- the textbook Crazy Eights / Mau-Mau core. The special cards (Jacks skip, Spades/8s force draw-4, J-of-Hearts and 2-of-Diamonds as extra wilds) are standard Mau-Mau-style command-card decorations. Bolted-on additions: a Knock option that ends the round with fewest-cards-wins (a Knock-Rummy graft) and multi-card set/run \"combination plays\" (a Big Two-style dump), but the win condition and turn loop remain pure shedding.",
+          "reasoning": "The skeleton is unambiguously Crazy Eights/Mau-Mau: suit-or-rank matching, draw-on-no-play, shed-your-hand-to-win, and 8s-are-wild are the literal defining features of that game. The two grafted mechanics (knock-to-end and set/run combos) are recognizable borrows from Rummy and climbing games, but they sit on top of the Crazy Eights core without replacing its identity -- the combos just accelerate shedding and the knock is an alternate ending. This combination is a tweaked shedding game, not a genuinely new mechanic fusion; no published game pairs these exactly, but it reads clearly as \"a Crazy Eights variant\" rather than novel. I withhold \"novel\" because the knock and combo additions are minor incremental layers, not a reconfigured core loop."
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Crazy Eights (equivalently Mau-Mau)",
+          "confidence": "medium",
+          "key_mechanics": "Crazy Eights suit-or-rank shedding base; wild eights and other wild cards; penalty draw-4 and skip cards; Big-Two-style combination plays (same-rank sets and in-suit runs dumped in one turn); Knock-Rummy-style knock-to-end with fewest-cards-wins.",
+          "reasoning": "The core loop is unmistakably Crazy Eights / Mau-Mau: match the top discard by suit or rank, eights (and assorted cards) are wild, fail-to-play draws from the deck, and emptying your hand wins. Two grafts go beyond cosmetics: Big-Two/Tien-Len-style combination plays (dumping same-rank sets or in-suit runs in one turn) borrowed from the climbing family, and a Knock-Rummy/Gin-style \"knock to end now, fewest cards wins\" early-out borrowed from the rummy family. I know no single published game that fuses Crazy Eights matching with both multi-card run dumping and a knock-for-fewest-cards win, so it is more than a pure variant in mechanics, but the game's identity is still overwhelmingly Crazy Eights, so it lands as a variant rather than novel. The redundant/contradictory special-card list (8 listed as both wild and a draw-4 penalty; four separate cards all \"playable on any card\") reads as evolved noise rather than deliberate design and does not alter the Crazy Eights lineage."
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Crazy Eights (Mau-Mau)",
+          "confidence": "high",
+          "key_mechanics": "Match-suit-or-rank discard play, wild eights, draw-when-stuck, and empty-your-hand-to-win are the literal defining rules of Crazy Eights/Mau-Mau. The action cards (Spades/eights = draw-4, Jacks = skip) are the standard Mau-Mau penalty-and-skip set. Two grafted-on extras: a Rummy-style \"knock\" to end early with fewest-cards-wins, and climbing/Big-Two-style multi-card combination dumps (same-rank sets or in-suit runs).",
+          "reasoning": "The base loop is unmistakably Crazy Eights/Mau-Mau: suit-or-rank matching on a discard pile, eights as wild, draw-on-no-play, and shed-to-win, with conventional Mau-Mau action cards (draw-penalty Spades/eights, skip Jacks). The contradictory special-card duplicates (8 = wild and 8 = draw-4; multiple \"play on any card\" wilds) are incoherent evolved-genome artifacts but cosmetically remain Crazy Eights action cards. Two cross-family borrows are layered on: a Rummy knock (fewest-cards-wins early end) and climbing-style combo plays (multi-card sets/runs in one turn). Each borrowed piece is individually well-known (multi-card stacking exists in published Switch/Crazy Eights variants; knock is pure Rummy) and neither displaces the Crazy Eights core, so this keeps a Crazy Eights identity with minor tweaks rather than forming a genuinely new mechanic combination."
+        }
+      ]
+    },
+    {
+      "game": "D",
+      "judges": [
+        {
+          "verdict": "variant",
+          "closest_game": "Hearts (with a trump suit, i.e. a Hearts/Black-Maria-style avoidance trick-taker)",
+          "confidence": "medium",
+          "key_mechanics": "Follow-suit trick-taking with a cut trump; highest card of led suit wins unless trumped; lowest score wins with hearts as the only penalty cards (2 pts each); end-of-round penalty for scoring cards still held/captured; plus a rummy-style meld bonus (sets/runs from hand + captured cards).",
+          "reasoning": "The dominant identity is unmistakable Hearts: avoidance trick-taking where hearts are the penalty cards and lowest score wins. The only departure from classic Hearts is a cut trump suit (which pushes it toward Black Maria / generic point-avoidance trump games) and two grafted layers: an end-of-round penalty for unshed point cards, and a rummy-style meld bonus scoring sets/runs across hand and captured cards. The meld-bonus layer is the one element I cannot place in any published trick-taking game -- it creates an unusual opposing pull (avoid capturing hearts, but capture cards that form sets/runs), unlike Pinochle where melds come from the dealt hand and capture is point-positive. That combination is uncommon, but it is an additive scoring sweetener bolted onto a structurally pure Hearts engine; the trick mechanics, win condition, and penalty cards are all textbook Hearts. So it reads as a Hearts variant with a rummy meld kicker, not a new mechanical combination that earns \"novel.\" I hold medium confidence because the meld-on-captured-tricks twist is genuinely unusual and a more permissive judge could defensibly call it novel."
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Hearts (avoidance trick-taking), with a trump suit borrowed from Whist/Spades and a meld bonus grafted from Rummy/Pinochle",
+          "confidence": "medium",
+          "key_mechanics": "Must-follow-suit trick-taking; lowest-score-wins avoidance scoring with hearts as the penalty suit (the defining Hearts signature); a trump suit determined by a cut (atypical for Hearts, standard in Whist/Spades); a round-end penalty for scoring cards left in hand or captured; and a rummy-style meld bonus scoring sets and runs from your hand plus captured cards.",
+          "reasoning": "The spine is an unmistakable Hearts-family avoidance trick-taker: follow-suit, highest-of-led-suit-wins-unless-trumped, lowest score wins, hearts are the point cards to dodge. Two grafts sit on top: a trump suit (from plain-trump games like Whist/Spades; Hearts itself is trumpless) and a Rummy/Pinochle-style meld bonus scored at round end from hand plus captured tricks. The meld-from-captured-pile idea is genuinely odd and self-contradictory against avoidance scoring (you want to dodge point cards yet collect melds), and no published game combines these exactly, which pushes it past pure cosmetic tweaks. But it does not rise to novel: the core identity remains a recognizable trump-Hearts variant with a bolted-on rummy bonus rather than a new mechanical engine, so it reads as a variant of Hearts."
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Hearts (specifically a trump-augmented avoidance trick-taker resembling Hearts crossed with a Whist trump structure)",
+          "confidence": "medium",
+          "key_mechanics": "Core loop is a standard follow-suit, highest-of-led-suit-or-trump-wins trick-taking game (the Whist/Spades engine) with an avoidance scoring identity: lowest score wins and hearts each carry penalty points, which is the defining signature of Hearts. The only genuine departures from a known game are (1) a cut-card trump suit grafted onto an avoidance game (Hearts is trumpless, Whist/Spades reward tricks rather than penalize), and (2) an end-of-round rummy-style meld bonus (sets/pairs/runs scored across hand + captured cards), which is alien to any trick-taking family.",
+          "reasoning": "The dominant, identity-defining mechanics are pure Hearts: trick-taking with follow-suit, \"lowest score wins,\" and hearts-as-penalty-cards. That is unmistakably the Hearts avoidance family, so it cannot be called fully novel. However, two bolt-ons push it past a clean \"Hearts variant\": a determined trump suit (avoidance trick-takers are normally trumpless, since a trump makes it easy to dump penalty cards on opponents and dodge taking them) and a rummy meld bonus scored over captured cards. The meld-over-captured-cards idea is a real cross-family graft not found in published Hearts/Whist play, but it is a secondary appended scoring layer rather than a reworked core loop, and the trump-plus-avoidance tension is incoherent enough (trump trivializes avoidance) that this reads as an evolved tweak-stack on Hearts rather than a coherent new game. Verdict: variant, closest to Hearts. Note the point table only assigns value to hearts (2 each), with no Queen of Spades or shooting-the-moon, reinforcing that the base is a simplified Hearts."
+        }
+      ]
+    },
+    {
+      "game": "E",
+      "judges": [
+        {
+          "verdict": "variant",
+          "closest_game": "Whist (two-handed, fixed-trump) \u2014 adjacent to Spades minus the bidding",
+          "confidence": "high",
+          "key_mechanics": "Plain-trick game: must-follow-suit, highest card of led suit wins unless trumped, trick winner leads, one point per trick, most tricks wins. Trump is fixed (spades always trump) rather than turned up. Two-handed, 13-card hands.",
+          "reasoning": "This is a minimal, textbook plain-trick game with no distinguishing mechanic beyond a fixed trump suit. Follow-suit + highest-of-suit-wins + trump-overrides + win-most-tricks is the exact core of Whist; fixing spades as permanent trump (instead of turning up the last card) is a cosmetic rule choice and is also the trump rule of Spades. It lacks the one feature that would make it Spades (bid/contract scoring) and has none of Hearts' penalty cards, no melds, no special-card powers, and no borrowed cross-family mechanic. The two-player, 13-card form is standard two-handed Whist territory. Nothing here is a combination of mechanics not already found together in published trick-taking games, so it is a recognizable Whist variant, not novel."
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Whist (specifically two-handed Whist; near-identical to bidding-less Spades)",
+          "confidence": "high",
+          "key_mechanics": "Plain-trick play: must-follow-suit, highest card of led suit wins unless trumped, trick winner leads next; fixed trump (spades); scoring is exactly 1 point per trick won, most tricks wins.",
+          "reasoning": "This is the canonical plain-trick template with a fixed trump and tricks-won scoring, which IS the core of Whist. The only deviations from full Whist are that it is two-handed and the trump suit is fixed (spades) rather than turned up -- minor tweaks that do not change its identity. It is identical in resolution to Spades with the bidding stripped out, or Oh Hell without bids. There is no novel mechanic combination: no captured-card/penalty scoring (Hearts), no bidding/contract, no special cards, no melding, no stock-draw (which would make it German Whist), no trump-determination twist. Every element here appears together in standard Whist, so it is a recognizable variant, not a new combination."
+        },
+        {
+          "verdict": "known",
+          "closest_game": "Whist (specifically the two-handed / fixed-trump form, close to German Whist or basic Spades without bidding)",
+          "confidence": "high",
+          "key_mechanics": "Must-follow-suit trick-taking, a fixed trump suit (spades), highest-card-of-led-suit-wins (unless trumped), winner-leads-next, and scoring of exactly 1 point per trick with highest total winning.",
+          "reasoning": "This is the plain-vanilla trick-taking core with zero distinguishing additions: no bidding/contract, no penalty-card scoring (so it is not Hearts), no melds, no special cards, no nil, no comeback or trump-establishment mechanic. Spades-always-trump plus one-point-per-trick plus must-follow-suit is exactly basic Whist/Spades-without-bidding rendered for 2 players (it most resembles two-handed Whist; calling spades trump is the only flavor choice and matches Spades). Every rule stated here appears verbatim in countless published trick-takers, and nothing is combined in an unfamiliar way, so this is a rediscovery of an existing game rather than a variant or a novel design. The fixed trump is a cosmetic identity choice, not a new mechanic, which keeps it in \"known\" rather than \"variant.\""
+        }
+      ]
+    },
+    {
+      "game": "F",
+      "judges": [
+        {
+          "verdict": "variant",
+          "closest_game": "Big Two (specifically the Tien Len / President climbing family)",
+          "confidence": "high",
+          "key_mechanics": "Beat-or-pass climbing on a current combination; the four combination types (single, pair, triple, run of 3+); table clears when all others pass and the last player to play leads fresh; first to empty hand wins.",
+          "reasoning": "This is the generic climbing/shedding skeleton with nothing layered on top. Four players, 13-card deal, beat-with-same-type-higher-rank or pass, all-pass clears the table and the winner re-leads, empty-hand victory -- that is precisely Big Two / Tien Len / President. It is actually a stripped-DOWN Big Two: it lacks Big Two's suit ordering, its 2-as-high-card rule, and its five-card poker combinations (straight, flush, full house, four-of-a-kind, straight flush), and runs here ignore suit. There is no bomb mechanic, no scoring across rounds, no special-card effect, no team play (Tichu), no captured-card or point structure -- just rank-based combination climbing. Single round, no points, no win-condition twist, no borrowed mechanic that changes the legal-move set. Nothing here combines mechanics in a way absent from the published climbing canon; it is a plain instance of it, so it is a variant of Big Two, not novel."
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Big Two (Tien Len / President climbing family)",
+          "confidence": "high",
+          "key_mechanics": "Beat-or-pass on a current combination of matching type and strictly higher rank; combination types single/pair/triple/run-of-3+; table clears when all others pass in succession and the last player to play leads fresh; first to empty hand wins; full 52-card deck dealt 13 to each of 4 players.",
+          "reasoning": "This is the generic climbing/shedding skeleton shared by Big Two, Tien Len, and President, with no distinguishing novel mechanic. The exact set of legal combinations (single/pair/triple plus runs of 3+), the strictly-higher same-type beat rule, the pass-to-clear-the-trick mechanic, and the empty-hand win condition are the defining features of that family. It actually omits the things that individuate specific members (Big Two's suit ranking, five-card poker hands and bombs; Tichu/President's card-passing and scoring rounds), leaving a stripped-down Tien Len-style climber. There is no cross-mechanic fusion (no capture, meld, trick-scoring, or special-card layer) that would make this a new combination of mechanics, so it keeps the core identity of a climbing game and is a variant, not novel."
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Big Two (Choh Dai Di / Deuces), with Tien Len (Vietnamese President) as the runs-based cousin",
+          "confidence": "high",
+          "key_mechanics": "Beat-or-pass climbing on a current combination; match-type-and-exceed-rank-or-pass; table clears when all others pass and the last player to play leads fresh; combination set of single/pair/triple/run; first to empty hand wins. Full 52-card deck dealt 13 each to 4 players.",
+          "reasoning": "This is the textbook core loop of the Big Two / President climbing family: 4 players, 52 cards dealt 13 each, lead-any then beat-same-type-higher-or-pass, table clears on all-pass, shed-to-win. The combination set (single/pair/triple/run) and the all-pass clear rule are exactly the President/Tien Len engine. It is recognizably this known family, not a new combination of mechanics -- in fact it is a SIMPLIFICATION of Big Two: it strips Big Two's identity features (suit ordering, 5-card poker hands like flushes/full houses/straight flushes, the 3-of-diamonds opening lead) and Tichu's bombs/partnerships, leaving only the generic skeleton. Using rank-runs instead of poker hands matches Tien Len, so even that choice is published prior art. No mechanic here appears in a combination not already found together in Big Two or Tien Len; it keeps the family's core identity with features removed rather than added, which is the definition of a variant."
+        }
+      ]
+    }
+  ],
+  "climbing_knock_isolated_G": [
+    {
+      "verdict": "variant",
+      "closest_game": "Tien Len (Vietnamese climbing) / Big Two",
+      "confidence": "high",
+      "key_mechanics": "Beat-or-pass climbing core; combinations = single/pair/triple/run-of-3+; all-pass clears the table and the last player leads fresh; empty your hand to win. Plus a Rummy-style \"Knock\" that ends the game early with the fewest-cards holder winning.",
+      "reasoning": "The engine is a near-verbatim Tien Len / Big Two climbing game: 4 players, 13 cards, single/pair/triple/run combinations, strictly-higher same-type beat-or-pass, and all-pass-clears-table-and-relead. The sole non-standard element is a \"Knock\" lifted from Gin/Knock Rummy that lets a player end the game immediately with the shortest hand winning. This is a single appended mechanic that does not alter the legal-move set or the core loop (emptying your hand still wins), so it keeps the climbing-game identity intact -- a variant, not a new combination. Compare Tichu, which adds far more (bombs, partnerships, special cards) and is still classed as Big Two family; a lone knock is a lighter tweak than that."
+    },
+    {
+      "verdict": "variant",
+      "closest_game": "Tien Len (Vietnamese Big Two), part of the Big Two / President / Tichu climbing family",
+      "confidence": "high",
+      "key_mechanics": "Beat-or-pass climbing on combination types (singles, pairs, triples, consecutive runs), strictly-higher rank, table clears when all others pass, first to empty hand wins; plus a bolt-on Rummy-style \"knock\" that ends the game and awards the win to the player holding the fewest cards.",
+      "reasoning": "The engine is textbook climbing: 13-card hands for 4 players, lead-any then match-type-and-beat-or-pass over singles/pairs/triples/runs, table clears on a full pass cycle, go-out wins. That is Tien Len / Big Two almost exactly. The single deviation is the \"knock\" rule (call a stop, fewest cards wins), which is a Knock-Rummy concept transplanted onto a climbing shell. Climbing games are not known to allow a stop-the-game-and-compare-hand-sizes win, so the literal ruleset is not a published game; but the borrow is shallow and mechanically near-redundant (in a climbing game you already shed cards by playing, so \"fewest cards\" tracks \"closest to going out\"), it doesn't change the legal-move set, and it adds no real bluff/deadwood tension the way knocking does in Rummy. The game keeps its core climbing identity, so this is a minor variant rather than a genuinely novel mechanical fusion."
+    },
+    {
+      "verdict": "variant",
+      "closest_game": "Big Two / Tien Len (climbing/shedding family), with a Knock-Rummy-style termination rule",
+      "confidence": "medium",
+      "key_mechanics": "Core is textbook climbing/shedding: 13-card hands, a current combination that must be beaten by the same type at strictly higher rank or passed, singles/pairs/triples/runs, table clears when all others pass, first to empty hand wins. The single twist is a \"Knock\" rule letting a player unilaterally halt the game so that whoever holds the fewest cards wins \u2014 a mechanic lifted from Knock Rummy / Gin.",
+      "reasoning": "The skeleton is unambiguously the Big Two / Tien Len / President climbing family \u2014 beat-or-pass on a current combination, same-type-higher-rank, shed your hand to win. That core identity is fully intact and known. The only non-standard element is the Knock: voluntary early termination with a \"fewest cards in hand\" win, which can override the normal empty-hand win. Big Two scores remaining cards at game end but no published climbing game lets a player CALL the end mid-game, and no climbing game I know imports a rummy-style knock. So the specific fusion is one I cannot name in print, but it is a thin bolt-on (one underspecified rule) on a completely known game rather than a new mechanical core. That makes it a variant, not novel: a climbing game with a Knock-Rummy termination graft. It falls short of \"novel\" because the borrowed mechanic occupies tiny surface area and does not reshape how the game is actually played turn-to-turn."
+    }
+  ]
+}
