@@ -65,13 +65,22 @@ pkg/
 └── seeds/          # 8 seed game definitions
 ```
 
-### Seed Games (8 total)
+### Seed Games (8 calibration classics + 1 climbing = 9 evolution seeds)
+
+`seeds.All()` returns the 8 human-validated CLASSICS below -- the calibration
+ground-truth AND the novelty seed-distance anchors (`pkg/evolution` `seedDescriptors`).
+**Big Two (climbing) is a 9th seed** used for evolution init + as the climbing
+playability reference (`cmd/darwindeck/main.go`, `experiment.go` add it to the pool),
+but it is deliberately NOT in `seeds.All()`: there is no human fun-rating for a
+climbing game to calibrate against (see `pkg/seeds/climbing.go`). So an evolve run
+loads 9 seeds across 4 skeletons; calibration and novelty anchors use only the 8.
 
 | Skeleton | Seeds |
 |----------|-------|
 | Shedding | Crazy Eights, Mau-Mau |
 | Trick-taking | Whist, Hearts, Spades, Oh Hell |
 | Rummy | Gin Rummy, Knock Rummy |
+| Climbing | Big Two (evolution seed only; NOT calibration ground-truth) |
 
 ### Fitness Function (5 metrics)
 

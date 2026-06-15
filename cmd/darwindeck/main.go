@@ -127,7 +127,11 @@ func cmdEvolve(args []string) {
 		fmt.Printf("  Seed pool: %d (%d classics + %d custom from %s)\n",
 			len(allSeeds), len(getAllSeeds()), len(allSeeds)-len(getAllSeeds()), *seedDir)
 	} else {
-		fmt.Printf("  Seeds: %d games across 3 skeletons\n", len(allSeeds))
+		skel := map[genome.SkeletonType]bool{}
+		for _, s := range allSeeds {
+			skel[s.Skeleton] = true
+		}
+		fmt.Printf("  Seeds: %d games across %d skeletons\n", len(allSeeds), len(skel))
 	}
 	fmt.Printf("  Output: %s\n\n", config.OutputDir)
 
