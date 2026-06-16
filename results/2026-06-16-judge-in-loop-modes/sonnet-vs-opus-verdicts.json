@@ -1,0 +1,191 @@
+{
+  "description": "Sonnet vs Opus novelty-judge agreement on 6 dossiers (3 judges each). 4/6 exact majority, 6/6 within one category, 0 known<->novel flips; Sonnet more conservative on the borderline.",
+  "games": [
+    {
+      "game": "A",
+      "sonnet": [
+        {
+          "verdict": "variant",
+          "closest_game": "13-Card Poker (Teen Patti / Western 13-card deal-all-at-once poker)"
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Guts (13-card vying poker variant; meld/avoidance scoring overlay has precedent in Panguingue)"
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Chinese Poker (13-card closed-hand poker)"
+        }
+      ],
+      "opus": [
+        {
+          "verdict": "variant",
+          "closest_game": "Straight Poker (no-draw poker)"
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Poker (single-round draw-less vying/showdown, five-card-draw family)"
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Poker (vying/betting family \u2014 closest to a single-betting-round stud/draw poker variant)"
+        }
+      ]
+    },
+    {
+      "game": "B",
+      "sonnet": [
+        {
+          "verdict": "variant",
+          "closest_game": "Chinese Poker (vying/betting variant): deal 13 cards, single betting round, best poker hand at showdown, repeat for fixed number of deals, cumulative chips decide winner. The meld-bonus overlay does not change betting decisions and is an incoherent add-on (references \"captured cards\" which don't exist in a vying game); the core game identity is unchanged."
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Chinese Poker (Pusoy)"
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Cold Hands / Show Hand poker (all cards dealt face-down at once, single betting round, best poker hand at showdown) -- the 13-card hand size is an unusual parameter but the structure is identical; the meld bonus overlay is inert and does not change any decision."
+        }
+      ],
+      "opus": [
+        {
+          "verdict": "variant",
+          "closest_game": "Poker (single-betting-round closed poker, i.e. five-card draw with the draw/exchange removed; here on a 13-card deal). The meld-bonus overlay is mechanically inert \u2014 it scores \"captured\" cards though the game has no capture/draw/discard/exchange phase, so the hand is frozen at the deal and the overlay never changes the fold/call/raise decision. A scoring tally that alters no core decision keeps the game's identity as poker."
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Poker (straight/5-Card-style high-hand showdown poker) \u2014 the betting/showdown game is unchanged poker; the rummy-style meld bonus is a duplicated, inert scoring overlay decoupled from the chip-based win condition and drives no decisions (no draw/discard/capture phase), so the core identity stays poker."
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Fixed-limit Poker (a blind-posted, single-raise-cap vying/showdown game in the poker family \u2014 essentially flat-dealt draw/stud poker without the draw, with an inert bolted-on rummy-style meld-bonus tally)"
+        }
+      ]
+    },
+    {
+      "game": "C",
+      "sonnet": [
+        {
+          "verdict": "variant",
+          "closest_game": "Big Two (2-player singles-only variant)"
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Gin Rummy"
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Big Two (2-player, singles-only reduction) -- also close to Shithead/Palace in hand-only form, with Knock Rummy's termination rule added and a Mau-Mau-style face-card draw penalty"
+        }
+      ],
+      "opus": [
+        {
+          "verdict": "variant",
+          "closest_game": "President (a.k.a. Scum / Asshole) \u2014 singles-only climbing/shedding game"
+        },
+        {
+          "verdict": "novel",
+          "closest_game": "Big Two (singles-only climbing shed) crossed with Knock Rummy's knock-to-end-with-fewest-cards; no published game combines these"
+        },
+        {
+          "verdict": "novel",
+          "closest_game": "President / Big Two (climbing family)"
+        }
+      ]
+    },
+    {
+      "game": "D",
+      "sonnet": [
+        {
+          "verdict": "variant",
+          "closest_game": "Casino (Royal Casino variant)"
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Casino (American fishing-capture game, 18th century)"
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Casino (Italian/American fishing-capture game)"
+        }
+      ],
+      "opus": [
+        {
+          "verdict": "variant",
+          "closest_game": "Cassino (Casino), the classic fishing/capture game"
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Casino (Cassino), specifically its point-scoring/Scopa variants"
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Casino (the capture-by-sum fishing game), with Hearts-style penalty-card and Rummy-style meld-bonus scoring overlays bolted on"
+        }
+      ]
+    },
+    {
+      "game": "E",
+      "sonnet": [
+        {
+          "verdict": "known",
+          "closest_game": "Straight Poker (Five-Card Stud, no-draw form; documented in Hoyle, 19th century)"
+        },
+        {
+          "verdict": "known",
+          "closest_game": "Straight Poker (5-card no-draw poker, oldest documented poker variant)"
+        },
+        {
+          "verdict": "known",
+          "closest_game": "Five-Card Stud (specifically the \"cold hand\" / single-street variant: all 5 cards dealt face-down, one betting round, best poker hand wins)"
+        }
+      ],
+      "opus": [
+        {
+          "verdict": "known",
+          "closest_game": "Straight Poker (the no-draw, single-betting-round, five-card closed-hand form of Poker; equivalently \"flat\" or \"bluff\" poker)"
+        },
+        {
+          "verdict": "known",
+          "closest_game": "Straight Poker (the original drawless, single-betting-round five-card poker, a.k.a. Flat/Bluff poker; equivalently five-card stud without up-cards)"
+        },
+        {
+          "verdict": "known",
+          "closest_game": "Straight Poker (five-card draw poker without the draw; one betting round, showdown on standard poker hand rankings)"
+        }
+      ]
+    },
+    {
+      "game": "F",
+      "sonnet": [
+        {
+          "verdict": "known",
+          "closest_game": "Casino (the classic American fishing/capture card game)"
+        },
+        {
+          "verdict": "known",
+          "closest_game": "Casino (American fishing/capture game)"
+        },
+        {
+          "verdict": "known",
+          "closest_game": "Casino (American fishing/capture game, 18th century)"
+        }
+      ],
+      "opus": [
+        {
+          "verdict": "variant",
+          "closest_game": "Casino (the classic fishing/capture card game)"
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Cassino (Casino) \u2014 specifically basic/simplified Cassino, scored by most cards captured instead of the full point system"
+        },
+        {
+          "verdict": "variant",
+          "closest_game": "Casino (the classic fishing/capture game)"
+        }
+      ]
+    }
+  ]
+}
