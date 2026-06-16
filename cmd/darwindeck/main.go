@@ -194,25 +194,25 @@ func cmdEvolve(args []string) {
 					queue = filepath.Join(config.OutputDir, "judge-queue")
 				}
 				inds, _ := engine.AllQualified()
-				emitForJudging(queue, engine.Generation, sortAndTrim(inds, config.SaveTopN))
+				emitForJudging(queue, engine.Generation, sortAndTrim(inds, config.SaveTopN, config.JudgeVerdicts))
 				fmt.Printf("\nChunk boundary at generation %d/%d.\nJudge the new compositions in %s, append verdicts to the table, then relaunch with the same -checkpoint to resume.\n",
 					engine.Generation, config.Generations, queue)
 				return
 			}
 			inds, _ := engine.AllQualified()
-			top = sortAndTrim(inds, config.SaveTopN)
+			top = sortAndTrim(inds, config.SaveTopN, config.JudgeVerdicts)
 			bestFitness = engine.BestFitness
 			break
 		}
 		engine.Run(progress)
 		inds, _ := engine.AllQualified()
 		// Sort by raw fitness and take top N
-		top = sortAndTrim(inds, config.SaveTopN)
+		top = sortAndTrim(inds, config.SaveTopN, config.JudgeVerdicts)
 		bestFitness = engine.BestFitness
 	case "mapelites":
 		engine := evolution.NewMAPElitesEngine(config, allSeeds)
 		engine.Run(progress)
-		top = sortAndTrim(engine.AllQualified(), config.SaveTopN)
+		top = sortAndTrim(engine.AllQualified(), config.SaveTopN, config.JudgeVerdicts)
 		bestFitness = engine.BestFitness
 	default:
 		fmt.Fprintf(os.Stderr, "unknown algorithm: %s (must be baseline, hybrid, or mapelites)\n", *algorithm)
@@ -373,7 +373,17 @@ func cmdDescribe(args []string) {
 	}
 }
 
-func sortAndTrim(inds []*evolution.Individual, n int) []*evolution.Individual {
+// pubJudgeWeight scales the judge verdict into the PUBLICATION ranking (v3):
+// among playable games, a certified-novel composition (verdict +1) gets +0.2
+// added to its leaderboard score and a certified rediscovery (verdict < 0) gets
+// the verdict*0.2 subtracted, so a novel game surfaces above a somewhat-higher-
+// fitness variant -- but fitness stays the base (a novel-but-weak game does not
+// leapfrog a much stronger one). Fixes the v2 gap where the population explored
+// novel territory but the fitness-ranked output still surfaced high-fitness
+// rediscoveries. Zero effect when no verdicts are loaded.
+const pubJudgeWeight = 0.2
+
+func sortAndTrim(inds []*evolution.Individual, n int, verdicts map[string]float64) []*evolution.Individual {
 	// Deduplicate by genome ID first
 	seen := make(map[string]bool)
 	var unique []*evolution.Individual
@@ -385,11 +395,21 @@ func sortAndTrim(inds []*evolution.Individual, n int) []*evolution.Individual {
 		unique = append(unique, ind)
 	}
 
-	// Order by OutputRank, the greedy-only running mean -- the commensurable
-	// leaderboard key (Wave K fix 1). Published MCTS-mode means are reported
-	// in report.md/summary.json but never ranked.
+	// Order by OutputRank (the greedy-only running mean -- the commensurable
+	// leaderboard key, Wave K fix 1) PLUS the judge-aware publication term, so
+	// certified-novel games surface above higher-fitness rediscoveries while
+	// fitness stays the base. With no verdicts loaded this is exactly OutputRank.
+	// Published MCTS-mode means are reported in report.md/summary.json but never
+	// ranked.
+	pubScore := func(ind *evolution.Individual) float64 {
+		s := ind.OutputRank()
+		if len(verdicts) > 0 {
+			s += pubJudgeWeight * verdicts[evolution.Composition(ind.Genome)]
+		}
+		return s
+	}
 	sort.Slice(unique, func(i, j int) bool {
-		return unique[i].OutputRank() > unique[j].OutputRank()
+		return pubScore(unique[i]) > pubScore(unique[j])
 	})
 
 	// Reserve slots per skeleton for diversity in output

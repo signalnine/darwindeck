@@ -330,14 +330,15 @@ func (e *NoveltyEngine) updateBestFitness() {
 // computeNovelty calculates novelty score for each individual based on
 // k-nearest neighbor distance in behavior space, computed WITHIN-SKELETON only.
 // Also applies fitness sharing by skeleton niche to prevent monopoly.
-// composition returns a genome's mechanic fingerprint -- its skeleton plus the
+// Composition returns a genome's mechanic fingerprint -- its skeleton plus the
 // sorted set of DISTINCT borrowed mechanics, e.g. "0:1,8" (a shedding host with
 // meld_bonus + run_play) or "5:" (plain vying). It is the key Config.JudgeVerdicts
-// maps to a judge score. Novelty is a property of the MECHANIC combination, not
-// the params or the borrow provenance, so one verdict on a representative genome
-// covers every genome of that composition. Borrow Source is deliberately ignored
-// (it is crossover provenance, not behaviour).
-func composition(g *genome.Genome) string {
+// maps to a judge score (used both for the in-loop novelty term and the
+// judge-aware publication ranking). Novelty is a property of the MECHANIC
+// combination, not the params or the borrow provenance, so one verdict on a
+// representative genome covers every genome of that composition. Borrow Source is
+// deliberately ignored (it is crossover provenance, not behaviour).
+func Composition(g *genome.Genome) string {
 	seen := map[int]bool{}
 	var mechs []int
 	for _, b := range g.Borrowed {
@@ -454,7 +455,7 @@ func (e *NoveltyEngine) computeNovelty() {
 		// below); a suppressed composition simply gets no novelty protection and
 		// survives on fitness sharing alone.
 		if len(e.Config.JudgeVerdicts) > 0 {
-			ind.Novelty += JudgeWeight * e.Config.JudgeVerdicts[composition(ind.Genome)]
+			ind.Novelty += JudgeWeight * e.Config.JudgeVerdicts[Composition(ind.Genome)]
 			if ind.Novelty < 0 {
 				ind.Novelty = 0
 			}

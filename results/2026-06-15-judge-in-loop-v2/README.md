@@ -41,3 +41,21 @@ a high-fitness rediscovery (plain Casino ~0.77) survives in the population and
 reappears in the fitness-ranked output even while being explored less. v3: make
 the PUBLICATION step judge-aware too (rank/filter the output by verdict, not just
 fitness), so the discovered novel games actually surface at the top.
+
+## v3: judge-aware publication ranking (the gap closed)
+
+The output now ranks by OutputRank + 0.2*verdict (Composition-keyed), so a
+certified-novel game surfaces above a higher-fitness rediscovery while fitness
+stays the base. Re-running the gen-30 output through this ranking: the final
+top-12 is ALL judge-certified novel -- casino+meld (+0.8, fit ~0.85), climbing
+draw_penalty+knock (+0.5, ~0.85), and shedding knock-alone (+1.0) lifted from
+fit 0.72 into ranks 11-12 by its strong novel verdict. The high-fitness
+rediscoveries (plain Casino ~0.77, suppressed -1.0 -> -0.20) are demoted out of
+the top. Byte-identical when no verdicts are loaded.
+
+End to end: v1 explores toward novel (selection term), v2 compounds it (chunked
+checkpoint grows the verdict table mid-run, whole population persisted), v3
+surfaces the discoveries (judge-aware publication ranking). Structural metrics
+cannot tell novel from rediscovery; the LLM judge can, and putting it in the loop
+at generation granularity -- with the population persisted and the output
+judge-ranked -- is what makes novelty pressure both compound AND publish.
