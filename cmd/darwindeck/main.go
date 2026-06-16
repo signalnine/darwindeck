@@ -40,6 +40,8 @@ func main() {
 		cmdRestamp(os.Args[2:])
 	case "playtest":
 		cmdPlaytest(os.Args[2:])
+	case "serve":
+		cmdServe(os.Args[2:])
 	case "describe":
 		cmdDescribe(os.Args[2:])
 	case "judge":
@@ -64,6 +66,7 @@ Commands:
   calibrate   Report raw fitness metrics for classics + degenerate fixtures
   restamp     Re-evaluate a saved run's genomes for veto-stability and write a results bundle
   playtest    Play a game interactively against AI
+  serve       Serve a genome (or a directory of them) as a browser game
   describe    Show details of a genome JSON file
   judge       LLM-as-judge: emit blind dossiers / rank verdicts
   version     Print version info

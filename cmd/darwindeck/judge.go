@@ -9,11 +9,17 @@ import (
 	"github.com/darwindeck/darwindeck/pkg/judge"
 )
 
-// valueFlags are the judge flags that consume the following token as their
-// value (so splitPositional does not mistake that token for a positional).
+// valueFlags are the flags (across the subcommands that use splitPositional)
+// that consume the following token as their value, so splitPositional does not
+// mistake that token for a positional. The `--flag=value` form is self-
+// describing and needs no entry here.
 var valueFlags = map[string]bool{
 	"-out": true, "--out": true,
 	"-answer-key": true, "--answer-key": true,
+	// serve
+	"-port": true, "--port": true,
+	"-host": true, "--host": true,
+	"-dir": true, "--dir": true,
 }
 
 // splitPositional separates bare positional arguments from flag arguments so

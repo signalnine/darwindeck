@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DarwinDeck</title>
+<style>
+  :root {
+    --bg: #14161b; --panel: #1d2027; --panel2: #23262f; --ink: #e7e9ee;
+    --muted: #8b90a0; --line: #313542; --accent: #7c9cff; --accent2: #5a7bff;
+    --red: #ff6b7a; --good: #59d499; --warn: #ffd166;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  header {
+    padding: 14px 20px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: baseline; gap: 12px;
+  }
+  header h1 { font-size: 17px; margin: 0; letter-spacing: .3px; }
+  header .sub { color: var(--muted); font-size: 13px; }
+  main { max-width: 920px; margin: 0 auto; padding: 20px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+  .panel h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin: 0 0 12px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .spread { justify-content: space-between; }
+  button {
+    background: var(--panel2); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 8px; padding: 8px 14px; font-size: 14px; cursor: pointer; transition: .12s;
+  }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent2); border-color: var(--accent2); color: #fff; font-weight: 600; }
+  button.primary:hover { background: var(--accent); }
+  button:disabled { opacity: .4; cursor: default; }
+  select { background: var(--panel2); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+  .card {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 40px; height: 56px; padding: 0 8px; border-radius: 8px;
+    background: #f4f5f8; color: #14161b; font-weight: 700; font-size: 18px;
+    border: 1px solid #c9ccd6; box-shadow: 0 1px 0 rgba(0,0,0,.25);
+  }
+  .card.red { color: #c4283a; }
+  .card.sm { min-width: 30px; height: 42px; font-size: 15px; }
+  .hand { display: flex; flex-wrap: wrap; gap: 8px; }
+  .moves { display: flex; flex-wrap: wrap; gap: 8px; }
+  .opp { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; font-size: 14px; }
+  .opp .seat { color: var(--accent); font-weight: 600; }
+  .opp.folded { opacity: .45; }
+  .log { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; color: var(--muted); max-height: 220px; overflow-y: auto; }
+  .log div { padding: 2px 0; }
+  .log div.you { color: var(--ink); }
+  .tabletags { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; color: var(--muted); font-size: 13px; }
+  .tabletags b { color: var(--ink); }
+  .gameover { text-align: center; padding: 8px 0 4px; font-size: 20px; font-weight: 700; }
+  .gameover.win { color: var(--good); }
+  .gameover.lose { color: var(--red); }
+  .stars button { font-size: 20px; padding: 4px 8px; }
+  .stars button.on { color: var(--warn); border-color: var(--warn); }
+  textarea { width: 100%; background: var(--panel2); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 8px; font: inherit; resize: vertical; }
+  .rules { color: var(--ink); }
+  .rules h1 { font-size: 18px; } .rules h2 { font-size: 15px; text-transform: none; letter-spacing: 0; color: var(--ink); }
+  .rules h3 { font-size: 14px; } .rules ul { margin: 6px 0; padding-left: 20px; } .rules code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; }
+  details { margin-top: 6px; } summary { cursor: pointer; color: var(--accent); }
+  .muted { color: var(--muted); }
+  .hide { display: none; }
+  .pill { font-size: 12px; padding: 2px 8px; border-radius: 20px; background: var(--panel2); border: 1px solid var(--line); color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>DarwinDeck</h1>
+  <span class="sub" id="subhead">play an evolved card game</span>
+</header>
+<main>
+
+  <!-- Lobby -->
+  <section id="lobby" class="panel">
+    <h2>Choose a game</h2>
+    <div class="row spread">
+      <select id="gameSelect"></select>
+      <div class="row">
+        <label class="muted" for="difficulty">opponent</label>
+        <select id="difficulty">
+          <option value="greedy">greedy</option>
+          <option value="random">random</option>
+          <option value="mcts">mcts (slow)</option>
+        </select>
+        <button class="primary" id="startBtn">Start</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Game -->
+  <section id="game" class="hide">
+    <section class="panel">
+      <div class="row spread">
+        <div><b id="gTitle"></b> <span class="pill" id="gSkeleton"></span></div>
+        <div class="muted">turn <span id="gTurn">0</span> · <span id="gDiff"></span></div>
+      </div>
+    </section>
+
+    <section class="panel" id="overPanel" hidden>
+      <div class="gameover" id="overText"></div>
+      <div class="row" style="justify-content:center; margin-top:6px">
+        <div class="stars" id="stars"></div>
+      </div>
+      <div style="margin-top:10px"><textarea id="comment" rows="2" placeholder="optional: what did you think? (recorded for fun-validation)"></textarea></div>
+      <div class="row" style="justify-content:center; margin-top:10px">
+        <button id="submitRating">Submit rating</button>
+        <button class="primary" id="againBtn">New game</button>
+      </div>
+      <div class="muted" id="rateMsg" style="text-align:center; margin-top:6px"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Table</h2>
+      <div class="tabletags" id="tableTags"></div>
+      <div class="row" id="tableCards" style="margin-top:10px"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Opponents</h2>
+      <div class="row" id="opponents"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Your hand <span class="muted" id="handScore"></span></h2>
+      <div class="hand" id="hand"></div>
+    </section>
+
+    <section class="panel" id="movesPanel">
+      <h2>Your move</h2>
+      <div class="moves" id="moves"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Log</h2>
+      <div class="log" id="log"></div>
+    </section>
+
+    <section class="panel">
+      <details>
+        <summary>Rules</summary>
+        <div class="rules" id="rules"></div>
+      </details>
+    </section>
+  </section>
+
+</main>
+<script>
+const $ = id => document.getElementById(id);
+let session = null;
+let lastWinner = -1;
+let chosenRating = 0;
+
+const SUIT = { C: ["♣", false], D: ["♦", true], H: ["♥", true], S: ["♠", false] };
+
+function cardEl(str, small) {
+  const el = document.createElement("span");
+  el.className = "card" + (small ? " sm" : "");
+  const suit = str.slice(-1), rank = str.slice(0, -1);
+  const s = SUIT[suit];
+  if (s) { if (s[1]) el.classList.add("red"); el.textContent = rank + s[0]; }
+  else el.textContent = str;
+  return el;
+}
+
+async function api(path, opts) {
+  const res = await fetch(path, opts);
+  if (!res.ok) { throw new Error((await res.text()).trim() || res.statusText); }
+  return res.json();
+}
+
+async function loadGames() {
+  const games = await api("/api/games");
+  const sel = $("gameSelect");
+  sel.innerHTML = "";
+  games.forEach(g => {
+    const o = document.createElement("option");
+    o.value = g.id;
+    o.textContent = `${g.title}  (${g.skeleton}, ${g.players}p)`;
+    sel.appendChild(o);
+  });
+  if (games.length <= 1) $("gameSelect").parentElement; // single game: still selectable
+}
+
+async function startGame() {
+  $("startBtn").disabled = true;
+  try {
+    const v = await api("/api/new", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ game: $("gameSelect").value, difficulty: $("difficulty").value }),
+    });
+    session = v.session;
+    $("lobby").classList.add("hide");
+    $("game").classList.remove("hide");
+    $("gDiff").textContent = $("difficulty").value;
+    if (v.rules) $("rules").innerHTML = renderMarkdown(v.rules);
+    render(v);
+  } catch (e) {
+    alert("Could not start: " + e.message);
+  } finally {
+    $("startBtn").disabled = false;
+  }
+}
+
+async function sendMove(index) {
+  try {
+    const v = await api("/api/move", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session, index }),
+    });
+    render(v);
+  } catch (e) {
+    alert("Move rejected: " + e.message);
+  }
+}
+
+function render(v) {
+  $("subhead").textContent = v.title;
+  $("gTitle").textContent = v.title;
+  $("gSkeleton").textContent = v.skeleton;
+  $("gTurn").textContent = v.turn;
+  $("handScore").textContent = v.yourScore ? `· score ${v.yourScore}` : "";
+
+  // hand
+  const hand = $("hand"); hand.innerHTML = "";
+  (v.yourHand || []).forEach(c => hand.appendChild(cardEl(c, false)));
+  if (!v.yourHand || !v.yourHand.length) hand.innerHTML = '<span class="muted">(no cards)</span>';
+
+  // opponents
+  const opp = $("opponents"); opp.innerHTML = "";
+  (v.opponents || []).forEach(o => {
+    const d = document.createElement("div");
+    d.className = "opp" + (o.folded ? " folded" : "");
+    let t = `<span class="seat">P${o.seat}</span> · ${o.handCount} cards`;
+    if (o.score) t += ` · ${o.score} pts`;
+    if (o.committed) t += ` · bet ${o.committed}`;
+    if (o.folded) t += " · folded";
+    d.innerHTML = t;
+    opp.appendChild(d);
+  });
+  if (!v.opponents || !v.opponents.length) opp.innerHTML = '<span class="muted">none</span>';
+
+  // table
+  const tags = $("tableTags"); tags.innerHTML = "";
+  const tag = (label, val) => { const s = document.createElement("span"); s.innerHTML = `${label} <b>${val}</b>`; tags.appendChild(s); };
+  const tb = v.table || {};
+  tag("deck", tb.deckCount);
+  tag("discard", tb.discardCount);
+  if (tb.trumpSuit) tag("trump", tb.trumpSuit);
+  if (tb.pot) tag("pot", tb.pot);
+  if (tb.currentBet) tag("to call", tb.currentBet);
+
+  const tc = $("tableCards"); tc.innerHTML = "";
+  if (tb.topCard) { const w = wrap("top", cardEl(tb.topCard, false)); tc.appendChild(w); }
+  if (tb.trick && tb.trick.length) { const g = document.createElement("div"); g.className = "row"; tb.trick.forEach(c => g.appendChild(cardEl(c, true))); tc.appendChild(wrap("trick", g)); }
+  if (tb.melds && tb.melds.length) {
+    tb.melds.forEach((m, i) => { const g = document.createElement("div"); g.className = "row"; m.forEach(c => g.appendChild(cardEl(c, true))); tc.appendChild(wrap("meld " + (i + 1), g)); });
+  }
+  if (!tc.children.length) tc.innerHTML = '<span class="muted">(empty table)</span>';
+
+  // moves
+  const mv = $("moves"); mv.innerHTML = "";
+  if (v.status === "human_turn") {
+    $("movesPanel").classList.remove("hide");
+    (v.legalMoves || []).forEach(m => {
+      const b = document.createElement("button");
+      b.textContent = m.label;
+      if (m.type === "fold") b.style.color = "var(--red)";
+      b.onclick = () => sendMove(m.index);
+      mv.appendChild(b);
+    });
+  } else {
+    $("movesPanel").classList.add("hide");
+  }
+
+  // log
+  const log = $("log"); log.innerHTML = "";
+  (v.log || []).forEach(line => { const d = document.createElement("div"); if (line.startsWith("You")) d.className = "you"; d.textContent = line; log.appendChild(d); });
+  log.scrollTop = log.scrollHeight;
+
+  // game over
+  const over = v.status === "game_over" || v.status === "stuck";
+  $("overPanel").hidden = !over;
+  if (over) {
+    lastWinner = v.winner;
+    const won = v.winner === v.yourSeat;
+    const ot = $("overText");
+    ot.textContent = v.winnerLabel;
+    ot.className = "gameover " + (won ? "win" : (v.winner < 0 ? "" : "lose"));
+    renderStars();
+    $("rateMsg").textContent = "";
+  }
+}
+
+function wrap(label, node) {
+  const d = document.createElement("div");
+  d.innerHTML = `<div class="muted" style="font-size:12px;margin-bottom:4px">${label}</div>`;
+  d.appendChild(node);
+  d.style.marginRight = "16px";
+  return d;
+}
+
+function renderStars() {
+  const s = $("stars"); s.innerHTML = ""; chosenRating = 0;
+  for (let i = 1; i <= 5; i++) {
+    const b = document.createElement("button");
+    b.textContent = "★"; b.dataset.n = i;
+    b.onclick = () => { chosenRating = i; [...s.children].forEach(c => c.classList.toggle("on", +c.dataset.n <= i)); };
+    s.appendChild(b);
+  }
+}
+
+async function submitRating() {
+  try {
+    await api("/api/rate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session, rating: chosenRating, comment: $("comment").value }),
+    });
+    $("rateMsg").textContent = "Thanks - recorded.";
+    $("submitRating").disabled = true;
+  } catch (e) {
+    $("rateMsg").textContent = "Could not record: " + e.message;
+  }
+}
+
+function resetLobby() {
+  $("game").classList.add("hide");
+  $("lobby").classList.remove("hide");
+  $("submitRating").disabled = false;
+  $("comment").value = "";
+  session = null;
+}
+
+// Tiny markdown -> HTML for the rules panel (headers, bold, lists, paragraphs).
+function renderMarkdown(md) {
+  const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const lines = md.split("\n");
+  let html = "", inList = false;
+  const inline = s => esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/`(.+?)`/g, "<code>$1</code>");
+  for (let raw of lines) {
+    const line = raw.replace(/\s+$/, "");
+    const li = line.match(/^\s*[-*]\s+(.*)/);
+    if (li) { if (!inList) { html += "<ul>"; inList = true; } html += "<li>" + inline(li[1]) + "</li>"; continue; }
+    if (inList) { html += "</ul>"; inList = false; }
+    if (/^###\s/.test(line)) html += "<h3>" + inline(line.slice(4)) + "</h3>";
+    else if (/^##\s/.test(line)) html += "<h2>" + inline(line.slice(3)) + "</h2>";
+    else if (/^#\s/.test(line)) html += "<h1>" + inline(line.slice(2)) + "</h1>";
+    else if (line.trim() === "") html += "";
+    else html += "<p>" + inline(line) + "</p>";
+  }
+  if (inList) html += "</ul>";
+  return html;
+}
+
+$("startBtn").onclick = startGame;
+$("againBtn").onclick = resetLobby;
+$("submitRating").onclick = submitRating;
+loadGames();
+</script>
+</body>
+</html>
