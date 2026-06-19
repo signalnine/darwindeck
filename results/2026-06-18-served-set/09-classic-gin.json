@@ -1,0 +1,16 @@
+{
+  "id": "Tenline",
+  "generation": 0,
+  "skeleton": 2,
+  "players": 2,
+  "hand_size": 10,
+  "rummy": {
+    "meld_types": 2,
+    "min_meld_size": 3,
+    "draw_from": 2,
+    "knock_threshold": 10
+  },
+  "scoring": {},
+  "trump_rule": 0,
+  "description": "Draw, meld, and discard, knocking the moment your unmatched cards drop to ten points or fewer."
+}

@@ -36,9 +36,9 @@ func TestSortAndTrimRanksByGreedyOnlyMean(t *testing.T) {
 		return ind
 	}
 
-	granted := mk("granted", 5, 3.90, 5, 0.92, 1)   // greedy 0.78, published 0.92
-	ungranted := mk("ungranted", 6, 4.00, 5, 0, 0)  // greedy 0.80
-	third := mk("third", 7, 3.50, 5, 0, 0)          // greedy 0.70
+	granted := mk("granted", 5, 3.90, 5, 0.92, 1)  // greedy 0.78, published 0.92
+	ungranted := mk("ungranted", 6, 4.00, 5, 0, 0) // greedy 0.80
+	third := mk("third", 7, 3.50, 5, 0, 0)         // greedy 0.70
 
 	top := sortAndTrim([]*evolution.Individual{granted, third, ungranted}, 3, nil)
 	if len(top) != 3 {

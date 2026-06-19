@@ -1,0 +1,16 @@
+{
+  "id": "Highrise",
+  "generation": 0,
+  "skeleton": 3,
+  "players": 4,
+  "hand_size": 13,
+  "climbing": {
+    "allow_pairs": true,
+    "allow_triples": true,
+    "allow_runs": true,
+    "min_run_len": 3
+  },
+  "scoring": {},
+  "trump_rule": 0,
+  "description": "Four-handed climbing from full thirteen-card hands: beat the singles, pairs, triples, or runs on the table or pass, and empty your hand first to win."
+}

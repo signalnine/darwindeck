@@ -117,20 +117,22 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 
 // gameListItem is the picker payload (no genome internals leak).
 type gameListItem struct {
-	ID       string `json:"id"`
-	Title    string `json:"title"`
-	Skeleton string `json:"skeleton"`
-	Players  int    `json:"players"`
+	ID          string `json:"id"`
+	Title       string `json:"title"`
+	Description string `json:"description,omitempty"`
+	Skeleton    string `json:"skeleton"`
+	Players     int    `json:"players"`
 }
 
 func (s *Server) handleGames(w http.ResponseWriter, r *http.Request) {
 	items := make([]gameListItem, 0, len(s.games))
 	for _, g := range s.games {
 		items = append(items, gameListItem{
-			ID:       g.ID,
-			Title:    g.Title,
-			Skeleton: g.Skeleton,
-			Players:  g.Genome.Players,
+			ID:          g.ID,
+			Title:       g.Title,
+			Description: g.Genome.Description,
+			Skeleton:    g.Skeleton,
+			Players:     g.Genome.Players,
 		})
 	}
 	writeJSON(w, items)

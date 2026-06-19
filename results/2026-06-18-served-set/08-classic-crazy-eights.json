@@ -1,0 +1,20 @@
+{
+  "id": "Wildfire",
+  "generation": 0,
+  "skeleton": 0,
+  "players": 2,
+  "hand_size": 7,
+  "shedding": {
+    "match_rule": 2,
+    "draw_penalty": 1
+  },
+  "special_cards": [
+    {
+      "type": 4,
+      "by_rank": 8
+    }
+  ],
+  "scoring": {},
+  "trump_rule": 0,
+  "description": "Match the top of the pile by suit or rank to shed your hand first. Eights are wild and play on anything."
+}

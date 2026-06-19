@@ -6,7 +6,7 @@ import "fmt"
 type SkeletonType uint8
 
 const (
-	Shedding    SkeletonType = iota
+	Shedding SkeletonType = iota
 	TrickTaking
 	Rummy
 	Climbing
@@ -66,7 +66,7 @@ type SheddingParams struct {
 type TrickScoring uint8
 
 const (
-	ScorePerTrick  TrickScoring = iota // Each trick worth 1 point
+	ScorePerTrick   TrickScoring = iota // Each trick worth 1 point
 	ScoreCardPoints                     // Specific cards have point values
 	ScoreAvoidance                      // Points are bad (Hearts-style)
 )
@@ -97,9 +97,9 @@ func (t TrickScoring) String() string {
 type LeadRule uint8
 
 const (
-	LeadNone          LeadRule = iota // No restriction
-	LeadNoTrumpUntilBroken            // Can't lead trump until broken
-	LeadWinnerLeads                   // RESERVED: inert (see type doc); rejected by Validate
+	LeadNone               LeadRule = iota // No restriction
+	LeadNoTrumpUntilBroken                 // Can't lead trump until broken
+	LeadWinnerLeads                        // RESERVED: inert (see type doc); rejected by Validate
 )
 
 var leadRuleNames = [3]string{"none", "no_trump_until_broken", "winner_leads"}
@@ -125,9 +125,9 @@ type TrickTakingParams struct {
 type MeldType uint8
 
 const (
-	MeldSets  MeldType = iota // Groups of same rank
-	MeldRuns                   // Sequential same-suit cards
-	MeldBoth                   // Sets and runs
+	MeldSets MeldType = iota // Groups of same rank
+	MeldRuns                 // Sequential same-suit cards
+	MeldBoth                 // Sets and runs
 )
 
 var meldTypeNames = [3]string{"sets", "runs", "both"}
@@ -143,7 +143,7 @@ func (m MeldType) String() string {
 type DrawSource uint8
 
 const (
-	DrawDeck    DrawSource = iota
+	DrawDeck DrawSource = iota
 	DrawDiscard
 	DrawEither
 )
@@ -160,7 +160,7 @@ func (d DrawSource) String() string {
 // RummyParams controls a rummy game.
 type RummyParams struct {
 	MeldTypes      MeldType   `json:"meld_types"`
-	MinMeldSize    int        `json:"min_meld_size"`   // 3-4 (2 is Tier-0 rejected: a 2-card meld is trivially formable)
+	MinMeldSize    int        `json:"min_meld_size"` // 3-4 (2 is Tier-0 rejected: a 2-card meld is trivially formable)
 	DrawFrom       DrawSource `json:"draw_from"`
 	KnockThreshold int        `json:"knock_threshold"` // Deadwood to knock (0 = gin only)
 }
@@ -241,10 +241,10 @@ type VyingParams struct {
 type TrumpRule uint8
 
 const (
-	TrumpNone    TrumpRule = iota // No trump suit
-	TrumpFixed                    // Fixed suit (specified in config)
-	TrumpCut                      // Cut from deck during deal
-	TrumpLed                      // First suit led becomes trump
+	TrumpNone  TrumpRule = iota // No trump suit
+	TrumpFixed                  // Fixed suit (specified in config)
+	TrumpCut                    // Cut from deck during deal
+	TrumpLed                    // First suit led becomes trump
 )
 
 var trumpRuleNames = [4]string{"none", "fixed", "cut", "led"}
@@ -261,10 +261,10 @@ type SpecialCardType uint8
 
 const (
 	SpecialSkip     SpecialCardType = iota // Skip next player
-	SpecialReverse                          // Reverse play direction
-	SpecialDrawTwo                          // Next player draws 2
-	SpecialDrawFour                         // Next player draws 4
-	SpecialWild                             // Can be played on anything
+	SpecialReverse                         // Reverse play direction
+	SpecialDrawTwo                         // Next player draws 2
+	SpecialDrawFour                        // Next player draws 4
+	SpecialWild                            // Can be played on anything
 )
 
 var specialCardTypeNames = [5]string{"skip", "reverse", "draw_two", "draw_four", "wild"}
@@ -278,9 +278,9 @@ func (s SpecialCardType) String() string {
 
 // SpecialCard assigns a special effect to cards matching a condition.
 type SpecialCard struct {
-	Type     SpecialCardType `json:"type"`
-	ByRank   uint8           `json:"by_rank,omitempty"`   // 0 = any rank
-	BySuit   uint8           `json:"by_suit,omitempty"`   // 0 = any suit (1-4 = specific)
+	Type   SpecialCardType `json:"type"`
+	ByRank uint8           `json:"by_rank,omitempty"` // 0 = any rank
+	BySuit uint8           `json:"by_suit,omitempty"` // 0 = any suit (1-4 = specific)
 }
 
 // MatchesCard reports whether this special-card rule applies to a card of
@@ -320,8 +320,8 @@ func (s ScoringEvent) String() string {
 
 // CardScoring assigns point values to cards.
 type CardScoring struct {
-	Rank   uint8        `json:"rank"`            // 0 = all ranks
-	Suit   uint8        `json:"suit"`            // 0 = all suits
+	Rank   uint8        `json:"rank"` // 0 = all ranks
+	Suit   uint8        `json:"suit"` // 0 = all suits
 	Points int          `json:"points"`
 	Event  ScoringEvent `json:"event"`
 }
@@ -379,14 +379,14 @@ type MechanicType uint8
 // every existing serialized genome.
 const (
 	MechTrickScoring MechanicType = iota // Score based on tricks won
-	MechMeldBonus                         // Bonus for forming melds
-	MechDrawPenalty                       // Draw cards as penalty
-	MechKnock                             // Knock to end round
-	MechTrump                             // reserved: no implementation, not whitelisted
-	MechAvoidance                         // Points-are-bad scoring
-	MechPlayMultiple                      // reserved: no implementation, not whitelisted
-	MechFollowSuit                        // DEEP borrow: must follow the discard suit (shedding runner)
-	MechRunPlay                           // DEEP borrow: multi-card combo discards (shedding runner)
+	MechMeldBonus                        // Bonus for forming melds
+	MechDrawPenalty                      // Draw cards as penalty
+	MechKnock                            // Knock to end round
+	MechTrump                            // reserved: no implementation, not whitelisted
+	MechAvoidance                        // Points-are-bad scoring
+	MechPlayMultiple                     // reserved: no implementation, not whitelisted
+	MechFollowSuit                       // DEEP borrow: must follow the discard suit (shedding runner)
+	MechRunPlay                          // DEEP borrow: multi-card combo discards (shedding runner)
 )
 
 var mechanicNames = [9]string{
@@ -411,9 +411,13 @@ type BorrowedMechanic struct {
 
 // Genome encodes a complete card game.
 type Genome struct {
-	ID         string       `json:"id"`
-	Generation int          `json:"generation"`
-	Skeleton   SkeletonType `json:"skeleton"`
+	ID string `json:"id"`
+	// Description is an optional human-facing tagline for a curated/served game
+	// (a one-line pitch shown in the playtest lobby). Purely cosmetic: evolution
+	// never sets it, validation ignores it, and it never feeds the metric stack.
+	Description string       `json:"description,omitempty"`
+	Generation  int          `json:"generation"`
+	Skeleton    SkeletonType `json:"skeleton"`
 	// Fitness is the RAW (unshared) fitness. It must never hold a
 	// sharing/novelty-blended score: the published genome.json used to store
 	// SharedFitness here while report.md showed raw fitness, and the two

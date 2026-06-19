@@ -44,6 +44,8 @@ func main() {
 		cmdServe(os.Args[2:])
 	case "describe":
 		cmdDescribe(os.Args[2:])
+	case "seeds":
+		cmdSeeds(os.Args[2:])
 	case "judge":
 		cmdJudge(os.Args[2:])
 	case "version":
@@ -67,7 +69,8 @@ Commands:
   restamp     Re-evaluate a saved run's genomes for veto-stability and write a results bundle
   playtest    Play a game interactively against AI
   serve       Serve a genome (or a directory of them) as a browser game
-  describe    Show details of a genome JSON file
+  describe    Show details of a genome JSON file (-rules for the rulebook)
+  seeds       Export built-in classic seed genomes as JSON
   judge       LLM-as-judge: emit blind dossiers / rank verdicts
   version     Print version info
   help        Show this message`)
@@ -337,12 +340,17 @@ func cmdPlaytest(args []string) {
 }
 
 func cmdDescribe(args []string) {
-	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "usage: darwindeck describe <genome.json>")
+	positional, flagArgs := splitPositional(args)
+	fs := flag.NewFlagSet("describe", flag.ExitOnError)
+	rules := fs.Bool("rules", false, "print the human-readable rulebook instead of the field summary")
+	fs.Parse(flagArgs)
+
+	if len(positional) == 0 {
+		fmt.Fprintln(os.Stderr, "usage: darwindeck describe <genome.json> [-rules]")
 		os.Exit(1)
 	}
 
-	data, err := os.ReadFile(args[0])
+	data, err := os.ReadFile(positional[0])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error reading file: %v\n", err)
 		os.Exit(1)
@@ -352,6 +360,11 @@ func cmdDescribe(args []string) {
 	if err := json.Unmarshal(data, &g); err != nil {
 		fmt.Fprintf(os.Stderr, "Error parsing genome: %v\n", err)
 		os.Exit(1)
+	}
+
+	if *rules {
+		fmt.Print(output.GenerateRulebook(&g))
+		return
 	}
 
 	fmt.Printf("Genome: %s\n", g.ID)

@@ -1,0 +1,72 @@
+{
+  "Cascade": {
+    "kind": "evolved",
+    "skeleton": 0,
+    "players": 4,
+    "orig_id": "gen60_76619",
+    "file": "01-shedding-knock.json"
+  },
+  "Standoff": {
+    "kind": "evolved",
+    "skeleton": 0,
+    "players": 2,
+    "orig_id": "gen60_32990",
+    "file": "02-shedding-2p.json"
+  },
+  "Black Deuce": {
+    "kind": "evolved",
+    "skeleton": 1,
+    "players": 2,
+    "orig_id": "gen100_39876",
+    "file": "03-tricktaking.json"
+  },
+  "Knockabout": {
+    "kind": "evolved",
+    "skeleton": 2,
+    "players": 5,
+    "orig_id": "gen200_84667",
+    "file": "04-rummy.json"
+  },
+  "Tightrope": {
+    "kind": "evolved",
+    "skeleton": 3,
+    "players": 2,
+    "orig_id": "gen100_14213",
+    "file": "05-climbing.json"
+  },
+  "Tidewater": {
+    "kind": "evolved",
+    "skeleton": 4,
+    "players": 2,
+    "orig_id": "gen81_56545",
+    "file": "06-casino.json"
+  },
+  "Showhand": {
+    "kind": "evolved",
+    "skeleton": 5,
+    "players": 4,
+    "orig_id": "gen100_44763",
+    "file": "07-vying.json"
+  },
+  "Wildfire": {
+    "kind": "classic",
+    "skeleton": 0,
+    "players": 2,
+    "orig_id": "crazy-eights",
+    "file": "08-classic-crazy-eights.json"
+  },
+  "Tenline": {
+    "kind": "classic",
+    "skeleton": 2,
+    "players": 2,
+    "orig_id": "gin-rummy",
+    "file": "09-classic-gin.json"
+  },
+  "Highrise": {
+    "kind": "classic",
+    "skeleton": 3,
+    "players": 4,
+    "orig_id": "big-two",
+    "file": "10-classic-bigtwo.json"
+  }
+}

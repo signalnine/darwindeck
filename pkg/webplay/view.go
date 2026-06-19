@@ -46,6 +46,7 @@ type TableView struct {
 type View struct {
 	Session     string     `json:"session"`
 	Title       string     `json:"title"`
+	Description string     `json:"description,omitempty"`
 	Skeleton    string     `json:"skeleton"`
 	Status      string     `json:"status"`
 	Turn        int        `json:"turn"`
@@ -66,19 +67,20 @@ type View struct {
 func (ws *WebSession) view(includeRules bool) View {
 	st := ws.state
 	v := View{
-		Session:    ws.ID,
-		Title:      gameTitle(ws.Genome),
-		Skeleton:   ws.Genome.Skeleton.String(),
-		Status:     ws.status,
-		Turn:       st.Turn,
-		YourSeat:   HumanSeat,
-		YourHand:   cardStrings(st.Hands[HumanSeat]),
-		YourScore:  scoreAt(st.Scores, HumanSeat),
-		Winner:     -1,
-		Table:      tableView(st, ws.Genome),
-		Log:        tail(ws.log, logTail),
-		LegalMoves: []MoveView{},
-		Opponents:  []OppView{},
+		Session:     ws.ID,
+		Title:       gameTitle(ws.Genome),
+		Description: ws.Genome.Description,
+		Skeleton:    ws.Genome.Skeleton.String(),
+		Status:      ws.status,
+		Turn:        st.Turn,
+		YourSeat:    HumanSeat,
+		YourHand:    cardStrings(st.Hands[HumanSeat]),
+		YourScore:   scoreAt(st.Scores, HumanSeat),
+		Winner:      -1,
+		Table:       tableView(st, ws.Genome),
+		Log:         tail(ws.log, logTail),
+		LegalMoves:  []MoveView{},
+		Opponents:   []OppView{},
 	}
 
 	for seat := 0; seat < st.NumPlayers; seat++ {

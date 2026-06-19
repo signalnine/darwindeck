@@ -66,6 +66,12 @@
   .muted { color: var(--muted); }
   .hide { display: none; }
   .pill { font-size: 12px; padding: 2px 8px; border-radius: 20px; background: var(--panel2); border: 1px solid var(--line); color: var(--muted); }
+  .glist { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+  .gamecard { width: 100%; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; cursor: pointer; transition: .12s; text-align: left; color: inherit; font: inherit; }
+  .gamecard:hover { border-color: var(--accent); }
+  .gamecard h3 { margin: 0 0 5px; font-size: 16px; color: var(--ink); }
+  .gamecard .pitch { color: var(--muted); font-size: 13px; margin: 0 0 10px; }
+  .gamecard .meta { font-size: 12px; color: var(--muted); text-transform: capitalize; }
 </style>
 </head>
 <body>
@@ -76,20 +82,22 @@
 <main>
 
   <!-- Lobby -->
-  <section id="lobby" class="panel">
-    <h2>Choose a game</h2>
-    <div class="row spread">
-      <select id="gameSelect"></select>
-      <div class="row">
-        <label class="muted" for="difficulty">opponent</label>
-        <select id="difficulty">
-          <option value="greedy">greedy</option>
-          <option value="random">random</option>
-          <option value="mcts">mcts (slow)</option>
-        </select>
-        <button class="primary" id="startBtn">Start</button>
+  <section id="lobby">
+    <section class="panel">
+      <div class="row spread">
+        <h2 style="margin:0">Pick a game</h2>
+        <div class="row">
+          <label class="muted" for="difficulty">opponent</label>
+          <select id="difficulty">
+            <option value="greedy">greedy</option>
+            <option value="random">random</option>
+            <option value="mcts">mcts (slow)</option>
+          </select>
+        </div>
       </div>
-    </div>
+      <p class="muted" style="margin:10px 0 0">These card games were invented by an evolutionary search, with a few classics mixed in as a baseline. Play one against the AI and rate it when you're done - the ratings are the experiment.</p>
+    </section>
+    <div id="gameList" class="glist"></div>
   </section>
 
   <!-- Game -->
@@ -99,6 +107,7 @@
         <div><b id="gTitle"></b> <span class="pill" id="gSkeleton"></span></div>
         <div class="muted">turn <span id="gTurn">0</span> · <span id="gDiff"></span></div>
       </div>
+      <div class="muted" id="gDesc" style="font-size:13px; margin-top:4px"></div>
     </section>
 
     <section class="panel" id="overPanel" hidden>
@@ -175,24 +184,26 @@ async function api(path, opts) {
 
 async function loadGames() {
   const games = await api("/api/games");
-  const sel = $("gameSelect");
-  sel.innerHTML = "";
+  const list = $("gameList");
+  list.innerHTML = "";
   games.forEach(g => {
-    const o = document.createElement("option");
-    o.value = g.id;
-    o.textContent = `${g.title}  (${g.skeleton}, ${g.players}p)`;
-    sel.appendChild(o);
+    const card = document.createElement("button");
+    card.className = "gamecard";
+    const h = document.createElement("h3"); h.textContent = g.title;
+    const p = document.createElement("p"); p.className = "pitch"; p.textContent = g.description || "";
+    const m = document.createElement("div"); m.className = "meta"; m.textContent = `${g.skeleton} · ${g.players} players`;
+    card.append(h, p, m);
+    card.onclick = () => startGame(g.id);
+    list.appendChild(card);
   });
-  if (games.length <= 1) $("gameSelect").parentElement; // single game: still selectable
 }
 
-async function startGame() {
-  $("startBtn").disabled = true;
+async function startGame(gameId) {
   try {
     const v = await api("/api/new", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ game: $("gameSelect").value, difficulty: $("difficulty").value }),
+      body: JSON.stringify({ game: gameId, difficulty: $("difficulty").value }),
     });
     session = v.session;
     $("lobby").classList.add("hide");
@@ -202,8 +213,6 @@ async function startGame() {
     render(v);
   } catch (e) {
     alert("Could not start: " + e.message);
-  } finally {
-    $("startBtn").disabled = false;
   }
 }
 
@@ -223,6 +232,7 @@ async function sendMove(index) {
 function render(v) {
   $("subhead").textContent = v.title;
   $("gTitle").textContent = v.title;
+  $("gDesc").textContent = v.description || "";
   $("gSkeleton").textContent = v.skeleton;
   $("gTurn").textContent = v.turn;
   $("handScore").textContent = v.yourScore ? `· score ${v.yourScore}` : "";
@@ -359,7 +369,6 @@ function renderMarkdown(md) {
   return html;
 }
 
-$("startBtn").onclick = startGame;
 $("againBtn").onclick = resetLobby;
 $("submitRating").onclick = submitRating;
 loadGames();
