@@ -1,0 +1,245 @@
+{
+ "0:": {
+  "closest_game": "Crazy Eights (Mau-Mau)",
+  "score": -0.6,
+  "votes": [
+   "variant",
+   "variant",
+   "variant"
+  ]
+ },
+ "0:0": {
+  "closest_game": "Crazy Eights / Mau-Mau",
+  "score": -0.6,
+  "votes": [
+   "variant",
+   "variant",
+   "variant"
+  ]
+ },
+ "0:1": {
+  "closest_game": "Mau-Mau / Pesten",
+  "score": -0.6,
+  "votes": [
+   "variant",
+   "variant",
+   "variant"
+  ]
+ },
+ "0:1,4": {
+  "closest_game": "Mau-Mau / UNO",
+  "score": -0.6,
+  "votes": [
+   "variant",
+   "variant",
+   "variant"
+  ]
+ },
+ "0:1,4,5": {
+  "closest_game": "Crazy Eights",
+  "score": -0.6,
+  "votes": [
+   "variant",
+   "variant",
+   "variant"
+  ]
+ },
+ "0:1,5": {
+  "closest_game": "Crazy Eights",
+  "score": -0.6,
+  "votes": [
+   "variant",
+   "variant",
+   "variant"
+  ]
+ },
+ "0:1,5,8": {
+  "closest_game": "Crazy Eights",
+  "score": -0.6,
+  "votes": [
+   "variant",
+   "variant",
+   "variant"
+  ]
+ },
+ "0:3,7,8": {
+  "closest_game": "Mau-Mau (Crazy Eights family)",
+  "score": -0.5,
+  "votes": [
+   "variant",
+   "variant",
+   "novel"
+  ]
+ },
+ "0:4": {
+  "closest_game": "Crazy Eights (Uno)",
+  "score": -0.6,
+  "votes": [
+   "variant",
+   "variant",
+   "variant"
+  ]
+ },
+ "0:4,5": {
+  "closest_game": "Crazy Eights",
+  "score": -0.6,
+  "votes": [
+   "variant",
+   "variant",
+   "variant"
+  ]
+ },
+ "0:5": {
+  "closest_game": "Crazy Eights / Mau-Mau",
+  "score": -0.6,
+  "votes": [
+   "variant",
+   "variant",
+   "variant"
+  ]
+ },
+ "0:8": {
+  "closest_game": "Mau-Mau / Pesten",
+  "score": -0.6,
+  "votes": [
+   "variant",
+   "variant",
+   "variant"
+  ]
+ },
+ "1:1,2": {
+  "closest_game": "Pinochle",
+  "score": -0.6,
+  "votes": [
+   "variant",
+   "variant",
+   "variant"
+  ]
+ },
+ "1:1,2,6": {
+  "closest_game": "Pinochle",
+  "score": -0.6,
+  "votes": [
+   "variant",
+   "variant",
+   "variant"
+  ]
+ },
+ "1:2": {
+  "closest_game": "Whist (2-player)",
+  "score": -0.6,
+  "votes": [
+   "variant",
+   "variant",
+   "variant"
+  ]
+ },
+ "1:2,6": {
+  "closest_game": "Slobberhannes (2-player avoidance trick-taking with a single poison card -- the Queen of Clubs -- and trump; G16 substitutes the 4 of Clubs as the sole scoring card and adds a face-card draw penalty, but the core strategic identity is identical)",
+  "score": -0.6,
+  "votes": [
+   "variant",
+   "variant",
+   "variant"
+  ]
+ },
+ "1:6": {
+  "closest_game": "Two-player Whist",
+  "score": -0.5,
+  "votes": [
+   "known",
+   "variant",
+   "variant"
+  ]
+ },
+ "2:": {
+  "closest_game": "Gin Rummy",
+  "score": -0.6,
+  "votes": [
+   "variant",
+   "variant",
+   "variant"
+  ]
+ },
+ "2:0": {
+  "closest_game": "Knock Rummy",
+  "score": -0.6,
+  "votes": [
+   "variant",
+   "variant",
+   "variant"
+  ]
+ },
+ "2:0,2": {
+  "closest_game": "Knock Rummy",
+  "score": -0.6,
+  "votes": [
+   "variant",
+   "variant",
+   "variant"
+  ]
+ },
+ "2:0,2,5": {
+  "closest_game": "Knock Rummy (Gin Rummy)",
+  "score": -0.6,
+  "votes": [
+   "variant",
+   "variant",
+   "variant"
+  ]
+ },
+ "2:0,5": {
+  "closest_game": "Knock Rummy (3-card variant)",
+  "score": -0.6,
+  "votes": [
+   "variant",
+   "variant",
+   "variant"
+  ]
+ },
+ "2:2": {
+  "closest_game": "Knock Rummy",
+  "score": -0.6,
+  "votes": [
+   "variant",
+   "variant",
+   "variant"
+  ]
+ },
+ "2:2,5": {
+  "closest_game": "Knock Rummy",
+  "score": -0.6,
+  "votes": [
+   "variant",
+   "variant",
+   "variant"
+  ]
+ },
+ "2:5": {
+  "closest_game": "Knock Rummy",
+  "score": -0.6,
+  "votes": [
+   "variant",
+   "variant",
+   "variant"
+  ]
+ },
+ "3:2": {
+  "closest_game": "Big Two (2-player singles-only form)",
+  "score": -0.6,
+  "votes": [
+   "variant",
+   "variant",
+   "variant"
+  ]
+ },
+ "5:5": {
+  "closest_game": "Seven-card draw poker with a Hearts-style penalty-card scoring overlay (hearts cost 1 chip, 9 of Diamonds costs 4 chips at showdown) -- closest published analog is Black Maria / Hearts-penalty poker variants; the penalty wrapper does not change any betting decisions since players cannot selectively avoid dealt penalty cards.",
+  "score": -0.6,
+  "votes": [
+   "variant",
+   "variant",
+   "variant"
+  ]
+ }
+}

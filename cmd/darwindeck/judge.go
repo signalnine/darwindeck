@@ -56,6 +56,8 @@ func cmdJudge(args []string) {
 		cmdJudgeEmit(args[1:])
 	case "rank":
 		cmdJudgeRank(args[1:])
+	case "backfill":
+		cmdJudgeBackfill(args[1:])
 	case "help", "--help", "-h":
 		printJudgeUsage()
 	default:
@@ -76,7 +78,12 @@ Subcommands:
 
   rank <dossier-dir> <verdicts.json> [--out <report.md>]
       Ingest verdicts, aggregate majority-of-3 per id, re-rank by judged
-      quality, flag rediscoveries, and write judged-report.md + judged.json.`)
+      quality, flag rediscoveries, and write judged-report.md + judged.json.
+
+  backfill -table <verdicts.json> -dir <genome-dir> -out <dossier-dir>
+      Emit blind dossiers for every composition present under <genome-dir>
+      that is NOT yet in <verdicts.json>, so the composition-keyed table can be
+      completed and the in-loop judge becomes a zero-cost lookup.`)
 }
 
 func cmdJudgeEmit(args []string) {

@@ -53,6 +53,21 @@ this agreement check.
 
 Everything is byte-identical with no verdict table loaded.
 
+## The complete table (distillation)
+
+The judge's input is `Composition(g)` (skeleton + sorted borrow set) -- a small
+finite categorical space. Rather than train a local model to approximate the
+judge, the reachable composition space is enumerated and labeled once:
+`results/2026-06-18-complete-verdict-table/verdicts.json` covers all 42 reachable
+compositions (5 novel, 33 variant, 6 known). Loaded as `-judge-verdicts`, the
+in-loop judge term is then a **zero-cost lookup** -- no LLM call per generation.
+
+Keep it complete with `darwindeck judge backfill -table <verdicts.json> -dir
+<run-output> -out <dossiers>`: it emits a blind dossier per composition present
+in the run but absent from the table. Judge those (the workflow below), append
+`composition -> score`, and the table is complete again. Only adding a skeleton
+or a borrow opens new compositions.
+
 ## The loop (one chunk)
 
 ```bash
