@@ -1,0 +1,45 @@
+== Expressiveness: the grammar reproduces these hand-coded skeletons ==
+  shedding  4p deal=7 shared=1 move=play_match(either) end=empty_hand score=first_out term=40/40 agency=0.36 turns=   43 OK
+  climbing  4p deal=7 move=beat_or_pass end=empty_hand score=first_out term=40/40 agency=0.54 turns=   47 OK
+  banking   4p deal=0 shared=3 move=accumulate target=21 end=bust score=closest_target term=40/40 agency=1.00 turns=    9 OK
+  casino    4p deal=4 shared=4 move=capture end=deck_out score=most_captured term=40/40 agency=0.75 turns=   48 OK
+
+== Family space (4 move-generators x ends x scorings x params) ==
+  full specs enumerated : 114
+  distinct families     : 20  (4 canonical, 16 NOVEL)
+
+== Playability under random AI (40 trials each, 2000-turn cap) ==
+  PLAYABLE (terminates + never stuck + has agency)   : 70/114 (61%)
+  of which NATURAL-END (own end fires, not stalemate): 42  <- the well-typed families
+  stalemate-reliant (end unreachable = mis-typed)    : 28  <- prune via composition typing
+  ever STUCK (empty move set = safety violation)     : 0
+  ever hit the turn cap (non-termination)            : 0
+
+== NOVEL, natural-end, playable families (not any hand-coded skeleton) ==
+  accumulate|bust|high_score
+  beat_or_pass|empty_hand|fewest_cards
+  capture|deck_out|high_score
+  play_match/either|empty_hand|fewest_cards
+
+== Per-family verdict (specs = param variants of the family) ==
+  family                                        spec   nat stale   agz  tag
+  accumulate|bust|closest_target                   6     6     0     0  well-typed [canonical]
+  accumulate|bust|high_score                       6     6     0     0  well-typed
+  beat_or_pass|deck_out|fewest_cards               6     0     6     0  MIS-TYPED (end unreachable)
+  beat_or_pass|deck_out|first_out                  6     0     6     0  MIS-TYPED (end unreachable)
+  beat_or_pass|empty_hand|fewest_cards             6     6     0     0  well-typed
+  beat_or_pass|empty_hand|first_out                6     6     0     0  well-typed [canonical]
+  capture|deck_out|high_score                      3     3     0     0  well-typed
+  capture|deck_out|most_captured                   3     3     0     0  well-typed [canonical]
+  play_match/either|deck_out|fewest_cards          6     0     6     0  MIS-TYPED (end unreachable)
+  play_match/either|deck_out|first_out             6     0     6     0  MIS-TYPED (end unreachable)
+  play_match/either|empty_hand|fewest_cards        6     6     0     0  well-typed
+  play_match/either|empty_hand|first_out           6     6     0     0  well-typed [canonical]
+  play_match/rank|deck_out|fewest_cards            6     0     0     6  AGENCY-DEAD
+  play_match/rank|deck_out|first_out               6     0     0     6  AGENCY-DEAD
+  play_match/rank|empty_hand|fewest_cards          6     0     0     6  AGENCY-DEAD
+  play_match/rank|empty_hand|first_out             6     0     0     6  AGENCY-DEAD
+  play_match/suit|deck_out|fewest_cards            6     0     1     5  MIS-TYPED (end unreachable)
+  play_match/suit|deck_out|first_out               6     0     1     5  MIS-TYPED (end unreachable)
+  play_match/suit|empty_hand|fewest_cards          6     0     1     5  MIS-TYPED (end unreachable)
+  play_match/suit|empty_hand|first_out             6     0     1     5  MIS-TYPED (end unreachable)
