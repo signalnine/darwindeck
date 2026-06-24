@@ -213,6 +213,7 @@ func (rr Runner) Apply(gs *sim.GameState, m sim.Move) {
 				gs.Hands[p] = removeCard(gs.Hands[p], c)
 			}
 			gs.Discard = append(gs.Discard, m.Cards...)
+			gs.PassCount = 0
 			if rr.Spec.hasMod(ModDrawPenalty) && len(gs.Deck) > 0 { // face-card play -> draw one
 				if last := m.Cards[len(m.Cards)-1]; int(last.Rank) >= 11 {
 					drawn, rem := sim.DrawN(gs.Deck, 1)
@@ -224,6 +225,9 @@ func (rr Runner) Apply(gs *sim.GameState, m sim.Move) {
 			drawn, rem := sim.DrawN(gs.Deck, 1)
 			gs.Hands[p] = append(gs.Hands[p], drawn...)
 			gs.Deck = rem
+			gs.PassCount = 0
+		case sim.MovePass: // only reachable with an empty deck and no legal play
+			gs.PassCount++
 		}
 		gs.Active = (p + 1) % gs.NumPlayers
 
@@ -342,6 +346,14 @@ func (rr Runner) CheckEnd(gs *sim.GameState) (winner int, done bool) {
 		return fewestCards(gs), true
 	}
 	s := rr.Spec
+	// Runner-level liveness: a PlayMatch game can stall when the deck is empty and
+	// nobody holds a legal play (everyone passes). End it by the standing progress
+	// (fewest cards). This is the termination guarantee living in the RUNNER, not
+	// in the harness -- so the grammar is playable-by-construction in the real
+	// engine (sim.RunBatch), which has no stalemate net of its own.
+	if s.Move == PlayMatch && gs.PassCount >= gs.NumPlayers {
+		return fewestCards(gs), true
+	}
 	switch s.End {
 	case EmptyHand:
 		for p := 0; p < gs.NumPlayers; p++ {
@@ -356,7 +368,10 @@ func (rr Runner) CheckEnd(gs *sim.GameState) (winner int, done bool) {
 				allEmpty = false
 			}
 		}
-		if allEmpty && len(gs.Deck) == 0 {
+		// End when hands are empty and the deck can't deal another full round --
+		// the leftover-remainder case (deck in 1..NumPlayers-1) would otherwise
+		// stall on passes forever in the real engine.
+		if allEmpty && len(gs.Deck) < gs.NumPlayers {
 			return rr.score(gs), true
 		}
 	case Bust:
@@ -389,13 +404,21 @@ func (rr Runner) score(gs *sim.GameState) int {
 		}
 		return best
 	case ClosestTarget:
-		best = -1
+		best, bestVal = -1, -1
 		for p := 0; p < gs.NumPlayers; p++ {
 			if gs.Scores[p] <= s.Target && gs.Scores[p] >= bestVal {
 				best, bestVal = p, gs.Scores[p]
 			}
 		}
-		return best // -1 if everyone busted
+		if best < 0 { // everyone busted: least-over wins (the GenericRunner contract needs a winner >= 0)
+			best, bestVal = 0, gs.Scores[0]
+			for p := 1; p < gs.NumPlayers; p++ {
+				if gs.Scores[p] < bestVal {
+					best, bestVal = p, gs.Scores[p]
+				}
+			}
+		}
+		return best
 	case MostCaptured, HighScore:
 		eff := func(p int) int { // ModMeldBonus banks set/run bonuses from the captured pile
 			v := gs.Scores[p]

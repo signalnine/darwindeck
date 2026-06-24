@@ -1,5 +1,5 @@
 == Expressiveness: the grammar reproduces these hand-coded skeletons ==
-  shedding  4p deal=7 shared=1 move=play_match(either) end=empty_hand score=first_out term=40/40 agency=0.36 turns=   43 OK
+  shedding  4p deal=7 shared=1 move=play_match(either) end=empty_hand score=first_out term=40/40 agency=0.36 turns=   42 OK
   climbing  4p deal=7 move=beat_or_pass end=empty_hand score=first_out term=40/40 agency=0.54 turns=   47 OK
   banking   4p deal=0 shared=3 move=accumulate target=21 end=bust score=closest_target term=40/40 agency=1.00 turns=    9 OK
   casino    4p deal=4 shared=4 move=capture end=deck_out score=most_captured term=40/40 agency=0.75 turns=   48 OK
@@ -30,18 +30,18 @@
   beat_or_pass|empty_hand|first_out                6     6     0     0  well-typed  KEEP [canonical]
   capture|deck_out|high_score                      3     3     0     0  INERT score drop (== another rule / degenerate)
   capture|deck_out|most_captured                   3     3     0     0  well-typed  KEEP [canonical]
-  play_match/either|deck_out|fewest_cards          6     0     6     0  MIS-TYPED   drop (end unreachable)
-  play_match/either|deck_out|first_out             6     0     6     0  MIS-TYPED   drop (end unreachable)
+  play_match/either|deck_out|fewest_cards          6     6     0     0  INERT score drop (== another rule / degenerate)
+  play_match/either|deck_out|first_out             6     6     0     0  INERT score drop (== another rule / degenerate)
   play_match/either|empty_hand|fewest_cards        6     6     0     0  INERT score drop (== another rule / degenerate)
   play_match/either|empty_hand|first_out           6     6     0     0  well-typed  KEEP [canonical]
   play_match/rank|deck_out|fewest_cards            6     0     0     6  AGENCY-DEAD drop (forced moves)
   play_match/rank|deck_out|first_out               6     0     0     6  AGENCY-DEAD drop (forced moves)
   play_match/rank|empty_hand|fewest_cards          6     0     0     6  AGENCY-DEAD drop (forced moves)
   play_match/rank|empty_hand|first_out             6     0     0     6  AGENCY-DEAD drop (forced moves)
-  play_match/suit|deck_out|fewest_cards            6     0     1     5  AGENCY-DEAD drop (forced moves)
-  play_match/suit|deck_out|first_out               6     0     1     5  AGENCY-DEAD drop (forced moves)
-  play_match/suit|empty_hand|fewest_cards          6     0     1     5  AGENCY-DEAD drop (forced moves)
-  play_match/suit|empty_hand|first_out             6     0     1     5  AGENCY-DEAD drop (forced moves)
+  play_match/suit|deck_out|fewest_cards            6     2     0     4  AGENCY-DEAD drop (forced moves)
+  play_match/suit|deck_out|first_out               6     2     0     4  AGENCY-DEAD drop (forced moves)
+  play_match/suit|empty_hand|fewest_cards          6     2     0     4  AGENCY-DEAD drop (forced moves)
+  play_match/suit|empty_hand|first_out             6     2     0     4  AGENCY-DEAD drop (forced moves)
 
 == Modifier axis (5 productive typed modifiers from v2 borrows, subsets <=3) ==
   modifiers: run_play, follow_suit, draw_penalty, knock, meld_bonus (wild: defined, non-productive)
@@ -50,7 +50,7 @@
   novel families (carry >=1 modifier)  : 16
   multiplier from the modifier algebra: 5.0x
   PLAYABLE under random AI            : 20/20 (100%)
-  of which natural-end / stalemate    : 19 / 1
+  of which natural-end / stalemate    : 20 / 0
   ever STUCK / ever non-terminating   : 0 / 0
     beat_or_pass|empty_hand|first_out+knock
     capture|deck_out|most_captured+meld_bonus

@@ -111,6 +111,26 @@ and more modifiers compounds this multiplicatively toward the hundreds / thousan
   both same-rank sets AND same-suit runs, matching v2 `applyMeldBonus` (the first
   cut scored only sets, contradicting its own comment).
 
+## Step 4: it runs in the REAL engine (and liveness has to live in the runner)
+
+`adapter.go` makes a `GameSpec` satisfy `sim.GenericRunner`, so a grammar
+composition runs through the SAME `sim.RunBatch` engine the hand-coded skeletons
+use. Verified: **24 specs (4 canonical + 20 modified), 4800 games, 0 timeouts,
+0 errors, 0 stuck** -- every game completes with a real winner and emits the event
+taxonomy the metrics read.
+
+Getting there surfaced a real bug the prototype harness had hidden: **the grammar's
+liveness guarantee lived in the HARNESS, not the runner.** `PlayRandom` had a
+stalemate net (progress-potential flat -> end); the real engine has only a turn
+cap. So `draw_penalty` specs (which grow hands and drain the deck) and the
+deck-remainder edge of `capture` would stall on an all-pass loop and time out in
+`sim.RunBatch` while passing in the harness. Fixed by moving termination INTO the
+runner (`CheckEnd`): a PlayMatch all-pass deadlock and a "can't deal another round"
+capture end. Now the runner terminates by its own rules -- the harness stalemate
+net is a redundant backstop, and the modifier axis reads 20/20 natural-end (was
+19/1). Lesson: playable-by-construction has to be a property of the RUNNER to
+survive contact with the real engine, not of the test harness.
+
 ## Recommendation / status
 
 Not a full rewrite. Grow v2's borrow system into a typed-composition layer on top
@@ -122,11 +142,17 @@ of the generic runner:
 3. Port the borrow hooks as typed *modifiers* gated against the spec. **DONE**
    (`modifier.go`; 5 productive modifiers, 5.0x families, 16 novel, playability
    preserved). Reviewed adversarially (3 lenses) + verified.
-4. Wire the fitness + judge-in-loop pipeline onto the generic runner so the same
-   evolution loop searches the typed, playable-by-construction space. **NEXT** --
-   the plug-in point is `fitness.GetRunner` (a `sim.GenericRunner` per skeleton)
-   plus `mechanic.HooksFor`; the grammar runner already implements that shape over
-   `sim.GameState`.
+4. Run through the real simulation engine. **DONE** (`adapter.go`, `sim.RunBatch`,
+   4800 games clean) -- and the liveness-in-runner fix above.
+5. Full FITNESS parity (the 5 metrics) + judge keying. **NEXT** -- the seam:
+   the simulation layer is genuinely generic (the adapter is all it took), but the
+   fitness layer is still skeleton-coupled. `fitness.Evaluate` calls `GetRunner(g)`
+   (no runner injection), `optionDeltaModeFor` switches on `g.Skeleton` for the
+   Interaction metric, and the greedy scorers are per-skeleton and don't understand
+   the grammar's state layout. So full parity needs either a `GetRunner` injection
+   point (+ a grammar genome it maps to) or generic delta-mode/greedy-scorer
+   versions. `SpecGenome` already carries a best-fit skeleton so the existing modes
+   approximately apply.
 
 The win is thousands of playable-by-construction families feeding the *same* judge
 loop already in use -- the grammar serves the discovery goal, it is not the goal.
