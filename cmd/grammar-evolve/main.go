@@ -15,9 +15,11 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"math/rand/v2"
+	"os"
 	"sort"
 
 	"github.com/darwindeck/darwindeck/pkg/fitness"
@@ -61,6 +63,21 @@ type individual struct {
 }
 
 func main() {
+	// -verdicts <path> loads a Composition-keyed judge table (novel>0, variant/
+	// known<0) from grammar-judge, closing the discovery loop: the GA then SELECTS
+	// for judge-certified-novel compositions, not just behavioral novelty.
+	for i := 1; i < len(os.Args)-1; i++ {
+		if os.Args[i] == "-verdicts" {
+			if data, err := os.ReadFile(os.Args[i+1]); err == nil {
+				if err := json.Unmarshal(data, &JudgeVerdicts); err != nil {
+					fmt.Fprintln(os.Stderr, "verdicts:", err)
+				} else {
+					fmt.Printf("loaded %d judge verdicts from %s\n", len(JudgeVerdicts), os.Args[i+1])
+				}
+			}
+		}
+	}
+
 	rng := rand.New(rand.NewPCG(2026, 0x9e3779b97f4a7c15))
 	cache := map[string]individual{}
 

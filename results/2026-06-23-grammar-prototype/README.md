@@ -185,8 +185,31 @@ of the generic runner:
    grammar exists to find (`beat_or_pass+knock` nov=0.875; `run_play,draw_penalty,
    knock` stacks). Raw run: `evolve-2026-06-23.txt`.
 
-The remaining work is the OUT-OF-LOOP judge: emit blind dossiers for grammar
-compositions and fill `JudgeVerdicts` -- the SAME apparatus v2 already has
-(`pkg/judge`), now keyed on `GameSpec.Composition`. The win is thousands of
-playable-by-construction families feeding the *same* judge loop already in use --
-the grammar serves the discovery goal, it is not the goal.
+7. The blind judge -- closing the loop. **DONE** (`pkg/grammar/rulebook.go`,
+   `pkg/judge/grammar_dossier.go`, `cmd/grammar-judge`). `GameSpec.Rulebook`
+   renders a composition as natural-language rules (no grammar internals leak --
+   the legibility v2 learned is the bottleneck); `EmitGrammar` writes one BLIND
+   dossier per well-typed family (rulebook + greedy-vs-greedy traces via the
+   adapter + a termination note), keyed on `Composition`.
+
+   All 20 compositions were blind-judged (one judge each, `judge-verdicts-
+   2026-06-23.txt`). The judge is calibrated and the result mirrors v2 exactly:
+   the bare canonical bases land as **known** (shedding 0.95, casino 0.82) or
+   variant, the modifier fusions read mostly **variant** (a move-tweak doesn't
+   change the core decision), and ONE rich fusion -- `run_play + follow_suit +
+   knock` -- reads **NOVEL** ("a dual win-path timing decision found in no single
+   standard published game"). 1 novel / 17 variant / 2 known.
+
+   Folding the verdicts into a `Composition`-keyed `JudgeVerdicts` table
+   (`judge-verdicts.json`) and re-running the novelty-select GA with it
+   (`cmd/grammar-evolve -verdicts`, `evolve-judged-2026-06-23.txt`) **surfaces the
+   judge-certified-novel composition to the #1 selection slot and demotes the two
+   "known" bare bases to the bottom.** The loop is closed: emit -> blind judge ->
+   verdict table -> the GA selects for certified novelty -- the original DarwinDeck
+   goal, now over the typed grammar space.
+
+This is the whole point: thousands of playable-by-construction families feeding
+the *same* judge loop already in use -- the grammar serves the discovery goal, it
+is not the goal. Remaining sharpening (not blockers): casino's coarse capture
+move-gen (under-measures interaction/skill), the 2 missing move-gens (trick-taking,
+rummy), and 3-judge majority + more compositions for a production verdict table.

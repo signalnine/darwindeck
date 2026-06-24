@@ -1,0 +1,24 @@
+Blind novelty verdicts over the 20 grammar compositions (1 blind judge each)
+
+novel     play_match/either|empty_hand|first_out+run_play,follow_suit,knock
+variant   accumulate|bust|closest_target
+variant   beat_or_pass|empty_hand|first_out
+variant   beat_or_pass|empty_hand|first_out+knock
+variant   capture|deck_out|most_captured+meld_bonus
+variant   play_match/either|empty_hand|first_out+draw_penalty
+variant   play_match/either|empty_hand|first_out+draw_penalty,knock
+variant   play_match/either|empty_hand|first_out+follow_suit
+variant   play_match/either|empty_hand|first_out+follow_suit,draw_penalty
+variant   play_match/either|empty_hand|first_out+follow_suit,draw_penalty,knock
+variant   play_match/either|empty_hand|first_out+follow_suit,knock
+variant   play_match/either|empty_hand|first_out+knock
+variant   play_match/either|empty_hand|first_out+run_play
+variant   play_match/either|empty_hand|first_out+run_play,draw_penalty
+variant   play_match/either|empty_hand|first_out+run_play,draw_penalty,knock
+variant   play_match/either|empty_hand|first_out+run_play,follow_suit
+variant   play_match/either|empty_hand|first_out+run_play,follow_suit,draw_penalty
+variant   play_match/either|empty_hand|first_out+run_play,knock
+known     capture|deck_out|most_captured
+known     play_match/either|empty_hand|first_out
+
+novel=1  variant=17  known=2

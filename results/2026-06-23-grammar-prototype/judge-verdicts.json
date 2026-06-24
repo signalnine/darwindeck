@@ -1,0 +1,22 @@
+{
+ "accumulate|bust|closest_target": -0.5,
+ "beat_or_pass|empty_hand|first_out": -0.5,
+ "beat_or_pass|empty_hand|first_out+knock": -0.5,
+ "capture|deck_out|most_captured": -1.0,
+ "capture|deck_out|most_captured+meld_bonus": -0.5,
+ "play_match/either|empty_hand|first_out": -1.0,
+ "play_match/either|empty_hand|first_out+draw_penalty": -0.5,
+ "play_match/either|empty_hand|first_out+draw_penalty,knock": -0.5,
+ "play_match/either|empty_hand|first_out+follow_suit": -0.5,
+ "play_match/either|empty_hand|first_out+follow_suit,draw_penalty": -0.5,
+ "play_match/either|empty_hand|first_out+follow_suit,draw_penalty,knock": -0.5,
+ "play_match/either|empty_hand|first_out+follow_suit,knock": -0.5,
+ "play_match/either|empty_hand|first_out+knock": -0.5,
+ "play_match/either|empty_hand|first_out+run_play": -0.5,
+ "play_match/either|empty_hand|first_out+run_play,draw_penalty": -0.5,
+ "play_match/either|empty_hand|first_out+run_play,draw_penalty,knock": -0.5,
+ "play_match/either|empty_hand|first_out+run_play,follow_suit": -0.5,
+ "play_match/either|empty_hand|first_out+run_play,follow_suit,draw_penalty": -0.5,
+ "play_match/either|empty_hand|first_out+run_play,follow_suit,knock": 1.0,
+ "play_match/either|empty_hand|first_out+run_play,knock": -0.5
+}

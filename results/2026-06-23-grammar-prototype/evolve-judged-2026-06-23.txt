@@ -1,0 +1,31 @@
+loaded 20 judge verdicts from results/2026-06-23-grammar-prototype/judge-verdicts.json
+gen  0: best fit=0.348 novelty=0.779 (play_match/either|empty_hand|first_out+run_play,follow_suit,knock)  distinct-compositions=12
+gen  1: best fit=0.348 novelty=0.779 (play_match/either|empty_hand|first_out+run_play,follow_suit,knock)  distinct-compositions=14
+gen  2: best fit=0.348 novelty=0.779 (play_match/either|empty_hand|first_out+run_play,follow_suit,knock)  distinct-compositions=13
+gen  3: best fit=0.348 novelty=0.779 (play_match/either|empty_hand|first_out+run_play,follow_suit,knock)  distinct-compositions=12
+gen  4: best fit=0.432 novelty=0.636 (play_match/either|empty_hand|first_out+run_play,follow_suit,knock)  distinct-compositions=13
+gen  5: best fit=0.394 novelty=0.731 (play_match/either|empty_hand|first_out+draw_penalty,knock)  distinct-compositions=13
+gen  6: best fit=0.457 novelty=0.825 (play_match/either|empty_hand|first_out+run_play,knock)  distinct-compositions=12
+gen  7: best fit=0.457 novelty=0.825 (play_match/either|empty_hand|first_out+run_play,knock)  distinct-compositions=11
+gen  8: best fit=0.457 novelty=0.825 (play_match/either|empty_hand|first_out+run_play,knock)  distinct-compositions=13
+gen  9: best fit=0.348 novelty=0.779 (play_match/either|empty_hand|first_out+run_play,follow_suit,knock)  distinct-compositions=13
+gen 10: best fit=0.381 novelty=0.797 (play_match/either|empty_hand|first_out+run_play,follow_suit,knock)  distinct-compositions=12
+gen 11: best fit=0.381 novelty=0.797 (play_match/either|empty_hand|first_out+run_play,follow_suit,knock)  distinct-compositions=13
+
+== Final population, one row per composition (fitness | novelty | composition) ==
+  fit=0.381  nov=0.797  play_match/either|empty_hand|first_out+run_play,follow_suit,knock
+  fit=0.464  nov=0.843  play_match/either|empty_hand|first_out+run_play,draw_penalty,knock
+  fit=0.298  nov=0.757  play_match/either|empty_hand|first_out+follow_suit,draw_penalty,knock
+  fit=0.516  nov=0.178  play_match/either|empty_hand|first_out+knock
+  fit=0.420  nov=0.173  play_match/either|empty_hand|first_out+run_play
+  fit=0.332  nov=0.321  play_match/either|empty_hand|first_out+run_play,follow_suit,draw_penalty
+  fit=0.424  nov=0.101  play_match/either|empty_hand|first_out+draw_penalty
+  fit=0.291  nov=0.841  play_match/either|empty_hand|first_out+follow_suit,knock
+  fit=0.561  nov=0.703  play_match/either|empty_hand|first_out+run_play,knock
+  fit=0.432  nov=0.203  accumulate|bust|closest_target
+  fit=0.372  nov=0.386  play_match/either|empty_hand|first_out+follow_suit,draw_penalty
+  fit=0.461  nov=0.123  capture|deck_out|most_captured
+  fit=0.394  nov=0.731  play_match/either|empty_hand|first_out+draw_penalty,knock
+  fit=0.442  nov=0.122  play_match/either|empty_hand|first_out
+
+Evaluated 73 distinct specs; 15 distinct compositions survive (novelty pressure keeps the pool diverse).
