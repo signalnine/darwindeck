@@ -277,6 +277,28 @@ func TestScriptedSessionFiresBorrowHooks(t *testing.T) {
 	t.Fatal("no scripted session completed across seeds 1-5; fixture or runner broken")
 }
 
+func TestDescribeMoveShortCapture(t *testing.T) {
+	played := sim.Card{Rank: 10, Suit: sim.Hearts}
+	cap1 := sim.Card{Rank: 7, Suit: sim.Clubs}
+	cap2 := sim.Card{Rank: 3, Suit: sim.Spades}
+
+	// Casino capture must name the played card AND the cards it takes (not "Unknown").
+	got := describeMoveShort(sim.Move{Type: sim.MoveCapture, Cards: []sim.Card{played, cap1, cap2}})
+	if got == "Unknown" || !strings.Contains(got, "capture") {
+		t.Errorf("MoveCapture rendered %q, want a capture description", got)
+	}
+	for _, want := range []string{played.String(), cap1.String(), cap2.String()} {
+		if !strings.Contains(got, want) {
+			t.Errorf("capture label %q missing card %q", got, want)
+		}
+	}
+
+	// A capture carrying only the played card still must not render "Unknown".
+	if got := describeMoveShort(sim.Move{Type: sim.MoveCapture, Cards: []sim.Card{played}}); got == "Unknown" {
+		t.Errorf("single-card MoveCapture rendered %q, want a capture description", got)
+	}
+}
+
 func TestOutcomeWinnerLabel(t *testing.T) {
 	cases := []struct {
 		o       Outcome

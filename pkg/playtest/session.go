@@ -186,8 +186,22 @@ func (s *Session) printState() {
 		fmt.Printf("Top card: %s\n", s.State.TopCard)
 	}
 
-	fmt.Printf("Deck: %d cards | Discard: %d cards\n",
-		len(s.State.Deck), len(s.State.Discard))
+	// Show the shared pile's actual cards, not just a count: for casino this is the
+	// face-up TABLE you capture from (you cannot choose a capture without seeing
+	// it); elsewhere it is the discard pile. Cap very long piles to the recent tail.
+	pileLabel := "Discard"
+	if s.Genome.Skeleton == genome.Casino {
+		pileLabel = "Table"
+	}
+	switch disc, n := s.State.Discard, len(s.State.Discard); {
+	case n == 0:
+		fmt.Printf("Deck: %d cards | %s: (empty)\n", len(s.State.Deck), pileLabel)
+	case n <= 16:
+		fmt.Printf("Deck: %d cards | %s: %s\n", len(s.State.Deck), pileLabel, formatCards(disc))
+	default:
+		fmt.Printf("Deck: %d cards | %s: %d cards (recent: %s)\n",
+			len(s.State.Deck), pileLabel, n, formatCards(disc[n-16:]))
+	}
 
 	for i := 0; i < s.State.NumPlayers; i++ {
 		if i == s.HumanID {
@@ -280,6 +294,13 @@ func describeMoveShort(m sim.Move) string {
 		return fmt.Sprintf("Meld %s", formatCards(m.Cards))
 	case sim.MoveDiscard:
 		return fmt.Sprintf("Discard %s", formatCards(m.Cards))
+	case sim.MoveCapture:
+		// Casino: Cards[0] is the card played from hand, Cards[1:] are the table
+		// cards it captures. Render both so a human can see what each option takes.
+		if len(m.Cards) > 1 {
+			return fmt.Sprintf("Play %s to capture %s", m.Cards[0], formatCards(m.Cards[1:]))
+		}
+		return fmt.Sprintf("Play %s (capture)", formatCards(m.Cards))
 	default:
 		return "Unknown"
 	}
