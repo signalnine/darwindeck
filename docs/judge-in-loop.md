@@ -53,20 +53,26 @@ this agreement check.
 
 Everything is byte-identical with no verdict table loaded.
 
-## The complete table (distillation)
+## The verdict table (distillation)
 
 The judge's input is `Composition(g)` (skeleton + sorted borrow set) -- a small
-finite categorical space. Rather than train a local model to approximate the
-judge, the reachable composition space is enumerated and labeled once:
-`results/2026-06-18-complete-verdict-table/verdicts.json` covers all 42 reachable
-compositions (5 novel, 33 variant, 6 known). Loaded as `-judge-verdicts`, the
-in-loop judge term is then a **zero-cost lookup** -- no LLM call per generation.
+finite categorical space, so rather than train a local model to approximate the
+judge, you label that space with the teacher once and read it back as a lookup.
+`results/2026-06-18-complete-verdict-table/verdicts.json` labels the compositions
+the search has produced so far (44 entries: ~35 of the 66 reachable + 9 legacy;
+5 novel, 33 variant, 6 known). Loaded as `-judge-verdicts`, a labeled composition
+is a **zero-cost lookup** -- no LLM call. It is NOT complete over the full 66
+reachable space (31 mostly-shedding compositions are unlabeled), but that is fine
+by design: a **miss is neutral** (`JudgeVerdicts[composition]` returns 0, so an
+unseen composition gets a 0 judge term, not an error), and `judge backfill`
+labels whatever a run actually produces.
 
-Keep it complete with `darwindeck judge backfill -table <verdicts.json> -dir
-<run-output> -out <dossiers>`: it emits a blind dossier per composition present
-in the run but absent from the table. Judge those (the workflow below), append
-`composition -> score`, and the table is complete again. Only adding a skeleton
-or a borrow opens new compositions.
+So the table self-heals for explored compositions rather than statically covering
+all 66. Run `darwindeck judge backfill -table <verdicts.json> -dir <run-output>
+-out <dossiers>` at a chunk boundary: it emits a blind dossier per composition
+present in the run but absent from the table; judge those (the workflow below),
+append `composition -> score`. Adding a skeleton or a borrow opens new
+compositions to backfill.
 
 ## The loop (one chunk)
 
