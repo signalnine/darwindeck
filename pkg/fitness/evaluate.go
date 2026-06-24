@@ -89,6 +89,56 @@ func EvaluateWithMCTS(g *genome.Genome, baseSeed uint64, cfg MCTSEvalConfig) Eva
 	return evaluate(g, baseSeed, &cfg)
 }
 
+// EvaluateWithRunner runs the Tier-1/Tier-2 metric pipeline with an INJECTED
+// runner + greedy AI instead of the skeleton dispatch (GetRunner/GetGreedyAI).
+// It is the plug-in point for the generative grammar (pkg/grammar): a GameSpec's
+// adapter runs through the SAME metric code the hand-coded skeletons use, so the
+// 5 metrics are computed by identical machinery.
+//
+// Differences from Evaluate: it SKIPS Tier 0 (genome.Validate) -- the caller's
+// composition validates itself (GameSpec.WellTyped), and the carrier genome is
+// synthetic -- and it records the degeneracy reason WITHOUT zeroing the metrics,
+// so callers see the full 5-metric vector for parity/diagnosis (Valid still
+// reflects the veto). g is the synthetic carrier (skeleton for the delta mode +
+// player count); hooks come from it (empty for a borrowless grammar genome).
+func EvaluateWithRunner(g *genome.Genome, runner sim.GenericRunner, greedy sim.AIPlayer, baseSeed uint64) EvaluationResult {
+	result := EvaluationResult{}
+	hooks := mechanic.HooksFor(g)
+
+	result.Tier1 = RunTier1(g, runner, baseSeed, hooks...)
+	if !result.Tier1.Passed {
+		return result
+	}
+
+	randomResult := sim.RunBatch(g, runner, &sim.RandomAI{}, tier2RandomGames, baseSeed+100, hooks...)
+
+	players := make([]sim.AIPlayer, g.Players)
+	players[0] = greedy
+	random := &sim.RandomAI{}
+	for i := 1; i < g.Players; i++ {
+		players[i] = random
+	}
+	greedyAI := &sim.PerPlayerAI{Players: players, Fallback: random}
+	greedyResult := sim.RunBatch(g, runner, greedyAI, tier2GreedyGames, baseSeed+1000, hooks...)
+
+	result.Degeneracy.RandomMeanRun = meanConsecutiveRun(randomResult)
+	result.Degeneracy.RandomMinSeatShare = meanMinSeatShare(randomResult, g.Players)
+	result.Degeneracy.GreedyRan = true
+	result.Degeneracy.GreedyMeanRun = meanConsecutiveRun(greedyResult)
+	if greedyResult.GamesPlayed > 0 {
+		result.Degeneracy.GreedyTimeoutShare = float64(greedyResult.Timeouts) / float64(greedyResult.GamesPlayed)
+	}
+	if reason := CheckDegeneracy(randomResult, g); reason != "" {
+		result.DegenerateReason = reason
+	} else if reason := CheckGreedyDegeneracy(greedyResult, g); reason != "" {
+		result.DegenerateReason = reason
+	}
+	result.Valid = result.DegenerateReason == ""
+
+	result.Metrics = ComputeFitness(randomResult, greedyResult, g.Players)
+	return result
+}
+
 // evaluate is the shared pipeline; mcts == nil selects default (greedy-only)
 // mode.
 func evaluate(g *genome.Genome, baseSeed uint64, mcts *MCTSEvalConfig) EvaluationResult {

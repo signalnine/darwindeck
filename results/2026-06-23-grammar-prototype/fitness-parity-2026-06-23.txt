@@ -1,0 +1,13 @@
+family     source                    decis      arc interact    skill  session    TOTAL valid
+shedding   grammar (EvalWithRunner)    0.253    0.684    0.445    0.000    1.000    0.423 yes
+             seed: crazy-eights      0.213    0.863    0.388    0.001    1.000    0.447 yes
+
+climbing   grammar (EvalWithRunner)    0.534    0.567    0.676    0.006    1.000    0.512 yes
+             seed: big-two           0.540    0.576    0.756    0.139    1.000    0.558 yes
+
+banking    grammar (EvalWithRunner)    1.000    0.523    0.000    0.000    0.000    0.381 yes
+                                    (no v2 seed -- banking is grammar-only)
+
+casino     grammar (EvalWithRunner)    0.750    0.817    0.000    0.000    1.000    0.492 yes
+             seed: casino            0.873    0.732    0.560    0.764    1.000    0.766 yes
+

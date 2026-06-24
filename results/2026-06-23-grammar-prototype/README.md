@@ -144,15 +144,32 @@ of the generic runner:
    preserved). Reviewed adversarially (3 lenses) + verified.
 4. Run through the real simulation engine. **DONE** (`adapter.go`, `sim.RunBatch`,
    4800 games clean) -- and the liveness-in-runner fix above.
-5. Full FITNESS parity (the 5 metrics) + judge keying. **NEXT** -- the seam:
-   the simulation layer is genuinely generic (the adapter is all it took), but the
-   fitness layer is still skeleton-coupled. `fitness.Evaluate` calls `GetRunner(g)`
-   (no runner injection), `optionDeltaModeFor` switches on `g.Skeleton` for the
-   Interaction metric, and the greedy scorers are per-skeleton and don't understand
-   the grammar's state layout. So full parity needs either a `GetRunner` injection
-   point (+ a grammar genome it maps to) or generic delta-mode/greedy-scorer
-   versions. `SpecGenome` already carries a best-fit skeleton so the existing modes
-   approximately apply.
+5. Full FITNESS parity (the 5 metrics). **MOSTLY DONE.** Added the injection
+   point `fitness.EvaluateWithRunner(g, runner, greedy, seed)` (skips Tier 0,
+   reports the veto without zeroing metrics), so a grammar spec runs through the
+   SAME 5-metric pipeline. Parity vs the seed of the same skeleton (`cmd/grammar-
+   fitness`, `fitness-parity-2026-06-23.txt`):
+
+   | family | metrics that matched the seed | gap |
+   |---|---|---|
+   | shedding | decisions, interaction, skill, session (total 0.423 vs 0.447) | arc slightly low |
+   | climbing | decisions, arc, interaction, session (total 0.512 vs 0.558) | skill (grammar climbing is structurally simpler than Big Two) |
+   | casino | decisions, arc, session | interaction + skill read 0 |
+
+   THE COUPLING, with a worked fix: the metrics read SKELETON-SPECIFIC state
+   fields the generic runner stored in generic ones. The shedding choice-impact
+   probe swaps `state.TopCard`; the climbing OptionDelta probe + greedy scorer read
+   `state.TrickCards`. Pointing the grammar runner at those conventional fields
+   (PlayMatch->TopCard, BeatOrPass->TrickCards) took shedding from a `non_agentic`
+   VETO to parity and climbing's interaction from 0.000 to 0.676. **Casino is a
+   deeper, different mismatch:** the grammar's coarse capture move-gen ("play any
+   card, resolve in Apply") makes the legal-move COUNT table-independent, so the
+   OptionDelta interaction metric reads 0 structurally and the scorer can't grade
+   captures -- a move-GRANULARITY difference, not field-aliasing. Fix = enumerate
+   capture targets explicitly in the runner (next).
+
+6. Evolution + judge keying over specs. **NEXT** -- mutation/crossover over
+   `GameSpec`, novelty, and a composition key for the verdict table.
 
 The win is thousands of playable-by-construction families feeding the *same* judge
 loop already in use -- the grammar serves the discovery goal, it is not the goal.

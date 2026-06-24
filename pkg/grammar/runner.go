@@ -29,6 +29,20 @@ func lastCard(cards []sim.Card) (sim.Card, bool) {
 	return cards[len(cards)-1], true
 }
 
+// topOf reads the match reference from the shedding-conventional state.TopCard.
+func topOf(gs *sim.GameState) (sim.Card, bool) {
+	if gs.TopCard == nil {
+		return sim.Card{}, false
+	}
+	return *gs.TopCard, true
+}
+
+// setTop points state.TopCard at a copy of c (the new discard top).
+func setTop(gs *sim.GameState, c sim.Card) {
+	cp := c
+	gs.TopCard = &cp
+}
+
 func matches(c, top sim.Card, ok bool, rule MatchRule) bool {
 	if !ok {
 		return true // empty discard: anything plays
@@ -118,6 +132,9 @@ func (rr Runner) Setup(rng *rand.Rand) *sim.GameState {
 		sh, rem := sim.DrawN(deck, s.Shared)
 		gs.Discard = sh
 		deck = rem
+		if c, ok := lastCard(gs.Discard); ok {
+			setTop(gs, c) // shedding match reference (read by the runner + the metric probe)
+		}
 	}
 	gs.Deck = deck
 	gs.Folded = make([]bool, s.Players)
@@ -132,7 +149,10 @@ func (rr Runner) LegalMoves(gs *sim.GameState) []sim.Move {
 	hand := gs.Hands[p]
 	switch rr.Spec.Move {
 	case PlayMatch:
-		top, ok := lastCard(gs.Discard)
+		// Match against state.TopCard (the shedding-conventional field) so the
+		// fitness layer's choice-impact probe -- which hypothesizes by swapping
+		// TopCard and re-running this generator -- actually perturbs the move set.
+		top, ok := topOf(gs)
 		wild := rr.Spec.hasMod(ModWild)
 		var moves []sim.Move
 		for _, c := range hand {
@@ -156,11 +176,13 @@ func (rr Runner) LegalMoves(gs *sim.GameState) []sim.Move {
 		return rr.appendKnock(moves, gs, p)
 
 	case BeatOrPass:
-		leading := len(gs.Discard) == 0
+		// The combination to beat lives in state.TrickCards (the climbing-
+		// conventional field the ClimbingScorer + deltaModeClimbing probe read),
+		// not Discard -- so the fitness layer sees the beat/pass coupling.
+		leading := len(gs.TrickCards) == 0
 		var moves []sim.Move
-		top, ok := lastCard(gs.Discard)
 		for _, c := range hand {
-			if leading || (ok && c.Rank > top.Rank) {
+			if leading || c.Rank > gs.TrickCards[0].Rank {
 				moves = append(moves, mv(sim.MovePlay, p, c))
 			}
 		}
@@ -213,6 +235,7 @@ func (rr Runner) Apply(gs *sim.GameState, m sim.Move) {
 				gs.Hands[p] = removeCard(gs.Hands[p], c)
 			}
 			gs.Discard = append(gs.Discard, m.Cards...)
+			setTop(gs, m.Cards[len(m.Cards)-1])
 			gs.PassCount = 0
 			if rr.Spec.hasMod(ModDrawPenalty) && len(gs.Deck) > 0 { // face-card play -> draw one
 				if last := m.Cards[len(m.Cards)-1]; int(last.Rank) >= 11 {
@@ -236,12 +259,13 @@ func (rr Runner) Apply(gs *sim.GameState, m sim.Move) {
 		case sim.MovePlay:
 			c := m.Cards[0]
 			gs.Hands[p] = removeCard(gs.Hands[p], c)
-			gs.Discard = []sim.Card{c} // new top to beat
+			gs.TrickCards = []sim.Card{c} // new combination to beat
+			gs.TrickLeader = p
 			gs.PassCount = 0
 		case sim.MovePass:
 			gs.PassCount++
 			if gs.PassCount >= gs.NumPlayers-1 { // all others passed: table clears
-				gs.Discard = nil
+				gs.TrickCards = nil
 				gs.PassCount = 0
 			}
 		}
