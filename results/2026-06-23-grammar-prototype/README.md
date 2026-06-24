@@ -168,8 +168,25 @@ of the generic runner:
    captures -- a move-GRANULARITY difference, not field-aliasing. Fix = enumerate
    capture targets explicitly in the runner (next).
 
-6. Evolution + judge keying over specs. **NEXT** -- mutation/crossover over
-   `GameSpec`, novelty, and a composition key for the verdict table.
+6. Evolution + judge keying over specs. **DONE** (`evolve.go`, `cmd/grammar-
+   evolve`). Genetic operators `Mutate`/`Crossover`/`RandomSpec` stay inside the
+   well-typed manifold BY CONSTRUCTION (every output re-checked against
+   `WellTyped`), so every individual in every generation is playable -- evolution
+   literally cannot reach the v1 desert. Fitness is the real pipeline
+   (`EvaluateWithRunner`). `GameSpec.Composition()` is the verdict-table key (the
+   structural identity), and `JudgeVerdicts[Composition]` is the judge-in-loop
+   plug-in (empty -> neutral, v2's cache-miss-returns-0).
 
-The win is thousands of playable-by-construction families feeding the *same* judge
-loop already in use -- the grammar serves the discovery goal, it is not the goal.
+   A pure-fitness GA CONVERGES (12 -> 3 compositions) -- the discovery anti-goal.
+   Novelty-aware selection (behavioral distance in 5-metric space from the 4
+   canonical seeds) + niche-sharing (a composition-crowding penalty) keeps the pool
+   diverse: **16 of the 20 well-typed compositions survive the final generation,
+   and the high-novelty survivors are exactly the modifier-driven fusions** the
+   grammar exists to find (`beat_or_pass+knock` nov=0.875; `run_play,draw_penalty,
+   knock` stacks). Raw run: `evolve-2026-06-23.txt`.
+
+The remaining work is the OUT-OF-LOOP judge: emit blind dossiers for grammar
+compositions and fill `JudgeVerdicts` -- the SAME apparatus v2 already has
+(`pkg/judge`), now keyed on `GameSpec.Composition`. The win is thousands of
+playable-by-construction families feeding the *same* judge loop already in use --
+the grammar serves the discovery goal, it is not the goal.

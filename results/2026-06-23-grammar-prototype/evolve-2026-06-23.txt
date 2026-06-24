@@ -1,0 +1,32 @@
+gen  0: best fit=0.508 novelty=0.835 (play_match/either|empty_hand|first_out+run_play,draw_penalty,knock)  distinct-compositions=12
+gen  1: best fit=0.457 novelty=0.825 (play_match/either|empty_hand|first_out+run_play,knock)  distinct-compositions=14
+gen  2: best fit=0.457 novelty=0.825 (play_match/either|empty_hand|first_out+run_play,knock)  distinct-compositions=14
+gen  3: best fit=0.457 novelty=0.825 (play_match/either|empty_hand|first_out+run_play,knock)  distinct-compositions=15
+gen  4: best fit=0.506 novelty=0.848 (beat_or_pass|empty_hand|first_out+knock)  distinct-compositions=13
+gen  5: best fit=0.394 novelty=0.731 (play_match/either|empty_hand|first_out+draw_penalty,knock)  distinct-compositions=14
+gen  6: best fit=0.604 novelty=0.875 (beat_or_pass|empty_hand|first_out+knock)  distinct-compositions=15
+gen  7: best fit=0.633 novelty=0.307 (beat_or_pass|empty_hand|first_out)  distinct-compositions=15
+gen  8: best fit=0.394 novelty=0.731 (play_match/either|empty_hand|first_out+draw_penalty,knock)  distinct-compositions=14
+gen  9: best fit=0.508 novelty=0.835 (play_match/either|empty_hand|first_out+run_play,draw_penalty,knock)  distinct-compositions=13
+gen 10: best fit=0.604 novelty=0.875 (beat_or_pass|empty_hand|first_out+knock)  distinct-compositions=15
+gen 11: best fit=0.604 novelty=0.875 (beat_or_pass|empty_hand|first_out+knock)  distinct-compositions=18
+
+== Final population, one row per composition (fitness | novelty | composition) ==
+  fit=0.604  nov=0.875  beat_or_pass|empty_hand|first_out+knock
+  fit=0.508  nov=0.835  play_match/either|empty_hand|first_out+run_play,draw_penalty,knock
+  fit=0.549  nov=0.240  play_match/either|empty_hand|first_out+run_play,knock
+  fit=0.381  nov=0.797  play_match/either|empty_hand|first_out+run_play,follow_suit,knock
+  fit=0.406  nov=0.232  play_match/either|empty_hand|first_out
+  fit=0.330  nov=0.344  play_match/either|empty_hand|first_out+follow_suit,draw_penalty
+  fit=0.604  nov=0.222  beat_or_pass|empty_hand|first_out
+  fit=0.291  nov=0.841  play_match/either|empty_hand|first_out+follow_suit,knock
+  fit=0.503  nov=0.250  play_match/either|empty_hand|first_out+run_play,draw_penalty
+  fit=0.436  nov=0.340  play_match/either|empty_hand|first_out+run_play,follow_suit,draw_penalty
+  fit=0.372  nov=0.385  play_match/either|empty_hand|first_out+follow_suit
+  fit=0.492  nov=0.063  capture|deck_out|most_captured+meld_bonus
+  fit=0.377  nov=0.793  play_match/either|empty_hand|first_out+knock
+  fit=0.400  nov=0.078  accumulate|bust|closest_target
+  fit=0.499  nov=0.080  capture|deck_out|most_captured
+  fit=0.420  nov=0.191  play_match/either|empty_hand|first_out+run_play
+
+Evaluated 78 distinct specs; 16 distinct compositions survive (novelty pressure keeps the pool diverse).
