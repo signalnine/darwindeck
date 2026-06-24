@@ -56,6 +56,51 @@ func mv(t sim.MoveType, player int, cards ...sim.Card) sim.Move {
 	return sim.Move{Type: t, PlayerID: player, Cards: cards}
 }
 
+// followSuitFilter (ModFollowSuit) keeps only plays that follow the discard suit
+// (or a wild) when the player holds the suit -- the move-RESTRICT modifier. If the
+// player is void in the suit, or the filter would empty the set, it leaves the
+// moves untouched so the never-empty invariant holds.
+func followSuitFilter(moves []sim.Move, hand []sim.Card, top sim.Card, wild bool) []sim.Move {
+	holds := false
+	for _, c := range hand {
+		if c.Suit == top.Suit {
+			holds = true
+			break
+		}
+	}
+	if !holds {
+		return moves
+	}
+	kept := moves[:0]
+	for _, m := range moves {
+		if m.Type != sim.MovePlay {
+			continue
+		}
+		for _, c := range m.Cards {
+			if c.Suit == top.Suit || isWild(c, wild) {
+				kept = append(kept, m)
+				break
+			}
+		}
+	}
+	if len(kept) == 0 {
+		return moves // obligation unsatisfiable (e.g. only a wild qualifies): fall through
+	}
+	return kept
+}
+
+// appendKnock (ModKnock) adds a knock move for a small hand -- the win-override
+// modifier. ADDITIVE: every play/draw/pass remains, so the set never empties.
+func (rr Runner) appendKnock(moves []sim.Move, gs *sim.GameState, p int) []sim.Move {
+	if !rr.Spec.hasMod(ModKnock) {
+		return moves
+	}
+	if n := len(gs.Hands[p]); n >= 1 && n <= 3 {
+		moves = append(moves, mv(sim.MoveKnock, p))
+	}
+	return moves
+}
+
 // Setup deals a fresh game per the spec.
 func (rr Runner) Setup(rng *rand.Rand) *sim.GameState {
 	s := rr.Spec
@@ -88,11 +133,18 @@ func (rr Runner) LegalMoves(gs *sim.GameState) []sim.Move {
 	switch rr.Spec.Move {
 	case PlayMatch:
 		top, ok := lastCard(gs.Discard)
+		wild := rr.Spec.hasMod(ModWild)
 		var moves []sim.Move
 		for _, c := range hand {
-			if matches(c, top, ok, rr.Spec.Match) {
+			if matches(c, top, ok, rr.Spec.Match) || isWild(c, wild) {
 				moves = append(moves, mv(sim.MovePlay, p, c))
 			}
+		}
+		if rr.Spec.hasMod(ModRunPlay) { // EXPAND: same-rank set / same-suit run combos
+			moves = append(moves, comboPlays(hand, top, ok, rr.Spec.Match, p)...)
+		}
+		if rr.Spec.hasMod(ModFollowSuit) && ok { // RESTRICT: must follow the discard suit if held
+			moves = followSuitFilter(moves, hand, top, wild)
 		}
 		if len(moves) == 0 { // fallback: draw, or pass if the deck is gone
 			if len(gs.Deck) > 0 {
@@ -101,7 +153,7 @@ func (rr Runner) LegalMoves(gs *sim.GameState) []sim.Move {
 				moves = append(moves, mv(sim.MovePass, p))
 			}
 		}
-		return moves
+		return rr.appendKnock(moves, gs, p)
 
 	case BeatOrPass:
 		leading := len(gs.Discard) == 0
@@ -118,7 +170,7 @@ func (rr Runner) LegalMoves(gs *sim.GameState) []sim.Move {
 		if len(moves) == 0 { // leading with an empty hand: end will fire; pass is the floor
 			moves = append(moves, mv(sim.MovePass, p))
 		}
-		return moves
+		return rr.appendKnock(moves, gs, p)
 
 	case Accumulate:
 		var moves []sim.Move
@@ -148,13 +200,26 @@ func (rr Runner) LegalMoves(gs *sim.GameState) []sim.Move {
 func (rr Runner) Apply(gs *sim.GameState, m sim.Move) {
 	p := gs.Active
 	s := rr.Spec
+	if m.Type == sim.MoveKnock { // ModKnock: end the game now; winner is fewest cards (CheckEnd)
+		gs.Phase = sim.PhaseEnd
+		gs.Turn++
+		return
+	}
 	switch s.Move {
 	case PlayMatch:
 		switch m.Type {
-		case sim.MovePlay:
-			c := m.Cards[0]
-			gs.Hands[p] = removeCard(gs.Hands[p], c)
-			gs.Discard = append(gs.Discard, c)
+		case sim.MovePlay: // one or many cards (ModRunPlay combos); last becomes the new top
+			for _, c := range m.Cards {
+				gs.Hands[p] = removeCard(gs.Hands[p], c)
+			}
+			gs.Discard = append(gs.Discard, m.Cards...)
+			if rr.Spec.hasMod(ModDrawPenalty) && len(gs.Deck) > 0 { // face-card play -> draw one
+				if last := m.Cards[len(m.Cards)-1]; int(last.Rank) >= 11 {
+					drawn, rem := sim.DrawN(gs.Deck, 1)
+					gs.Hands[p] = append(gs.Hands[p], drawn...)
+					gs.Deck = rem
+				}
+			}
 		case sim.MoveDraw:
 			drawn, rem := sim.DrawN(gs.Deck, 1)
 			gs.Hands[p] = append(gs.Hands[p], drawn...)
@@ -273,6 +338,9 @@ func (rr Runner) nextActive(gs *sim.GameState) int {
 // winner of -1 from a terminal state (e.g. everyone busted) is reported as a
 // drawn-but-TERMINATED game by the harness, not a hang.
 func (rr Runner) CheckEnd(gs *sim.GameState) (winner int, done bool) {
+	if gs.Phase == sim.PhaseEnd { // ModKnock fired: win goes to the fewest-cards hand
+		return fewestCards(gs), true
+	}
 	s := rr.Spec
 	switch s.End {
 	case EmptyHand:
@@ -329,13 +397,32 @@ func (rr Runner) score(gs *sim.GameState) int {
 		}
 		return best // -1 if everyone busted
 	case MostCaptured, HighScore:
-		best, bestVal = 0, gs.Scores[0]
+		eff := func(p int) int { // ModMeldBonus banks set/run bonuses from the captured pile
+			v := gs.Scores[p]
+			if rr.Spec.hasMod(ModMeldBonus) {
+				v += meldBonus(gs.Tableau[p])
+			}
+			return v
+		}
+		best, bestVal = 0, eff(0)
 		for p := 1; p < gs.NumPlayers; p++ {
-			if gs.Scores[p] > bestVal {
-				best, bestVal = p, gs.Scores[p]
+			if e := eff(p); e > bestVal {
+				best, bestVal = p, e
 			}
 		}
 		return best
+	}
+	return best
+}
+
+// fewestCards returns the seat holding the fewest cards (ties to lowest seat) --
+// the ModKnock win condition.
+func fewestCards(gs *sim.GameState) int {
+	best, bestN := 0, len(gs.Hands[0])
+	for p := 1; p < gs.NumPlayers; p++ {
+		if len(gs.Hands[p]) < bestN {
+			best, bestN = p, len(gs.Hands[p])
+		}
 	}
 	return best
 }

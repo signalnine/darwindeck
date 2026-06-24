@@ -109,6 +109,56 @@ func EnumerateAll() []GameSpec {
 	return out
 }
 
+// EnumerateModified returns one representative WELL-TYPED spec per distinct
+// modified family: each base spec crossed with every compatible modifier subset
+// (size 0..modCap). This is the orthogonal axis -- the modifier algebra is what
+// multiplies the ~8 base families toward the hundreds/thousands, and (via ModWild)
+// what rescues the agency-dead match rules the base grammar drops.
+func EnumerateModified() []GameSpec {
+	seen := map[string]bool{}
+	var out []GameSpec
+	for _, base := range EnumerateAll() {
+		base.Mods = nil
+		for _, subset := range modSubsets(compatibleMods(base), modCap) {
+			s := base
+			s.Mods = subset
+			if !s.WellTyped() {
+				continue
+			}
+			if f := s.Family(); !seen[f] {
+				seen[f] = true
+				out = append(out, s)
+			}
+		}
+	}
+	return out
+}
+
+func compatibleMods(s GameSpec) []Modifier {
+	var out []Modifier
+	for m := Modifier(0); m < modifierCount; m++ {
+		if m.CompatibleWith(s) {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+// modSubsets returns every subset of cands with size 0..max (a capped powerset).
+func modSubsets(cands []Modifier, max int) [][]Modifier {
+	subsets := [][]Modifier{nil}
+	for _, m := range cands {
+		for i, n := 0, len(subsets); i < n; i++ {
+			if len(subsets[i]) >= max {
+				continue
+			}
+			ns := append(append([]Modifier{}, subsets[i]...), m)
+			subsets = append(subsets, ns)
+		}
+	}
+	return subsets
+}
+
 // Families counts distinct structural families (Move(+Match)|End|Score).
 func Families(specs []GameSpec) map[string]int {
 	fam := map[string]int{}

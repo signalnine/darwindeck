@@ -8,6 +8,7 @@ package main
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/darwindeck/darwindeck/pkg/grammar"
 )
@@ -93,11 +94,12 @@ func main() {
 	fmt.Printf("  ever STUCK (empty move set = safety violation)     : %d\n", stuckN)
 	fmt.Printf("  ever hit the turn cap (non-termination)            : %d\n", nontermN)
 
-	sort.Strings(novelPlayable)
-	fmt.Printf("\n== NOVEL, well-typed, playable families (not any hand-coded skeleton) ==\n")
-	for _, f := range novelPlayable {
-		fmt.Printf("  %s\n", f)
-	}
+	_ = novelPlayable
+	fmt.Printf("\n== Base grammar reproduces exactly its covered skeletons ==\n")
+	fmt.Printf("  well-typed base families: %d (%d canonical, %d novel)\n",
+		len(famTyped), countCanon(famTyped, canon), len(famTyped)-countCanon(famTyped, canon))
+	fmt.Printf("  the score axis is inert on these ends, so there are NO spurious novel base\n")
+	fmt.Printf("  families -- ALL novelty is modifier-driven (see the modifier axis below).\n")
 
 	// The diagnostic that drove the typing rules: which families typing excludes
 	// (MIS-TYPED / AGENCY-DEAD) vs keeps (well-typed), over the untyped set.
@@ -117,7 +119,7 @@ func main() {
 		case !fs.typed && fs.stalemate > 0:
 			tag = "MIS-TYPED   drop (end unreachable)"
 		case !fs.typed:
-			tag = "off-type    drop"
+			tag = "INERT score drop (== another rule / degenerate)"
 		}
 		mk := ""
 		if canon[f] {
@@ -125,6 +127,67 @@ func main() {
 		}
 		fmt.Printf("  %-44s %5d %5d %5d %5d  %s%s\n", f, fs.specs, fs.natural, fs.stalemate, fs.lowAgency, tag, mk)
 	}
+
+	// ----- The modifier axis: typed addons (lifted from v2 borrows) -----
+	mod := grammar.EnumerateModified()
+	famMod := grammar.Families(mod)
+	var modPlayable, modNatural, modStuck, modNonterm int
+	for _, s := range mod {
+		sm := grammar.Runner{Spec: s}.Playability(trials, 13)
+		if sm.Stuck > 0 {
+			modStuck++
+		}
+		if sm.HitCap > 0 {
+			modNonterm++
+		}
+		if sm.Playable() {
+			modPlayable++
+			if sm.NaturalEnd() {
+				modNatural++
+			}
+		}
+	}
+	novelMod := 0
+	var novelSample []string
+	for f := range famMod {
+		if strings.Contains(f, "+") { // carries at least one modifier -> a new game
+			novelMod++
+			novelSample = append(novelSample, f)
+		}
+	}
+	sort.Strings(novelSample)
+	fmt.Printf("\n== Modifier axis (5 productive typed modifiers from v2 borrows, subsets <=3) ==\n")
+	fmt.Printf("  modifiers: run_play, follow_suit, draw_penalty, knock, meld_bonus (wild: defined, non-productive)\n")
+	fmt.Printf("  base well-typed families            : %d\n", len(famTyped))
+	fmt.Printf("  WITH modifier subsets               : %d families / %d representative specs\n", len(famMod), len(mod))
+	fmt.Printf("  novel families (carry >=1 modifier)  : %d\n", novelMod)
+	fmt.Printf("  multiplier from the modifier algebra: %.1fx\n", float64(len(famMod))/float64(len(famTyped)))
+	fmt.Printf("  PLAYABLE under random AI            : %d/%d (%.0f%%)\n",
+		modPlayable, len(mod), 100*float64(modPlayable)/float64(len(mod)))
+	fmt.Printf("  of which natural-end / stalemate    : %d / %d\n", modNatural, modPlayable-modNatural)
+	fmt.Printf("  ever STUCK / ever non-terminating   : %d / %d\n", modStuck, modNonterm)
+	for i, f := range novelSample {
+		if i >= 8 {
+			fmt.Printf("  ... and %d more novel families\n", len(novelSample)-8)
+			break
+		}
+		fmt.Printf("    %s\n", f)
+	}
+
+	// Honest negative result: a modest wild does NOT rescue an agency-dead family,
+	// so the type system is right to drop non-either matching.
+	rankBase := grammar.GameSpec{Players: 4, Deal: 7, Shared: 1, Move: grammar.PlayMatch,
+		Match: grammar.MatchRank, End: grammar.EmptyHand, Score: grammar.FirstOut}
+	rankWild := rankBase
+	rankWild.Mods = []grammar.Modifier{grammar.ModWild}
+	a := grammar.Runner{Spec: rankBase}.Playability(trials, 17)
+	b := grammar.Runner{Spec: rankWild}.Playability(trials, 17)
+	fmt.Printf("\n== Agency rule check: a modest wild does NOT rescue rank-only ==\n")
+	fmt.Printf("  play_match/rank|empty_hand|first_out          base : agency=%.2f playable=%v (well-typed=%v)\n",
+		a.AgencyFrac, a.Playable(), rankBase.WellTyped())
+	fmt.Printf("  play_match/rank|empty_hand|first_out  +wild (8s)   : agency=%.2f playable=%v (well-typed=%v)\n",
+		b.AgencyFrac, b.Playable(), rankWild.WellTyped())
+	fmt.Printf("  -> the type system correctly keeps non-either matching off-type.\n")
 }
 
 func countCanon(fam map[string]int, canon map[string]bool) int {

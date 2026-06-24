@@ -15,6 +15,7 @@ package grammar
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -88,6 +89,19 @@ type GameSpec struct {
 	Target  int       // only meaningful for Accumulate
 	End     EndRule
 	Score   ScoreRule
+	Mods    []Modifier // typed addons (v2 borrows); sorted, distinct, capped at modCap
+}
+
+// modCap mirrors v2's borrow cap (operator-level, len(g.Borrowed) <= 3).
+const modCap = 3
+
+func (s GameSpec) hasMod(m Modifier) bool {
+	for _, x := range s.Mods {
+		if x == m {
+			return true
+		}
+	}
+	return false
 }
 
 // WellTyped reports whether a spec's scoring signal is actually producible by its
@@ -104,26 +118,81 @@ type GameSpec struct {
 // Tightening Enumerate to WellTyped specs is the grammar's promise made concrete:
 // illegal compositions become unrepresentable, not caught at runtime.
 func (s GameSpec) WellTyped() bool {
+	// A score rule is only well-typed when the end condition leaves the winner
+	// UNDER-determined and the rule reads a signal the moves actually produce.
+	// Otherwise it is inert (picks the same winner as another rule) or degenerate:
+	//   - empty_hand: the emptier is uniquely determined, so fewest_cards == first_out.
+	//   - capture/deck_out: most_captured and high_score read the same Scores tally.
+	//   - bust: high_score would reward the biggest BUST (a total over the target).
+	// So each move-gen has exactly one non-inert base score; others are modifier-only.
 	switch s.Move {
 	case PlayMatch:
-		return s.Match == MatchEither && s.End == EmptyHand
+		if s.End != EmptyHand || s.Score != FirstOut {
+			return false
+		}
+		// Agency rule: rank/suit-only matching is forced-draw dead, and a modest
+		// wild does NOT rescue it (rescue experiment in cmd/grammar-proto). Only
+		// rank-OR-suit matching has real agency in the base grammar.
+		if s.Match != MatchEither {
+			return false
+		}
 	case BeatOrPass:
-		return s.End == EmptyHand
+		if s.End != EmptyHand || s.Score != FirstOut {
+			return false
+		}
 	case Accumulate:
-		return s.End == Bust
+		if s.End != Bust || s.Score != ClosestTarget {
+			return false
+		}
 	case Capture:
-		return s.End == DeckOut
+		if s.End != DeckOut || s.Score != MostCaptured {
+			return false
+		}
+	default:
+		return false
 	}
-	return false
+	// Modifiers: distinct, within the cap, each compatible with the base.
+	if len(s.Mods) > modCap {
+		return false
+	}
+	seen := make(map[Modifier]bool, len(s.Mods))
+	for _, m := range s.Mods {
+		if seen[m] || !m.CompatibleWith(s) {
+			return false
+		}
+		seen[m] = true
+	}
+	return true
 }
 
 // Family is the structural identity (ignores fine params) -- the unit we count.
+// Modifiers are part of the identity: a base plus a modifier set is a distinct
+// family (a distinct game), which is how the modifier axis multiplies the count.
 func (s GameSpec) Family() string {
 	m := s.Move.String()
 	if s.Move == PlayMatch {
 		m += "/" + s.Match.String()
 	}
-	return fmt.Sprintf("%s|%s|%s", m, s.End, s.Score)
+	base := fmt.Sprintf("%s|%s|%s", m, s.End, s.Score)
+	if len(s.Mods) == 0 {
+		return base
+	}
+	return base + "+" + modsKey(s.Mods)
+}
+
+// modsKey renders a modifier set as a sorted, comma-joined string so the family
+// identity is independent of modifier order.
+func modsKey(mods []Modifier) string {
+	ids := make([]int, len(mods))
+	for i, m := range mods {
+		ids[i] = int(m)
+	}
+	sort.Ints(ids)
+	parts := make([]string, len(ids))
+	for i, id := range ids {
+		parts[i] = Modifier(id).String()
+	}
+	return strings.Join(parts, ",")
 }
 
 func (s GameSpec) String() string {
@@ -140,5 +209,8 @@ func (s GameSpec) String() string {
 		fmt.Fprintf(&b, " target=%d", s.Target)
 	}
 	fmt.Fprintf(&b, " end=%s score=%s", s.End, s.Score)
+	if len(s.Mods) > 0 {
+		fmt.Fprintf(&b, " mods=[%s]", modsKey(s.Mods))
+	}
 	return b.String()
 }
