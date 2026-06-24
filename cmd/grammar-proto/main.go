@@ -23,42 +23,35 @@ func main() {
 			names[i], s.String(), sm.Terminated, sm.Trials, sm.AgencyFrac, sm.MeanTurns, mark(sm.Playable()))
 	}
 
-	specs := grammar.Enumerate()
-	fam := grammar.Families(specs)
+	// The untyped cross-product vs the coherence-typed grammar. The collapse from
+	// the former to the latter is the grammar's promise: illegal compositions are
+	// unrepresentable, not caught at runtime.
+	all := grammar.EnumerateAll()
+	typed := grammar.Enumerate()
 	canon := grammar.CanonicalFamilies()
-	novelFam := 0
-	for f := range fam {
-		if !canon[f] {
-			novelFam++
-		}
-	}
+	famAll := grammar.Families(all)
+	famTyped := grammar.Families(typed)
 	fmt.Printf("\n== Family space (4 move-generators x ends x scorings x params) ==\n")
-	fmt.Printf("  full specs enumerated : %d\n", len(specs))
-	fmt.Printf("  distinct families     : %d  (%d canonical, %d NOVEL)\n", len(fam), len(fam)-novelFam, novelFam)
+	fmt.Printf("  untyped cross-product : %3d specs / %2d families\n", len(all), len(famAll))
+	fmt.Printf("  WELL-TYPED grammar    : %3d specs / %2d families  (%d canonical, %d novel)\n",
+		len(typed), len(famTyped), countCanon(famTyped, canon), len(famTyped)-countCanon(famTyped, canon))
 
-	// Per-family rollup so the typing work is grounded in data, not guesswork.
+	// Per-family rollup over the UNTYPED set, so the typing rules stay grounded in
+	// the data and the excluded families are visible with their failure reason.
 	type famStat struct {
 		specs, natural, stalemate, lowAgency int
+		typed                                bool
 	}
 	famStats := map[string]*famStat{}
-	var playable, natural, stuckN, nontermN int
-	famSeen := map[string]bool{}
-	var novelPlayable []string
-	for _, s := range specs {
+	for _, s := range all {
 		sm := grammar.Runner{Spec: s}.Playability(trials, 7)
 		f := s.Family()
 		fs := famStats[f]
 		if fs == nil {
-			fs = &famStat{}
+			fs = &famStat{typed: s.WellTyped()}
 			famStats[f] = fs
 		}
 		fs.specs++
-		if sm.Stuck > 0 {
-			stuckN++
-		}
-		if sm.HitCap > 0 {
-			nontermN++
-		}
 		switch {
 		case sm.AgencyFrac <= 0.05:
 			fs.lowAgency++
@@ -67,54 +60,64 @@ func main() {
 		default:
 			fs.natural++
 		}
+	}
+
+	// Headline: playability of the WELL-TYPED grammar (what search would explore).
+	var playable, natural, stuckN, nontermN int
+	famSeen := map[string]bool{}
+	var novelPlayable []string
+	for _, s := range typed {
+		sm := grammar.Runner{Spec: s}.Playability(trials, 7)
+		if sm.Stuck > 0 {
+			stuckN++
+		}
+		if sm.HitCap > 0 {
+			nontermN++
+		}
 		if sm.Playable() {
 			playable++
 			if sm.NaturalEnd() {
 				natural++
-				if !canon[f] && !famSeen[f] {
+				if f := s.Family(); !canon[f] && !famSeen[f] {
 					famSeen[f] = true
 					novelPlayable = append(novelPlayable, f)
 				}
 			}
 		}
 	}
-	fmt.Printf("\n== Playability under random AI (%d trials each, %d-turn cap) ==\n", trials, 2000)
+	fmt.Printf("\n== Playability of the WELL-TYPED grammar under random AI (%d trials, %d-turn cap) ==\n", trials, 2000)
 	fmt.Printf("  PLAYABLE (terminates + never stuck + has agency)   : %d/%d (%.0f%%)\n",
-		playable, len(specs), 100*float64(playable)/float64(len(specs)))
-	fmt.Printf("  of which NATURAL-END (own end fires, not stalemate): %d  <- the well-typed families\n", natural)
-	fmt.Printf("  stalemate-reliant (end unreachable = mis-typed)    : %d  <- prune via composition typing\n", playable-natural)
+		playable, len(typed), 100*float64(playable)/float64(len(typed)))
+	fmt.Printf("  of which NATURAL-END (own end fires, not stalemate): %d\n", natural)
+	fmt.Printf("  stalemate-reliant (should be 0 after typing)       : %d\n", playable-natural)
 	fmt.Printf("  ever STUCK (empty move set = safety violation)     : %d\n", stuckN)
 	fmt.Printf("  ever hit the turn cap (non-termination)            : %d\n", nontermN)
 
 	sort.Strings(novelPlayable)
-	fmt.Printf("\n== NOVEL, natural-end, playable families (not any hand-coded skeleton) ==\n")
-	for i, f := range novelPlayable {
-		if i >= 12 {
-			fmt.Printf("  ... and %d more\n", len(novelPlayable)-12)
-			break
-		}
+	fmt.Printf("\n== NOVEL, well-typed, playable families (not any hand-coded skeleton) ==\n")
+	for _, f := range novelPlayable {
 		fmt.Printf("  %s\n", f)
 	}
 
-	// The diagnostic that drives the typing rules: which families are well-typed,
-	// which only end via stalemate (end unreachable), which are agency-dead.
+	// The diagnostic that drove the typing rules: which families typing excludes
+	// (MIS-TYPED / AGENCY-DEAD) vs keeps (well-typed), over the untyped set.
 	fams := make([]string, 0, len(famStats))
 	for f := range famStats {
 		fams = append(fams, f)
 	}
 	sort.Strings(fams)
-	fmt.Printf("\n== Per-family verdict (specs = param variants of the family) ==\n")
-	fmt.Printf("  %-44s %5s %5s %5s %5s  %s\n", "family", "spec", "nat", "stale", "agz", "tag")
+	fmt.Printf("\n== Per-family verdict over the untyped set (what the type rules act on) ==\n")
+	fmt.Printf("  %-44s %5s %5s %5s %5s  %s\n", "family", "spec", "nat", "stale", "agz", "type verdict")
 	for _, f := range fams {
 		fs := famStats[f]
-		tag := "well-typed"
+		tag := "well-typed  KEEP"
 		switch {
-		case fs.natural == 0 && fs.stalemate > 0:
-			tag = "MIS-TYPED (end unreachable)"
-		case fs.natural == 0 && fs.lowAgency > 0:
-			tag = "AGENCY-DEAD"
-		case fs.stalemate > 0 || fs.lowAgency > 0:
-			tag = "mixed (tighten params)"
+		case !fs.typed && fs.lowAgency >= fs.stalemate && fs.lowAgency > 0:
+			tag = "AGENCY-DEAD drop (forced moves)"
+		case !fs.typed && fs.stalemate > 0:
+			tag = "MIS-TYPED   drop (end unreachable)"
+		case !fs.typed:
+			tag = "off-type    drop"
 		}
 		mk := ""
 		if canon[f] {
@@ -122,6 +125,16 @@ func main() {
 		}
 		fmt.Printf("  %-44s %5d %5d %5d %5d  %s%s\n", f, fs.specs, fs.natural, fs.stalemate, fs.lowAgency, tag, mk)
 	}
+}
+
+func countCanon(fam map[string]int, canon map[string]bool) int {
+	n := 0
+	for f := range fam {
+		if canon[f] {
+			n++
+		}
+	}
+	return n
 }
 
 func mark(b bool) string {

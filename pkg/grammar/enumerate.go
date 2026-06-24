@@ -70,8 +70,23 @@ func targetsFor(m MoveGen) []int {
 
 var enumPlayers = []int{2, 3, 4}
 
-// Enumerate returns every structurally-coherent full GameSpec.
+// Enumerate returns every WELL-TYPED full GameSpec -- the actual grammar. The
+// coherence type (GameSpec.WellTyped) is what makes illegal compositions
+// unrepresentable; this is the set evolution/search would operate over.
 func Enumerate() []GameSpec {
+	var out []GameSpec
+	for _, s := range EnumerateAll() {
+		if s.WellTyped() {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// EnumerateAll returns the loose cross-product BEFORE the coherence type is
+// applied -- kept so the typing collapse (untyped families vs well-typed) stays
+// reproducible, not just a committed text file.
+func EnumerateAll() []GameSpec {
 	var out []GameSpec
 	for m := MoveGen(0); m < moveGenCount; m++ {
 		for _, match := range matchesFor(m) {

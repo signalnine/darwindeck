@@ -90,6 +90,33 @@ type GameSpec struct {
 	Score   ScoreRule
 }
 
+// WellTyped reports whether a spec's scoring signal is actually producible by its
+// move + end -- the grammar's coherence type. Two physical rules, validated by the
+// random-AI diagnostic (results/2026-06-23-grammar-prototype):
+//
+//  1. deck_out is only reachable when the move-gen drains the DECK (capture).
+//     play_match / beat_or_pass empty HANDS -- the empty-hand->draw fallback
+//     refills a spent hand, so the deck only drains via the stalemate path. They
+//     pair only with empty_hand.
+//  2. play_match needs rank-OR-suit matching to have agency; rank-only / suit-only
+//     collapse to forced draws (agency-dead) absent a wild-card modifier.
+//
+// Tightening Enumerate to WellTyped specs is the grammar's promise made concrete:
+// illegal compositions become unrepresentable, not caught at runtime.
+func (s GameSpec) WellTyped() bool {
+	switch s.Move {
+	case PlayMatch:
+		return s.Match == MatchEither && s.End == EmptyHand
+	case BeatOrPass:
+		return s.End == EmptyHand
+	case Accumulate:
+		return s.End == Bust
+	case Capture:
+		return s.End == DeckOut
+	}
+	return false
+}
+
 // Family is the structural identity (ignores fine params) -- the unit we count.
 func (s GameSpec) Family() string {
 	m := s.Move.String()
