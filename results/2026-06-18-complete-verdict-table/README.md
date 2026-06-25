@@ -19,11 +19,24 @@ borrow whitelist in `pkg/genome/validate.go`, max 3 borrows):
 | trick / climbing / casino / vying | 2 each | 4 each |
 | **total** | | **66** |
 
-This table has **44 entries: ~35 of the reachable 66, plus 9 legacy** that use
+This table has **48 entries: ~39 of the reachable 66, plus 9 legacy** that use
 Trump/PlayMultiple (mechanics removed from the whitelist 2026-06-11; they can no
-longer occur). So it is **NOT complete over the reachable space** -- **31
+longer occur). So it is **NOT complete over the reachable space** -- **27
 reachable compositions (almost all shedding) are still unlabeled.** They are
-simply ones evolution hasn't produced in the 738-genome corpus yet.
+simply ones evolution hasn't produced yet.
+
+**2026-06-25 chunked-discovery addition (+4).** A chunked judge-in-loop run
+(explore with no judge term -> `judge backfill` the unjudged compositions a run
+actually produced -> 3-judge majority -> grow the table -> resume) labeled four
+new shedding compositions and found a **new NOVEL** one the static-table runs
+never surfaced: `0:1,3,8` (shedding + meld_bonus + knock + run_play), a
+"three-ways-out" game (shed to end the round / hoard melds for banked points /
+knock on fewest cards), 3/3 judges novel. The other three came back variant:
+`0:0,8` (trick_scoring on a shedding loop that produces no tricks -- an incoherent
+overlay), `0:3,5,8`, `0:7,8`. This is the loop discovering novelty *beyond* the
+frontier a fixed table already knows -- which a longer run against a static table
+cannot do, because an unlabeled composition's neutral judge term can't out-compete
+the already-certified ones long enough to be noticed.
 
 This is fine operationally, by design: the judge only queries compositions that
 appear in a population, and a **miss is neutral** -- `JudgeVerdicts[composition]`
