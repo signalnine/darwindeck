@@ -29,11 +29,12 @@ const (
 	Accumulate                // take a card onto a running total toward Target, or stick; bust over Target
 	Capture                   // play a card to capture equal-rank table cards, else trail (leave it face-up)
 	Trick                     // follow-suit trick-taking: each player plays one card, highest of the lead suit wins the trick
+	Rummy                     // draw-and-discard: each turn draw a card and discard one, building melds; fewest deadwood wins at deck-out
 	moveGenCount
 )
 
 func (m MoveGen) String() string {
-	return [...]string{"play_match", "beat_or_pass", "accumulate", "capture", "trick"}[m]
+	return [...]string{"play_match", "beat_or_pass", "accumulate", "capture", "trick", "rummy"}[m]
 }
 
 // MatchRule constrains PlayMatch (ignored by other generators).
@@ -66,16 +67,17 @@ func (e EndRule) String() string {
 type ScoreRule int
 
 const (
-	FirstOut      ScoreRule = iota // the player who emptied their hand
-	FewestCards                    // fewest cards left
-	ClosestTarget                  // highest running total not over Target
-	MostCaptured                   // most cards captured
-	HighScore                      // highest Scores[]
+	FirstOut       ScoreRule = iota // the player who emptied their hand
+	FewestCards                     // fewest cards left
+	ClosestTarget                   // highest running total not over Target
+	MostCaptured                    // most cards captured
+	HighScore                       // highest Scores[]
+	FewestDeadwood                  // fewest cards left UNMELDED (rummy): hand minus sets/runs
 	scoreRuleCount
 )
 
 func (s ScoreRule) String() string {
-	return [...]string{"first_out", "fewest_cards", "closest_target", "most_captured", "high_score"}[s]
+	return [...]string{"first_out", "fewest_cards", "closest_target", "most_captured", "high_score", "fewest_deadwood"}[s]
 }
 
 // GameSpec is a full game as a composition of primitives. The "family" (what a
@@ -153,6 +155,13 @@ func (s GameSpec) WellTyped() bool {
 		// Trick-taking empties hands in lockstep (one card per trick per player),
 		// so it ends on deck_out; the non-inert base score is most cards won.
 		if s.End != DeckOut || s.Score != MostCaptured {
+			return false
+		}
+	case Rummy:
+		// Draw-and-discard keeps hands a constant size, so fewest_cards is inert;
+		// the meld-aware score (fewest deadwood) is the non-inert one. The deck
+		// drains one card per turn, so deck_out terminates by construction.
+		if s.End != DeckOut || s.Score != FewestDeadwood {
 			return false
 		}
 	default:

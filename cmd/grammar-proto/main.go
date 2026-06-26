@@ -17,7 +17,7 @@ func main() {
 	const trials = 40
 
 	fmt.Println("== Expressiveness: the grammar reproduces these hand-coded skeletons ==")
-	names := []string{"shedding", "climbing", "banking", "casino", "trick"}
+	names := []string{"shedding", "climbing", "banking", "casino", "trick", "rummy"}
 	for i, s := range grammar.Canonical() {
 		sm := grammar.Runner{Spec: s}.Playability(trials, 1)
 		fmt.Printf("  %-9s %-56s term=%2d/%d agency=%.2f turns=%5.0f %s\n",

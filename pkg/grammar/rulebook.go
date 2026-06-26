@@ -61,6 +61,8 @@ func (s GameSpec) objective() string {
 		return "Capture more cards from the table than anyone else."
 	case HighScore:
 		return "Score the most points."
+	case FewestDeadwood:
+		return "Form your cards into melds -- sets of three or more of the same rank, or runs of three or more consecutive cards in one suit -- leaving as few stray (unmelded) cards as possible."
 	}
 	return ""
 }
@@ -91,6 +93,9 @@ func (s GameSpec) turnRules() string {
 	case Trick:
 		return "- Play one card to the table. You MUST follow the suit of the card that led this trick if you hold it; otherwise you may play any card.\n" +
 			"- Once every player has played, the highest card of the led suit wins the trick (and all the cards in it) and leads the next trick."
+	case Rummy:
+		return "- Draw the top card of the deck into your hand.\n" +
+			"- Then discard one card from your hand face-up. Keep the cards that build toward melds and throw away your stray cards."
 	}
 	return ""
 }
@@ -124,6 +129,9 @@ func (s GameSpec) endRule() string {
 		if s.Move == Trick {
 			return "The game ends once every player has played out their whole hand."
 		}
+		if s.Move == Rummy {
+			return "The game ends the moment the draw deck runs out."
+		}
 		return "The game ends once the deck is exhausted and the players' hands are empty."
 	case Bust:
 		return "The round ends when every player has either stuck or busted."
@@ -146,6 +154,8 @@ func (s GameSpec) winRule() string {
 		return "The player who captured the most cards wins."
 	case HighScore:
 		return "The player with the highest score wins."
+	case FewestDeadwood:
+		return "The player whose hand has the fewest unmelded cards (the least deadwood) wins."
 	}
 	return ""
 }

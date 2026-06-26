@@ -44,6 +44,8 @@ func (a Adapter) ApplyMove(s *sim.GameState, m sim.Move, _ *genome.Genome) []sim
 		ev = append(ev, sim.Event{Type: sim.EventCardPlayed, PlayerID: p, Cards: m.Cards})
 	case sim.MoveDraw:
 		ev = append(ev, sim.Event{Type: sim.EventCardDrawn, PlayerID: p})
+	case sim.MoveDiscard: // rummy: the chosen discard is the meaningful action
+		ev = append(ev, sim.Event{Type: sim.EventCardPlayed, PlayerID: p, Cards: m.Cards})
 	case sim.MoveKnock:
 		ev = append(ev, sim.Event{Type: sim.EventSpecialTriggered, PlayerID: p, Detail: "knock"})
 	}
@@ -112,6 +114,18 @@ func (a Adapter) Progress(s *sim.GameState, _ *genome.Genome) []float64 {
 				out[p] = float64(s.Scores[p]) / float64(total)
 			}
 		}
+	case Rummy: // closeness to winning = fewer unmelded cards
+		d := a.Spec.Deal
+		if d < 1 {
+			d = 1
+		}
+		for p := range out {
+			v := 1 - float64(deadwoodCount(s.Hands[p]))/float64(d)
+			if v < 0 {
+				v = 0
+			}
+			out[p] = v
+		}
 	}
 	return out
 }
@@ -140,6 +154,8 @@ func specSkeleton(m MoveGen) genome.SkeletonType {
 		return genome.Casino
 	case Trick:
 		return genome.TrickTaking
+	case Rummy:
+		return genome.Rummy
 	default: // PlayMatch, Accumulate
 		return genome.Shedding
 	}

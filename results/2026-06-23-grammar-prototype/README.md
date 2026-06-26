@@ -229,8 +229,15 @@ empty, **0 stuck / 0 non-terminating** across the enlarged space. New families:
 `trick` (Whist), `trick+avoidance` (Hearts), `trick+meld_bonus`,
 `capture+avoidance`. Trick reaches FULL fitness parity with the Whist seed through
 the real pipeline (`cmd/grammar-fitness`) once the adapter emits `EventTrickWon`.
-Each added generator multiplies the family count; rummy (draw-meld-discard) is the
-remaining one.
+
+The `Rummy` move-gen (2026-06-26) completes all SIX skeletons in the grammar:
+draw from the deck, discard one, build melds, fewest-deadwood wins at deck-out. It
+terminates BY CONSTRUCTION where the v2 Gin seed does not -- the deck drains one
+card per turn so deck-out is guaranteed, sidestepping the "go-out gate doesn't
+terminate under random play" problem (the deep-borrow finding). It scores **0.523
+vs the Gin seed's 0.468**, and higher on session length (1.000 vs 0.110) precisely
+because it terminates cleanly. Base families 5 -> 6, modified 26 -> 27, still
+27/27 playable-by-construction.
 
 **Lever 2 -- illuminate instead of optimize.** `cmd/grammar-illuminate` runs
 MAP-Elites over the typed space: it keeps the best game per cell of a behavior
@@ -243,5 +250,7 @@ judging set (best game per family). The two levers compose: a bigger space, and 
 search that fills all of it instead of collapsing onto its best corner.
 
 Remaining sharpening (not blockers): casino's coarse capture move-gen
-(under-measures interaction/skill), the last move-gen (rummy), and a 3-judge
-majority + more compositions for a production verdict table.
+(under-measures interaction/skill), genuinely-new move-gens beyond the six
+skeletons (drafting/set-collection, auction), modifiers that compose with trick
+and rummy, and a 3-judge majority + more compositions for a production verdict
+table.

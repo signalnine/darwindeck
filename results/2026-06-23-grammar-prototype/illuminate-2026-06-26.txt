@@ -1,13 +1,13 @@
-iter  500 | cells filled= 48 | distinct families=26 | specs evaluated=118
-iter 1000 | cells filled= 49 | distinct families=26 | specs evaluated=125
-iter 1500 | cells filled= 49 | distinct families=26 | specs evaluated=129
-iter 2000 | cells filled= 49 | distinct families=26 | specs evaluated=131
-iter 2500 | cells filled= 49 | distinct families=26 | specs evaluated=132
+iter  500 | cells filled= 48 | distinct families=27 | specs evaluated=115
+iter 1000 | cells filled= 50 | distinct families=27 | specs evaluated=130
+iter 1500 | cells filled= 50 | distinct families=27 | specs evaluated=132
+iter 2000 | cells filled= 50 | distinct families=27 | specs evaluated=133
+iter 2500 | cells filled= 50 | distinct families=27 | specs evaluated=133
 
 == MAP-Elites illumination of the typed grammar ==
-  behavior cells filled        : 49  (family x decisions-bucket x interaction-bucket)
-  distinct families illuminated : 26 / 26 well-typed families
-  specs evaluated               : 132
+  behavior cells filled        : 50  (family x decisions-bucket x interaction-bucket)
+  distinct families illuminated : 27 / 27 well-typed families
+  specs evaluated               : 133
 
 == Best game per illuminated family (the out-of-loop judging set) ==
   0.432  accumulate|bust|closest_target
@@ -32,6 +32,7 @@ iter 2500 | cells filled= 49 | distinct families=26 | specs evaluated=132
   0.436  play_match/either|empty_hand|first_out+run_play,follow_suit,draw_penalty
   0.504  play_match/either|empty_hand|first_out+run_play,follow_suit,knock
   0.561  play_match/either|empty_hand|first_out+run_play,knock
+  0.523  rummy|deck_out|fewest_deadwood
   0.606  trick|deck_out|most_captured
   0.575  trick|deck_out|most_captured+avoidance
   0.611  trick|deck_out|most_captured+meld_bonus

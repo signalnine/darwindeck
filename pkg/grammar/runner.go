@@ -146,6 +146,9 @@ func (rr Runner) Setup(rng *rand.Rand) *sim.GameState {
 		gs.TrickPlayers = nil
 		gs.TrickLeader = 0
 	}
+	if s.Move == Rummy {
+		gs.Phase = sim.PhaseDraw // a rummy turn is two moves: draw, then discard
+	}
 	gs.Folded = make([]bool, s.Players)
 	gs.Active = 0
 	return gs
@@ -224,6 +227,22 @@ func (rr Runner) LegalMoves(gs *sim.GameState) []sim.Move {
 		}
 		return moves
 
+	case Rummy:
+		// A turn is two moves: DRAW a card from the deck (forced -- the deck drains
+		// one per turn, which is what terminates the game), then DISCARD any card.
+		// The discard choice (keep meld cards, shed deadwood) is the whole decision.
+		if gs.Phase == sim.PhaseDiscard {
+			var moves []sim.Move
+			for _, c := range hand {
+				moves = append(moves, mv(sim.MoveDiscard, p, c))
+			}
+			return moves // hand is Deal+1 here, never empty
+		}
+		if len(gs.Deck) > 0 {
+			return []sim.Move{mv(sim.MoveDraw, p)}
+		}
+		return []sim.Move{mv(sim.MovePass, p)} // deck empty: deck_out fires in CheckEnd
+
 	case Trick:
 		// Lead the trick with any card; otherwise FOLLOW the lead suit if you hold
 		// it, else play anything. TrickCards holds the cards played so far this trick
@@ -257,6 +276,21 @@ func (rr Runner) Apply(gs *sim.GameState, m sim.Move) {
 	if m.Type == sim.MoveKnock { // ModKnock: end the game now; winner is fewest cards (CheckEnd)
 		gs.Phase = sim.PhaseEnd
 		gs.Turn++
+		return
+	}
+	if s.Move == Rummy { // two-phase turn; counts ONE Turn per draw+discard pair
+		if gs.Phase == sim.PhaseDraw && m.Type == sim.MoveDraw {
+			drawn, rem := sim.DrawN(gs.Deck, 1)
+			gs.Hands[p] = append(gs.Hands[p], drawn...)
+			gs.Deck = rem
+			gs.Phase = sim.PhaseDiscard // same player discards next
+		} else { // discard
+			gs.Hands[p] = removeCard(gs.Hands[p], m.Cards[0])
+			gs.Discard = append(gs.Discard, m.Cards[0])
+			gs.Phase = sim.PhaseDraw
+			gs.Active = (p + 1) % gs.NumPlayers
+			gs.Turn++
+		}
 		return
 	}
 	switch s.Move {
@@ -441,6 +475,14 @@ func (rr Runner) CheckEnd(gs *sim.GameState) (winner int, done bool) {
 			}
 		}
 	case DeckOut:
+		if s.Move == Rummy {
+			// Rummy hands stay a constant size, so deck_out means the DECK is
+			// exhausted -- which the one-draw-per-turn dynamic guarantees.
+			if len(gs.Deck) == 0 {
+				return rr.score(gs), true
+			}
+			return -1, false
+		}
 		allEmpty := true
 		for p := 0; p < gs.NumPlayers; p++ {
 			if len(gs.Hands[p]) > 0 {
@@ -479,6 +521,14 @@ func (rr Runner) score(gs *sim.GameState) int {
 		for p := 1; p < gs.NumPlayers; p++ {
 			if len(gs.Hands[p]) < bestVal {
 				best, bestVal = p, len(gs.Hands[p])
+			}
+		}
+		return best
+	case FewestDeadwood:
+		best, bestVal = 0, deadwoodCount(gs.Hands[0])
+		for p := 1; p < gs.NumPlayers; p++ {
+			if d := deadwoodCount(gs.Hands[p]); d < bestVal {
+				best, bestVal = p, d
 			}
 		}
 		return best

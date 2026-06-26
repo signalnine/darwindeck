@@ -181,6 +181,54 @@ func meldBonus(pile []sim.Card) int {
 	return bonus
 }
 
+// deadwoodCount returns how many cards in a hand are NOT part of a meld -- the
+// rummy score signal (fewest deadwood wins). Greedy melding: same-rank sets of 3+
+// first, then same-suit consecutive runs of 3+ among the leftovers. Greedy is an
+// approximation of the optimal partition, but it is monotone and good enough to
+// reward meld-building, which is the decision the game is about.
+func deadwoodCount(hand []sim.Card) int {
+	melded := make([]bool, len(hand))
+	byRank := map[sim.Rank][]int{}
+	for i, c := range hand {
+		byRank[c.Rank] = append(byRank[c.Rank], i)
+	}
+	for _, idxs := range byRank {
+		if len(idxs) >= 3 {
+			for _, i := range idxs {
+				melded[i] = true
+			}
+		}
+	}
+	for s := 0; s < 4; s++ {
+		var idxs []int
+		for i, c := range hand {
+			if int(c.Suit) == s && !melded[i] {
+				idxs = append(idxs, i)
+			}
+		}
+		sort.Slice(idxs, func(a, b int) bool { return hand[idxs[a]].Rank < hand[idxs[b]].Rank })
+		for i := 0; i < len(idxs); {
+			j := i + 1
+			for j < len(idxs) && hand[idxs[j]].Rank == hand[idxs[j-1]].Rank+1 {
+				j++
+			}
+			if j-i >= 3 {
+				for k := i; k < j; k++ {
+					melded[idxs[k]] = true
+				}
+			}
+			i = j
+		}
+	}
+	dw := 0
+	for _, m := range melded {
+		if !m {
+			dw++
+		}
+	}
+	return dw
+}
+
 // avoidancePenalty scores the won pile for ModAvoidance (Hearts-style): each heart
 // is 1 penalty point and the Queen of Spades is 13. The score rule subtracts this,
 // so the winner is whoever took the FEWEST penalty cards.

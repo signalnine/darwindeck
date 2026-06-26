@@ -19,7 +19,7 @@ func endsFor(m MoveGen) []EndRule {
 		return []EndRule{EmptyHand, DeckOut}
 	case Accumulate:
 		return []EndRule{Bust}
-	case Capture, Trick:
+	case Capture, Trick, Rummy:
 		return []EndRule{DeckOut}
 	}
 	return nil
@@ -33,6 +33,8 @@ func scoresFor(m MoveGen) []ScoreRule {
 		return []ScoreRule{ClosestTarget, HighScore}
 	case Capture, Trick:
 		return []ScoreRule{MostCaptured, HighScore}
+	case Rummy:
+		return []ScoreRule{FewestDeadwood, FewestCards} // fewest_cards is inert (constant hand) -> dropped by typing
 	}
 	return nil
 }
@@ -47,6 +49,8 @@ func dealFor(m MoveGen) []int {
 		return []int{4}
 	case Trick:
 		return []int{13} // deal the hand out; the trick race empties it in lockstep
+	case Rummy:
+		return []int{10} // Gin-style hand; the deck (not the hand) drains to end the game
 	}
 	return []int{5}
 }
@@ -170,9 +174,9 @@ func Families(specs []GameSpec) map[string]int {
 	return fam
 }
 
-// Canonical expresses the hand-coded skeletons this grammar can represent (5 of
-// the 6: shedding, climbing, banking, casino, trick-taking). Rummy needs one more
-// move-generator (draw-meld-discard); each generator further multiplies the space.
+// Canonical expresses the hand-coded skeletons this grammar can represent -- now
+// all SIX (shedding, climbing, banking, casino, trick-taking, rummy). Each
+// move-generator multiplies the family space.
 func Canonical() []GameSpec {
 	return []GameSpec{
 		{Players: 4, Deal: 7, Shared: 1, Move: PlayMatch, Match: MatchEither, End: EmptyHand, Score: FirstOut}, // shedding
@@ -180,6 +184,7 @@ func Canonical() []GameSpec {
 		{Players: 4, Deal: 0, Shared: 3, Move: Accumulate, Target: 21, End: Bust, Score: ClosestTarget},        // banking
 		{Players: 4, Deal: 4, Shared: 4, Move: Capture, End: DeckOut, Score: MostCaptured},                     // casino
 		{Players: 4, Deal: 13, Shared: 0, Move: Trick, End: DeckOut, Score: MostCaptured},                      // trick-taking (Whist)
+		{Players: 2, Deal: 10, Shared: 0, Move: Rummy, End: DeckOut, Score: FewestDeadwood},                    // rummy (Gin-style)
 	}
 }
 
