@@ -156,8 +156,8 @@ func main() {
 		}
 	}
 	sort.Strings(novelSample)
-	fmt.Printf("\n== Modifier axis (6 productive typed modifiers from v2 borrows, subsets <=3) ==\n")
-	fmt.Printf("  modifiers: run_play, follow_suit, draw_penalty, knock, meld_bonus, avoidance (wild: non-productive)\n")
+	fmt.Printf("\n== Modifier axis (typed modifiers; 6 v2 borrows + trump/skip/force_draw/wild-rummy/gin-knock) ==\n")
+	fmt.Printf("  modifiers: run_play, follow_suit, draw_penalty, knock, meld_bonus, avoidance, trump, skip, force_draw, wild(rummy)\n")
 	fmt.Printf("  base well-typed families            : %d\n", len(famTyped))
 	fmt.Printf("  WITH modifier subsets               : %d families / %d representative specs\n", len(famMod), len(mod))
 	fmt.Printf("  novel families (carry >=1 modifier)  : %d\n", novelMod)

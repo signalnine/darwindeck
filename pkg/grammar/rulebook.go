@@ -111,7 +111,19 @@ func (s GameSpec) modifierRules() []string {
 		case ModDrawPenalty:
 			out = append(out, "Whenever you play a face card (Jack, Queen, or King), you must immediately draw one extra card from the deck as a penalty.")
 		case ModKnock:
-			out = append(out, "When you are down to 3 or fewer cards, you may KNOCK on your turn to end the game at once. Whoever holds the fewest cards then wins -- so knocking while you are NOT lowest hands the win to someone else.")
+			if s.Move == Rummy {
+				out = append(out, "When your unmelded cards are nearly gone, you may KNOCK at the start of your turn to end the game immediately. Whoever has the least deadwood then wins -- knock too early and an opponent with fewer stray cards beats you.")
+			} else {
+				out = append(out, "When you are down to 3 or fewer cards, you may KNOCK on your turn to end the game at once. Whoever holds the fewest cards then wins -- so knocking while you are NOT lowest hands the win to someone else.")
+			}
+		case ModWild:
+			out = append(out, "Eights are WILD: a wild card stands in for any card you need to complete a set or a run, so holding wilds lets you finish melds and cut your deadwood.")
+		case ModTrump:
+			out = append(out, "Spades are TRUMP: a spade beats any card of the suit that was led, and the highest spade played wins the trick. You must still follow the led suit if you can.")
+		case ModSkip:
+			out = append(out, "Sevens SKIP: when you play a seven, the next player loses their turn and play jumps to the player after them.")
+		case ModForceDraw:
+			out = append(out, "Twos ATTACK: when you play a two, the next player must draw two cards from the deck and loses their turn.")
 		case ModMeldBonus:
 			out = append(out, "At the end, you earn bonus points for matching combinations in your score pile: pairs and three-of-a-kinds, and runs of the same suit. These bonuses are added to your total.")
 		case ModAvoidance:

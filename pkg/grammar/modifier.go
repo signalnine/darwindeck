@@ -22,12 +22,22 @@ const (
 	ModKnock                       // win-override: knock with a small hand to end the game by fewest cards (v2 knock, id 3)
 	ModMeldBonus                   // score-adjust: bank set/run bonuses from the captured pile (v2 meld_bonus, id 1)
 	ModAvoidance                   // score-adjust: penalty cards in your won pile count AGAINST you (v2 avoidance, id 5) -- gives Hearts on a trick host
+	ModTrump                       // trick-resolve: a trump suit beats the led suit -- gives Spades/Bridge-family trick games
+	ModSkip                        // turn-order: playing a designated rank skips the next player -- gives Uno-family shedding
+	ModForceDraw                   // attack: playing a designated rank makes the next player draw two and lose their turn (Uno draw-two)
 	modifierCount
 )
 
 func (m Modifier) String() string {
-	return [...]string{"run_play", "follow_suit", "wild", "draw_penalty", "knock", "meld_bonus", "avoidance"}[m]
+	return [...]string{"run_play", "follow_suit", "wild", "draw_penalty", "knock", "meld_bonus", "avoidance", "trump", "skip", "force_draw"}[m]
 }
+
+const (
+	skipRank      = 7 // the rank that skips the next player under ModSkip (Uno-style)
+	forceDrawRank = 2 // the rank that forces the next player to draw under ModForceDraw
+	forceDrawN    = 2 // how many cards the victim draws
+	trumpSuit     = 3 // Spades is trump under ModTrump (sim.Spades == 3); reuses wildRank(8) for rummy melds
+)
 
 // CompatibleWith is the modifier's type rule against the base spec. It reads only
 // the structural fields (Move/Match/End/Score), never WellTyped, so it cannot
@@ -39,18 +49,33 @@ func (m Modifier) CompatibleWith(s GameSpec) bool {
 		// Move-set modifiers act on the match-and-shed generator (v2: shedding host).
 		return s.Move == PlayMatch
 	case ModWild:
-		// A single wild rank is too sparse to restore agency to rank/suit-only
-		// matching (the random-AI rescue experiment shows ~0.01 -> 0.02 agency,
-		// still dead). So wild is NOT a productive modifier and never enumerated;
-		// the base agency rule (require MatchEither) stands. Kept only so the
-		// honest rescue experiment in cmd/grammar-proto can run the runner path.
-		return false
+		// On play_match a single wild rank is too sparse to restore agency to
+		// rank/suit-only matching (the rescue experiment: ~0.01 -> 0.02, still dead),
+		// so it is NOT enumerated there. On RUMMY it is genuinely productive: a wild
+		// completes melds and cuts deadwood, a real decision (deuces-wild rummy).
+		return s.Move == Rummy
 	case ModDrawPenalty:
 		// Hand-growth penalty only bites in a hand-emptying race (v2: shedding/rummy).
 		return s.Move == PlayMatch && s.End == EmptyHand
+	case ModSkip:
+		// A skip card (Uno-style turn-order attack) only matters in a shedding race.
+		return s.Move == PlayMatch && s.End == EmptyHand
+	case ModForceDraw:
+		// Force-an-opponent-to-draw (Uno draw-two) is a shedding-race attack: it
+		// grows the victim's hand, the inverse of self draw_penalty. The deck is
+		// finite so it cannot prevent termination.
+		return s.Move == PlayMatch && s.End == EmptyHand
 	case ModKnock:
-		// "Fewest cards wins" is only meaningful in an empty-hand race (v2: shedding+climbing).
+		// "Fewest cards wins" in an empty-hand race (shedding/climbing); on RUMMY it
+		// is the Gin go-out: knock by low DEADWOOD, fewest-deadwood wins. Additive --
+		// deck-out remains the floor, so it stays playable-by-construction.
+		if s.Move == Rummy {
+			return s.End == DeckOut
+		}
 		return (s.Move == PlayMatch || s.Move == BeatOrPass) && s.End == EmptyHand
+	case ModTrump:
+		// A trump suit that beats the led suit -- only meaningful in trick-taking.
+		return s.Move == Trick
 	case ModMeldBonus:
 		// Bank a weighted set/run bonus on top of the count rule -- v2's casino
 		// CheckEnd ("captured COUNT + bonus"). It rides any pile-collecting count
@@ -181,15 +206,26 @@ func meldBonus(pile []sim.Card) int {
 	return bonus
 }
 
-// deadwoodCount returns how many cards in a hand are NOT part of a meld -- the
-// rummy score signal (fewest deadwood wins). Greedy melding: same-rank sets of 3+
-// first, then same-suit consecutive runs of 3+ among the leftovers. Greedy is an
-// approximation of the optimal partition, but it is monotone and good enough to
-// reward meld-building, which is the decision the game is about.
-func deadwoodCount(hand []sim.Card) int {
-	melded := make([]bool, len(hand))
+// deadwood returns how many cards in a hand are NOT part of a meld -- the rummy
+// score signal (fewest deadwood wins). Greedy melding: same-rank sets of 3+ first,
+// then same-suit consecutive runs of 3+ among the leftovers. wildRank >= 0 enables
+// a wild (ModWild): wild-rank cards are never deadwood themselves and each one
+// completes a leftover near-meld (a pair or a 2-card run), cutting deadwood by 2 --
+// a real reason to hold wilds. Greedy approximates the optimal partition but is
+// monotone and rewards meld-building, the decision the game is about.
+func deadwood(hand []sim.Card, wildRank int) int {
+	var wilds int
+	cards := make([]sim.Card, 0, len(hand))
+	for _, c := range hand {
+		if wildRank >= 0 && int(c.Rank) == wildRank {
+			wilds++
+		} else {
+			cards = append(cards, c)
+		}
+	}
+	melded := make([]bool, len(cards))
 	byRank := map[sim.Rank][]int{}
-	for i, c := range hand {
+	for i, c := range cards {
 		byRank[c.Rank] = append(byRank[c.Rank], i)
 	}
 	for _, idxs := range byRank {
@@ -201,15 +237,15 @@ func deadwoodCount(hand []sim.Card) int {
 	}
 	for s := 0; s < 4; s++ {
 		var idxs []int
-		for i, c := range hand {
+		for i, c := range cards {
 			if int(c.Suit) == s && !melded[i] {
 				idxs = append(idxs, i)
 			}
 		}
-		sort.Slice(idxs, func(a, b int) bool { return hand[idxs[a]].Rank < hand[idxs[b]].Rank })
+		sort.Slice(idxs, func(a, b int) bool { return cards[idxs[a]].Rank < cards[idxs[b]].Rank })
 		for i := 0; i < len(idxs); {
 			j := i + 1
-			for j < len(idxs) && hand[idxs[j]].Rank == hand[idxs[j-1]].Rank+1 {
+			for j < len(idxs) && cards[idxs[j]].Rank == cards[idxs[j-1]].Rank+1 {
 				j++
 			}
 			if j-i >= 3 {
@@ -220,13 +256,40 @@ func deadwoodCount(hand []sim.Card) int {
 			i = j
 		}
 	}
-	dw := 0
-	for _, m := range melded {
+	var leftover []sim.Card
+	for i, m := range melded {
 		if !m {
-			dw++
+			leftover = append(leftover, cards[i])
 		}
 	}
-	return dw
+	for wilds > 0 { // each wild completes one leftover near-meld (pair or 2-run)
+		if i, j, ok := findNearMeld(leftover); ok {
+			leftover = append(leftover[:j], leftover[j+1:]...)
+			leftover = append(leftover[:i], leftover[i+1:]...)
+			wilds--
+		} else {
+			break
+		}
+	}
+	return len(leftover)
+}
+
+// findNearMeld returns the indices of two cards a single wild can turn into a meld:
+// a pair (same rank) or two consecutive same-suit cards.
+func findNearMeld(cards []sim.Card) (int, int, bool) {
+	for i := 0; i < len(cards); i++ {
+		for j := i + 1; j < len(cards); j++ {
+			if cards[i].Rank == cards[j].Rank {
+				return i, j, true
+			}
+			if cards[i].Suit == cards[j].Suit {
+				if d := int(cards[i].Rank) - int(cards[j].Rank); d == 1 || d == -1 {
+					return i, j, true
+				}
+			}
+		}
+	}
+	return 0, 0, false
 }
 
 // avoidancePenalty scores the won pile for ModAvoidance (Hearts-style): each heart

@@ -104,6 +104,7 @@ func TestModifierTyping(t *testing.T) {
 	banking := GameSpec{Move: Accumulate, End: Bust, Score: ClosestTarget}
 	casinoCap := GameSpec{Move: Capture, End: DeckOut, Score: MostCaptured}
 	trick := GameSpec{Move: Trick, End: DeckOut, Score: MostCaptured}
+	rummy := GameSpec{Move: Rummy, End: DeckOut, Score: FewestDeadwood}
 
 	cases := []struct {
 		m    Modifier
@@ -116,6 +117,7 @@ func TestModifierTyping(t *testing.T) {
 		{ModFollowSuit, banking, false},
 		{ModKnock, shedding, true},
 		{ModKnock, climbing, true},
+		{ModKnock, rummy, true},    // Gin go-out by deadwood
 		{ModKnock, banking, false}, // bust end, not a hand race
 		{ModDrawPenalty, shedding, true},
 		{ModDrawPenalty, climbing, false}, // v2 allows it; grammar scopes it to the match-shed gen
@@ -125,7 +127,14 @@ func TestModifierTyping(t *testing.T) {
 		{ModAvoidance, trick, true},     // Hearts: penalty cards in won tricks count against you
 		{ModAvoidance, casinoCap, true}, // Scopa penalty-suit
 		{ModAvoidance, shedding, false}, // no won pile to penalize
-		{ModWild, shedding, false},      // non-productive: never enumerated
+		{ModWild, rummy, true},          // deuces/eights-wild: completes melds
+		{ModWild, shedding, false},      // still non-productive on shedding
+		{ModTrump, trick, true},         // Spades/Bridge trump
+		{ModTrump, shedding, false},
+		{ModSkip, shedding, true}, // Uno skip
+		{ModSkip, trick, false},
+		{ModForceDraw, shedding, true}, // Uno draw-two
+		{ModForceDraw, casinoCap, false},
 	}
 	for _, c := range cases {
 		if got := c.m.CompatibleWith(c.spec); got != c.want {

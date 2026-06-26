@@ -70,6 +70,19 @@ func mv(t sim.MoveType, player int, cards ...sim.Card) sim.Move {
 	return sim.Move{Type: t, PlayerID: player, Cards: cards}
 }
 
+func hasRank(cards []sim.Card, rank int) bool {
+	for _, c := range cards {
+		if int(c.Rank) == rank {
+			return true
+		}
+	}
+	return false
+}
+
+// ginKnockThreshold is the deadwood at or below which a rummy player may knock
+// (ModKnock on rummy = the Gin go-out).
+const ginKnockThreshold = 2
+
 // followSuitFilter (ModFollowSuit) keeps only plays that follow the discard suit
 // (or a wild) when the player holds the suit -- the move-RESTRICT modifier. If the
 // player is void in the suit, or the filter would empty the set, it leaves the
@@ -142,6 +155,9 @@ func (rr Runner) Setup(rng *rand.Rand) *sim.GameState {
 		// dead kitty, so drop it -- then deck_out fires the moment hands empty.
 		gs.Deck = nil
 		gs.TrumpSuit = -1 // no trump (the TrickTakingScorer treats <0 as none)
+		if s.hasMod(ModTrump) {
+			gs.TrumpSuit = trumpSuit // Spades trump (also makes the TrickTakingScorer trump-aware)
+		}
 		gs.TrickCards = nil
 		gs.TrickPlayers = nil
 		gs.TrickLeader = 0
@@ -238,10 +254,25 @@ func (rr Runner) LegalMoves(gs *sim.GameState) []sim.Move {
 			}
 			return moves // hand is Deal+1 here, never empty
 		}
+		// Draw phase: draw from the deck, or (ModKnock = Gin go-out) knock when your
+		// deadwood is low. Additive -- deck-out is still the floor.
+		var moves []sim.Move
 		if len(gs.Deck) > 0 {
-			return []sim.Move{mv(sim.MoveDraw, p)}
+			moves = append(moves, mv(sim.MoveDraw, p))
 		}
-		return []sim.Move{mv(sim.MovePass, p)} // deck empty: deck_out fires in CheckEnd
+		if rr.Spec.hasMod(ModKnock) {
+			wr := -1
+			if rr.Spec.hasMod(ModWild) {
+				wr = wildRank
+			}
+			if deadwood(hand, wr) <= ginKnockThreshold {
+				moves = append(moves, mv(sim.MoveKnock, p))
+			}
+		}
+		if len(moves) == 0 {
+			moves = append(moves, mv(sim.MovePass, p)) // deck empty: deck_out fires in CheckEnd
+		}
+		return moves
 
 	case Trick:
 		// Lead the trick with any card; otherwise FOLLOW the lead suit if you hold
@@ -318,7 +349,20 @@ func (rr Runner) Apply(gs *sim.GameState, m sim.Move) {
 		case sim.MovePass: // only reachable with an empty deck and no legal play
 			gs.PassCount++
 		}
-		gs.Active = (p + 1) % gs.NumPlayers
+		step := 1
+		if m.Type == sim.MovePlay {
+			if rr.Spec.hasMod(ModSkip) && hasRank(m.Cards, skipRank) {
+				step = 2 // ModSkip: playing the skip rank skips the next player
+			}
+			if rr.Spec.hasMod(ModForceDraw) && hasRank(m.Cards, forceDrawRank) {
+				victim := (p + 1) % gs.NumPlayers
+				drawn, rem := sim.DrawN(gs.Deck, forceDrawN) // bounded by the (finite) deck
+				gs.Hands[victim] = append(gs.Hands[victim], drawn...)
+				gs.Deck = rem
+				step = 2 // the victim drew and loses their turn
+			}
+		}
+		gs.Active = (p + step) % gs.NumPlayers
 
 	case BeatOrPass:
 		switch m.Type {
@@ -395,10 +439,23 @@ func (rr Runner) Apply(gs *sim.GameState, m sim.Move) {
 		}
 		if len(gs.TrickCards) >= gs.NumPlayers { // trick complete: resolve it
 			lead := gs.TrickCards[0].Suit
+			trump := gs.TrumpSuit // -1 when no ModTrump
 			win, winCard := gs.TrickPlayers[0], gs.TrickCards[0]
+			winTrump := trump >= 0 && int(winCard.Suit) == trump
 			for i := 1; i < len(gs.TrickCards); i++ {
-				if tc := gs.TrickCards[i]; tc.Suit == lead && tc.Rank > winCard.Rank {
-					win, winCard = gs.TrickPlayers[i], tc
+				tc := gs.TrickCards[i]
+				tcTrump := trump >= 0 && int(tc.Suit) == trump
+				beats := false
+				switch {
+				case tcTrump && !winTrump: // any trump beats a non-trump
+					beats = true
+				case tcTrump == winTrump && tcTrump: // both trump: higher rank
+					beats = tc.Rank > winCard.Rank
+				case tcTrump == winTrump: // neither trump: must be lead suit and higher
+					beats = tc.Suit == lead && tc.Rank > winCard.Rank
+				}
+				if beats {
+					win, winCard, winTrump = gs.TrickPlayers[i], tc, tcTrump
 				}
 			}
 			gs.Scores[win] += len(gs.TrickCards) // cards won (the most-captured signal)
@@ -455,8 +512,11 @@ func (rr Runner) nextActive(gs *sim.GameState) int {
 // winner of -1 from a terminal state (e.g. everyone busted) is reported as a
 // drawn-but-TERMINATED game by the harness, not a hang.
 func (rr Runner) CheckEnd(gs *sim.GameState) (winner int, done bool) {
-	if gs.Phase == sim.PhaseEnd { // ModKnock fired: win goes to the fewest-cards hand
-		return fewestCards(gs), true
+	if gs.Phase == sim.PhaseEnd { // ModKnock fired
+		if rr.Spec.Move == Rummy { // Gin go-out: fewest DEADWOOD wins
+			return rr.score(gs), true
+		}
+		return fewestCards(gs), true // shedding/climbing: fewest cards
 	}
 	s := rr.Spec
 	// Runner-level liveness: a PlayMatch game can stall when the deck is empty and
@@ -525,9 +585,13 @@ func (rr Runner) score(gs *sim.GameState) int {
 		}
 		return best
 	case FewestDeadwood:
-		best, bestVal = 0, deadwoodCount(gs.Hands[0])
+		wr := -1
+		if rr.Spec.hasMod(ModWild) {
+			wr = wildRank
+		}
+		best, bestVal = 0, deadwood(gs.Hands[0], wr)
 		for p := 1; p < gs.NumPlayers; p++ {
-			if d := deadwoodCount(gs.Hands[p]); d < bestVal {
+			if d := deadwood(gs.Hands[p], wr); d < bestVal {
 				best, bestVal = p, d
 			}
 		}

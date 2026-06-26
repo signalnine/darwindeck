@@ -1,0 +1,629 @@
+{
+ "synthesis": {
+  "coverageSummary": "Of 52 surveyed games, 10 are out-of-scope by design: 3 real-time/dexterity (Spit/Speed, Pig, Egyptian Ratscrew), 3 no-decision deterministic feeds (War, Beggar-my-Neighbour, Old Maid), and 4 that stack too many independent missing primitives at once (Tichu, Canasta, Continental, Rummikub). That leaves 42 in-scope multiplayer games. Of those, 6 are covered or covered-modulo-the-modifiers-being-added: covered-now = Whist (trick base), 31/Thirty-One (accumulate base); covered-with-modifiers-being-added = Crazy Eights (minus suit-nominate), Hearts (avoidance), Gin Rummy + Knock Rummy (gin-knock). The remaining 36 need genuinely new work. HEADLINE: 6/42 = ~14% of in-scope multiplayer games are covered now or with the modifiers currently being added. The coverage ceiling is gated by two big absences that together account for ~19 of the 36 uncovered games: a bidding/contract phase (~11 games) and a vying/betting move-gen (~8 games); both are net-new primitives, not modifiers, and both stay playable-by-construction only with explicit termination caps (a finite bid round; a max-raises cap per betting round). Two more mid-tier modifier gaps (suit-nomination and multi-card combo-beat on climbing) each unlock ~6 and are cleanly playable-by-construction. The shedding and climbing families are within reach of modifier work; the trick-contract, vying, and table-meld-rummy families need new phases/generators.",
+  "prioritizedGaps": [
+   {
+    "gap": "Bidding/contract phase + contract-relative (make-or-set / exact-match / target-relative) scoring",
+    "type": "move-gen",
+    "unlocksGames": "Spades, Oh Hell, Euchre, 500, German Skat, Bridge (play), Napoleon, Rook, Skat-bidding, Klaberjass, Pinochle",
+    "count": 11,
+    "terminationNote": "Stays playable-by-construction: a bid is a one-shot phase over a finite numeric range (each seat declares once, or an auction with a strictly-rising bid bounded by max tricks), so it terminates trivially under random play before the existing trick loop runs. The score axis (closeness/exact-match to a declared target) is a pure end-of-round tally, not a gate, so no termination risk. Largest single unlock; the defining decision of the entire trick-contract family."
+   },
+   {
+    "gap": "Vying/betting move-gen {check, bet, call, raise, fold} over a pot with hidden-hand showdown (high_hand rank score)",
+    "type": "move-gen",
+    "unlocksGames": "Five-Card Draw Poker, Texas Hold em, Stud, Three-Card Brag, Blackjack, Pontoon, Baccarat, In-Between/Acey-Deucey",
+    "count": 8,
+    "terminationNote": "Playable-by-construction ONLY with an explicit max-raises cap per betting round (mirrors v2 max_raises): without it, random call/raise can loop unbounded. With the cap, fold/call always resolves a round in bounded turns, so it terminates under random play. Needs companion primitives (hidden-hand state, hand-ranking showdown score, staged community/up-card reveal for Hold em/Stud); Blackjack/Pontoon/Baccarat also need a fixed-rule banker seat with asymmetric payout on top of the bet primitive."
+   },
+   {
+    "gap": "Multi-card same-type combo-beat on beat_or_pass (pair beats pair, run beats run) + rank-then-suit total order",
+    "type": "move-gen",
+    "unlocksGames": "Big Two, President/Asshole, Tien Len, Daihinmin, Zheng Shangyou, President-with-revolutions",
+    "count": 6,
+    "terminationNote": "Playable-by-construction: a combo-beat is a SUPERSET of single-card plays restricted to strictly-higher same-type, and pass is always legal, so the move set is never empty and all-pass still clears; combos only shed faster, so the empty-hand race still terminates. (The existing comboPlays superset proves the shed-faster monotonicity argument.) Note this is a move-gen change, not a pure modifier, because it alters the legal-move set against a multi-card table top."
+   },
+   {
+    "gap": "Suit-nomination modifier (a designated wild rank lets the player CHOOSE the next required suit, mutating the match target)",
+    "type": "modifier",
+    "unlocksGames": "Crazy Eights, Uno, Mau-Mau, Switch, Whot, Last Card",
+    "count": 6,
+    "terminationNote": "Playable-by-construction: nomination is a branching move whose payload is one of 4 suits; it does not remove the draw fallback and cannot deadlock (the next player can always draw if unable to match the chosen suit), so the empty-hand race still terminates under random play. The disabled ModWild does NOT cover this (it only makes a rank always-legal, not the pick-a-suit decision). Pure shedding-host modifier."
+   },
+   {
+    "gap": "Force-opponent-draw modifier (next player draws N and is skipped; ideally counter-stackable) -- the inverse of self draw_penalty",
+    "type": "modifier",
+    "unlocksGames": "Uno, Mau-Mau, Switch, Whot, Last Card",
+    "count": 5,
+    "terminationNote": "Playable-by-construction with care: forcing an opponent to DRAW grows a hand, which works against the empty-hand race, but the deck is finite and stock-out caps total draws, so it cannot prevent termination under random play; the stackable/counter variant must still bottom out when no counter card is held. Whot's General Market (ALL opponents draw) is the same primitive with a wider target. This is the central absence for the Uno/Mau-Mau shedding cluster (opponent-hand targeting)."
+   },
+   {
+    "gap": "Pip-sum capture modifier (capture a table SUBSET whose pip values sum to the played card) + sweep-clear bonus",
+    "type": "modifier",
+    "unlocksGames": "Casino, Scopa, Cassino, Cuarenta, Sweep",
+    "count": 5,
+    "terminationNote": "Playable-by-construction: sum-capture is still a play-or-trail move on the capture gen (trail is the always-legal fallback) and the deck drains one card per turn toward deck_out, so it terminates under random play. Already implemented as AllowSumCapture in pkg/skeleton/casino but NOT lifted into the grammar Capture gen. Sweep-clear is a pure score bonus. (Building/reserve-across-turns and named-card point scoring are separate, smaller add-ons.)"
+   },
+   {
+    "gap": "In-hand declaration-meld scoring modifier (score named combinations -- marriages, bezique, sequences -- from the HELD hand, cards stay playable), distinct from won-pile meld_bonus",
+    "type": "score-rule",
+    "unlocksGames": "Pinochle, Bezique, Sixty-Six, Schnapsen, Klaberjass",
+    "count": 5,
+    "terminationNote": "Playable-by-construction: scoring combinations from the retained hand is a pure end-of-trick/lead tally that does not alter the move set or the deck-out termination of the trick loop, so random play still terminates. ModMeldBonus is the WRONG zone (it scores the won pile); this scores cards kept in hand. Most of these games ALSO need a trump bid and a close-the-stock follow-suit toggle, so full coverage is gated behind the bidding gap too."
+   },
+   {
+    "gap": "Partnerships / team scoring aggregation",
+    "type": "score-rule",
+    "unlocksGames": "Spades, Euchre, 500, Bridge (play), Mindi, Rook",
+    "count": 6,
+    "terminationNote": "Playable-by-construction: teams are a pure score-aggregation axis (sum seat signals by team) layered on the existing trick loop; no effect on move generation or termination under random play. Cross-cuts heavily with the bidding gap (every listed game except Mindi also needs bidding), so it is rarely the SOLE blocker -- but it is a clean, independent, terminating add. Tichu/Canasta also need teams but are out-of-scope for other reasons."
+   },
+   {
+    "gap": "Trump modifier with trump-NAMING via bid + bower/permanent-trump rank reordering (Jacks become top trumps)",
+    "type": "modifier",
+    "unlocksGames": "Euchre, 500, German Skat, Skat-bidding, Klaberjass",
+    "count": 5,
+    "terminationNote": "Playable-by-construction: trump-naming is a one-shot choice folded into the bidding phase; the rank-reorder (bowers / Jacks-as-permanent-trump) is a static comparator tweak inside trick resolution, neither of which touches the deck-out termination. The plain fixed-suit ModTrump being added does NOT cover bid-chosen trump or the bower override. Fully gated behind the bidding/contract move-gen, so it only lands after that primitive exists."
+   },
+   {
+    "gap": "Meld-and-layoff rummy move-gen (lay sets/runs to a shared persistent tableau, lay off onto existing melds, multi-card discard-pile grab)",
+    "type": "move-gen",
+    "unlocksGames": "Rummy 500, Conquian",
+    "count": 2,
+    "terminationNote": "PARTIAL termination risk -- flag. The meld-to-table generator itself stays playable-by-construction IF it keeps the deck-out floor (Rummy 500 scores at deck-out, fine). BUT Conquian's natural win is a first-to-fully-meld GO-OUT GATE, which the project already EXCLUDED for non-termination under random play (~7% reach, like MechMeldGate). So Conquian's move-gen is buildable but its native win condition is fundamentally at odds with playable-by-construction and would need a different terminating proxy (points-at-deck-out). Canasta/Continental need this gen too but are out-of-scope for deck-size/team reasons."
+   },
+   {
+    "gap": "Reverse / turn-direction flip modifier (the runner advances seats one way only -- needs a direction state)",
+    "type": "modifier",
+    "unlocksGames": "Uno, Switch, Last Card",
+    "count": 3,
+    "terminationNote": "Playable-by-construction: flipping seat-advance direction does not change the move set or remove any fallback, and the empty-hand race still terminates under random play. Cheap, self-contained turn-order state. Part of the Uno-bundle alongside skip (in-flight), suit-nomination, and force-draw."
+   },
+   {
+    "gap": "Finish-ORDER score rule (rank ALL seats by empty-hand order) + inter-round card-passing phase keyed on that order",
+    "type": "score-rule",
+    "unlocksGames": "President/Asshole, Daihinmin, Zheng Shangyou, Tien Len",
+    "count": 4,
+    "terminationNote": "Playable-by-construction for termination (it only reads the order seats finished a round that already terminates), but it requires multi-round state the single-game runner does not carry (RoundsN exists as a param but has no inter-round hook), and a loser->winner card-exchange phase between rounds. Pairs naturally with the climbing combo-beat gap; these games need BOTH the combo-beat move-gen and this multi-round order+exchange to be fully covered."
+   },
+   {
+    "gap": "Specific-card / point-card positive scoring (count designated cards like tens or named point cards as the prize) -- a positive analogue of avoidance",
+    "type": "score-rule",
+    "unlocksGames": "Mindi, plus point-card trick games (Rook, 500, Skat, Pinochle card-points)",
+    "count": 4,
+    "terminationNote": "Playable-by-construction: a pure weighted end-of-round pile tally (count tens / 5s-10s-14s as points instead of raw card count); no move-set or termination effect. ModAvoidance already does the negative form (hearts/QofS subtract); this is the symmetric positive form. For Mindi it also needs teams; for Rook/500/Skat it is gated behind bidding. Cheap and terminating, but rarely the sole blocker."
+   },
+   {
+    "gap": "Bespoke climbing triggers: rank-inversion flag (revolution, 4-of-a-kind flips the beat comparator) and special-rank instant-table-clear (8-cut)",
+    "type": "modifier",
+    "unlocksGames": "Daihinmin, Tien Len (bomb/chop type-override), President-with-revolutions",
+    "count": 3,
+    "terminationNote": "Playable-by-construction: revolution flips the comparator direction (still a strict order, pass still legal, hands still drain) and 8-cut clears the table (the leader replays, equivalent to an all-pass clear), so neither blocks termination under random play. These ride ON TOP of the climbing combo-beat move-gen, so they only matter once that lands; Tien Len's chop is a type-OVERRIDING beat (a non-2 combo beats a 2), strictly beyond a same-type combo-beat."
+   },
+   {
+    "gap": "Attack/defend move-gen where a failed defense ABSORBS the attacking cards into your hand (hand can GROW), suit-or-trump constrained, last-with-cards loses",
+    "type": "move-gen",
+    "unlocksGames": "Durak",
+    "count": 1,
+    "terminationNote": "Termination risk -- flag. A move-gen where failure GROWS your hand is anti-shedding and inverts the grammar's drain-to-terminate assumption; under random play the loser-is-last-with-cards condition can be slow but the finite deck (replenish-to-six from a finite stock, then no refill) does bound it. Buildable as a terminating gen only if the no-refill endgame is enforced; otherwise at odds with playable-by-construction. Single-game unlock, low priority."
+   },
+   {
+    "gap": "Cribbage-style pattern-scoring during a count-up play phase + a post-play SHOW combination scorer against a shared starter, plus a discard-to-crib sub-decision",
+    "type": "score-rule",
+    "unlocksGames": "Cribbage",
+    "count": 1,
+    "terminationNote": "Playable-by-construction: the count-up-to-31 is the accumulate shell (already terminating via bust/reset), and the 15s/pairs/runs scoring is a pure tally during/after a phase that already ends; no termination risk. But closest_target is the wrong score signal and the dual-phase combinatorial pattern scorer is bespoke; single-game unlock, low priority."
+   },
+   {
+    "gap": "Go Fish ask/request move-gen (choose opponent + named rank -> forced transfer of all matching cards, else draw) + book-of-N set-collection score",
+    "type": "move-gen",
+    "unlocksGames": "Go Fish",
+    "count": 1,
+    "terminationNote": "Playable-by-construction: an ask that misses falls back to draw-from-stock, and the finite stock drains toward a deck-out-style end, so it terminates under random play. Structurally different from capture (opponent-hand targeting + forced full-rank transfer, no shared table). Single-game unlock; both the move-gen and the set-collection score are net-new, low priority."
+   },
+   {
+    "gap": "Real-time / simultaneous-action / dexterity model (no turn order, reaction-speed or physical-tell loss conditions)",
+    "type": "out-of-scope",
+    "unlocksGames": "Spit/Speed, Pig, Egyptian Ratscrew",
+    "count": 3,
+    "terminationNote": "Fundamentally at odds with the grammar by design: there is no turn order to generate moves over and no random-play model (speed/reflex is the whole game), so the terminate-under-random-play guarantee is meaningless. Explicitly excluded (the named Spit exclusion). Not a missing modifier -- a different game model."
+   },
+   {
+    "gap": "No-decision deterministic feed (forced top-card flip/play, winner fixed by shuffle order)",
+    "type": "out-of-scope",
+    "unlocksGames": "War, Beggar-my-Neighbour, Old Maid (blind draw)",
+    "count": 3,
+    "terminationNote": "Out of scope by design: WellTyped rejects agency-dead rules, and these games have NO move choice (forced flip / blind uniform-random draw), so they score zero meaningful-decisions. They terminate trivially but have nothing for the move-gen + modifier layer to hook onto. Excluded by the same rule as War."
+   },
+   {
+    "gap": "Multi-primitive stacks (teams + betting + out-of-turn interrupts + multi-deck + per-card special semantics + table manipulation at once)",
+    "type": "out-of-scope",
+    "unlocksGames": "Tichu, Canasta, Continental, Rummikub-style",
+    "count": 4,
+    "terminationNote": "Out of scope for the single-deck, strict-turn-order grammar: each needs several independent net-new primitives simultaneously (Tichu = teams + bidding + out-of-turn interrupt bombs + 4 bespoke specials; Canasta/Continental = two-deck pool + teams + meld-and-layoff + freeze/contract gates; Rummikub = 104 tiles + shared-table rearrange move). Several also embed go-out gates that fail the termination constraint. Not a single gap to prioritize."
+   }
+  ]
+ },
+ "perGame": [
+  {
+   "name": "Crazy Eights",
+   "coreMechanics": "Match the discard top by suit OR rank; if you can't, draw from stock. Eights are wild and let the player NOMINATE the next suit. First to empty hand wins. The core decision is which matching card to shed (managing your hand for future flexibility) vs drawing, plus what suit to call when you play an eight.",
+   "coverage": "covered-with-modifiers-being-added",
+   "representation": "play_match/either + empty_hand + first_out reproduces the match-or-draw core exactly (runner.go line 171: c.Suit==top.Suit || c.Rank==top.Rank, draw fallback). The wild eight that nominates a suit is the one missing piece. ModWild exists but is DISABLED (a sparse always-playable rank adds ~0.01 agency and, critically, does not implement the SUIT-NOMINATION choice -- it only makes the 8 always legal, not 'the 8 picks the next suit').",
+   "missing": "A suit-nomination modifier: playing a designated wild rank lets the player CHOOSE the next required suit (a branching move whose payload is a suit, mutating the match target). The disabled ModWild only makes a rank always-playable; it does not add the nominate-a-suit decision that is Crazy Eights' signature.",
+   "family": "shedding"
+  },
+  {
+   "name": "Uno",
+   "coreMechanics": "Color/number match (mapped to suit/rank on a standard deck) with action cards: Skip, Reverse (flip turn direction), Draw Two (next player draws 2 and is skipped), Wild (choose color = suit-nominate), Wild Draw Four. Shed-to-empty race. Core decisions are which matching card to dump and WHEN to fire turn-control/attack specials at opponents, plus color choice on wilds.",
+   "coverage": "needs-new-modifier",
+   "representation": "play_match/either + empty_hand + first_out + skip (being added) gives the Skip card and the basic match-or-draw shed. But Uno's identity is the BUNDLE of opponent-targeting specials. Reverse needs a turn-DIRECTION flip (the runner advances seats one way only); Draw Two/Four need a force-opponent-to-draw (and optionally stackable) effect; Wild needs suit-nomination. skip alone covers maybe one of four action cards.",
+   "missing": "Three distinct missing primitives: (1) a reverse modifier (flip turn direction -- the runner has no direction state); (2) a force-draw-on-opponent modifier (Draw Two/Four: target the NEXT player's hand, the inverse of self draw_penalty); (3) suit-nomination (Wild). skip is the only one being added now.",
+   "family": "shedding"
+  },
+  {
+   "name": "Mau-Mau",
+   "coreMechanics": "German ancestor of Uno on a standard deck: match suit OR rank, draw if unable; 7 = next player draws two (and they may stack/counter with their own 7), 8 = skip, Jack = wild-nominate-any-suit, Ace = extra turn/reverse (regional). Shed-to-empty. Core decision is shedding-vs-drawing plus timing the penalty/skip/wild specials.",
+   "coverage": "needs-new-modifier",
+   "representation": "play_match/either + empty_hand + first_out + skip (being added, = the 8) covers the match-or-draw core and the skip card. But Mau-Mau's 7 (force-next-player-draw-two, often stackable) and Jack (suit-nominate) are its defining specials and neither exists.",
+   "missing": "A force-opponent-draw modifier (the 7: next player draws 2, ideally counter-stackable) and a suit-nomination modifier (the Jack picks the suit). skip (the 8) is in-flight; the other two are not. self-draw_penalty is the WRONG primitive -- Mau-Mau's 7 hits the OPPONENT, not the player.",
+   "family": "shedding"
+  },
+  {
+   "name": "Switch",
+   "coreMechanics": "British Crazy-Eights/Mau-Mau cousin (a.k.a. Black Jack/Crazy Eights): match suit or rank, draw if stuck; 2 = pick up two (stackable), 8/Jack = miss-a-turn (skip), Ace = change suit (nominate), King = reverse direction. Shed-to-empty. Core decision is which matching card to play, when to fire skip/pickup/reverse, and what suit to nominate on an Ace.",
+   "coverage": "needs-new-modifier",
+   "representation": "play_match/either + empty_hand + first_out + skip (being added) covers the base shed plus the miss-a-turn card. The pickup-two (force-draw, stackable), Ace suit-change (nominate), and King reverse (direction flip) are all absent. Same gap profile as Uno/Mau-Mau.",
+   "missing": "force-opponent-draw (stackable pickup-two), suit-nomination (Ace), and reverse-direction (King). Only skip is in-flight.",
+   "family": "shedding"
+  },
+  {
+   "name": "Whot",
+   "coreMechanics": "Nigerian shedding game on its own 54-card deck (5 shapes, not 4 suits): match shape OR number, draw from market if unable; special command cards -- Hold On (skip), Pick Two (force next player draw 2), Pick Three, General Market (ALL opponents draw one), Suspension, and the Whot card (= wild, nominate the next shape). Shed-to-empty. Core decision is matching-vs-drawing plus command-card timing/targeting.",
+   "coverage": "needs-new-modifier",
+   "representation": "The shape/number match maps cleanly onto play_match/either (shape->suit, number->rank), empty_hand + first_out, and Hold On = skip (being added). But Whot's identity is the command cards: Pick Two/Three (force-opponent-draw), General Market (force ALL opponents to draw), and the Whot wild (nominate shape). The non-standard 5-shape/54-card deck is a cosmetic relabel, not a structural blocker -- the grammar runs on the standard deck but the suit/rank match is isomorphic.",
+   "missing": "force-opponent-draw (Pick Two/Three), a force-ALL-opponents-draw variant (General Market), and suit/shape-nomination (the Whot card). skip (Hold On) is in-flight. The targeting-opponents'-hands primitive is the central absence.",
+   "family": "shedding"
+  },
+  {
+   "name": "Last Card",
+   "coreMechanics": "Australian/NZ Crazy-Eights variant: match suit or rank, draw if unable; 2 = next player picks up 2 (stackable), 8 or Q = skip, Ace = reverse, Jack(or chosen) = wild-nominate-suit; plus the must-declare-'Last Card' social rule when down to one card (penalty draw if you forget). Shed-to-empty. Core decision = shed-vs-draw plus special timing.",
+   "coverage": "needs-new-modifier",
+   "representation": "play_match/either + empty_hand + first_out + skip (being added) covers the base shed and the skip card. pickup-two (force-draw/stackable), reverse, and suit-nomination are missing. The 'declare last card' rule is a social/penalty layer with no AI-decision content (random/greedy AI gains nothing from the announcement) so it is out-of-scope cosmetically, not a structural gap.",
+   "missing": "force-opponent-draw (stackable 2s), reverse-direction (Ace), suit-nomination (wild). skip is in-flight. The 'last card' declaration is a no-decision social rule, irrelevant to the grammar's playability/decision model.",
+   "family": "shedding"
+  },
+  {
+   "name": "Pig (a.k.a. Spoons/Donkey grabbing game)",
+   "coreMechanics": "Pass-and-collect speed game: every player simultaneously passes one card to the left, fast as possible, racing to collect four of a kind; on getting four (Pig) you discreetly touch your nose (or grab a spoon) and the LAST player to notice and react loses. The decision is real-time perception/reaction and bluffing the tell, not turn-based card legality.",
+   "coverage": "out-of-scope",
+   "representation": "Cannot be represented. The grammar is a turn-based, sequential, full-information move-generator over a discard/table state with random-play termination. Pig has (a) SIMULTANEOUS passing (no turn order), (b) a real-time reaction/dexterity loss-condition (notice-and-react speed), and (c) social bluffing of a physical tell. None of move-gen, end, score, or any modifier touches simultaneity, reaction time, or physical signaling.",
+   "missing": "Out of scope, like Spit: a simultaneous-action + real-time/dexterity + perception primitive the grammar deliberately excludes (it would break the turn-based, terminate-under-random-play foundation). Not a single missing modifier -- a different game model entirely.",
+   "family": "shedding"
+  },
+  {
+   "name": "Spit / Speed",
+   "coreMechanics": "Two-player real-time shedding: both players simultaneously and continuously play cards from their stacks onto two central piles, each card must be one rank above or below a pile top, racing to empty their pile -- no turns, fastest reflexes win, with a scramble to claim the smaller pile when both stall. The decision is real-time pattern-matching and manual speed.",
+   "coverage": "out-of-scope",
+   "representation": "Cannot be represented. Although the legality rule (play a card one rank from the pile top) resembles a sequence-match move-gen, Spit/Speed is fundamentally SIMULTANEOUS and REAL-TIME: there is no turn order, no random-play model (speed is the whole game), and the winner is decided by reaction velocity. The grammar's terminate-under-random-play guarantee is meaningless for a no-turns dexterity game.",
+   "missing": "Out of scope: a real-time/dexterity + simultaneous-play model the grammar excludes by design (named explicitly in the task as the Spit exclusion). The rank-adjacency matching could be a future move-gen, but it would not capture the game, whose core is manual speed, not move selection.",
+   "family": "shedding"
+  },
+  {
+   "name": "Big Two (Deuces / Choh Dai Di)",
+   "coreMechanics": "Beat-or-pass ladder where you must beat the current play with a STRICTLY-HIGHER play of the SAME TYPE: singles, pairs, triples, and five-card poker combos (straight, flush, full house, four-of-a-kind+kicker, straight flush). Card order is rank-then-SUIT (2 highest rank; within a rank, spades > hearts > clubs > diamonds). All-pass clears the table and the last player to play leads fresh. First to empty hand wins.",
+   "coverage": "needs-new-modifier",
+   "representation": "The grammar's beat_or_pass move-gen reproduces ONLY the single-card layer: play a card out-ranking the table top or pass, all-pass clears, FirstOut wins (runner.go:190-207, score FirstOut). That is a real but minority slice of Big Two -- the game's actual decision is choosing WHICH combination (pair vs hold a triple, break a run) to lead and beat with. ModRunPlay builds same-rank sets and same-suit runs but CompatibleWith restricts it to PlayMatch (modifier.go:38), and even there combos are DUMPED on a discard, never required to BEAT a same-type table combo. The production v2 skeleton (pkg/skeleton/climbing/runner.go) does support pairs/triples/runs as same-type-higher beats, so the engine work is proven; the grammar's beat_or_pass + the modifier type-rules just don't expose it yet.",
+   "missing": "A combo-beat modifier on beat_or_pass: legal moves become same-TYPE strictly-higher combinations (pair beats pair, run beats run of equal length), with the table-to-beat being a multi-card combination rather than a single card. Plus a rank-then-suit total order so 2-spades is the top card. The existing single-card beat_or_pass + FirstOut already covers the surrounding loop (clear-on-all-pass, lead-fresh, first-out).",
+   "family": "climbing"
+  },
+  {
+   "name": "President / Asshole (Scum / Daihinmin Western variant)",
+   "coreMechanics": "Same singles/sets beat-or-pass climbing core as Big Two, but the DEFINING loop is multi-round social hierarchy: a round ranks players by FINISH ORDER (President, VP, ... Scum), then between rounds the Scum passes their best card(s) to the President and the President passes back unwanted cards. Seating/role carries across rounds. Often 'play same number of cards of higher rank' (sets) rather than poker combos.",
+   "coverage": "needs-new-modifier",
+   "representation": "beat_or_pass + FirstOut captures the within-round single-card ladder, and ModKnock could add a fewest-cards finish, but neither the finish-ORDER ranking (1st/2nd/.../last) nor the cross-round card-passing exists. The grammar scores one winner per game (score() returns a single seat); there is no notion of a full finishing permutation, no multi-round state carry, and no card-exchange phase between rounds. RoundsN exists as a fine param but the runner has no inter-round hook. So only the skeletal trick-by-trick shedding is representable, missing the two mechanics the game is actually named for.",
+   "missing": "Two new primitives: (1) a finishing-ORDER score rule (rank all seats by empty-hand order across a round, not just first-out), and (2) an inter-round card-passing phase keyed on that order (loser->winner card exchange). Both require multi-round state the single-game runner does not carry.",
+   "family": "climbing"
+  },
+  {
+   "name": "Tien Len (Vietnamese Thirteen)",
+   "coreMechanics": "Beat-or-pass climbing with singles, pairs, triples, and CONSECUTIVE-PAIR/run combinations; rank-then-suit order (2 highest, hearts highest suit). Defining twist: special 'chops' -- three consecutive pairs or four-of-a-kind BOMB and beat a single 2 (or a sequence of 2s) out of normal type rules. First to empty hand wins; later finishers are scored by cards left / instant-loss conditions.",
+   "coverage": "needs-new-modifier",
+   "representation": "Single-card beat_or_pass + FirstOut covers the bare ladder. The combo layer is the same gap as Big Two (ModRunPlay is PlayMatch-only and dumps rather than beats). Additionally Tien Len's chop is a TYPE-BREAKING beat (a non-2 combo legally beats a 2), which is strictly beyond even a same-type combo-beat modifier -- it is a conditional override of the beat-type rule. The instant-loss / cards-left penalty scoring is also absent (only FirstOut exists).",
+   "missing": "Everything Big Two needs (same-type combo-beat + rank-then-suit order) PLUS a type-overriding 'bomb' rule (a designated combo beats a specific high card out of type), and a cards-remaining penalty score for non-winners. The bomb is a second new modifier beyond the basic combo-beat.",
+   "family": "climbing"
+  },
+  {
+   "name": "Tichu",
+   "coreMechanics": "Partnership (2v2) climbing: singles/pairs/triples/full-houses/straights/consecutive-pairs beat-or-pass, PLUS bombs (4-of-a-kind or straight flush) that interrupt any play, PLUS pre-round bet calls (Tichu/Grand Tichu) wagering you go out first, PLUS four special cards (Mahjong forces a rank and leads, Dog passes lead to partner, Phoenix wild, Dragon highest single but gifts the trick to an opponent), PLUS a mandatory 3-card pass at deal. Team score to a points target over many rounds; first partner out can finish the other.",
+   "coverage": "out-of-scope",
+   "representation": "Only the most skeletal layer -- single-card beat-or-pass with all-pass clearing -- maps to the grammar, which is a tiny fraction of Tichu. Every load-bearing mechanic is absent and most are categorically outside the current architecture: partnerships/teams (no team score aggregation), the Tichu/Grand-Tichu BIDDING/wager calls, interrupt-anytime bombs (out-of-turn play, which the strict round-robin runner cannot express), four bespoke special-card behaviors (forced rank, lead-transfer, wild, trick-gifting), the 3-card pre-round pass, and a multi-round points-target win. The grammar is single-winner-per-game with strict turn order; Tichu needs teams, betting, out-of-turn interrupts, and rich card semantics at once.",
+   "missing": "Partnerships/team scoring; a betting/call (vying-style) primitive; out-of-turn interrupt moves (bombs); per-card special semantics (force-rank, transfer-lead, wild, gift-trick); the 3-card pass; multi-round points-target end. This is a stack of missing primitives spanning teams, betting, and turn-order interrupts -- not a single modifier.",
+   "family": "climbing"
+  },
+  {
+   "name": "Daihinmin (Dai Hin Min / Japanese President)",
+   "coreMechanics": "Japanese President-family climbing: play equal-COUNT sets of strictly-higher rank (or pass), all-pass clears, first out is Daifugo (Grand Millionaire) and last is Daihinmin (Grand Pauper); finish ORDER sets rank, and rank drives a between-rounds card exchange (Daihinmin gives 2 best cards up, etc.). Signature local rules: revolution (4-of-a-kind inverts rank order for the round), 8-cut (playing an 8 clears the table), suit-lock, sequences (kaidan).",
+   "coverage": "needs-new-modifier",
+   "representation": "Same as President: single-card beat_or_pass + FirstOut renders only the within-round skeleton. Missing the finish-ORDER ranking, the cross-round card exchange, and the equal-count set-beats (combo layer). Its signature specials make it harder still: 'revolution' is a global rank-order INVERSION trigger (no primitive for a state flag that flips the beat comparator), and '8-cut' is a special-rank table-CLEAR on play (a turn-order/table-state effect with no analog -- ModSkip clears nothing and is PlayMatch-only). So even beyond President's two gaps, Daihinmin adds two more bespoke triggers.",
+   "missing": "President's finish-order score + inter-round card-passing + equal-count combo-beat, PLUS a rank-inversion ('revolution') flag toggled by a 4-of-a-kind, and a special-rank instant-table-clear ('8-cut'). Multiple new modifiers, at least one (revolution) altering the core beat comparator mid-round.",
+   "family": "climbing"
+  },
+  {
+   "name": "Zheng Shangyou (Struggling Upstream / Chinese climbing, a.k.a. the Daihinmin/Big-Two ancestor)",
+   "coreMechanics": "Climbing/shedding: lead any legal group (single, pair, triple, run, or run-of-pairs), each next player must beat with a strictly-higher group of the SAME structure or pass; all-pass clears and the leader plays fresh. 2s (and sometimes jokers) are highest / act as rank-free wilds or bombs. Finish order ranks players (upstream->downstream) and drives a between-rounds tribute card exchange, like President.",
+   "coverage": "needs-new-modifier",
+   "representation": "The single-card beat_or_pass core (play-higher-or-pass, clear-on-all-pass, lead-fresh) is present and is genuinely the spine of the game, but the same three gaps recur: same-structure COMBO beats (pairs/triples/runs/run-of-pairs) are the actual decision and ModRunPlay is PlayMatch-only and non-beating; the wild/bomb behavior of 2s and jokers has no climbing analog (ModWild is Rummy-only); and the finish-order ranking plus inter-round tribute exchange are absent (only FirstOut, single winner, no cross-round state).",
+   "missing": "Same-structure combo-beat on beat_or_pass (incl. run-of-pairs), a high-wild/bomb card rule for climbing, and finish-order scoring + inter-round card-passing. The combo-beat modifier is the minimum to make the core decision real; full coverage also needs the multi-round order+exchange primitives.",
+   "family": "climbing"
+  },
+  {
+   "name": "Whist",
+   "coreMechanics": "4 players, no-trump-or-fixed-trump plain trick-taking over the full deck (13 tricks); follow suit if able, highest of led suit (or trump) wins; most tricks wins. Classic Whist actually has a turned trump card and 2v2 partnerships, but the plain/no-partnership form is the literal grammar base.",
+   "coverage": "covered-now",
+   "representation": "move=trick, end=deck_out, score=most_captured (the WellTyped trick base). Follow-suit-if-held and highest-of-led-suit resolution are already in the trick runner (LegalMoves filters to the lead suit when held; Apply resolves highest of lead). This is the exact base the trick move-gen was built to reproduce; the runner even seeds gs.TrumpSuit=-1 for the no-trump case.",
+   "missing": "none (for no-trump single-player-seat Whist; true 2v2 partnership scoring is out of this base, see Spades)",
+   "family": "trick-plain"
+  },
+  {
+   "name": "Spades",
+   "coreMechanics": "Spades always trump; players BID how many tricks they will take, then score against that contract (make bid = +10/trick, miss = penalty, bags); 2v2 partnerships aggregate bids and tricks. The core decision is bid-then-fulfill, not raw trick-grabbing.",
+   "coverage": "needs-new-modifier",
+   "representation": "The trick play layer is covered: move=trick + ModTrump (being added, fixes spades as trump) reproduces spades-always-win resolution. But the DEFINING decision -- declaring a trick target and being scored against it -- has no primitive. Needs a bidding/contract phase and contract scoring; also needs team aggregation for the 2v2 form.",
+   "missing": "a bidding/contract phase primitive (declare a per-player trick target before play) + contract scoring (reward = closeness to declared count, not raw most-captured); partnerships for the standard 2v2 form",
+   "family": "trick-plain"
+  },
+  {
+   "name": "Hearts",
+   "coreMechanics": "Plain (no-trump) trick-taking where you AVOID taking penalty cards: each heart = 1, Queen of Spades = 13; lowest penalty total wins. Adds a pre-hand 3-card PASS to a neighbor, and 'shooting the moon' (taking all penalties flips to best). Hearts can't be led until broken.",
+   "coverage": "covered-with-modifiers-being-added",
+   "representation": "move=trick, end=deck_out, score=most_captured + ModAvoidance. ModAvoidance.CompatibleWith already accepts (Trick, MostCaptured) and avoidancePenalty scores hearts=1 + QofS=13 and the score rule SUBTRACTS it, so the avoider wins -- this is exactly Hearts' core. The 3-card pass, hearts-not-led-until-broken, and shoot-the-moon are absent, but the core 'win by taking the fewest penalty cards in tricks' is reproduced. (Note avoidance is listed as existing; it scores correctly today.)",
+   "missing": "card-passing phase (3-card pass), the 'hearts broken' lead restriction, and shoot-the-moon inversion -- all flavor on top of the covered core; none is the core decision",
+   "family": "trick-plain"
+  },
+  {
+   "name": "Oh Hell",
+   "coreMechanics": "Trick-taking where each hand you must take EXACTLY your bid (over/under both penalized), hand size shrinks each round (e.g. 1 up to N and back), a trump is turned each hand. The exact-bid contract against a varying hand size is the whole game.",
+   "coverage": "needs-new-modifier",
+   "representation": "Trick play + ModTrump covers the trick mechanics. But Oh Hell IS the bid-exactly contract plus multi-round hand-size variation; the grammar has neither a bidding phase nor a multi-round/rounds-per-game primitive (GameSpec has no RoundsN wired; Trick plays exactly one deal then deck_out ends). Same missing primitive as Spades plus the varying-deal rounds.",
+   "missing": "a bidding/contract phase with EXACT-match scoring, plus a multi-round structure with per-round changing hand size (the spec runs a single deal and ends)",
+   "family": "trick-plain"
+  },
+  {
+   "name": "Euchre",
+   "coreMechanics": "25-card deck (9-A), trump NAMED by bidding (order up / call) each hand, the Jack of trump (right bower) and same-color Jack (left bower) are the two top cards, 5-card hands, 2v2 partnerships, 5 tricks. Bowers and trump-naming are the identity.",
+   "coverage": "needs-new-modifier",
+   "representation": "move=trick gives plain follow-suit play and a fixed-trump via ModTrump could fake a trump suit, but Euchre's core is (a) PLAYERS NAME trump via bidding, (b) the bower re-ranking that pulls two Jacks into trump above the Ace, and (c) 2v2 teams. ModTrump is a FIXED suit with normal rank order -- it cannot express bidding-chosen trump or the bower rank override. Also needs a 24/25-card deck subset (grammar deals from a StandardDeck).",
+   "missing": "trump-NAMING via a bid (not a fixed trump), the bower rank-reordering modifier (Jacks become top trumps), partnerships, and a reduced-deck setup",
+   "family": "trick-plain"
+  },
+  {
+   "name": "500",
+   "coreMechanics": "Competitive bidding for a named trump (or no-trump/misere) with a point-value contract, take the bid kitty/widow and discard, bowers as in Euchre, point cards, 2v2 (or 3-player) partnerships, score toward 500. A full contract-bidding trick game.",
+   "coverage": "needs-new-modifier",
+   "representation": "Trick play is covered; everything that makes 500 itself is not. It stacks every missing primitive at once: competitive point-contract bidding, named/variable trump including no-trump and misere, a kitty/widow exchange (pick-up-and-discard) phase, bowers, partnerships, and multi-deal scoring to a target. The trick move-gen reproduces only the card-by-card play layer.",
+   "missing": "competitive contract bidding with named trump + misere/no-trump options, a widow/kitty exchange phase, bower reordering, partnerships, and play-to-a-target multi-round scoring",
+   "family": "trick-plain"
+  },
+  {
+   "name": "German Skat",
+   "coreMechanics": "3-player, 32-card deck, a competitive bidding auction for the right to declare the game (suit/grand/null), a 2-card SKAT exchange, declarer (1) vs defenders (2) with card-point scoring (Jacks are the 4 top trumps in suit/grand games), null = a misere variant. One of the deepest trick games.",
+   "coverage": "needs-new-modifier",
+   "representation": "Only the follow-suit trick play maps to move=trick. Skat's identity -- the bidding auction, the declarer-picks-game-type contract, the Jacks-are-permanent-trumps ranking, the skat (2-card pick-up/discard), the 1-vs-2 asymmetric sides, and card-point (not trick-count) scoring -- has no primitive. ModTrump is a fixed suit; it cannot express grand (only Jacks trump) or null (no trump, avoidance). Card-point scoring per captured pile also isn't a score rule (most_captured counts cards, not their point values).",
+   "missing": "a bidding auction + declarer-chooses-game-type contract, a 2-card skat exchange phase, Jack-as-permanent-top-trump ranking, asymmetric 1-vs-many sides, and CARD-POINT pile scoring (not trick count)",
+   "family": "trick-plain"
+  },
+  {
+   "name": "Pinochle",
+   "coreMechanics": "48-card DOUBLE deck (two each 9-A), two scoring channels: MELDING combinations from hand (marriages, pinochle, runs) for points AND trick-taking for card points, with a bidding auction for trump in the partnership form. Melds-in-hand plus trick points is the dual identity.",
+   "coverage": "needs-new-modifier",
+   "representation": "The trick layer maps to move=trick + ModTrump. ModMeldBonus exists but it scores the CAPTURED/won pile (it rides Trick+MostCaptured), whereas Pinochle scores melds declared FROM HAND before/independent of tricks, plus card-point trick scoring -- a different signal. Also requires a 48-card double deck (grammar uses a single StandardDeck) and a trump bid. So even the meld channel isn't reproduced by ModMeldBonus's pile bonus.",
+   "missing": "a meld-from-HAND scoring phase (distinct from the won-pile ModMeldBonus), a double-deck (duplicate-card) setup, card-point trick scoring, and a trump bid",
+   "family": "trick-plain"
+  },
+  {
+   "name": "Bridge (play)",
+   "coreMechanics": "Even restricted to the PLAY (post-auction): a declared contract with a named trump (or NT), a 2v2 partnership, the DUMMY hand laid face-up and played by declarer, and scoring measured against making the contract (tricks vs contract). The dummy + contract-relative scoring define the play.",
+   "coverage": "needs-new-modifier",
+   "representation": "move=trick + ModTrump reproduces the card-by-card trick mechanics with a trump suit. But even ignoring the auction, Bridge play needs: partnerships (2v2 aggregate), the DUMMY (one player's hand is open and controlled by partner -- a turn-control/visibility change no primitive offers), and contract-relative scoring (made/down vs a target, not raw most-captured). The grammar scores a single best seat by trick count.",
+   "missing": "partnerships, a dummy/open-hand-controlled-by-partner mechanic (turn-and-visibility control), and contract-relative scoring; the full game also needs the bidding auction",
+   "family": "trick-plain"
+  },
+  {
+   "name": "Napoleon",
+   "coreMechanics": "A short trick game where one player bids to win a declared NUMBER of tricks (e.g. 'nap' = all 5) playing SOLO against the rest, named trump, win only by meeting the declared count. A simple declaration-vs-the-table contract game.",
+   "coverage": "needs-new-modifier",
+   "representation": "Trick play + ModTrump covers the play; Napoleon's core is the bid-a-trick-target declaration scored as all-or-nothing against that target, with a soloist vs the field. That is the same missing bidding/contract primitive as Spades, plus the asymmetric 1-vs-many sides and meet-exactly(or at-least) contract scoring. Raw most_captured cannot express 'did the declarer meet their stated number'.",
+   "missing": "a bidding/declaration phase with target-relative (all-or-nothing) contract scoring and an asymmetric soloist-vs-field side structure",
+   "family": "trick-plain"
+  },
+  {
+   "name": "Gin Rummy",
+   "coreMechanics": "Draw (from deck or discard) and discard; arrange the hand into melds (sets of 3+ same-rank, runs of 3+ same-suit); minimize unmelded deadwood. Knock when deadwood <= 10, or go gin (0 deadwood) for a bonus. Loser may lay off deadwood onto the knocker's melds. Two players, played over rounds to a target score.",
+   "coverage": "covered-with-modifiers-being-added",
+   "representation": "Base rummy move-gen (forced deck-draw + discard choice) with End=deck_out, Score=fewest_deadwood reproduces the central decision (keep meld cards, shed deadwood; greedy sets/runs of 3+ are exactly Gin's melds). The gin-knock modifier being added (knock when deadwood is low, end and win by fewest deadwood) supplies Gin's signature knock/gin go-out, replacing the pure deck-out end. With gin-knock this is the closest fit in the family.",
+   "missing": "Two refinements remain even with gin-knock: (1) draw-from-discard is not a player decision in the grammar's rummy gen (draw is forced from the deck), removing the discard-pile-reading sub-decision; (2) laying off deadwood onto the opponent's melds and the gin/undercut scoring bonuses are not modeled. Core meld-vs-deadwood decision IS reproduced, so this is covered-with-modifiers-being-added, not needs-new-modifier.",
+   "family": "rummy"
+  },
+  {
+   "name": "Knock Rummy",
+   "coreMechanics": "Standard draw-and-discard rummy where ANY player may knock at the end of their turn (not gated by a deadwood threshold like Gin's 10); lowest unmelded-card count at the knock wins. Sets and runs of 3+, single 52-card deck, 2-5 players.",
+   "coverage": "covered-with-modifiers-being-added",
+   "representation": "Base rummy (deck-draw + discard, fewest_deadwood) plus the gin-knock modifier being added gives exactly Knock Rummy: knock to end, fewest-deadwood/fewest-unmelded wins. Knock Rummy is in fact the purest match for an unconditional-knock modifier (no deadwood<=10 gate to enforce). It is also already a v2 calibration seed, confirming the runner reproduces it.",
+   "missing": "none -- once gin-knock lands (the knock-to-end-by-fewest-deadwood override) this is fully covered; the only gap is the optional draw-from-discard choice, which is not part of Knock Rummy's defining decision.",
+   "family": "rummy"
+  },
+  {
+   "name": "Rummy 500",
+   "coreMechanics": "Draw from deck OR take one-or-more cards from the discard pile (must use the taken bottom card immediately); meld sets/runs by laying them FACE-UP on the table; lay off cards onto any player's existing table melds; score the point value of melded cards (positive) minus deadwood left in hand; play to 500 across rounds. The discard-pile-raid and laying-off are the strategic core.",
+   "coverage": "needs-new-move-gen",
+   "representation": "The grammar's rummy gen melds only implicitly (hand-internal deadwood scoring); it has no concept of melds laid to a shared table, no lay-off onto opponents' melds, and no multi-card grab from the discard pile. Those are not score-adjust hooks -- they change the legal-move set (what you may take, where cards go) and the inter-player board state, so a modifier cannot express them.",
+   "missing": "needs-new-move-gen: a 'meld-and-layoff' rummy generator that (a) lets a turn lay sets/runs to a persistent shared tableau, (b) lets cards be laid off onto any existing table meld, and (c) lets a player draw multiple cards from the discard pile. The deck-out termination still holds, so it stays playable-by-construction, but it is a structurally different move-gen, not the current deck-draw+discard one.",
+   "family": "rummy"
+  },
+  {
+   "name": "Canasta",
+   "coreMechanics": "Partnership (2v2) rummy with TWO 52-card decks plus 4 jokers (108 cards); jokers and 2s are wild; build melds of 7+ (canastas) for large bonuses; rules for taking the entire frozen discard pile; initial-meld point thresholds that scale with team score; red-3 bonuses; play to 5000 points over many hands. The freeze/pile-take and canasta-bonus economy are the game.",
+   "coverage": "out-of-scope",
+   "representation": "Multiple barriers simultaneously: a two-deck/108-card shoe (grammar is single 52-card deck by construction), formal partnerships/teams (not present), taking the whole discard pile, frozen-pile rules, wild-substitution at scale, and a per-team initial-meld threshold gate. Even ignoring the deck-size constraint, the meld-to-table + pile-economy is a new move-gen and the team scoring is a new axis.",
+   "missing": "out-of-scope for the current single-deck grammar: requires a two-deck/joker card pool, partnership/team scoring, the meld-and-layoff move-gen (as Rummy 500 needs), AND a discard-pile-take + freeze mechanic. Too many independent new primitives to call it a modifier or single move-gen gap.",
+   "family": "rummy"
+  },
+  {
+   "name": "Conquian",
+   "coreMechanics": "Two-player ancestral rummy with a 40-card Spanish-style deck (8-9-10 removed); NO discard pile to draw from -- you draw the top deck card and either use it (meld/lay off to the table) or discard it; you may force-take an opponent's discard only to immediately meld it; FIRST player to meld exactly 11 cards (all melds on the table) WINS. It is a race to lay all melds down, not a deadwood count.",
+   "coverage": "needs-new-move-gen",
+   "representation": "Conquian's win is a go-out-by-laying-all-melds race with melds on a shared table -- precisely the meld-to-table-and-win structure the grammar lacks. The grammar scores deadwood at deck-out; it has no table-meld move and no 'first to fully meld wins' end. A go-out gate is also exactly the win-condition the project EXCLUDED for non-termination under random play (~7% reach), so even a meld-gate modifier is off the table by the stated constraint.",
+   "missing": "needs-new-move-gen: a table-meld rummy generator with a 'lay melds to a shared tableau' move; and its natural win (first to meld all cards) is a go-out gate that fails the random-play termination constraint, so it could not be added as the win condition without a different terminating proxy. The 40-card deck is a minor param, but the meld-race core is the blocker.",
+   "family": "rummy"
+  },
+  {
+   "name": "Continental",
+   "coreMechanics": "Multi-round contract rummy: each of several rounds dictates a REQUIRED meld pattern (e.g. round 3 = two sets; round 5 = one set + one run), escalating each deal; played with two-plus decks and wild jokers; you may not go out until you satisfy that round's contract; lay melds to the table and lay off. The contract-per-round escalation is the defining mechanic.",
+   "coverage": "out-of-scope",
+   "representation": "Requires a contract/round-pattern phase (each round mandates a specific meld composition before going out) layered on a meld-to-table rummy with multiple decks and wilds. The grammar has no contract/bidding-style phase, no per-round changing rules, no multi-deck pool, and no table-meld move-gen. The contract requirement is also a go-out gate (excluded for termination).",
+   "missing": "out-of-scope: needs a contract-phase primitive (per-round required meld pattern), a meld-and-layoff move-gen, and a multi-deck pool -- three independent missing primitives, plus the go-out gate conflicts with the random-play termination constraint.",
+   "family": "rummy"
+  },
+  {
+   "name": "Rummikub-style",
+   "coreMechanics": "Played with 104 numbered tiles (two copies of 1-13 in four colors) plus 2 jokers, NOT a card deck; all melds live on a COMMUNAL table that any player may rearrange on their turn (split, merge, re-form runs/groups) as long as every group stays valid after the turn; you must make an initial 30-point meld to enter; first to empty their rack wins. The table-rearrangement (manipulation) is the entire strategic engine.",
+   "coverage": "out-of-scope",
+   "representation": "Not a 52-card-deck game (104 tiles + jokers), and its core -- freely rearranging a shared communal meld pool every turn while preserving validity -- is a combinatorial board-manipulation mechanic with no analogue in any card move-gen here. The grammar's melds are private and hand-internal; there is no shared mutable meld board, no rearrangement move, and the tile pool isn't a standard deck. Its empty-rack win is also a go-out gate.",
+   "missing": "out-of-scope: requires a 104-tile pool (not a standard 52-card deck), a shared mutable-table 'rearrange all melds' move-gen, an initial-meld entry gate, and an empty-rack go-out win (which fails the termination constraint). No combination of the grammar's primitives or planned modifiers reproduces table manipulation.",
+   "family": "rummy"
+  },
+  {
+   "name": "Casino (Cassino)",
+   "coreMechanics": "Play a hand card to capture table cards three ways: by RANK match, by PIP-SUM (a 9 takes a 4+5+anything summing to 9, simultaneously), and by BUILDING (lay a card on a table card to declare a combined value you intend to capture next turn, which opponents may steal). Trail if you can't/won't. Last player to capture sweeps the remaining table. Scoring is specific: most cards (3), most spades (1), Big Casino=10D (2), Little Casino=2S (1), each ace (1).",
+   "coverage": "needs-new-modifier",
+   "representation": "The grammar's Capture move-gen reproduces only the rank-match leg (runner.go: t.Rank==c.Rank, capture-all-equal-rank-else-trail) scored by MostCaptured. That is one of three capture modes and the least decision-rich. Pip-sum capture and building -- the actual strategic core (reserving captures, sum arithmetic, build-stealing) -- are absent. The point-card scoring (spades/Big/Little/aces) is also not expressible; MostCaptured + ModMeldBonus/ModAvoidance only tally counts and set/run bonuses, not specific named cards.",
+   "missing": "A pip-sum-capture modifier (capture a SUBSET of number cards whose pip values sum to the played card's value -- already implemented in pkg/skeleton/casino as AllowSumCapture but NOT lifted into the grammar's Capture gen), PLUS a build modifier (declare/reserve a combined-value pile across turns, steal-able), PLUS a last-capturer table-sweep, PLUS named-card point scoring. Rank-match-only is a superficial shell of Casino.",
+   "family": "fishing-capture"
+  },
+  {
+   "name": "Scopa",
+   "coreMechanics": "Play a hand card to capture table cards summing to its value (rank-match is just the degenerate equal-value case on the 40-card Italian deck), else trail. Clearing the entire table (a 'scopa') scores a bonus point. End scoring counts most cards, most coins/diamonds, the settebello (7 of coins), and primiera (best 7s/6s).",
+   "coverage": "needs-new-modifier",
+   "representation": "Grammar Capture gives the trail-or-capture skeleton and MostCaptured count, but Scopa's defining decision is the PIP-SUM capture choice (which subset of the table to take) and the scopa SWEEP-CLEAR bonus -- neither exists. The runner's capture is rank-equality only, and there is no detection/bonus for emptying the table. ModMeldBonus rewards set/run shapes in the pile, which is not Scopa's coins/settebello/primiera scoring.",
+   "missing": "Pip-sum capture modifier (subset-sums-to-played-value), a sweep-clear bonus modifier (table-emptied -> +1), and Scopa's specific point categories (coins majority, settebello, primiera). Without sum-capture the central choice (which summing subset) doesn't exist.",
+   "family": "fishing-capture"
+  },
+  {
+   "name": "Cassino",
+   "coreMechanics": "Historical spelling of Casino; identical game -- rank capture, pip-sum capture, building, trailing, last-capturer sweep, and the cards/spades/Big-Little/aces point scoring.",
+   "coverage": "needs-new-modifier",
+   "representation": "Same as Casino: the grammar covers only rank-match capture + MostCaptured count. Pip-sum, building, the sweep, and point-card scoring are all missing.",
+   "missing": "Pip-sum-capture modifier, build modifier, last-capturer sweep, and named-card point scoring -- identical gap to Casino (it is the same game).",
+   "family": "fishing-capture"
+  },
+  {
+   "name": "Cuarenta",
+   "coreMechanics": "Ecuadorian 40-card game, race to 40 points. Capture by rank match, and after matching, SEQUENTIALLY run consecutive-rank cards off the table (capture a 5 matching a 5, then sweep 6,7,8 if present). Bonuses for caida (capturing the last card an opponent played) and limpia/sweep (clearing the table). Two-player or partnership.",
+   "coverage": "needs-new-modifier",
+   "representation": "Grammar Capture covers the bare rank-match leg only. Cuarenta's signature SEQUENTIAL run-capture (cascade consecutive ranks after a match), the caida bonus (state-dependent on the opponent's last play), the limpia sweep bonus, and the first-to-40-over-rounds win are all unrepresentable. End=DeckOut/MostCaptured cannot express a points-race across rounds.",
+   "missing": "A sequential/consecutive run-capture modifier, a sweep-clear (limpia) bonus, a caida 'capture-the-last-played-card' bonus, and a multi-round points-to-target win condition (no RoundsN/points-race primitive in the grammar's end/score set).",
+   "family": "fishing-capture"
+  },
+  {
+   "name": "Go Fish",
+   "coreMechanics": "On your turn ASK a chosen opponent for a named rank you already hold at least one of; if they have it they must hand over ALL cards of that rank, and you ask again; if not, you 'go fish' (draw from stock). Collecting a set of four of a rank books it. Most books wins. Core decision = whom to ask for what, inferring opponents' hidden hands from prior asks.",
+   "coverage": "needs-new-move-gen",
+   "representation": "This is not table-capture at all. There is no shared table/discard to match against; the move is a REQUEST that TRANSFERS cards between two players' hidden hands, with set-of-4 collection scoring. None of the six move-gens model an ask/transfer-from-opponent action. Capture matches a played card against a shared pile, which is structurally different (no opponent targeting, no forced full-rank transfer, no draw-on-miss).",
+   "missing": "A new 'request/ask-and-transfer' move-gen (choose opponent + named rank -> forced transfer of all matching cards, else draw from stock) plus a set-collection (book-of-N) score rule. Both the move-gen and the scoring primitive are absent.",
+   "family": "fishing-capture"
+  },
+  {
+   "name": "Old Maid",
+   "coreMechanics": "Deal out a deck with one unpaired card (the odd queen). Players discard all pairs from hand, then take turns BLIND-drawing one card from the next player's concealed hand, discarding any new pair formed. The player left holding the odd card loses. The draw choice is from face-down cards = no information, effectively uniform-random.",
+   "coverage": "out-of-scope",
+   "representation": "There is no meaningful decision: which hidden card you take from a neighbor is a blind, uniform-random pick, and pairing-off is forced. Like War, it is a no-agency game -- a deterministic/random process, not a choice-driven one. The grammar's mandate is reproducing a game's CORE DECISION; Old Maid has none to reproduce.",
+   "missing": "Nothing to add -- it is a no-decision game (blind draw, forced discard), out of scope by the same rule that excludes War. A blind-draw-from-opponent move-gen could shell it, but it would carry zero agency.",
+   "family": "fishing-capture"
+  },
+  {
+   "name": "Sweep (Indian Casino)",
+   "coreMechanics": "The Indian/South-Asian name for Casino played to a points target. Pip-sum capture (a card takes any table subset summing to its value, with the house number system), rank match, building (houses), trailing, and a 'sweep' bonus for clearing the table. Most-points/cards over rounds wins.",
+   "coverage": "needs-new-modifier",
+   "representation": "Identical structure to Casino: the grammar reproduces only the rank-match capture leg with a MostCaptured tally. Sweep is fundamentally a PIP-SUM capture game with a table-clear bonus and a points-target race, so it has the same gap as Casino/Scopa plus the multi-round target.",
+   "missing": "Pip-sum-capture modifier, build/house modifier, a sweep-clear bonus, and a points-to-target multi-round win condition -- same family gap as Casino, which is the game it is.",
+   "family": "fishing-capture"
+  },
+  {
+   "name": "Mindi (Mendikot/Mindikot)",
+   "coreMechanics": "Partnership trick-taking game (4 players, 2v2), NOT a fishing-capture game -- the family label is a misfile. Follow suit, highest of the led suit (or trump in Mindikot) wins the trick; the goal is to CAPTURE the tens (and in Mindikot, win 7+ tricks / the majority of tens). Decision is trick management and tens-collection, not table-fishing.",
+   "coverage": "needs-new-modifier",
+   "representation": "Best represented by the grammar's Trick move-gen, not Capture. Trick + DeckOut + MostCaptured gives follow-suit trick-taking; the ModTrump modifier (being added) gives Mindikot's trump. What is missing is the tens-only scoring (specific-rank card scoring, like Hearts but counting tens as the prize) and partnerships/teams. ModAvoidance scores penalty cards but not a 'collect-the-tens' positive target.",
+   "missing": "A specific-card scoring modifier that counts only tens (a positive analogue of ModAvoidance), and partnership/team aggregation (the prompt confirms teams are NOT YET PRESENT). It is mis-assigned to fishing-capture; its real host is the trick move-gen.",
+   "family": "fishing-capture"
+  },
+  {
+   "name": "Blackjack",
+   "coreMechanics": "Each player vs a dealer: hit (draw to raise total) or stand, aiming to get closer to 21 than the dealer without busting. The real strategic crux is the WAGER plus double-down and split, and the dealer's fixed hit-to-17 rule with a 3:2 blackjack payout; play is a comparison of each player's total against the banker's.",
+   "coverage": "needs-new-move-gen",
+   "representation": "The grammar's `accumulate` move-gen (take face-up/blind card onto a running total, or stick; bust over Target) with Target=21, End=bust, Score=closest_target reproduces ONLY the hit/stick-to-21 loop and the bust. cardValue already does J/Q/K=10, Ace=11. But that is the thin shell, not the game: there is no wager, no double-down/split, and no banker-vs-player comparison (closest_target compares all seats symmetrically, with no fixed-rule dealer). The decisive money decisions are unrepresentable.",
+   "missing": "A betting/vying move-gen (place/raise/double the stake) AND a fixed-rule banker seat with player-vs-banker comparison and asymmetric payout; accumulate gives only the hit/stand skeleton.",
+   "family": "banking-comparing"
+  },
+  {
+   "name": "31/Thirty-One",
+   "coreMechanics": "The simple banking version: draw cards to build a running pip total, stick or bust over 31, closest-to-31-without-busting wins. Pure push-your-luck hit/stick decision against a target.",
+   "coverage": "covered-now",
+   "representation": "Directly the `accumulate` move-gen with Target=31 (enumerate's targetsFor already lists 31), End=bust, Score=closest_target. The hit (take face-up or blind card)/stick (pass)/bust loop and the closest-without-going-over winner are exactly this game's core decision. Note: the OTHER '31' (Scat/Blitz: draw-discard, collect one suit to 31 pips, knock) is a different game and is NOT this -- it would need pip-SUM melding + knock, see Pontoon-style gaps. The canonical simple 31 is covered.",
+   "missing": "none",
+   "family": "banking-comparing"
+  },
+  {
+   "name": "Pontoon",
+   "coreMechanics": "British Blackjack: twist (hit), stick, or BUY (raise the stake then draw) toward 21, against a banker who pays out; five-card-trick and pontoon (two-card 21) give bonus payouts. Core decision couples drawing with staking against the banker.",
+   "coverage": "needs-new-move-gen",
+   "representation": "accumulate (Target=21, End=bust, Score=closest_target) reproduces twist/stick/bust but NOT buy (a stake raise) nor the banker-pays-out comparison nor the five-card-trick/pontoon payout bonuses. As with Blackjack, the staking decision and banker asymmetry are the game and they are absent; what remains is a generic hit-to-21 shell.",
+   "missing": "A betting/vying move-gen for the buy/stake, plus a banker seat with asymmetric payout and special-hand bonuses (five-card trick, natural pontoon).",
+   "family": "banking-comparing"
+  },
+  {
+   "name": "Baccarat",
+   "coreMechanics": "Player has essentially NO play decisions: Player and Banker hands are dealt and drawn by fixed third-card tableau rules toward a 9-modulo total; the only choice is which of three outcomes (Player/Banker/Tie) to BET on. It is a pure wager-and-compare game with deterministic card resolution.",
+   "coverage": "needs-new-move-gen",
+   "representation": "The grammar has no betting/vying move-gen, so the sole decision in Baccarat (the wager among Player/Banker/Tie) cannot be expressed. accumulate is a wrong fit: there is no hit/stick agency (drawing is rule-forced) and the target is mod-9 not over-target-busts. Without a betting primitive the game has no representable decision at all.",
+   "missing": "A betting/vying move-gen (stake on one of several fixed outcomes); the card-drawing itself is a no-decision deterministic resolution.",
+   "family": "banking-comparing"
+  },
+  {
+   "name": "War",
+   "coreMechanics": "Players simultaneously flip the top card of their stack; higher rank takes both; ties trigger a face-down war. Zero decisions -- entirely determined by the shuffled deck order.",
+   "coverage": "out-of-scope",
+   "representation": "No move-generator fits because there is no move CHOICE: every turn is a forced top-card flip. The grammar requires a non-empty CHOICE set with agency (WellTyped even rejects agency-dead match rules); a deterministic no-decision game is excluded by design and would score zero meaningful-decisions.",
+   "missing": "Out of scope: a pure no-decision deterministic game (the grammar models decisions, not forced card feeds).",
+   "family": "banking-comparing"
+  },
+  {
+   "name": "Beggar-my-Neighbour",
+   "coreMechanics": "Players play top cards to a central pile in turn; face cards levy a penalty-card tribute from the next player; whoever runs out of cards loses. Fully deterministic from the shuffle -- no choices whatsoever.",
+   "coverage": "out-of-scope",
+   "representation": "Like War, every turn is a forced top-card play with no alternatives, so no move-generator can express a decision. The face-card-tribute rule superficially resembles ModDrawPenalty, but that modifier rides play_match (a real hand-choice host); here there is no underlying choice to modify. A deterministic feed game is outside the decision-modeling grammar.",
+   "missing": "Out of scope: no decision points; the deterministic feed has nothing the move-gen + modifier layer can hook onto.",
+   "family": "banking-comparing"
+  },
+  {
+   "name": "Egyptian Ratscrew",
+   "coreMechanics": "Beggar-my-Neighbour-style feed plus REAL-TIME slap-the-pile races on doubles/sandwiches; the skill is reflex speed and pattern recognition under time pressure, not turn-based move selection.",
+   "coverage": "out-of-scope",
+   "representation": "The grammar is turn-based and models discrete move choices; ERS's decisive mechanic is a dexterity/speed slap with no turn structure, which has no representation as a move-generator. The card-feed half is the same no-decision feed as War/Beggar. Both halves are outside the grammar (one no-decision, one real-time).",
+   "missing": "Out of scope: a real-time/dexterity (slap-race) game; the grammar has no real-time or simultaneous-reflex primitive and the feed half has no decisions.",
+   "family": "banking-comparing"
+  },
+  {
+   "name": "Five-Card Draw Poker",
+   "coreMechanics": "Ante into a pot; bet/check/call/raise/fold over a hidden 5-card hand across two betting rounds; one draw phase to replace cards; best poker hand at showdown takes the pot. The whole decision is wagering chips on private information under bluff pressure.",
+   "coverage": "needs-new-move-gen",
+   "representation": "No grammar move-gen produces a bet/fold decision over a hidden hand. The closest primitive, accumulate, is a public stick/bust toward a numeric target (Blackjack), not a wager on a concealed hand ranked at showdown. The 'Folded' flag in runner.go is only a bust marker for accumulate, with no pot, chips, raise, or hand-rank comparison. There is no scoring primitive that compares poker hand strength, and the win signals (cards-out, captured, deadwood, total) cannot express 'best hidden hand wins the pot'. Representing it as accumulate would reproduce only a superficial number-chasing shell, not the bet-on-hidden-information core.",
+   "missing": "A 'vying' (betting/wagering) move-generator: a betting-round move set {check, bet, call, raise, fold} over a pot, plus a hidden-hand state and a hand-ranking showdown score rule (high_hand). Also a draw/replace sub-phase. Termination must be guaranteed via a max-raises cap so random play resolves each betting round (matching v2's max_raises).",
+   "family": "vying-betting"
+  },
+  {
+   "name": "Texas Hold em",
+   "coreMechanics": "Two hidden hole cards plus five staged community cards (flop/turn/river); four betting rounds with check/bet/call/raise/fold; best 5-of-7 poker hand wins the pot. Core is multi-street betting on progressively-revealed shared+hidden information.",
+   "coverage": "needs-new-move-gen",
+   "representation": "Same gap as Draw Poker plus more. The grammar has a Shared face-up zone, but it is a static market/discard seed, not a staged community-card reveal tied to betting streets. No move-gen yields betting actions, no end/score primitive compares 7-card poker hands, and there is no concept of hole cards distinct from board cards. Cannot be approximated by any of the six generators without losing the entire bet-on-hidden-information decision.",
+   "missing": "The vying move-generator (check/bet/call/raise/fold over a pot with a max-raise termination cap) PLUS staged community-card reveal phases interleaved with betting rounds, hole-card vs board-card state, and a best-5-of-7 poker hand-ranking showdown score rule.",
+   "family": "vying-betting"
+  },
+  {
+   "name": "Stud (Five/Seven-Card Stud)",
+   "coreMechanics": "Cards dealt one at a time, some face-up (up-cards visible to all) and some face-down (hole cards); a betting round after each deal street; best poker hand at showdown. Core is betting with partial public information from opponents' visible up-cards.",
+   "coverage": "needs-new-move-gen",
+   "representation": "No betting move-gen exists, so the central wagering decision is unrepresentable. Stud additionally needs per-player mixed face-up/face-down hands (the grammar models a player's hand as uniformly private and a single Shared zone as public, with no per-player visible up-cards) and a betting round keyed off the visible board. None of capture/trick/play_match/rummy/accumulate/beat_or_pass produce a wager, and no score rule ranks poker hands.",
+   "missing": "The vying move-generator with pot/max-raise termination, plus per-player partial-visibility hands (face-up up-cards vs face-down hole cards), per-street betting rounds, and a poker hand-ranking showdown score rule.",
+   "family": "vying-betting"
+  },
+  {
+   "name": "Three-Card Brag",
+   "coreMechanics": "Ante; a single escalating betting round where players stay (match the stake) or fold on a hidden 3-card hand, with the option to play 'blind' (bet without looking); pot won by best 3-card brag ranking or by everyone else folding. Core is pure escalating vying/bluff on hidden hands, no draw.",
+   "coverage": "needs-new-move-gen",
+   "representation": "This is the purest vying game in the set and maps to nothing in the grammar: it is ALL betting decision and showdown, no shedding/capturing/melding. No move-gen produces stay/raise/fold over a stake, and no score rule ranks brag hands. The blind-play option (betting on cards you have not seen) is an extra information-asymmetry layer beyond even standard betting. Out of reach until a betting move-gen and hand-ranking score exist.",
+   "missing": "The vying move-generator (ante, stay/raise/fold over an escalating stake with a raise cap for termination) and a brag hand-ranking showdown score rule. The 'play blind' variant additionally needs an unseen-hand betting state, but the base game is blocked on the betting move-gen itself.",
+   "family": "vying-betting"
+  },
+  {
+   "name": "In-Between / Acey-Deucey",
+   "coreMechanics": "Two cards are turned face-up; the player bets (any amount up to the pot) that the next card's rank falls strictly between them, then a third card is dealt; win the bet if it lands inside, lose (or pay double on a 'post'/hit-the-post) if it ties an endpoint, else lose the stake. Core is a single sizing-a-bet-on-known-odds decision.",
+   "coverage": "needs-new-move-gen",
+   "representation": "The card mechanic (reveal two, see if a third falls between) is a trivial deterministic comparison the runner could do, but the GAME is the wager: choosing how many chips to risk against a pot given visible odds. The grammar has no pot, no variable bet-sizing move, and no chip-stake score rule. accumulate is the nearest primitive but it tracks a card-pip total with stick/bust, not a wager against a pot with a between-the-endpoints payout. Without a betting move-gen there is no decision at all (the card outcome is pure chance), so a non-betting encoding would be a no-decision/chance shell -- effectively out of scope as a card-disposition game, and only becomes a real game with wagering.",
+   "missing": "The vying move-generator with variable bet-sizing against a pot and a stake-based (chips-won) score rule. Note this game also needs a bet-amount-as-a-continuous/graded choice, not just call/raise-by-fixed-increment, plus the between-the-endpoints + tie-penalty payout resolution.",
+   "family": "vying-betting"
+  },
+  {
+   "name": "Cribbage",
+   "coreMechanics": "Two interleaved scoring engines on a 52-card deck: (1) THE PLAY -- alternately lay cards onto a running pip count, scoring for hitting 15, 31, pairs, and runs, never exceeding 31 (a go/reset); (2) THE SHOW -- after the play, each hand plus a shared starter card is scored for every 15-combination, pair, run, flush, and his-nobs. A discard to the dealer's 'crib' is a separate decision. Pegging race to 121.",
+   "coverage": "needs-new-move-gen",
+   "representation": "accumulate gives the running-total-toward-a-target shell, so THE PLAY's count-up-to-31 with a stick/bust feel is partly there. But accumulate scores only closest_target -- it has no machinery to award points for hitting 15/31, making pairs, or completing runs DURING the count, and no second SHOW-phase combination-scoring of the held hand against a shared cut card. closest_target is the wrong score signal; Cribbage's whole decision (which two cards to crib, which to peg) is driven by combinatorial pattern points the grammar cannot tally.",
+   "missing": "a pattern-scoring move-gen that awards points for 15s/pairs/runs both during a count-up play phase AND in a post-play hand 'show' against a shared starter card -- plus a two-card discard-to-crib sub-decision. No primitive scores combinations of in-hand cards.",
+   "family": "specialty"
+  },
+  {
+   "name": "Rook",
+   "coreMechanics": "Trick-taking with a special 'Rook' card and a colored (suit) trump, preceded by a BIDDING auction for a point contract and the right to take the kitty/widow and name trump. Point cards (5s, 10s, 14s, Rook) score; declarer must make their bid or go set. Partnerships in the standard 4-player game.",
+   "coverage": "needs-new-move-gen",
+   "representation": "trick + the in-flight trump modifier reproduces the trick-and-trump core, and meld_bonus/avoidance-style point-card scoring could be approximated by a point-card scorer. But the DEFINING decision is the bidding auction (commit to a point target, win the kitty, name trump) followed by make-or-go-set scoring against that bid -- none of which the grammar has. Partnerships are also absent. Without the bid commitment there is no Rook, just a point-trick game.",
+   "missing": "a bidding/contract move-gen (auction to a point target, then make-or-set scoring against the declared bid) plus a kitty/widow exchange and partnership/team scoring. Bidding phases are listed as not-yet-present.",
+   "family": "specialty"
+  },
+  {
+   "name": "Skat-bidding",
+   "coreMechanics": "Three-player trick-taking on 32 cards with an escalating bid auction (Reizen) that establishes the soloist, the game value, and the contract type (suit/grand/null); the soloist takes the two-card Skat, declares trump, and must reach a card-point threshold (61) to win the declared game value. Jacks are permanent trumps; complex game-value multipliers.",
+   "coverage": "needs-new-move-gen",
+   "representation": "trick + in-flight trump covers ordinary trick-taking, and a card-point scorer could tally the 61-point target. But Skat's identity is the Reizen bid auction (numeric game-value bidding that selects soloist and contract) and the soloist-vs-defenders asymmetry with a Skat exchange -- the grammar has no auction primitive, no soloist/defender role asymmetry, and no permanent-trump (jacks-as-trump) override of the suit order. closest_target/most_captured cannot encode 'declarer needs >=61 or the contract is set'.",
+   "missing": "a bidding/contract move-gen with a numeric game-value auction, a soloist-vs-defenders role split, a 2-card Skat exchange, and contract-value make/set scoring; plus a permanent-trump rank override (jacks). All absent.",
+   "family": "specialty"
+  },
+  {
+   "name": "Bezique",
+   "coreMechanics": "Trick-taking with trump on a 64-card double deck, where tricks are nearly free (you need not follow suit until the stock is exhausted) and the real game is DECLARING melds from your hand after winning a trick -- marriages (K+Q same suit), bezique (Q-spades + J-diamonds), four-of-a-kind aces/kings etc -- which score immediately while the cards STAY in hand and remain playable. Brisques (aces/tens) also score.",
+   "coverage": "needs-new-modifier",
+   "representation": "trick + the in-flight trump modifier reproduces the trick-and-trump frame, and the win-a-trick-then-act loop fits the runner. The blocker is the declaration mechanic: meld_bonus scores sets/runs from the captured PILE, but Bezique scores specific named combinations (marriage, bezique, aces) DECLARED from cards still in your hand, which then remain playable -- a fundamentally different signal. The non-follow-suit-until-stock-out phase is also not expressible (follow_suit is all-or-nothing). The trick core is covered; the scoring soul is not.",
+   "missing": "an in-hand declaration-meld scoring modifier (score named combinations -- marriages, bezique, four-of-a-kind -- from the held hand without discarding them, after winning a trick), distinct from won-pile meld_bonus. Also a two-phase follow-suit rule (free until stock-out).",
+   "family": "specialty"
+  },
+  {
+   "name": "Sixty-Six",
+   "coreMechanics": "Two-player 24-card trick game to 66 card-points, with trump, marriages (K+Q same suit) declared on lead for 20/40 points, a trump-nine exchange, and a 'close the stock' option that switches the game from free-play (need not follow suit) to strict follow-suit. Going out is claiming 66 before the opponent.",
+   "coverage": "needs-new-modifier",
+   "representation": "trick + in-flight trump + a card-point/closest-target style scorer gives the trick-and-trump-to-a-point-target frame. But the central decisions -- declaring K+Q marriages for 20/40 while the cards stay in hand, exchanging the trump nine, and CLOSING the stock to flip follow-suit on -- have no representation. meld_bonus is won-pile-only and cannot score an in-hand marriage; follow_suit cannot be toggled mid-game by a player action.",
+   "missing": "an in-hand marriage-declaration scoring modifier (K+Q same suit scored from hand on lead) plus a player-triggered 'close the stock' that toggles follow-suit enforcement, and a trump-card exchange action. None present.",
+   "family": "specialty"
+  },
+  {
+   "name": "Schnapsen",
+   "coreMechanics": "The Austrian refinement of Sixty-Six: 2-player, 20 cards, race to 66 with trump, K+Q marriages (20/40) declared on lead from hand, trump-jack exchange, and stock-closing that flips to strict follow-suit. Adds the bummerl/game-point match scoring and tight perfect-information endgame after closing.",
+   "coverage": "needs-new-modifier",
+   "representation": "Same shape as Sixty-Six: trick + in-flight trump frames it, but the in-hand marriage declarations (K+Q scored while retained), the close-the-stock follow-suit toggle, and the trump-card exchange are all unrepresentable. meld_bonus scores the wrong zone (won pile, not retained hand) and follow_suit cannot be conditionally enabled by a play.",
+   "missing": "the same in-hand marriage-declaration scoring modifier as Sixty-Six, plus the player-triggered close-the-stock follow-suit toggle and trump-card exchange. Absent.",
+   "family": "specialty"
+  },
+  {
+   "name": "Durak",
+   "coreMechanics": "A Russian attack-and-defend game (not trick-taking): an attacker plays cards the defender must beat with a higher card of the same suit or with trump; unbeaten attacks are PICKED UP into the defender's hand; beaten attacks can be extended by other players; you replenish to six from the stock; the LAST player left holding cards is the durak (loser). No fixed turn order of one-card-each; a defender who fails takes cards, the role passes.",
+   "coverage": "needs-new-move-gen",
+   "representation": "Superficially beat_or_pass looks close (beat the top card or yield), but Durak's mechanics differ structurally: defense is suit-AND-trump constrained (beat-or-pass is pure rank), failed defense ADDS cards to your hand (anti-shedding -- beat_or_pass only sheds), attacks can pile on multiple cards mid-bout, and the loss condition is being LAST with cards, not first-out. beat_or_pass + knock cannot encode 'pick up the pile when you fail to beat'. The pick-up-on-failure feedback is the whole game.",
+   "missing": "an attack/defend move-gen where failing to beat forces you to absorb the attacking cards into your hand (hand can grow), defense is suit-or-trump constrained, multiple attackers may add cards, and last-with-cards loses. No primitive lets a failed action grow your hand.",
+   "family": "specialty"
+  },
+  {
+   "name": "President-with-revolutions",
+   "coreMechanics": "Climbing/shedding game (a.k.a. Asshole/Scum): beat the previous play with a higher SET of equal size (singles beat singles, pairs beat pairs, etc.) or pass; first out is President, last out is Scum, ranks pass cards between rounds. 'Revolution' = playing four-of-a-kind inverts the rank order (high becomes low) for the round.",
+   "coverage": "needs-new-move-gen",
+   "representation": "beat_or_pass + knock gives the climb-and-go-out race and first-out scoring, which is the President skeleton's backbone for SINGLES. But the core decision is multi-card combos -- a pair beats a pair, a triple beats a triple -- and beat_or_pass is explicitly SINGLE-cards only. run_play dumps multi-card sets on play_match (shedding), not on the beat-the-table climb, so it does not help here. The 'revolution' rank-inversion is a further unrepresented rule. Without same-size set-beats-set, this is just single-card climbing, not President.",
+   "missing": "multi-card combos on the climbing/beat_or_pass move-gen (a same-size higher set beats the table, per the not-yet-present 'multi-card combos on climbing / Big Two pairs and straights'), plus a four-of-a-kind rank-inversion (revolution) modifier.",
+   "family": "specialty"
+  },
+  {
+   "name": "Klaberjass",
+   "coreMechanics": "Two-player trick-taking with trump, a one-round bid to accept/pass the proposed trump (take it / schmeiss / second-round naming), sequence MELDS (runs of 3-4 in suit) declared and compared before play, the bella (K+Q of trump) scored in play, jasz/menel trump-rank reordering (jack and nine of trump are top trumps), and card-point scoring with a make-or-go-b\u00eate contract.",
+   "coverage": "needs-new-move-gen",
+   "representation": "trick + in-flight trump gives the trick-and-trump base, but Klaberjass stacks nearly every uncovered specialty mechanic at once: a trump-accept BID (contract with make-or-b\u00eate scoring), pre-play sequence-meld declaration and comparison from hand, the in-hand bella declaration, and a jack/nine-on-top trump-rank REORDER. The grammar has no bidding move-gen, no in-hand declaration scoring, and no per-suit rank reordering. It is the least-covered game in the set.",
+   "missing": "a bidding/contract move-gen (accept-trump bid with make-or-b\u00eate scoring) AND an in-hand sequence-meld + bella declaration scorer AND a trump-rank-reorder primitive (jack/nine highest in trump). Multiple primitives absent at once.",
+   "family": "specialty"
+  }
+ ]
+}

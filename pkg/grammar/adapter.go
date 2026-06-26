@@ -49,6 +49,16 @@ func (a Adapter) ApplyMove(s *sim.GameState, m sim.Move, _ *genome.Genome) []sim
 	case sim.MoveKnock:
 		ev = append(ev, sim.Event{Type: sim.EventSpecialTriggered, PlayerID: p, Detail: "knock"})
 	}
+	// Turn-order / draw attacks are the interaction signal (IsAttackEvent counts
+	// "draw_two" always, and "skip" for >2 players).
+	if m.Type == sim.MovePlay {
+		if a.Spec.hasMod(ModSkip) && hasRank(m.Cards, skipRank) {
+			ev = append(ev, sim.Event{Type: sim.EventSpecialTriggered, PlayerID: p, Detail: "skip"})
+		}
+		if a.Spec.hasMod(ModForceDraw) && hasRank(m.Cards, forceDrawRank) {
+			ev = append(ev, sim.Event{Type: sim.EventSpecialTriggered, PlayerID: p, Detail: "draw_two"})
+		}
+	}
 	// A trick that completes on this play is the interaction signal the metric
 	// counts (EventTrickWon); detect it across the Apply, which clears TrickCards
 	// and sets Active to the winner.
@@ -119,8 +129,12 @@ func (a Adapter) Progress(s *sim.GameState, _ *genome.Genome) []float64 {
 		if d < 1 {
 			d = 1
 		}
+		wr := -1
+		if a.Spec.hasMod(ModWild) {
+			wr = wildRank
+		}
 		for p := range out {
-			v := 1 - float64(deadwoodCount(s.Hands[p]))/float64(d)
+			v := 1 - float64(deadwood(s.Hands[p], wr))/float64(d)
 			if v < 0 {
 				v = 0
 			}
