@@ -21,11 +21,12 @@ const (
 	ModDrawPenalty                 // after-move: drawing one extra card after a face-card play (v2 draw_penalty, id 2)
 	ModKnock                       // win-override: knock with a small hand to end the game by fewest cards (v2 knock, id 3)
 	ModMeldBonus                   // score-adjust: bank set/run bonuses from the captured pile (v2 meld_bonus, id 1)
+	ModAvoidance                   // score-adjust: penalty cards in your won pile count AGAINST you (v2 avoidance, id 5) -- gives Hearts on a trick host
 	modifierCount
 )
 
 func (m Modifier) String() string {
-	return [...]string{"run_play", "follow_suit", "wild", "draw_penalty", "knock", "meld_bonus"}[m]
+	return [...]string{"run_play", "follow_suit", "wild", "draw_penalty", "knock", "meld_bonus", "avoidance"}[m]
 }
 
 // CompatibleWith is the modifier's type rule against the base spec. It reads only
@@ -51,11 +52,15 @@ func (m Modifier) CompatibleWith(s GameSpec) bool {
 		// "Fewest cards wins" is only meaningful in an empty-hand race (v2: shedding+climbing).
 		return (s.Move == PlayMatch || s.Move == BeatOrPass) && s.End == EmptyHand
 	case ModMeldBonus:
-		// Bank a weighted set/run bonus on top of the capture count -- exactly v2's
-		// casino CheckEnd ("captured COUNT + bonus"). It attaches to the capture
-		// count rule (most_captured); a bare most_captured family stays a pure
-		// count, most_captured+meld_bonus is the distinct Scopa-with-melds game.
-		return s.Move == Capture && s.Score == MostCaptured
+		// Bank a weighted set/run bonus on top of the count rule -- v2's casino
+		// CheckEnd ("captured COUNT + bonus"). It rides any pile-collecting count
+		// rule: capture (Scopa-with-melds) or trick (win tricks AND form melds).
+		return (s.Move == Capture || s.Move == Trick) && s.Score == MostCaptured
+	case ModAvoidance:
+		// Points-are-bad: penalty cards in your won pile subtract from the count,
+		// so the winner is whoever AVOIDS them. On a trick host this is Hearts; on
+		// capture it is a Scopa penalty-suit. Needs a pile + a count rule to bite.
+		return (s.Move == Trick || s.Move == Capture) && s.Score == MostCaptured
 	}
 	return false
 }
@@ -174,4 +179,20 @@ func meldBonus(pile []sim.Card) int {
 		}
 	}
 	return bonus
+}
+
+// avoidancePenalty scores the won pile for ModAvoidance (Hearts-style): each heart
+// is 1 penalty point and the Queen of Spades is 13. The score rule subtracts this,
+// so the winner is whoever took the FEWEST penalty cards.
+func avoidancePenalty(pile []sim.Card) int {
+	pen := 0
+	for _, c := range pile {
+		if c.Suit == sim.Hearts {
+			pen++
+		}
+		if c.Rank == 12 && c.Suit == sim.Spades { // Queen of Spades
+			pen += 13
+		}
+	}
+	return pen
 }

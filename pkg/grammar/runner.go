@@ -137,6 +137,15 @@ func (rr Runner) Setup(rng *rand.Rand) *sim.GameState {
 		}
 	}
 	gs.Deck = deck
+	if s.Move == Trick {
+		// Trick-taking plays out the dealt hands only; any undealt remainder is a
+		// dead kitty, so drop it -- then deck_out fires the moment hands empty.
+		gs.Deck = nil
+		gs.TrumpSuit = -1 // no trump (the TrickTakingScorer treats <0 as none)
+		gs.TrickCards = nil
+		gs.TrickPlayers = nil
+		gs.TrickLeader = 0
+	}
 	gs.Folded = make([]bool, s.Players)
 	gs.Active = 0
 	return gs
@@ -212,6 +221,29 @@ func (rr Runner) LegalMoves(gs *sim.GameState) []sim.Move {
 		}
 		if len(moves) == 0 {
 			moves = append(moves, mv(sim.MovePass, p)) // empty hand: pass (refill in Upkeep)
+		}
+		return moves
+
+	case Trick:
+		// Lead the trick with any card; otherwise FOLLOW the lead suit if you hold
+		// it, else play anything. TrickCards holds the cards played so far this trick
+		// (TrickCards[0] = the lead), so the TrickTakingScorer + delta probe read it.
+		var moves []sim.Move
+		if len(gs.TrickCards) > 0 {
+			lead := gs.TrickCards[0].Suit
+			for _, c := range hand {
+				if c.Suit == lead {
+					moves = append(moves, mv(sim.MovePlay, p, c))
+				}
+			}
+		}
+		if len(moves) == 0 { // leading, or void in the lead suit: any card
+			for _, c := range hand {
+				moves = append(moves, mv(sim.MovePlay, p, c))
+			}
+		}
+		if len(moves) == 0 {
+			moves = append(moves, mv(sim.MovePass, p)) // empty hand (deck_out is firing)
 		}
 		return moves
 	}
@@ -319,6 +351,29 @@ func (rr Runner) Apply(gs *sim.GameState, m sim.Move) {
 			}
 		}
 		gs.Active = (p + 1) % gs.NumPlayers
+
+	case Trick:
+		if m.Type == sim.MovePlay {
+			c := m.Cards[0]
+			gs.Hands[p] = removeCard(gs.Hands[p], c)
+			gs.TrickCards = append(gs.TrickCards, c)
+			gs.TrickPlayers = append(gs.TrickPlayers, p)
+		}
+		if len(gs.TrickCards) >= gs.NumPlayers { // trick complete: resolve it
+			lead := gs.TrickCards[0].Suit
+			win, winCard := gs.TrickPlayers[0], gs.TrickCards[0]
+			for i := 1; i < len(gs.TrickCards); i++ {
+				if tc := gs.TrickCards[i]; tc.Suit == lead && tc.Rank > winCard.Rank {
+					win, winCard = gs.TrickPlayers[i], tc
+				}
+			}
+			gs.Scores[win] += len(gs.TrickCards) // cards won (the most-captured signal)
+			gs.Tableau[win] = append(gs.Tableau[win], gs.TrickCards...)
+			gs.TrickCards, gs.TrickPlayers, gs.TrickLeader = nil, nil, win
+			gs.Active = win // the winner leads the next trick
+		} else {
+			gs.Active = (p + 1) % gs.NumPlayers
+		}
 	}
 	gs.Turn++
 }
@@ -444,10 +499,13 @@ func (rr Runner) score(gs *sim.GameState) int {
 		}
 		return best
 	case MostCaptured, HighScore:
-		eff := func(p int) int { // ModMeldBonus banks set/run bonuses from the captured pile
+		eff := func(p int) int { // scoring modifiers adjust the count from the won pile
 			v := gs.Scores[p]
 			if rr.Spec.hasMod(ModMeldBonus) {
-				v += meldBonus(gs.Tableau[p])
+				v += meldBonus(gs.Tableau[p]) // set/run bonuses
+			}
+			if rr.Spec.hasMod(ModAvoidance) {
+				v -= avoidancePenalty(gs.Tableau[p]) // points-are-bad (Hearts)
 			}
 			return v
 		}

@@ -28,11 +28,12 @@ const (
 	BeatOrPass                // play a card out-ranking the table top, or pass; all-pass clears the table
 	Accumulate                // take a card onto a running total toward Target, or stick; bust over Target
 	Capture                   // play a card to capture equal-rank table cards, else trail (leave it face-up)
+	Trick                     // follow-suit trick-taking: each player plays one card, highest of the lead suit wins the trick
 	moveGenCount
 )
 
 func (m MoveGen) String() string {
-	return [...]string{"play_match", "beat_or_pass", "accumulate", "capture"}[m]
+	return [...]string{"play_match", "beat_or_pass", "accumulate", "capture", "trick"}[m]
 }
 
 // MatchRule constrains PlayMatch (ignored by other generators).
@@ -145,6 +146,12 @@ func (s GameSpec) WellTyped() bool {
 			return false
 		}
 	case Capture:
+		if s.End != DeckOut || s.Score != MostCaptured {
+			return false
+		}
+	case Trick:
+		// Trick-taking empties hands in lockstep (one card per trick per player),
+		// so it ends on deck_out; the non-inert base score is most cards won.
 		if s.End != DeckOut || s.Score != MostCaptured {
 			return false
 		}

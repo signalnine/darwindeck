@@ -55,6 +55,9 @@ func (s GameSpec) objective() string {
 	case ClosestTarget:
 		return fmt.Sprintf("Build a card total as close as possible to %d without going over.", s.Target)
 	case MostCaptured:
+		if s.Move == Trick {
+			return "Win the most cards by taking tricks."
+		}
 		return "Capture more cards from the table than anyone else."
 	case HighScore:
 		return "Score the most points."
@@ -85,6 +88,9 @@ func (s GameSpec) turnRules() string {
 	case Capture:
 		return "- Play one card from your hand onto the table. If it matches the rank of one or more cards already on the table, you CAPTURE those cards (and the played card) into your score pile.\n" +
 			"- If it matches nothing, it stays face-up on the table for others to capture later."
+	case Trick:
+		return "- Play one card to the table. You MUST follow the suit of the card that led this trick if you hold it; otherwise you may play any card.\n" +
+			"- Once every player has played, the highest card of the led suit wins the trick (and all the cards in it) and leads the next trick."
 	}
 	return ""
 }
@@ -103,6 +109,8 @@ func (s GameSpec) modifierRules() []string {
 			out = append(out, "When you are down to 3 or fewer cards, you may KNOCK on your turn to end the game at once. Whoever holds the fewest cards then wins -- so knocking while you are NOT lowest hands the win to someone else.")
 		case ModMeldBonus:
 			out = append(out, "At the end, you earn bonus points for matching combinations in your score pile: pairs and three-of-a-kinds, and runs of the same suit. These bonuses are added to your total.")
+		case ModAvoidance:
+			out = append(out, "Beware the penalty cards: every heart among the cards you win counts ONE point against you, and the Queen of Spades counts thirteen. You want the FEWEST penalty points, so winning cards greedily can cost you the game.")
 		}
 	}
 	return out
@@ -113,6 +121,9 @@ func (s GameSpec) endRule() string {
 	case EmptyHand:
 		return "The game ends the moment any player has played the last card from their hand."
 	case DeckOut:
+		if s.Move == Trick {
+			return "The game ends once every player has played out their whole hand."
+		}
 		return "The game ends once the deck is exhausted and the players' hands are empty."
 	case Bust:
 		return "The round ends when every player has either stuck or busted."
@@ -129,6 +140,9 @@ func (s GameSpec) winRule() string {
 	case ClosestTarget:
 		return fmt.Sprintf("Among players who did not bust, the highest total (closest to %d) wins.", s.Target)
 	case MostCaptured:
+		if s.Move == Trick {
+			return "The player who won the most cards in tricks wins (less any penalty points)."
+		}
 		return "The player who captured the most cards wins."
 	case HighScore:
 		return "The player with the highest score wins."

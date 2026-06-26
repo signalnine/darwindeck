@@ -103,6 +103,7 @@ func TestModifierTyping(t *testing.T) {
 	climbing := GameSpec{Move: BeatOrPass, End: EmptyHand, Score: FirstOut}
 	banking := GameSpec{Move: Accumulate, End: Bust, Score: ClosestTarget}
 	casinoCap := GameSpec{Move: Capture, End: DeckOut, Score: MostCaptured}
+	trick := GameSpec{Move: Trick, End: DeckOut, Score: MostCaptured}
 
 	cases := []struct {
 		m    Modifier
@@ -119,8 +120,12 @@ func TestModifierTyping(t *testing.T) {
 		{ModDrawPenalty, shedding, true},
 		{ModDrawPenalty, climbing, false}, // v2 allows it; grammar scopes it to the match-shed gen
 		{ModMeldBonus, casinoCap, true},   // banks set/run bonus on top of the capture count (v2 casino)
+		{ModMeldBonus, trick, true},       // win tricks AND form melds from the won pile
 		{ModMeldBonus, shedding, false},
-		{ModWild, shedding, false}, // non-productive: never enumerated
+		{ModAvoidance, trick, true},     // Hearts: penalty cards in won tricks count against you
+		{ModAvoidance, casinoCap, true}, // Scopa penalty-suit
+		{ModAvoidance, shedding, false}, // no won pile to penalize
+		{ModWild, shedding, false},      // non-productive: never enumerated
 	}
 	for _, c := range cases {
 		if got := c.m.CompatibleWith(c.spec); got != c.want {

@@ -17,7 +17,7 @@ func main() {
 	const trials = 40
 
 	fmt.Println("== Expressiveness: the grammar reproduces these hand-coded skeletons ==")
-	names := []string{"shedding", "climbing", "banking", "casino"}
+	names := []string{"shedding", "climbing", "banking", "casino", "trick"}
 	for i, s := range grammar.Canonical() {
 		sm := grammar.Runner{Spec: s}.Playability(trials, 1)
 		fmt.Printf("  %-9s %-56s term=%2d/%d agency=%.2f turns=%5.0f %s\n",
@@ -156,8 +156,8 @@ func main() {
 		}
 	}
 	sort.Strings(novelSample)
-	fmt.Printf("\n== Modifier axis (5 productive typed modifiers from v2 borrows, subsets <=3) ==\n")
-	fmt.Printf("  modifiers: run_play, follow_suit, draw_penalty, knock, meld_bonus (wild: defined, non-productive)\n")
+	fmt.Printf("\n== Modifier axis (6 productive typed modifiers from v2 borrows, subsets <=3) ==\n")
+	fmt.Printf("  modifiers: run_play, follow_suit, draw_penalty, knock, meld_bonus, avoidance (wild: non-productive)\n")
 	fmt.Printf("  base well-typed families            : %d\n", len(famTyped))
 	fmt.Printf("  WITH modifier subsets               : %d families / %d representative specs\n", len(famMod), len(mod))
 	fmt.Printf("  novel families (carry >=1 modifier)  : %d\n", novelMod)

@@ -47,8 +47,15 @@ func (a Adapter) ApplyMove(s *sim.GameState, m sim.Move, _ *genome.Genome) []sim
 	case sim.MoveKnock:
 		ev = append(ev, sim.Event{Type: sim.EventSpecialTriggered, PlayerID: p, Detail: "knock"})
 	}
+	// A trick that completes on this play is the interaction signal the metric
+	// counts (EventTrickWon); detect it across the Apply, which clears TrickCards
+	// and sets Active to the winner.
+	trickCompleting := a.Spec.Move == Trick && m.Type == sim.MovePlay && len(s.TrickCards) == s.NumPlayers-1
 	r := Runner{a.Spec}
 	r.Apply(s, m)
+	if trickCompleting && len(s.TrickCards) == 0 {
+		ev = append(ev, sim.Event{Type: sim.EventTrickWon, PlayerID: s.Active}) // the winner leads next
+	}
 	if _, done := r.CheckEnd(s); done {
 		ev = append(ev, sim.Event{Type: sim.EventRoundEnd, PlayerID: p})
 	}
@@ -95,7 +102,7 @@ func (a Adapter) Progress(s *sim.GameState, _ *genome.Genome) []float64 {
 			}
 			out[p] = v
 		}
-	case Capture: // share of cards captured so far
+	case Capture, Trick: // share of cards captured / tricks won so far
 		total := 0
 		for p := 0; p < s.NumPlayers; p++ {
 			total += s.Scores[p]
@@ -131,6 +138,8 @@ func specSkeleton(m MoveGen) genome.SkeletonType {
 		return genome.Climbing
 	case Capture:
 		return genome.Casino
+	case Trick:
+		return genome.TrickTaking
 	default: // PlayMatch, Accumulate
 		return genome.Shedding
 	}

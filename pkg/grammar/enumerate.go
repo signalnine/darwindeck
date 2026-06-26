@@ -19,7 +19,7 @@ func endsFor(m MoveGen) []EndRule {
 		return []EndRule{EmptyHand, DeckOut}
 	case Accumulate:
 		return []EndRule{Bust}
-	case Capture:
+	case Capture, Trick:
 		return []EndRule{DeckOut}
 	}
 	return nil
@@ -31,7 +31,7 @@ func scoresFor(m MoveGen) []ScoreRule {
 		return []ScoreRule{FirstOut, FewestCards}
 	case Accumulate:
 		return []ScoreRule{ClosestTarget, HighScore}
-	case Capture:
+	case Capture, Trick:
 		return []ScoreRule{MostCaptured, HighScore}
 	}
 	return nil
@@ -45,6 +45,8 @@ func dealFor(m MoveGen) []int {
 		return []int{0} // banking builds from the market/deck, not a hand
 	case Capture:
 		return []int{4}
+	case Trick:
+		return []int{13} // deal the hand out; the trick race empties it in lockstep
 	}
 	return []int{5}
 }
@@ -168,16 +170,16 @@ func Families(specs []GameSpec) map[string]int {
 	return fam
 }
 
-// Canonical expresses the hand-coded skeletons this 4-primitive grammar can
-// represent (4 of the 6: shedding, climbing, banking, casino). Trick-taking and
-// rummy need two more move-generators (follow-suit-trick, draw-meld-discard) --
-// each of which further multiplies the family space.
+// Canonical expresses the hand-coded skeletons this grammar can represent (5 of
+// the 6: shedding, climbing, banking, casino, trick-taking). Rummy needs one more
+// move-generator (draw-meld-discard); each generator further multiplies the space.
 func Canonical() []GameSpec {
 	return []GameSpec{
 		{Players: 4, Deal: 7, Shared: 1, Move: PlayMatch, Match: MatchEither, End: EmptyHand, Score: FirstOut}, // shedding
 		{Players: 4, Deal: 7, Shared: 0, Move: BeatOrPass, End: EmptyHand, Score: FirstOut},                    // climbing
 		{Players: 4, Deal: 0, Shared: 3, Move: Accumulate, Target: 21, End: Bust, Score: ClosestTarget},        // banking
 		{Players: 4, Deal: 4, Shared: 4, Move: Capture, End: DeckOut, Score: MostCaptured},                     // casino
+		{Players: 4, Deal: 13, Shared: 0, Move: Trick, End: DeckOut, Score: MostCaptured},                      // trick-taking (Whist)
 	}
 }
 
