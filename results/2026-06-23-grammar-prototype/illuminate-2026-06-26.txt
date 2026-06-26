@@ -1,0 +1,38 @@
+iter  500 | cells filled= 48 | distinct families=26 | specs evaluated=118
+iter 1000 | cells filled= 49 | distinct families=26 | specs evaluated=125
+iter 1500 | cells filled= 49 | distinct families=26 | specs evaluated=129
+iter 2000 | cells filled= 49 | distinct families=26 | specs evaluated=131
+iter 2500 | cells filled= 49 | distinct families=26 | specs evaluated=132
+
+== MAP-Elites illumination of the typed grammar ==
+  behavior cells filled        : 49  (family x decisions-bucket x interaction-bucket)
+  distinct families illuminated : 26 / 26 well-typed families
+  specs evaluated               : 132
+
+== Best game per illuminated family (the out-of-loop judging set) ==
+  0.432  accumulate|bust|closest_target
+  0.691  beat_or_pass|empty_hand|first_out
+  0.679  beat_or_pass|empty_hand|first_out+knock
+  0.499  capture|deck_out|most_captured
+  0.451  capture|deck_out|most_captured+avoidance
+  0.492  capture|deck_out|most_captured+meld_bonus
+  0.488  capture|deck_out|most_captured+meld_bonus,avoidance
+  0.458  play_match/either|empty_hand|first_out
+  0.472  play_match/either|empty_hand|first_out+draw_penalty
+  0.533  play_match/either|empty_hand|first_out+draw_penalty,knock
+  0.372  play_match/either|empty_hand|first_out+follow_suit
+  0.372  play_match/either|empty_hand|first_out+follow_suit,draw_penalty
+  0.392  play_match/either|empty_hand|first_out+follow_suit,draw_penalty,knock
+  0.368  play_match/either|empty_hand|first_out+follow_suit,knock
+  0.516  play_match/either|empty_hand|first_out+knock
+  0.473  play_match/either|empty_hand|first_out+run_play
+  0.503  play_match/either|empty_hand|first_out+run_play,draw_penalty
+  0.655  play_match/either|empty_hand|first_out+run_play,draw_penalty,knock
+  0.404  play_match/either|empty_hand|first_out+run_play,follow_suit
+  0.436  play_match/either|empty_hand|first_out+run_play,follow_suit,draw_penalty
+  0.504  play_match/either|empty_hand|first_out+run_play,follow_suit,knock
+  0.561  play_match/either|empty_hand|first_out+run_play,knock
+  0.606  trick|deck_out|most_captured
+  0.575  trick|deck_out|most_captured+avoidance
+  0.611  trick|deck_out|most_captured+meld_bonus
+  0.601  trick|deck_out|most_captured+meld_bonus,avoidance

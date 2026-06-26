@@ -210,6 +210,38 @@ of the generic runner:
 
 This is the whole point: thousands of playable-by-construction families feeding
 the *same* judge loop already in use -- the grammar serves the discovery goal, it
-is not the goal. Remaining sharpening (not blockers): casino's coarse capture
-move-gen (under-measures interaction/skill), the 2 missing move-gens (trick-taking,
-rummy), and 3-judge majority + more compositions for a production verdict table.
+is not the goal.
+
+## 2026-06-26: growing the space (lever 1) and illuminating it (lever 2)
+
+The discovery loop saturates because the *space* is small: 6 skeletons x a few
+borrows = 66 reachable compositions, and the search only ever visits ~20. You get
+more distinct games by enlarging the primitive product and by filling it, not by
+searching the same 66 harder. Two changes:
+
+**Lever 1 -- a new move-generator.** Added the `Trick` move-gen (follow-suit
+trick-taking: play one card, follow the led suit if held, highest of the led suit
+wins the trick and leads next) and the `ModAvoidance` scoring modifier (penalty
+cards in your won pile count against you). The space grows **4 -> 5 base families
+and 20 -> 26 modified (5.2x)**, and it stays playable-by-construction: tricks empty
+hands in lockstep so `deck_out` fires deterministically, the move set is never
+empty, **0 stuck / 0 non-terminating** across the enlarged space. New families:
+`trick` (Whist), `trick+avoidance` (Hearts), `trick+meld_bonus`,
+`capture+avoidance`. Trick reaches FULL fitness parity with the Whist seed through
+the real pipeline (`cmd/grammar-fitness`) once the adapter emits `EventTrickWon`.
+Each added generator multiplies the family count; rummy (draw-meld-discard) is the
+remaining one.
+
+**Lever 2 -- illuminate instead of optimize.** `cmd/grammar-illuminate` runs
+MAP-Elites over the typed space: it keeps the best game per cell of a behavior
+grid (`family x decisions-bucket x interaction-bucket`) and spends its budget
+filling empty cells, never converging. Result (`illuminate-2026-06-26.txt`):
+**49 behavior cells filled, ALL 26/26 well-typed families illuminated**, in 130
+evaluations -- versus the optimizing GA (`cmd/grammar-evolve`) which converges to
+~16 families and throws the rest away. The archive IS the diverse out-of-loop
+judging set (best game per family). The two levers compose: a bigger space, and a
+search that fills all of it instead of collapsing onto its best corner.
+
+Remaining sharpening (not blockers): casino's coarse capture move-gen
+(under-measures interaction/skill), the last move-gen (rummy), and a 3-judge
+majority + more compositions for a production verdict table.
