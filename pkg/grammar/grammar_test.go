@@ -145,6 +145,8 @@ func TestModifierTyping(t *testing.T) {
 		{ModNominate, trick, false},
 		{ModReverse, shedding, true}, // Uno reverse
 		{ModReverse, trick, false},
+		{ModSumCapture, casinoCap, true}, // Scopa building capture
+		{ModSumCapture, shedding, false},
 	}
 	for _, c := range cases {
 		if got := c.m.CompatibleWith(c.spec); got != c.want {

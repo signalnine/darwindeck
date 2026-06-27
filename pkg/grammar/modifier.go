@@ -29,11 +29,78 @@ const (
 	ModTeams                       // score-aggregation: seats are 2 partnerships (evens vs odds); the team with the best total wins (Spades/Euchre/Bridge)
 	ModNominate                    // the wild rank (8) is always playable AND lets you NAME the next required suit (Crazy Eights / Uno)
 	ModReverse                     // playing a designated rank flips the turn direction (Uno reverse)
+	ModSumCapture                  // capture: a played number card also takes any table SUBSET whose pips sum to it (Scopa building)
 	modifierCount
 )
 
 func (m Modifier) String() string {
-	return [...]string{"run_play", "follow_suit", "wild", "draw_penalty", "knock", "meld_bonus", "avoidance", "trump", "skip", "force_draw", "bid", "teams", "nominate", "reverse"}[m]
+	return [...]string{"run_play", "follow_suit", "wild", "draw_penalty", "knock", "meld_bonus", "avoidance", "trump", "skip", "force_draw", "bid", "teams", "nominate", "reverse", "sum_capture"}[m]
+}
+
+// scopaPip is the summing value of a card for ModSumCapture: Ace = 1, number
+// cards = rank, face cards = 0 (they capture only by matching rank, never by sum).
+func scopaPip(r sim.Rank) int {
+	v := int(r)
+	switch {
+	case v == 14:
+		return 1
+	case v >= 11:
+		return 0
+	default:
+		return v
+	}
+}
+
+// captureOptions lists the table-card sets a played card can capture: the
+// same-rank set (always), plus -- under ModSumCapture -- every multi-card subset
+// of number cards whose pips SUM to the played card's value (Scopa building).
+func captureOptions(table []sim.Card, played sim.Card, sum bool) [][]sim.Card {
+	var opts [][]sim.Card
+	var rankSet []sim.Card
+	for _, t := range table {
+		if t.Rank == played.Rank {
+			rankSet = append(rankSet, t)
+		}
+	}
+	if len(rankSet) > 0 {
+		opts = append(opts, rankSet)
+	}
+	if sum {
+		if target := scopaPip(played.Rank); target > 0 {
+			var nums []sim.Card
+			for _, t := range table {
+				if scopaPip(t.Rank) > 0 {
+					nums = append(nums, t)
+				}
+			}
+			opts = append(opts, sumSubsets(nums, target)...)
+		}
+	}
+	return opts
+}
+
+// sumSubsets returns every multi-card (size >= 2) subset of cards whose scopaPip
+// values sum to target. Size-1 captures are the same-rank case already covered.
+// The 2^n scan is bounded (Scopa tables are tiny).
+func sumSubsets(cards []sim.Card, target int) [][]sim.Card {
+	n := len(cards)
+	if n > 14 {
+		n = 14
+	}
+	var out [][]sim.Card
+	for mask := 1; mask < (1 << n); mask++ {
+		s, sub := 0, []sim.Card(nil)
+		for i := 0; i < n; i++ {
+			if mask&(1<<i) != 0 {
+				s += scopaPip(cards[i].Rank)
+				sub = append(sub, cards[i])
+			}
+		}
+		if s == target && len(sub) >= 2 {
+			out = append(out, sub)
+		}
+	}
+	return out
 }
 
 // wrap returns x mod n in [0,n), correct for negative x (reversed turn order).
@@ -114,6 +181,11 @@ func (m Modifier) CompatibleWith(s GameSpec) bool {
 		// Flip the turn direction (Uno reverse) -- a shedding-race interaction. Pure
 		// turn-order, no effect on the move set or termination.
 		return s.Move == PlayMatch && s.End == EmptyHand
+	case ModSumCapture:
+		// Pip-sum (building) capture -- Scopa/Casino. Capture is still play-or-trail
+		// (trail is the always-legal fallback) and the deck drains toward deck_out,
+		// so it terminates. Capture-only.
+		return s.Move == Capture
 	case ModMeldBonus:
 		// Bank a weighted set/run bonus on top of the count rule -- v2's casino
 		// CheckEnd ("captured COUNT + bonus"). It rides any pile-collecting count

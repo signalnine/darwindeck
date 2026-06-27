@@ -251,9 +251,17 @@ func (rr Runner) LegalMoves(gs *sim.GameState) []sim.Move {
 		return moves
 
 	case Capture:
+		// Enumerate the capture CHOICES (which table cards a card takes), so the
+		// decision is explicit -- the next player's options shift with the table,
+		// which the interaction metric reads. Trail is always available.
 		var moves []sim.Move
+		sum := rr.Spec.hasMod(ModSumCapture)
 		for _, c := range hand {
-			moves = append(moves, mv(sim.MovePlay, p, c)) // capture-or-trail, decided in Apply
+			for _, capt := range captureOptions(gs.Discard, c, sum) {
+				cards := append([]sim.Card{c}, capt...)
+				moves = append(moves, sim.Move{Type: sim.MoveCapture, PlayerID: p, Cards: cards})
+			}
+			moves = append(moves, mv(sim.MovePlay, p, c)) // trail
 		}
 		if len(moves) == 0 {
 			moves = append(moves, mv(sim.MovePass, p)) // empty hand: pass (refill in Upkeep)
@@ -456,25 +464,19 @@ func (rr Runner) Apply(gs *sim.GameState, m sim.Move) {
 		gs.Active = rr.nextActive(gs)
 
 	case Capture:
-		if m.Type == sim.MovePlay {
+		switch m.Type {
+		case sim.MoveCapture: // Cards[0] played, Cards[1:] the captured table set
 			c := m.Cards[0]
 			gs.Hands[p] = removeCard(gs.Hands[p], c)
-			var capt []sim.Card
-			var rest []sim.Card
-			for _, t := range gs.Discard {
-				if t.Rank == c.Rank {
-					capt = append(capt, t)
-				} else {
-					rest = append(rest, t)
-				}
+			for _, t := range m.Cards[1:] {
+				gs.Discard = removeCard(gs.Discard, t)
 			}
-			if len(capt) > 0 { // capture
-				gs.Discard = rest
-				gs.Scores[p] += len(capt) + 1
-				gs.Tableau[p] = append(gs.Tableau[p], append(capt, c)...)
-			} else { // trail
-				gs.Discard = append(gs.Discard, c)
-			}
+			gs.Scores[p] += len(m.Cards) // captured cards + the played card
+			gs.Tableau[p] = append(gs.Tableau[p], m.Cards...)
+		case sim.MovePlay: // trail
+			c := m.Cards[0]
+			gs.Hands[p] = removeCard(gs.Hands[p], c)
+			gs.Discard = append(gs.Discard, c)
 		}
 		gs.Active = (p + 1) % gs.NumPlayers
 

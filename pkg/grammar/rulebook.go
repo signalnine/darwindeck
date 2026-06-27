@@ -129,6 +129,8 @@ func (s GameSpec) modifierRules() []string {
 			out = append(out, "Eights are WILD: you may play an eight on anything, and when you do you NAME the suit the next player must follow.")
 		case ModReverse:
 			out = append(out, "Nines REVERSE: playing a nine flips the direction of play, so the turn order runs the other way.")
+		case ModSumCapture:
+			out = append(out, "Building capture: a played number card may take not only table cards of its own rank but any group of number cards whose values ADD UP to it (Ace counts one).")
 		case ModTrump:
 			out = append(out, "Spades are TRUMP: a spade beats any card of the suit that was led, and the highest spade played wins the trick. You must still follow the led suit if you can.")
 		case ModSkip:

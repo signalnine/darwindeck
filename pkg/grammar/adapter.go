@@ -46,6 +46,8 @@ func (a Adapter) ApplyMove(s *sim.GameState, m sim.Move, _ *genome.Genome) []sim
 		ev = append(ev, sim.Event{Type: sim.EventCardDrawn, PlayerID: p})
 	case sim.MoveDiscard: // rummy: the chosen discard is the meaningful action
 		ev = append(ev, sim.Event{Type: sim.EventCardPlayed, PlayerID: p, Cards: m.Cards})
+	case sim.MoveCapture: // casino: a chosen capture from the shared table
+		ev = append(ev, sim.Event{Type: sim.EventCardPlayed, PlayerID: p, Cards: m.Cards})
 	case sim.MoveKnock:
 		ev = append(ev, sim.Event{Type: sim.EventSpecialTriggered, PlayerID: p, Detail: "knock"})
 	case sim.MoveBid:
