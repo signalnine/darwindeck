@@ -133,6 +133,8 @@ func (s GameSpec) modifierRules() []string {
 			out = append(out, "Twos ATTACK: when you play a two, the next player must draw two cards from the deck and loses their turn.")
 		case ModBid:
 			out = append(out, "Before the first trick, each player in turn declares how many tricks they expect to win. You are scored on hitting that contract -- make it and you score, fall short and you are penalised; bidding zero and taking none is a bonus.")
+		case ModTeams:
+			out = append(out, "Players sit in two partnerships -- the players opposite each other are teammates -- and your scores are pooled with your partner's. The partnership with the better combined result wins, so play for the team, not yourself.")
 		case ModMeldBonus:
 			out = append(out, "At the end, you earn bonus points for matching combinations in your score pile: pairs and three-of-a-kinds, and runs of the same suit. These bonuses are added to your total.")
 		case ModAvoidance:

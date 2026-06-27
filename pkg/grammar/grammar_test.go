@@ -104,6 +104,7 @@ func TestModifierTyping(t *testing.T) {
 	banking := GameSpec{Move: Accumulate, End: Bust, Score: ClosestTarget}
 	casinoCap := GameSpec{Move: Capture, End: DeckOut, Score: MostCaptured}
 	trick := GameSpec{Move: Trick, End: DeckOut, Score: MostCaptured}
+	trick4 := GameSpec{Players: 4, Move: Trick, End: DeckOut, Score: MostCaptured}
 	rummy := GameSpec{Move: Rummy, End: DeckOut, Score: FewestDeadwood}
 
 	cases := []struct {
@@ -133,6 +134,9 @@ func TestModifierTyping(t *testing.T) {
 		{ModTrump, shedding, false},
 		{ModBid, trick, true}, // Spades/Oh Hell contract bid
 		{ModBid, shedding, false},
+		{ModTeams, trick4, true}, // 2v2 partnerships
+		{ModTeams, trick, false}, // needs exactly 4 seats
+		{ModTeams, shedding, false},
 		{ModSkip, shedding, true}, // Uno skip
 		{ModSkip, trick, false},
 		{ModForceDraw, shedding, true}, // Uno draw-two

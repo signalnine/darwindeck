@@ -26,12 +26,17 @@ const (
 	ModSkip                        // turn-order: playing a designated rank skips the next player -- gives Uno-family shedding
 	ModForceDraw                   // attack: playing a designated rank makes the next player draw two and lose their turn (Uno draw-two)
 	ModBid                         // pre-round phase: each player declares a target number of tricks; scored by making the contract (Spades/Oh Hell/Euchre)
+	ModTeams                       // score-aggregation: seats are 2 partnerships (evens vs odds); the team with the best total wins (Spades/Euchre/Bridge)
 	modifierCount
 )
 
 func (m Modifier) String() string {
-	return [...]string{"run_play", "follow_suit", "wild", "draw_penalty", "knock", "meld_bonus", "avoidance", "trump", "skip", "force_draw", "bid"}[m]
+	return [...]string{"run_play", "follow_suit", "wild", "draw_penalty", "knock", "meld_bonus", "avoidance", "trump", "skip", "force_draw", "bid", "teams"}[m]
 }
+
+// teamOf maps a seat to its partnership (even seats vs odd seats), the standard
+// 2v2 arrangement for ModTeams.
+func teamOf(seat int) int { return seat % 2 }
 
 const (
 	skipRank      = 7 // the rank that skips the next player under ModSkip (Uno-style)
@@ -88,6 +93,12 @@ func (m Modifier) CompatibleWith(s GameSpec) bool {
 		// is scored on making it (Spades, Oh Hell, Euchre, 500, ...). Trick-only;
 		// the bid round is a finite one-shot, so it terminates trivially.
 		return s.Move == Trick
+	case ModTeams:
+		// 2v2 partnerships (evens vs odds): the winner is the best TEAM, not the
+		// best individual. Needs exactly 4 seats to be a clean two-team split, and a
+		// trick host where seat scores aggregate. Pure score-aggregation, no effect
+		// on moves or termination.
+		return s.Move == Trick && s.Players == 4
 	case ModMeldBonus:
 		// Bank a weighted set/run bonus on top of the count rule -- v2's casino
 		// CheckEnd ("captured COUNT + bonus"). It rides any pile-collecting count

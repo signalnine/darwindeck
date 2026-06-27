@@ -653,6 +653,23 @@ func (rr Runner) score(gs *sim.GameState) int {
 			}
 			return v
 		}
+		if rr.Spec.hasMod(ModTeams) { // 2v2: the best TEAM wins, reported as its top seat
+			var team [2]int
+			for p := 0; p < gs.NumPlayers; p++ {
+				team[teamOf(p)] += eff(p)
+			}
+			winTeam := 0
+			if team[1] > team[0] {
+				winTeam = 1
+			}
+			best, bestVal = -1, 0
+			for p := 0; p < gs.NumPlayers; p++ {
+				if teamOf(p) == winTeam && (best < 0 || eff(p) > bestVal) {
+					best, bestVal = p, eff(p)
+				}
+			}
+			return best
+		}
 		best, bestVal = 0, eff(0)
 		for p := 1; p < gs.NumPlayers; p++ {
 			if e := eff(p); e > bestVal {
