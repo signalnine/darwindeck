@@ -1,0 +1,139 @@
+{
+ "synthesis": {
+  "headline": "In-scope coverage: 22/26 = 84.6% (covered+partial over in-scope). MOST (>50%) is clearly reached. All 26 games are in scope; 4 are not-covered (Euchre, Napoleon, Bridge-play in the trick family; Texas Hold'em and Stud in vying -- note that is 5 not-covered: Euchre, Napoleon, Bridge(play), Texas Hold'em, Stud). Recomputing: 26 total, 5 not-covered, so 21/26 = 80.8% in-scope coverage. MOST is clearly reached.",
+  "counts": "Total games: 26. Fully covered: 11. Partial: 10. Not covered: 5. In-scope coverage (covered+partial)/total = 21/26 = 80.8%. By family: shedding 4 covered + 1 partial (5/5 in-scope); climbing 0 covered + 3 partial (3/3); trick 3 covered + 1 partial + 3 not-covered (4/7); rummy 0 covered + 2 partial (2/2); fishing-banking 4 covered + 1 partial (5/5); vying 0 covered + 2 partial + 2 not-covered (2/4).",
+  "covered": "Fully covered (11): Crazy Eights, Mau-Mau, Switch, Last Card (shedding); Whist, Spades, Hearts (trick); Casino, Scopa, Cassino, 31/Thirty-One (fishing-banking)."
+ },
+ "perGame": [
+  {
+   "name": "Crazy Eights",
+   "coverage": "covered",
+   "family": "shedding"
+  },
+  {
+   "name": "Uno",
+   "coverage": "partial",
+   "family": "shedding"
+  },
+  {
+   "name": "Mau-Mau",
+   "coverage": "covered",
+   "family": "shedding"
+  },
+  {
+   "name": "Switch",
+   "coverage": "covered",
+   "family": "shedding"
+  },
+  {
+   "name": "Last Card",
+   "coverage": "covered",
+   "family": "shedding"
+  },
+  {
+   "name": "Big Two",
+   "coverage": "partial",
+   "family": "climbing"
+  },
+  {
+   "name": "President",
+   "coverage": "partial",
+   "family": "climbing"
+  },
+  {
+   "name": "Tien Len",
+   "coverage": "partial",
+   "family": "climbing"
+  },
+  {
+   "name": "Whist",
+   "coverage": "covered",
+   "family": "trick"
+  },
+  {
+   "name": "Spades",
+   "coverage": "covered",
+   "family": "trick"
+  },
+  {
+   "name": "Hearts",
+   "coverage": "covered",
+   "family": "trick"
+  },
+  {
+   "name": "Oh Hell",
+   "coverage": "partial",
+   "family": "trick"
+  },
+  {
+   "name": "Euchre",
+   "coverage": "not-covered",
+   "family": "trick"
+  },
+  {
+   "name": "Napoleon",
+   "coverage": "not-covered",
+   "family": "trick"
+  },
+  {
+   "name": "Bridge(play)",
+   "coverage": "not-covered",
+   "family": "trick"
+  },
+  {
+   "name": "Gin Rummy",
+   "coverage": "partial",
+   "family": "rummy"
+  },
+  {
+   "name": "Knock Rummy",
+   "coverage": "partial",
+   "family": "rummy"
+  },
+  {
+   "name": "Casino",
+   "coverage": "covered",
+   "family": "fishing-banking"
+  },
+  {
+   "name": "Scopa",
+   "coverage": "covered",
+   "family": "fishing-banking"
+  },
+  {
+   "name": "Cassino",
+   "coverage": "covered",
+   "family": "fishing-banking"
+  },
+  {
+   "name": "Blackjack",
+   "coverage": "partial",
+   "family": "fishing-banking"
+  },
+  {
+   "name": "31/Thirty-One",
+   "coverage": "covered",
+   "family": "fishing-banking"
+  },
+  {
+   "name": "Five-Card Draw Poker",
+   "coverage": "partial",
+   "family": "vying"
+  },
+  {
+   "name": "Three-Card Brag",
+   "coverage": "partial",
+   "family": "vying"
+  },
+  {
+   "name": "Texas Hold'em",
+   "coverage": "not-covered",
+   "family": "vying"
+  },
+  {
+   "name": "Stud",
+   "coverage": "not-covered",
+   "family": "vying"
+  }
+ ]
+}

@@ -2,23 +2,24 @@
   shedding  4p deal=7 shared=1 move=play_match(either) end=empty_hand score=first_out term=40/40 agency=0.36 turns=   42 OK
   climbing  4p deal=7 move=beat_or_pass end=empty_hand score=first_out term=40/40 agency=0.54 turns=   47 OK
   banking   4p deal=0 shared=3 move=accumulate target=21 end=bust score=closest_target term=40/40 agency=1.00 turns=    9 OK
-  casino    4p deal=4 shared=4 move=capture end=deck_out score=most_captured term=40/40 agency=0.75 turns=   48 OK
+  casino    4p deal=4 shared=4 move=capture end=deck_out score=most_captured term=40/40 agency=0.89 turns=   48 OK
   trick     4p deal=13 move=trick end=deck_out score=most_captured   term=40/40 agency=0.78 turns=   52 OK
   rummy     2p deal=10 move=rummy end=deck_out score=fewest_deadwood term=40/40 agency=1.00 turns=   31 OK
+  vying     4p deal=5 move=vying end=showdown score=best_hand        term=40/40 agency=1.00 turns=    7 OK
 
 == Family space (4 move-generators x ends x scorings x params) ==
-  untyped cross-product : 126 specs / 24 families
-  WELL-TYPED grammar    :  27 specs /  6 families  (6 canonical, 0 novel)
+  untyped cross-product : 129 specs / 25 families
+  WELL-TYPED grammar    :  30 specs /  7 families  (7 canonical, 0 novel)
 
 == Playability of the WELL-TYPED grammar under random AI (40 trials, 2000-turn cap) ==
-  PLAYABLE (terminates + never stuck + has agency)   : 27/27 (100%)
-  of which NATURAL-END (own end fires, not stalemate): 27
+  PLAYABLE (terminates + never stuck + has agency)   : 30/30 (100%)
+  of which NATURAL-END (own end fires, not stalemate): 30
   stalemate-reliant (should be 0 after typing)       : 0
   ever STUCK (empty move set = safety violation)     : 0
   ever hit the turn cap (non-termination)            : 0
 
 == Base grammar reproduces exactly its covered skeletons ==
-  well-typed base families: 6 (6 canonical, 0 novel)
+  well-typed base families: 7 (7 canonical, 0 novel)
   the score axis is inert on these ends, so there are NO spurious novel base
   families -- ALL novelty is modifier-driven (see the modifier axis below).
 
@@ -48,25 +49,26 @@
   rummy|deck_out|fewest_deadwood                   3     3     0     0  well-typed  KEEP [canonical]
   trick|deck_out|high_score                        3     3     0     0  INERT score drop (== another rule / degenerate)
   trick|deck_out|most_captured                     3     3     0     0  well-typed  KEEP [canonical]
+  vying|showdown|best_hand                         3     3     0     0  well-typed  KEEP [canonical]
 
 == Modifier axis (typed modifiers; 6 v2 borrows + trump/skip/force_draw/wild-rummy/gin-knock) ==
-  modifiers: run_play, follow_suit, draw_penalty, knock, meld_bonus, avoidance, trump, skip, force_draw, wild(rummy)
-  base well-typed families            : 6
-  WITH modifier subsets               : 61 families / 61 representative specs
-  novel families (carry >=1 modifier)  : 55
-  multiplier from the modifier algebra: 10.2x
-  PLAYABLE under random AI            : 61/61 (100%)
-  of which natural-end / stalemate    : 61 / 0
+  modifiers: run_play(+climbing combos), follow_suit, draw_penalty, knock, meld_bonus, avoidance, trump, skip, force_draw, wild(rummy), bid
+  base well-typed families            : 7
+  WITH modifier subsets               : 137 families / 137 representative specs
+  novel families (carry >=1 modifier)  : 130
+  multiplier from the modifier algebra: 19.6x
+  PLAYABLE under random AI            : 137/137 (100%)
+  of which natural-end / stalemate    : 137 / 0
   ever STUCK / ever non-terminating   : 0 / 0
     beat_or_pass|empty_hand|first_out+knock
+    beat_or_pass|empty_hand|first_out+run_play
+    beat_or_pass|empty_hand|first_out+run_play,knock
     capture|deck_out|most_captured+avoidance
+    capture|deck_out|most_captured+avoidance,sum_capture
     capture|deck_out|most_captured+meld_bonus
     capture|deck_out|most_captured+meld_bonus,avoidance
-    play_match/either|empty_hand|first_out+draw_penalty
-    play_match/either|empty_hand|first_out+draw_penalty,force_draw
-    play_match/either|empty_hand|first_out+draw_penalty,knock
-    play_match/either|empty_hand|first_out+draw_penalty,knock,force_draw
-  ... and 47 more novel families
+    capture|deck_out|most_captured+meld_bonus,avoidance,sum_capture
+  ... and 122 more novel families
 
 == Agency rule check: a modest wild does NOT rescue rank-only ==
   play_match/rank|empty_hand|first_out          base : agency=0.01 playable=false (well-typed=false)
