@@ -138,6 +138,74 @@ Full v2 design: `docs/plans/2026-04-11-v2-rewrite-design.md`
 
 ---
 
+## Generative Grammar (`pkg/grammar`) -- the synthesis, covers most known card games
+
+The grammar is the synthesis of v1 (generative but mostly garbage) and v2
+(playable-by-construction but only ~6 hand-coded skeletons): a game is a
+composition of TYPED PRIMITIVES (move-generator x end-condition x scoring + typed
+modifiers) run by ONE generic interpreter (`runner.go`), and EVERY well-typed
+composition is **playable-by-construction** -- `LegalMoves` is never empty (safety)
+and the game always terminates under random play (liveness). So the reachable
+family count is the combinatorial product of the primitives, not the 6 skeletons.
+
+As of 2026-06-26 the grammar represents **~81% of surveyed known card games** (7
+move-generators, 16 modifiers, **137 modified families, all 137/137 playable** --
+0 stuck, 0 non-terminating). Coverage trajectory 14% -> 67% -> 81% across three
+blind expert-agent surveys (`results/2026-06-26-grammar-coverage/`).
+
+**Move-generators (7):** play_match (Crazy Eights), beat_or_pass (climbing/Big
+Two), accumulate (Blackjack/31), capture (Casino/Scopa, rank-match + pip-sum),
+trick (follow-suit), rummy (draw-discard, fewest-deadwood), vying (poker betting,
+max-raises-capped, best-hand showdown).
+
+**Modifiers (16), typed via `Modifier.CompatibleWith(spec)` -- the lift of v2's
+hand-maintained per-host borrow whitelist into a small total function:** run_play
+(combos on shedding + climbing), follow_suit, draw_penalty, knock (fewest-cards;
+rummy Gin go-out), meld_bonus, avoidance (Hearts), trump (Spades), bid (trick
+contract), teams (2v2), skip, force_draw, reverse (the Uno set), nominate (Crazy
+Eights), wild (rummy melds), sum_capture (Scopa building).
+
+**Key types:** `GameSpec` (the composition); `GameSpec.WellTyped()` (the coherence
+type -- makes inert/degenerate compositions unrepresentable, e.g. an inert score
+rule or an unreachable end); `GameSpec.Family()` / `Composition()` (structural
+identity / judge-table key); `Runner` (the interpreter over `sim.GameState`);
+`Adapter` (makes a GameSpec satisfy `sim.GenericRunner` so it runs in the REAL
+`sim.RunBatch` engine); `SpecGenome` (a carrier `*genome.Genome` for the fitness
+layer's per-skeleton delta-mode + greedy scorer).
+
+**Integration with the existing engine:** `fitness.EvaluateWithRunner(g, runner,
+greedy, seed)` runs a spec through the SAME 5-metric pipeline (the injected-runner
+plug-in point); `judge.BuildGrammarDossier` / `EmitGrammar` write blind dossiers
+keyed on `Composition` for the existing judge-in-loop verdict table.
+
+**Commands:**
+```bash
+go run ./cmd/grammar-proto/       # expressiveness + family count + playable-by-construction + per-family typing diagnostic
+go run ./cmd/grammar-fitness/     # each canonical spec's 5 metrics vs its hand-coded seed
+go run ./cmd/grammar-evolve/ [-verdicts <file>]   # novelty + niche-sharing GA over GameSpecs
+go run ./cmd/grammar-illuminate/  # MAP-Elites: fill the behavior grid (illuminate, don't converge)
+./bin/darwindeck judge ...        # blind novelty judging (grammar dossiers reuse pkg/judge)
+```
+
+**THE INVARIANT (do not break):** every move-generator carries an unconditional
+fallback move (never-empty `LegalMoves`), and termination is a property of the
+RUNNER -- the PlayMatch all-pass deadlock, the capture can't-redeal end, the rummy
+deck-drain, the vying max-raises cap -- NOT a harness-level stalemate net (that
+lesson cost a real bug: liveness in the harness silently passed while the real
+engine timed out). Adding a primitive touches `spec.go` (enum + `WellTyped`),
+`runner.go` (Setup/LegalMoves/Apply/CheckEnd/score), `enumerate.go`
+(domains + `Canonical`), `adapter.go` (Progress/specSkeleton/events), `modifier.go`
+(`CompatibleWith`), `rulebook.go` (the natural-language descriptions), and the cmd
+name arrays. The grammar tests (`pkg/grammar/*_test.go`) pin never-stuck +
+always-terminate across the WHOLE space; keep them green.
+
+**Findings:** `results/2026-06-23-grammar-prototype/` (the de-risk + steps 1-7:
+typed spec -> coherence type -> modifiers -> real-engine integration -> fitness
+parity -> evolution -> blind judge) and `results/2026-06-26-grammar-coverage/`
+(corpus coverage survey + the remaining-gap roadmap).
+
+---
+
 ## v1: Python/Go Hybrid (Legacy)
 
 The v1 system lives in `src/`. It is no longer under active development.
