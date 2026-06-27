@@ -27,11 +27,12 @@ const (
 	ModForceDraw                   // attack: playing a designated rank makes the next player draw two and lose their turn (Uno draw-two)
 	ModBid                         // pre-round phase: each player declares a target number of tricks; scored by making the contract (Spades/Oh Hell/Euchre)
 	ModTeams                       // score-aggregation: seats are 2 partnerships (evens vs odds); the team with the best total wins (Spades/Euchre/Bridge)
+	ModNominate                    // the wild rank (8) is always playable AND lets you NAME the next required suit (Crazy Eights / Uno)
 	modifierCount
 )
 
 func (m Modifier) String() string {
-	return [...]string{"run_play", "follow_suit", "wild", "draw_penalty", "knock", "meld_bonus", "avoidance", "trump", "skip", "force_draw", "bid", "teams"}[m]
+	return [...]string{"run_play", "follow_suit", "wild", "draw_penalty", "knock", "meld_bonus", "avoidance", "trump", "skip", "force_draw", "bid", "teams", "nominate"}[m]
 }
 
 // teamOf maps a seat to its partnership (even seats vs odd seats), the standard
@@ -99,6 +100,11 @@ func (m Modifier) CompatibleWith(s GameSpec) bool {
 		// trick host where seat scores aggregate. Pure score-aggregation, no effect
 		// on moves or termination.
 		return s.Move == Trick && s.Players == 4
+	case ModNominate:
+		// The wild rank (8) is always legal and NAMES the next required suit -- the
+		// Crazy Eights / Uno suit-pick. A real branching decision (4 suits), and the
+		// draw fallback survives so it cannot deadlock the shedding race.
+		return s.Move == PlayMatch && s.End == EmptyHand
 	case ModMeldBonus:
 		// Bank a weighted set/run bonus on top of the count rule -- v2's casino
 		// CheckEnd ("captured COUNT + bonus"). It rides any pile-collecting count

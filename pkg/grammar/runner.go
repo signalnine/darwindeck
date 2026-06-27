@@ -188,8 +188,15 @@ func (rr Runner) LegalMoves(gs *sim.GameState) []sim.Move {
 		// TopCard and re-running this generator -- actually perturbs the move set.
 		top, ok := topOf(gs)
 		wild := rr.Spec.hasMod(ModWild)
+		nominate := rr.Spec.hasMod(ModNominate)
 		var moves []sim.Move
 		for _, c := range hand {
+			if nominate && int(c.Rank) == wildRank { // wild 8: always legal, name the next suit
+				for suit := 0; suit < 4; suit++ {
+					moves = append(moves, sim.Move{Type: sim.MovePlay, PlayerID: p, Cards: []sim.Card{c}, Amount: suit})
+				}
+				continue
+			}
 			if matches(c, top, ok, rr.Spec.Match) || isWild(c, wild) {
 				moves = append(moves, mv(sim.MovePlay, p, c))
 			}
@@ -356,7 +363,13 @@ func (rr Runner) Apply(gs *sim.GameState, m sim.Move) {
 				gs.Hands[p] = removeCard(gs.Hands[p], c)
 			}
 			gs.Discard = append(gs.Discard, m.Cards...)
-			setTop(gs, m.Cards[len(m.Cards)-1])
+			last := m.Cards[len(m.Cards)-1]
+			if rr.Spec.hasMod(ModNominate) && int(last.Rank) == wildRank {
+				// ModNominate: the played 8 names the next required suit (Move.Amount).
+				setTop(gs, sim.Card{Rank: sim.Rank(wildRank), Suit: sim.Suit(m.Amount)})
+			} else {
+				setTop(gs, last)
+			}
 			gs.PassCount = 0
 			if rr.Spec.hasMod(ModDrawPenalty) && len(gs.Deck) > 0 { // face-card play -> draw one
 				if last := m.Cards[len(m.Cards)-1]; int(last.Rank) >= 11 {

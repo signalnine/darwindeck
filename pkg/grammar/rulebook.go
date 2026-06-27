@@ -125,6 +125,8 @@ func (s GameSpec) modifierRules() []string {
 			}
 		case ModWild:
 			out = append(out, "Eights are WILD: a wild card stands in for any card you need to complete a set or a run, so holding wilds lets you finish melds and cut your deadwood.")
+		case ModNominate:
+			out = append(out, "Eights are WILD: you may play an eight on anything, and when you do you NAME the suit the next player must follow.")
 		case ModTrump:
 			out = append(out, "Spades are TRUMP: a spade beats any card of the suit that was led, and the highest spade played wins the trick. You must still follow the led suit if you can.")
 		case ModSkip:
