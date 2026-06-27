@@ -143,6 +143,8 @@ func TestModifierTyping(t *testing.T) {
 		{ModForceDraw, casinoCap, false},
 		{ModNominate, shedding, true}, // Crazy Eights: 8 names the suit
 		{ModNominate, trick, false},
+		{ModReverse, shedding, true}, // Uno reverse
+		{ModReverse, trick, false},
 	}
 	for _, c := range cases {
 		if got := c.m.CompatibleWith(c.spec); got != c.want {

@@ -386,20 +386,30 @@ func (rr Runner) Apply(gs *sim.GameState, m sim.Move) {
 		case sim.MovePass: // only reachable with an empty deck and no legal play
 			gs.PassCount++
 		}
+		if rr.Spec.hasMod(ModReverse) && m.Type == sim.MovePlay && hasRank(m.Cards, reverseRank) {
+			if gs.Direction == 0 {
+				gs.Direction = 1
+			}
+			gs.Direction = -gs.Direction // flip, then advance in the new direction
+		}
+		dir := gs.Direction
+		if dir == 0 {
+			dir = 1
+		}
 		step := 1
 		if m.Type == sim.MovePlay {
 			if rr.Spec.hasMod(ModSkip) && hasRank(m.Cards, skipRank) {
 				step = 2 // ModSkip: playing the skip rank skips the next player
 			}
 			if rr.Spec.hasMod(ModForceDraw) && hasRank(m.Cards, forceDrawRank) {
-				victim := (p + 1) % gs.NumPlayers
+				victim := wrap(p+dir, gs.NumPlayers)
 				drawn, rem := sim.DrawN(gs.Deck, forceDrawN) // bounded by the (finite) deck
 				gs.Hands[victim] = append(gs.Hands[victim], drawn...)
 				gs.Deck = rem
 				step = 2 // the victim drew and loses their turn
 			}
 		}
-		gs.Active = (p + step) % gs.NumPlayers
+		gs.Active = wrap(p+step*dir, gs.NumPlayers)
 
 	case BeatOrPass:
 		switch m.Type {

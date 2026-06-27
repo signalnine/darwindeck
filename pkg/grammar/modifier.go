@@ -28,12 +28,16 @@ const (
 	ModBid                         // pre-round phase: each player declares a target number of tricks; scored by making the contract (Spades/Oh Hell/Euchre)
 	ModTeams                       // score-aggregation: seats are 2 partnerships (evens vs odds); the team with the best total wins (Spades/Euchre/Bridge)
 	ModNominate                    // the wild rank (8) is always playable AND lets you NAME the next required suit (Crazy Eights / Uno)
+	ModReverse                     // playing a designated rank flips the turn direction (Uno reverse)
 	modifierCount
 )
 
 func (m Modifier) String() string {
-	return [...]string{"run_play", "follow_suit", "wild", "draw_penalty", "knock", "meld_bonus", "avoidance", "trump", "skip", "force_draw", "bid", "teams", "nominate"}[m]
+	return [...]string{"run_play", "follow_suit", "wild", "draw_penalty", "knock", "meld_bonus", "avoidance", "trump", "skip", "force_draw", "bid", "teams", "nominate", "reverse"}[m]
 }
+
+// wrap returns x mod n in [0,n), correct for negative x (reversed turn order).
+func wrap(x, n int) int { return ((x % n) + n) % n }
 
 // teamOf maps a seat to its partnership (even seats vs odd seats), the standard
 // 2v2 arrangement for ModTeams.
@@ -43,6 +47,7 @@ const (
 	skipRank      = 7 // the rank that skips the next player under ModSkip (Uno-style)
 	forceDrawRank = 2 // the rank that forces the next player to draw under ModForceDraw
 	forceDrawN    = 2 // how many cards the victim draws
+	reverseRank   = 9 // the rank that flips the turn direction under ModReverse
 	trumpSuit     = 3 // Spades is trump under ModTrump (sim.Spades == 3); reuses wildRank(8) for rummy melds
 )
 
@@ -104,6 +109,10 @@ func (m Modifier) CompatibleWith(s GameSpec) bool {
 		// The wild rank (8) is always legal and NAMES the next required suit -- the
 		// Crazy Eights / Uno suit-pick. A real branching decision (4 suits), and the
 		// draw fallback survives so it cannot deadlock the shedding race.
+		return s.Move == PlayMatch && s.End == EmptyHand
+	case ModReverse:
+		// Flip the turn direction (Uno reverse) -- a shedding-race interaction. Pure
+		// turn-order, no effect on the move set or termination.
 		return s.Move == PlayMatch && s.End == EmptyHand
 	case ModMeldBonus:
 		// Bank a weighted set/run bonus on top of the count rule -- v2's casino
