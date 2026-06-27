@@ -56,6 +56,9 @@ func (s GameSpec) objective() string {
 		return fmt.Sprintf("Build a card total as close as possible to %d without going over.", s.Target)
 	case MostCaptured:
 		if s.Move == Trick {
+			if s.hasMod(ModBid) {
+				return "Win as close as you can to the number of tricks you declare at the start -- making your bid is what scores."
+			}
 			return "Win the most cards by taking tricks."
 		}
 		return "Capture more cards from the table than anyone else."
@@ -128,6 +131,8 @@ func (s GameSpec) modifierRules() []string {
 			out = append(out, "Sevens SKIP: when you play a seven, the next player loses their turn and play jumps to the player after them.")
 		case ModForceDraw:
 			out = append(out, "Twos ATTACK: when you play a two, the next player must draw two cards from the deck and loses their turn.")
+		case ModBid:
+			out = append(out, "Before the first trick, each player in turn declares how many tricks they expect to win. You are scored on hitting that contract -- make it and you score, fall short and you are penalised; bidding zero and taking none is a bonus.")
 		case ModMeldBonus:
 			out = append(out, "At the end, you earn bonus points for matching combinations in your score pile: pairs and three-of-a-kinds, and runs of the same suit. These bonuses are added to your total.")
 		case ModAvoidance:
@@ -165,6 +170,9 @@ func (s GameSpec) winRule() string {
 		return fmt.Sprintf("Among players who did not bust, the highest total (closest to %d) wins.", s.Target)
 	case MostCaptured:
 		if s.Move == Trick {
+			if s.hasMod(ModBid) {
+				return "Each player is scored on their contract: take at least as many tricks as you bid (or none if you bid zero) to score it, miss it and you are penalised. Highest contract score wins."
+			}
 			return "The player who won the most cards in tricks wins (less any penalty points)."
 		}
 		return "The player who captured the most cards wins."

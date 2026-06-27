@@ -131,6 +131,8 @@ func TestModifierTyping(t *testing.T) {
 		{ModWild, shedding, false},      // still non-productive on shedding
 		{ModTrump, trick, true},         // Spades/Bridge trump
 		{ModTrump, shedding, false},
+		{ModBid, trick, true}, // Spades/Oh Hell contract bid
+		{ModBid, shedding, false},
 		{ModSkip, shedding, true}, // Uno skip
 		{ModSkip, trick, false},
 		{ModForceDraw, shedding, true}, // Uno draw-two

@@ -48,6 +48,8 @@ func (a Adapter) ApplyMove(s *sim.GameState, m sim.Move, _ *genome.Genome) []sim
 		ev = append(ev, sim.Event{Type: sim.EventCardPlayed, PlayerID: p, Cards: m.Cards})
 	case sim.MoveKnock:
 		ev = append(ev, sim.Event{Type: sim.EventSpecialTriggered, PlayerID: p, Detail: "knock"})
+	case sim.MoveBid:
+		ev = append(ev, sim.Event{Type: sim.EventSpecialTriggered, PlayerID: p, Detail: "bid"})
 	}
 	// Turn-order / draw attacks are the interaction signal (IsAttackEvent counts
 	// "draw_two" always, and "skip" for >2 players).

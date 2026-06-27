@@ -49,6 +49,7 @@ func (gs *GameState) Clone() *GameState {
 	// They are PUBLIC (everyone sees the bets and who folded), so Determinize
 	// copies them verbatim -- only the hidden hole cards are resampled.
 	cp.Committed = cloneInts(gs.Committed)
+	cp.Bids = cloneInts(gs.Bids)
 	cp.Folded = cloneBools(gs.Folded)
 
 	cp.Events = nil

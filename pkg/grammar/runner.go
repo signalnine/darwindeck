@@ -161,6 +161,12 @@ func (rr Runner) Setup(rng *rand.Rand) *sim.GameState {
 		gs.TrickCards = nil
 		gs.TrickPlayers = nil
 		gs.TrickLeader = 0
+		if s.hasMod(ModBid) {
+			gs.Bids = make([]int, s.Players) // -1 = not yet bid; each seat bids before play
+			for p := range gs.Bids {
+				gs.Bids[p] = -1
+			}
+		}
 	}
 	if s.Move == Rummy {
 		gs.Phase = sim.PhaseDraw // a rummy turn is two moves: draw, then discard
@@ -279,6 +285,15 @@ func (rr Runner) LegalMoves(gs *sim.GameState) []sim.Move {
 		return moves
 
 	case Trick:
+		// ModBid: a one-shot bid round before any tricks -- the active player
+		// declares a target 0..Deal. Once every seat has bid, play begins.
+		if rr.Spec.hasMod(ModBid) && gs.Bids[p] == -1 {
+			moves := make([]sim.Move, 0, rr.Spec.Deal+1)
+			for b := 0; b <= rr.Spec.Deal; b++ {
+				moves = append(moves, sim.Move{Type: sim.MoveBid, PlayerID: p, Amount: b})
+			}
+			return moves
+		}
 		// Lead the trick with any card; otherwise FOLLOW the lead suit if you hold
 		// it, else play anything. TrickCards holds the cards played so far this trick
 		// (TrickCards[0] = the lead), so the TrickTakingScorer + delta probe read it.
@@ -311,6 +326,11 @@ func (rr Runner) Apply(gs *sim.GameState, m sim.Move) {
 	if m.Type == sim.MoveKnock { // ModKnock: end the game now; winner is fewest cards (CheckEnd)
 		gs.Phase = sim.PhaseEnd
 		gs.Turn++
+		return
+	}
+	if m.Type == sim.MoveBid { // ModBid: record the contract and pass to the next bidder
+		gs.Bids[p] = m.Amount
+		gs.Active = (p + 1) % gs.NumPlayers // after the last seat bids, wraps to 0 to lead trick 1
 		return
 	}
 	if s.Move == Rummy { // two-phase turn; counts ONE Turn per draw+discard pair
@@ -619,6 +639,11 @@ func (rr Runner) score(gs *sim.GameState) int {
 		return best
 	case MostCaptured, HighScore:
 		eff := func(p int) int { // scoring modifiers adjust the count from the won pile
+			// ModBid (trick contracts): the winner is whoever best MADE their bid,
+			// not who took the most tricks. Each trick banks NumPlayers cards.
+			if rr.Spec.hasMod(ModBid) && rr.Spec.Move == Trick {
+				return contractScore(gs.Scores[p]/gs.NumPlayers, gs.Bids[p])
+			}
 			v := gs.Scores[p]
 			if rr.Spec.hasMod(ModMeldBonus) {
 				v += meldBonus(gs.Tableau[p]) // set/run bonuses

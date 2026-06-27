@@ -295,7 +295,7 @@ func TestCloneIsDeep(t *testing.T) {
 // (pkg/sim/clone.go), Determinize (if the field carries hidden information),
 // the field-by-field tests above, and this constant are all updated together.
 func TestGameStateFieldCountPinsClone(t *testing.T) {
-	const want = 29 // +6 vying betting fields: Pot, CurrentBet, Committed, Folded, RaiseCount, ToAct
+	const want = 30 // 29 + Bids (trick-contract bidding, cloned via cloneInts)
 	if got := reflect.TypeOf(sim.GameState{}).NumField(); got != want {
 		t.Fatalf("GameState has %d fields, want %d -- update Clone/Determinize/clone_test.go for the new field, then bump this constant", got, want)
 	}

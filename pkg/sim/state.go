@@ -32,13 +32,18 @@ const (
 	MoveCall                    // Vying: match the current bet
 	MoveRaise                   // Vying: increase the current bet by the min bet
 	MoveFold                    // Vying: surrender the hand and forfeit the pot
+	MoveBid                     // Trick contracts: declare a target (Move.Amount = bid)
 )
 
 // Move represents a player action.
 type Move struct {
-	Type    MoveType
-	Cards   []Card // Cards involved (for play, meld, discard)
+	Type     MoveType
+	Cards    []Card // Cards involved (for play, meld, discard)
 	PlayerID int
+	// Amount carries a numeric payload for moves whose choice is a number rather
+	// than cards: a trick-contract bid (MoveBid) or, potentially, a bet size.
+	// Zero for ordinary card moves.
+	Amount int
 }
 
 // Key returns a canonical string identity for the move (audit Task 19 Step
@@ -57,6 +62,10 @@ func (m Move) Key() string {
 	b = strconv.AppendUint(b, uint64(m.Type), 10)
 	b = append(b, ':', 'p')
 	b = strconv.AppendInt(b, int64(m.PlayerID), 10)
+	if m.Amount != 0 {
+		b = append(b, ':', 'a')
+		b = strconv.AppendInt(b, int64(m.Amount), 10)
+	}
 	for _, c := range m.Cards {
 		b = append(b, ':')
 		b = strconv.AppendUint(b, uint64(c.Suit), 10)
@@ -223,6 +232,10 @@ type GameState struct {
 	Folded     []bool
 	RaiseCount int // raises so far this round (bounded by MaxRaises)
 	ToAct      int // non-folded players still owed an action before the round closes
+
+	// Bidding-specific (trick contracts). Bids[p] is player p's declared target
+	// (e.g. tricks bid in Spades/Oh Hell); -1 = not yet bid. Public information.
+	Bids []int
 
 	// Events log for fitness analysis
 	Events []Event

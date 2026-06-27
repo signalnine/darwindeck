@@ -25,11 +25,12 @@ const (
 	ModTrump                       // trick-resolve: a trump suit beats the led suit -- gives Spades/Bridge-family trick games
 	ModSkip                        // turn-order: playing a designated rank skips the next player -- gives Uno-family shedding
 	ModForceDraw                   // attack: playing a designated rank makes the next player draw two and lose their turn (Uno draw-two)
+	ModBid                         // pre-round phase: each player declares a target number of tricks; scored by making the contract (Spades/Oh Hell/Euchre)
 	modifierCount
 )
 
 func (m Modifier) String() string {
-	return [...]string{"run_play", "follow_suit", "wild", "draw_penalty", "knock", "meld_bonus", "avoidance", "trump", "skip", "force_draw"}[m]
+	return [...]string{"run_play", "follow_suit", "wild", "draw_penalty", "knock", "meld_bonus", "avoidance", "trump", "skip", "force_draw", "bid"}[m]
 }
 
 const (
@@ -82,6 +83,11 @@ func (m Modifier) CompatibleWith(s GameSpec) bool {
 	case ModTrump:
 		// A trump suit that beats the led suit -- only meaningful in trick-taking.
 		return s.Move == Trick
+	case ModBid:
+		// A bid/contract phase before the tricks: each player declares a target and
+		// is scored on making it (Spades, Oh Hell, Euchre, 500, ...). Trick-only;
+		// the bid round is a finite one-shot, so it terminates trivially.
+		return s.Move == Trick
 	case ModMeldBonus:
 		// Bank a weighted set/run bonus on top of the count rule -- v2's casino
 		// CheckEnd ("captured COUNT + bonus"). It rides any pile-collecting count
@@ -94,6 +100,23 @@ func (m Modifier) CompatibleWith(s GameSpec) bool {
 		return (s.Move == Trick || s.Move == Capture) && s.Score == MostCaptured
 	}
 	return false
+}
+
+// contractScore is the ModBid (trick-contract) scoring for one player: tricksWon
+// is gs.Scores[p]/NumPlayers (each trick banks NumPlayers cards). A bid of 0 is a
+// nil (big bonus for taking none, penalty per trick taken); otherwise making the
+// bid scores the bid plus small overtricks, and missing it is penalized.
+func contractScore(tricksWon, bid int) int {
+	if bid == 0 {
+		if tricksWon == 0 {
+			return 10
+		}
+		return -10 * tricksWon
+	}
+	if tricksWon >= bid {
+		return 10*bid + (tricksWon - bid)
+	}
+	return -10 * (bid - tricksWon)
 }
 
 const wildRank = 8 // Crazy Eights' eights; mirrors v2 special-cards.
