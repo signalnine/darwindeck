@@ -209,9 +209,13 @@ func (rr Runner) LegalMoves(gs *sim.GameState) []sim.Move {
 		// not Discard -- so the fitness layer sees the beat/pass coupling.
 		leading := len(gs.TrickCards) == 0
 		var moves []sim.Move
-		for _, c := range hand {
-			if leading || c.Rank > gs.TrickCards[0].Rank {
-				moves = append(moves, mv(sim.MovePlay, p, c))
+		if rr.Spec.hasMod(ModRunPlay) { // Big Two: lead a set, beat with a higher same-size set
+			moves = beatCombos(hand, gs.TrickCards, leading, p)
+		} else {
+			for _, c := range hand {
+				if leading || c.Rank > gs.TrickCards[0].Rank {
+					moves = append(moves, mv(sim.MovePlay, p, c))
+				}
 			}
 		}
 		if !leading {
@@ -367,9 +371,10 @@ func (rr Runner) Apply(gs *sim.GameState, m sim.Move) {
 	case BeatOrPass:
 		switch m.Type {
 		case sim.MovePlay:
-			c := m.Cards[0]
-			gs.Hands[p] = removeCard(gs.Hands[p], c)
-			gs.TrickCards = []sim.Card{c} // new combination to beat
+			for _, c := range m.Cards { // one card, or a same-rank set under ModRunPlay
+				gs.Hands[p] = removeCard(gs.Hands[p], c)
+			}
+			gs.TrickCards = append([]sim.Card(nil), m.Cards...) // new combination to beat
 			gs.TrickLeader = p
 			gs.PassCount = 0
 		case sim.MovePass:

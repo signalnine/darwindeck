@@ -112,7 +112,7 @@ func TestModifierTyping(t *testing.T) {
 		want bool
 	}{
 		{ModRunPlay, shedding, true},
-		{ModRunPlay, climbing, false},
+		{ModRunPlay, climbing, true}, // Big Two: lead a set, beat with a higher same-size set
 		{ModFollowSuit, shedding, true},
 		{ModFollowSuit, banking, false},
 		{ModKnock, shedding, true},

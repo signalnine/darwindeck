@@ -45,8 +45,14 @@ const (
 // be hand-maintained per (skeleton, mechanic) pair is here a small total function.
 func (m Modifier) CompatibleWith(s GameSpec) bool {
 	switch m {
-	case ModRunPlay, ModFollowSuit:
-		// Move-set modifiers act on the match-and-shed generator (v2: shedding host).
+	case ModRunPlay:
+		// Multi-card combos. On play_match: dump a set/run that matches the discard
+		// (shedding). On beat_or_pass: lead a set and beat it only with a higher
+		// same-size set (Big Two / President). Either way a pure superset that sheds
+		// faster, so the empty-hand race still terminates.
+		return s.Move == PlayMatch || s.Move == BeatOrPass
+	case ModFollowSuit:
+		// Move-restrict acts on the match-and-shed generator (v2: shedding host).
 		return s.Move == PlayMatch
 	case ModWild:
 		// On play_match a single wild rank is too sparse to restore agency to
@@ -136,6 +142,36 @@ func comboPlays(hand []sim.Card, top sim.Card, hasTop bool, rule MatchRule, play
 				out = append(out, mv(sim.MovePlay, player, run...))
 				i += len(run) - 1
 			}
+		}
+	}
+	return out
+}
+
+// beatCombos builds the Big Two / President moves under ModRunPlay on
+// beat_or_pass: LEADING, play a same-rank set of any size; FOLLOWING, play a
+// same-rank set of the SAME size as the table combo but a higher rank, else pass.
+// Singles are size-1 sets, so this is a strict superset of single-card beat-or-pass
+// and preserves termination (every play still sheds >= 1 card; the leader always
+// has a set; pass is always legal when following).
+func beatCombos(hand []sim.Card, table []sim.Card, leading bool, player int) []sim.Move {
+	byRank := map[sim.Rank][]sim.Card{}
+	for _, c := range hand {
+		byRank[c.Rank] = append(byRank[c.Rank], c)
+	}
+	var out []sim.Move
+	if leading {
+		for r := sim.Rank(2); r <= 14; r++ {
+			set := byRank[r]
+			for size := 1; size <= len(set); size++ {
+				out = append(out, mv(sim.MovePlay, player, set[:size]...))
+			}
+		}
+		return out
+	}
+	k := len(table)
+	for r := table[0].Rank + 1; r >= 2 && r <= 14; r++ { // r>=2 guards uint8 wrap past Ace
+		if set := byRank[r]; len(set) >= k {
+			out = append(out, mv(sim.MovePlay, player, set[:k]...))
 		}
 	}
 	return out

@@ -105,7 +105,11 @@ func (s GameSpec) modifierRules() []string {
 	for _, m := range s.Mods {
 		switch m {
 		case ModRunPlay:
-			out = append(out, "Instead of a single card, you may play a SET of cards of the same rank, or a RUN of consecutive cards of the same suit, all in one turn -- letting you shed several cards at once.")
+			if s.Move == BeatOrPass {
+				out = append(out, "You may lead a SET of two or more cards of the same rank, not just one card. Whoever follows must beat it with a higher set of the SAME size, or pass.")
+			} else {
+				out = append(out, "Instead of a single card, you may play a SET of cards of the same rank, or a RUN of consecutive cards of the same suit, all in one turn -- letting you shed several cards at once.")
+			}
 		case ModFollowSuit:
 			out = append(out, "If you hold any card of the same suit as the top of the discard pile, you MUST play one of them -- you may not draw to avoid it.")
 		case ModDrawPenalty:
