@@ -17,7 +17,7 @@ import (
 
 func main() {
 	const seed = 1
-	names := []string{"shedding", "climbing", "banking", "casino", "trick", "rummy"}
+	names := []string{"shedding", "climbing", "banking", "casino", "trick", "rummy", "vying"}
 	seedBySkeleton := map[genome.SkeletonType]*genome.Genome{}
 	for _, s := range seeds.All() {
 		if _, ok := seedBySkeleton[s.Skeleton]; !ok {

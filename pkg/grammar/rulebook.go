@@ -66,6 +66,8 @@ func (s GameSpec) objective() string {
 		return "Score the most points."
 	case FewestDeadwood:
 		return "Form your cards into melds -- sets of three or more of the same rank, or runs of three or more consecutive cards in one suit -- leaving as few stray (unmelded) cards as possible."
+	case BestHand:
+		return "Hold the best five-card poker hand at the showdown, and bet boldly enough that the others fold or pay to see it."
 	}
 	return ""
 }
@@ -99,6 +101,9 @@ func (s GameSpec) turnRules() string {
 	case Rummy:
 		return "- Draw the top card of the deck into your hand.\n" +
 			"- Then discard one card from your hand face-up. Keep the cards that build toward melds and throw away your stray cards."
+	case Vying:
+		return "- If no bet is owed, you may CHECK (stay in for free) or BET/RAISE to put pressure on.\n" +
+			"- If a bet is owed, you may CALL to match it, RAISE it higher, or FOLD and drop out. Betting continues until everyone still in has matched, then hands are shown."
 	}
 	return ""
 }
@@ -162,6 +167,8 @@ func (s GameSpec) endRule() string {
 			return "The game ends the moment the draw deck runs out."
 		}
 		return "The game ends once the deck is exhausted and the players' hands are empty."
+	case Showdown:
+		return "The hand ends at the showdown, once the betting is settled (everyone still in has matched the bet, or all but one have folded)."
 	case Bust:
 		return "The round ends when every player has either stuck or busted."
 	}
@@ -188,6 +195,8 @@ func (s GameSpec) winRule() string {
 		return "The player with the highest score wins."
 	case FewestDeadwood:
 		return "The player whose hand has the fewest unmelded cards (the least deadwood) wins."
+	case BestHand:
+		return "At the showdown the best five-card poker hand among the players still in wins; if everyone else folds, the last player in wins uncontested."
 	}
 	return ""
 }

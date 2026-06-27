@@ -4,7 +4,31 @@ import (
 	"math/rand/v2"
 
 	"github.com/darwindeck/darwindeck/pkg/sim"
+	"github.com/darwindeck/darwindeck/pkg/skeleton/vying"
 )
+
+// maxRaises caps the raises per vying betting round -- the bound that makes the
+// betting move-gen terminate under random play (mirrors v2's max_raises).
+const maxRaises = 4
+
+func nonFolded(gs *sim.GameState) int {
+	n := 0
+	for _, f := range gs.Folded {
+		if !f {
+			n++
+		}
+	}
+	return n
+}
+
+func nextNonFolded(gs *sim.GameState, from int) int {
+	for i := 1; i <= gs.NumPlayers; i++ {
+		if q := (from + i) % gs.NumPlayers; !gs.Folded[q] {
+			return q
+		}
+	}
+	return from
+}
 
 // Runner interprets a GameSpec over sim.GameState. It is the single generic
 // engine that plays ANY composition -- the whole point of the grammar.
@@ -171,6 +195,11 @@ func (rr Runner) Setup(rng *rand.Rand) *sim.GameState {
 	if s.Move == Rummy {
 		gs.Phase = sim.PhaseDraw // a rummy turn is two moves: draw, then discard
 	}
+	if s.Move == Vying {
+		gs.Committed = make([]int, s.Players)
+		gs.CurrentBet, gs.RaiseCount, gs.Pot = 0, 0, 0
+		gs.ToAct = s.Players // every seat owes at least one action this round
+	}
 	gs.Folded = make([]bool, s.Players)
 	gs.Active = 0
 	return gs
@@ -328,6 +357,21 @@ func (rr Runner) LegalMoves(gs *sim.GameState) []sim.Move {
 		}
 		if len(moves) == 0 {
 			moves = append(moves, mv(sim.MovePass, p)) // empty hand (deck_out is firing)
+		}
+		return moves
+
+	case Vying:
+		// Betting round: if you owe nothing you may check; if you owe, call or fold;
+		// you may raise until the per-round cap. The cap bounds the round so it
+		// terminates under random play.
+		var moves []sim.Move
+		if gs.CurrentBet-gs.Committed[p] <= 0 {
+			moves = append(moves, mv(sim.MoveCheck, p))
+		} else {
+			moves = append(moves, mv(sim.MoveCall, p), mv(sim.MoveFold, p))
+		}
+		if gs.RaiseCount < maxRaises {
+			moves = append(moves, mv(sim.MoveRaise, p))
 		}
 		return moves
 	}
@@ -515,6 +559,34 @@ func (rr Runner) Apply(gs *sim.GameState, m sim.Move) {
 		} else {
 			gs.Active = (p + 1) % gs.NumPlayers
 		}
+
+	case Vying:
+		switch m.Type {
+		case sim.MoveCheck:
+			gs.ToAct--
+		case sim.MoveCall:
+			owed := gs.CurrentBet - gs.Committed[p]
+			if owed < 0 {
+				owed = 0
+			}
+			gs.Committed[p] += owed
+			gs.Pot += owed
+			gs.ToAct--
+		case sim.MoveRaise:
+			owed := gs.CurrentBet - gs.Committed[p]
+			if owed < 0 {
+				owed = 0
+			}
+			gs.Committed[p] += owed + 1
+			gs.Pot += owed + 1
+			gs.CurrentBet++
+			gs.RaiseCount++
+			gs.ToAct = nonFolded(gs) - 1 // every other live seat owes a response
+		case sim.MoveFold:
+			gs.Folded[p] = true
+			gs.ToAct--
+		}
+		gs.Active = nextNonFolded(gs, p)
 	}
 	gs.Turn++
 }
@@ -612,6 +684,12 @@ func (rr Runner) CheckEnd(gs *sim.GameState) (winner int, done bool) {
 			}
 		}
 		return rr.score(gs), true // all stuck or busted
+	case Showdown:
+		// The betting round closes when only one player is live, or every live seat
+		// has matched the bet (ToAct exhausted). The max-raises cap guarantees this.
+		if nonFolded(gs) <= 1 || gs.ToAct <= 0 {
+			return rr.score(gs), true
+		}
 	}
 	return -1, false
 }
@@ -634,6 +712,20 @@ func (rr Runner) score(gs *sim.GameState) int {
 			}
 		}
 		return best
+	case BestHand:
+		winner, bestStr := -1, int64(-1)
+		for q := 0; q < gs.NumPlayers; q++ {
+			if gs.Folded[q] {
+				continue
+			}
+			if h := vying.HandStrength(gs.Hands[q]); winner < 0 || h > bestStr {
+				winner, bestStr = q, h
+			}
+		}
+		if winner < 0 {
+			winner = 0 // all folded (degenerate); deterministic fallback
+		}
+		return winner
 	case FewestDeadwood:
 		wr := -1
 		if rr.Spec.hasMod(ModWild) {

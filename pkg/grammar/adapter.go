@@ -5,6 +5,7 @@ import (
 
 	"github.com/darwindeck/darwindeck/pkg/genome"
 	"github.com/darwindeck/darwindeck/pkg/sim"
+	"github.com/darwindeck/darwindeck/pkg/skeleton/vying"
 )
 
 // Adapter makes a GameSpec satisfy sim.GenericRunner, so a grammar composition
@@ -48,6 +49,8 @@ func (a Adapter) ApplyMove(s *sim.GameState, m sim.Move, _ *genome.Genome) []sim
 		ev = append(ev, sim.Event{Type: sim.EventCardPlayed, PlayerID: p, Cards: m.Cards})
 	case sim.MoveCapture: // casino: a chosen capture from the shared table
 		ev = append(ev, sim.Event{Type: sim.EventCardPlayed, PlayerID: p, Cards: m.Cards})
+	case sim.MoveCheck, sim.MoveCall, sim.MoveRaise, sim.MoveFold: // vying betting
+		ev = append(ev, sim.Event{Type: sim.EventSpecialTriggered, PlayerID: p, Detail: "bet"})
 	case sim.MoveKnock:
 		ev = append(ev, sim.Event{Type: sim.EventSpecialTriggered, PlayerID: p, Detail: "knock"})
 	case sim.MoveBid:
@@ -144,6 +147,21 @@ func (a Adapter) Progress(s *sim.GameState, _ *genome.Genome) []float64 {
 			}
 			out[p] = v
 		}
+	case Vying: // share of poker hand strength among the live (non-folded) seats
+		str := make([]int64, s.NumPlayers)
+		var total int64
+		for p := 0; p < s.NumPlayers; p++ {
+			if p < len(s.Folded) && s.Folded[p] {
+				continue
+			}
+			str[p] = vying.HandStrength(s.Hands[p])
+			total += str[p]
+		}
+		for p := range out {
+			if total > 0 {
+				out[p] = float64(str[p]) / float64(total)
+			}
+		}
 	}
 	return out
 }
@@ -174,6 +192,8 @@ func specSkeleton(m MoveGen) genome.SkeletonType {
 		return genome.TrickTaking
 	case Rummy:
 		return genome.Rummy
+	case Vying:
+		return genome.Vying
 	default: // PlayMatch, Accumulate
 		return genome.Shedding
 	}

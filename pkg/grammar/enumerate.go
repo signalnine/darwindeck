@@ -21,6 +21,8 @@ func endsFor(m MoveGen) []EndRule {
 		return []EndRule{Bust}
 	case Capture, Trick, Rummy:
 		return []EndRule{DeckOut}
+	case Vying:
+		return []EndRule{Showdown}
 	}
 	return nil
 }
@@ -35,6 +37,8 @@ func scoresFor(m MoveGen) []ScoreRule {
 		return []ScoreRule{MostCaptured, HighScore}
 	case Rummy:
 		return []ScoreRule{FewestDeadwood, FewestCards} // fewest_cards is inert (constant hand) -> dropped by typing
+	case Vying:
+		return []ScoreRule{BestHand}
 	}
 	return nil
 }
@@ -51,6 +55,8 @@ func dealFor(m MoveGen) []int {
 		return []int{13} // deal the hand out; the trick race empties it in lockstep
 	case Rummy:
 		return []int{10} // Gin-style hand; the deck (not the hand) drains to end the game
+	case Vying:
+		return []int{5} // five-card poker hands
 	}
 	return []int{5}
 }
@@ -185,6 +191,7 @@ func Canonical() []GameSpec {
 		{Players: 4, Deal: 4, Shared: 4, Move: Capture, End: DeckOut, Score: MostCaptured},                     // casino
 		{Players: 4, Deal: 13, Shared: 0, Move: Trick, End: DeckOut, Score: MostCaptured},                      // trick-taking (Whist)
 		{Players: 2, Deal: 10, Shared: 0, Move: Rummy, End: DeckOut, Score: FewestDeadwood},                    // rummy (Gin-style)
+		{Players: 4, Deal: 5, Shared: 0, Move: Vying, End: Showdown, Score: BestHand},                          // vying (five-card poker)
 	}
 }
 

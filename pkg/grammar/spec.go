@@ -30,11 +30,12 @@ const (
 	Capture                   // play a card to capture equal-rank table cards, else trail (leave it face-up)
 	Trick                     // follow-suit trick-taking: each player plays one card, highest of the lead suit wins the trick
 	Rummy                     // draw-and-discard: each turn draw a card and discard one, building melds; fewest deadwood wins at deck-out
+	Vying                     // betting: hidden hands, a check/bet/call/raise/fold round (bounded by max raises), best hand wins at showdown (poker)
 	moveGenCount
 )
 
 func (m MoveGen) String() string {
-	return [...]string{"play_match", "beat_or_pass", "accumulate", "capture", "trick", "rummy"}[m]
+	return [...]string{"play_match", "beat_or_pass", "accumulate", "capture", "trick", "rummy", "vying"}[m]
 }
 
 // MatchRule constrains PlayMatch (ignored by other generators).
@@ -56,11 +57,12 @@ const (
 	EmptyHand EndRule = iota // a player emptied their hand
 	DeckOut                  // hands empty and the deck is exhausted
 	Bust                     // all players have stuck or busted (a banking round)
+	Showdown                 // a betting round closed (all matched, or one player left) -- vying
 	endRuleCount
 )
 
 func (e EndRule) String() string {
-	return [...]string{"empty_hand", "deck_out", "bust"}[e]
+	return [...]string{"empty_hand", "deck_out", "bust", "showdown"}[e]
 }
 
 // ScoreRule decides the winner at end-of-game from a per-player signal.
@@ -73,11 +75,12 @@ const (
 	MostCaptured                    // most cards captured
 	HighScore                       // highest Scores[]
 	FewestDeadwood                  // fewest cards left UNMELDED (rummy): hand minus sets/runs
+	BestHand                        // best poker hand at showdown among non-folded players (vying)
 	scoreRuleCount
 )
 
 func (s ScoreRule) String() string {
-	return [...]string{"first_out", "fewest_cards", "closest_target", "most_captured", "high_score", "fewest_deadwood"}[s]
+	return [...]string{"first_out", "fewest_cards", "closest_target", "most_captured", "high_score", "fewest_deadwood", "best_hand"}[s]
 }
 
 // GameSpec is a full game as a composition of primitives. The "family" (what a
@@ -162,6 +165,12 @@ func (s GameSpec) WellTyped() bool {
 		// the meld-aware score (fewest deadwood) is the non-inert one. The deck
 		// drains one card per turn, so deck_out terminates by construction.
 		if s.End != DeckOut || s.Score != FewestDeadwood {
+			return false
+		}
+	case Vying:
+		// A betting round (bounded by max raises) closes at a showdown, scored by
+		// the best poker hand -- the only non-inert pairing for a hidden-hand bet.
+		if s.End != Showdown || s.Score != BestHand {
 			return false
 		}
 	default:
