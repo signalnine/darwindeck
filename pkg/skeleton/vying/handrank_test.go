@@ -74,3 +74,15 @@ func TestHandRankBestOfSeven(t *testing.T) {
 		t.Fatalf("best-of-seven with a flush must rank Flush, got category %d", CategoryOf(s))
 	}
 }
+
+// TestHandStrengthEmptyHand: a mucked (emptied) hand must rank below every real
+// hand instead of panicking in eval5.
+func TestHandStrengthEmptyHand(t *testing.T) {
+	if got := HandStrength(nil); got != 0 {
+		t.Fatalf("HandStrength(nil) = %d, want 0", got)
+	}
+	real := []sim.Card{{Rank: 2, Suit: 0}, {Rank: 5, Suit: 1}, {Rank: 7, Suit: 2}, {Rank: 9, Suit: 3}, {Rank: 12, Suit: 0}}
+	if HandStrength(real) <= HandStrength(nil) {
+		t.Fatalf("a real hand must outrank a mucked hand")
+	}
+}

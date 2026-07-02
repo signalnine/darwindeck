@@ -66,6 +66,11 @@ func (r *Runner) beginDeal(state *sim.GameState, g *genome.Genome) {
 		state.Hands[i] = append(state.Hands[i][:0], hand...)
 		deck = rest
 	}
+	// Keep the undealt stock in state.Deck: no vying move or whitelisted hook
+	// draws from it, but Determinize builds its hidden pool from Deck + other
+	// hands. Discarding it here would hand ISMCTS the opponents' exact hole
+	// cards (omniscient search).
+	state.Deck = deck
 
 	state.Pot = 0
 	state.CurrentBet = 0
@@ -79,6 +84,11 @@ func (r *Runner) beginDeal(state *sim.GameState, g *genome.Genome) {
 	post := g.Vying.MinBet
 	if post > state.Scores[bb] {
 		post = state.Scores[bb] // validation prevents this, but stay solvent
+	}
+	if post < 0 {
+		// A VyingScored avoidance penalty can drive a stack negative; a negative
+		// post would invert the economy (negative pot, calls that mint chips).
+		post = 0
 	}
 	state.Scores[bb] -= post
 	state.Committed[bb] = post

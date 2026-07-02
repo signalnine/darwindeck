@@ -32,6 +32,11 @@ const (
 // order leaks into the result (kickers are sorted), so the seeded batch stays
 // reproducible.
 func HandStrength(cards []sim.Card) int64 {
+	if len(cards) == 0 {
+		// A mucked (emptied) hand ranks below every real hand instead of
+		// panicking in eval5's category switch.
+		return 0
+	}
 	if len(cards) <= 5 {
 		return eval5(cards)
 	}

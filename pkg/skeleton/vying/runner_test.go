@@ -142,3 +142,85 @@ func TestVyingGreedyBeatsRandom(t *testing.T) {
 		t.Fatalf("greedy must beat its fair share %.3f, got %.3f", 1.0/float64(g.Players), rate)
 	}
 }
+
+// TestBeginDealKeepsUndealtStock: the undealt remainder must land in state.Deck.
+// Determinize builds its hidden pool from Deck + other hands; an empty Deck
+// hands ISMCTS the opponents' exact hole cards (omniscient search).
+func TestBeginDealKeepsUndealtStock(t *testing.T) {
+	g := vyingGenome()
+	runner := &Runner{}
+	state := runner.Setup(g, rand.New(rand.NewPCG(7, 0)))
+
+	want := 52 - g.Players*g.HandSize
+	if len(state.Deck) != want {
+		t.Fatalf("state.Deck has %d cards after the deal, want %d", len(state.Deck), want)
+	}
+	seen := map[sim.Card]bool{}
+	for _, c := range state.Deck {
+		seen[c] = true
+	}
+	for i := 0; i < g.Players; i++ {
+		for _, c := range state.Hands[i] {
+			if seen[c] {
+				t.Fatalf("card %v is in both a hand and the stock", c)
+			}
+			seen[c] = true
+		}
+	}
+	if len(seen) != 52 {
+		t.Fatalf("hands+stock cover %d distinct cards, want 52", len(seen))
+	}
+}
+
+// TestDeterminizeHidesHoleCards: from seat 0's perspective a determinization
+// must resample the opponents' hidden hands from the unknown pool, not hand
+// back their real cards. Seat 0's own hand is public to itself and must survive.
+func TestDeterminizeHidesHoleCards(t *testing.T) {
+	g := vyingGenome()
+	runner := &Runner{}
+	state := runner.Setup(g, rand.New(rand.NewPCG(7, 0)))
+	rng := rand.New(rand.NewPCG(11, 0))
+
+	differed := false
+	for i := 0; i < 10 && !differed; i++ {
+		det := sim.Determinize(state, 0, rng)
+		if len(det.Hands[0]) != len(state.Hands[0]) {
+			t.Fatalf("own hand size changed under determinization")
+		}
+		for j, c := range state.Hands[0] {
+			if det.Hands[0][j] != c {
+				t.Fatalf("own hand changed under determinization")
+			}
+		}
+		for j, c := range state.Hands[1] {
+			if det.Hands[1][j] != c {
+				differed = true
+				break
+			}
+		}
+	}
+	if !differed {
+		t.Fatalf("10 determinizations reproduced the opponent's exact hole cards -- hidden pool is empty (omniscient MCTS)")
+	}
+}
+
+// TestNegativeStackPostsNothing: a VyingScored avoidance penalty can leave a
+// stack negative at a deal boundary; the blind clamp must floor at zero rather
+// than post a negative blind (negative pot, calls that mint chips).
+func TestNegativeStackPostsNothing(t *testing.T) {
+	g := vyingGenome()
+	runner := &Runner{}
+	state := runner.Setup(g, rand.New(rand.NewPCG(7, 0)))
+
+	state.Round = 1 // big blind seat = 1
+	state.Scores[1] = -50
+	runner.beginDeal(state, g)
+
+	if state.Pot != 0 || state.CurrentBet != 0 || state.Committed[1] != 0 {
+		t.Fatalf("negative stack posted a blind: pot=%d bet=%d committed=%d, want all 0",
+			state.Pot, state.CurrentBet, state.Committed[1])
+	}
+	if state.Scores[1] != -50 {
+		t.Fatalf("negative stack changed by posting: %d, want -50", state.Scores[1])
+	}
+}
