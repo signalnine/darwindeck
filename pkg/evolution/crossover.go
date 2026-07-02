@@ -53,14 +53,12 @@ func hybridCrossover(a, b *genome.Genome, rng *rand.Rand) *genome.Genome {
 	// fires and affects the winner on this host, or ok=false when no such
 	// borrow exists (then the child is just a clone of A, still a valid genome).
 	if bm, ok := crossFamilyBorrow(child.Skeleton, b.Skeleton, rng); ok {
-		// Skip if the host already carries this exact borrow (a parent could).
-		dup := false
-		for _, existing := range child.Borrowed {
-			if existing.Source == bm.Source && existing.Mechanic == bm.Mechanic {
-				dup = true
-				break
-			}
-		}
+		// Skip if the host already carries this MECHANIC under any Source (a
+		// parent could). Keyed on Mechanic alone: Source is provenance, not
+		// behavior, and BuildHooks builds one hook per entry, so a second
+		// same-mechanic borrow under a different Source (the crossFamilyBorrow
+		// fallback re-stamps Source) would double-apply the effect.
+		dup := hasBorrowedMechanicType(child, bm.Mechanic)
 		// Coherence nudge (Wave 2 step 3): softly discourage stacking a SECOND
 		// banking-scoring borrow on a host that already has one -- the Wave-1
 		// "muddled scoring pile-up". Soft (half the time), never a veto, and
@@ -540,16 +538,29 @@ func wiredHybrid(base *genome.Genome, source genome.SkeletonType, mech genome.Me
 	g := base.Clone()
 	g.ID = ""
 	bm := genome.BorrowedMechanic{Source: source, Mechanic: mech}
-	// Skip if already present (idempotent).
-	for _, existing := range g.Borrowed {
-		if existing.Source == bm.Source && existing.Mechanic == bm.Mechanic {
-			giveBorrowTeeth(g, bm)
-			return g
-		}
+	// Skip if the mechanic is already present under any Source (idempotent;
+	// a second same-mechanic entry would double-apply its hook).
+	if hasBorrowedMechanicType(g, mech) {
+		giveBorrowTeeth(g, bm)
+		return g
 	}
 	g.Borrowed = append(g.Borrowed, bm)
 	giveBorrowTeeth(g, bm)
 	return g
+}
+
+// hasBorrowedMechanicType reports whether g already carries a borrow of this
+// mechanic under ANY Source. Duplicate checks key on Mechanic alone: Source
+// records crossover provenance, not behavior, and mechanic.BuildHooks builds
+// one hook per Borrowed entry, so two same-mechanic borrows would silently
+// double-apply the effect (and the rulebook would print the rule twice).
+func hasBorrowedMechanicType(g *genome.Genome, m genome.MechanicType) bool {
+	for _, b := range g.Borrowed {
+		if b.Mechanic == m {
+			return true
+		}
+	}
+	return false
 }
 
 // Crossover performs uniform crossover between two same-skeleton genomes.

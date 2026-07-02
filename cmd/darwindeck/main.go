@@ -94,7 +94,7 @@ func cmdEvolve(args []string) {
 	crossSkeleton := fs.Bool("cross-skeleton", false,
 		"enable cross-skeleton recombination: crossing two different-skeleton parents produces a HYBRID child (e.g. shed-to-win scored by tricks) and mutation may add cross-family active borrows; default OFF (baseline/hybrid only -- MAP-Elites crosses same-skeleton only)")
 	noveltySelect := fs.Bool("novelty-select", false,
-		"seed-aware novelty selection (hybrid only): add behavioral distance from the nearest of the 8 classic seeds into each VALID, above-floor individual's novelty score, steering the search away from the Crazy-Eights/Whist/Gin attractors; default OFF")
+		"seed-aware novelty selection (hybrid only): add behavioral distance from the nearest of the 11 classic seeds into each VALID, above-floor individual's novelty score, steering the search away from the Crazy-Eights/Whist/Gin attractors; default OFF")
 	seedDir := fs.String("seed-dir", "",
 		"directory of custom seed genomes: load every genome.json under <dir> and AUGMENT (not replace) the built-in classic seed pool with the valid ones, so population init and changeSkeleton mutation sample from the combined pool while cross-family crossover keeps its classic partners; invalid files are skipped with a warning; default off (classics only)")
 	judgeVerdicts := fs.String("judge-verdicts", "",
@@ -108,6 +108,32 @@ func cmdEvolve(args []string) {
 
 	fs.Parse(args)
 	evolution.FitnessFloor = *floor
+
+	// Warn about silently-ignored flag combinations (behavior is unchanged):
+	// the judge-in-loop flags only take effect on the hybrid engine's
+	// checkpointed path, so an invocation that sets them anywhere else would
+	// otherwise run a different experiment than the one the flags describe.
+	switch *algorithm {
+	case "hybrid", "novelty":
+		if *checkpoint == "" {
+			if *chunk > 0 {
+				fmt.Fprintln(os.Stderr, "warning: -chunk is ignored without -checkpoint (chunked evolution needs a checkpoint to resume from)")
+			}
+			if *emitDir != "" {
+				fmt.Fprintln(os.Stderr, "warning: -emit-dir is ignored without -checkpoint (genomes are only emitted at chunk boundaries)")
+			}
+		}
+	case "baseline", "mapelites":
+		if *checkpoint != "" {
+			fmt.Fprintf(os.Stderr, "warning: -checkpoint is ignored with -algorithm %s (checkpoint/resume is hybrid-only)\n", *algorithm)
+		}
+		if *chunk > 0 {
+			fmt.Fprintf(os.Stderr, "warning: -chunk is ignored with -algorithm %s (chunked evolution is hybrid-only)\n", *algorithm)
+		}
+		if *emitDir != "" {
+			fmt.Fprintf(os.Stderr, "warning: -emit-dir is ignored with -algorithm %s (judge-queue emission is hybrid-only)\n", *algorithm)
+		}
+	}
 
 	if *outDir == "" {
 		*outDir = filepath.Join("output", time.Now().Format("2006-01-02_15-04-05"))
@@ -184,6 +210,16 @@ func cmdEvolve(args []string) {
 					os.Exit(1)
 				}
 				fmt.Printf("  Resumed from %s at generation %d\n", *checkpoint, engine.Generation)
+				// A completed run's checkpoint carries Generation ==
+				// Generations with the final evaluation already banked;
+				// relaunching used to re-run that evaluation at the SAME seeds
+				// and double-count the sample into the running means. No-op
+				// instead (RunChunk also guards against this).
+				if engine.Generation >= config.Generations {
+					fmt.Printf("checkpoint already complete (generation %d/%d); nothing to resume\n",
+						engine.Generation, config.Generations)
+					return
+				}
 			}
 			until := config.Generations
 			if *chunk > 0 {
@@ -235,9 +271,11 @@ func cmdEvolve(args []string) {
 		os.Exit(1)
 	}
 
-	// Print top games per skeleton
-	skeletonNames := []string{"shedding", "trick_taking", "rummy"}
-	for _, skelName := range skeletonNames {
+	// Print top games per skeleton -- all 6, in pkg/genome's canonical
+	// SkeletonType order (the hardcoded 3-name list predated climbing, casino,
+	// and vying, so their winners never printed).
+	for skel := genome.Shedding; skel <= genome.Vying; skel++ {
+		skelName := skel.String()
 		fmt.Printf("\nBest %s:\n", skelName)
 		count := 0
 		for _, ind := range top {
@@ -462,7 +500,7 @@ func sortAndTrim(inds []*evolution.Individual, n int, verdicts map[string]float6
 }
 
 // getAllSeeds returns the built-in seed pool. Single source of truth =
-// seeds.All() (the 8 classics + Big Two), so the evolution init pool, the
+// seeds.All() (the 11 classics across 6 skeletons), so the evolution init pool, the
 // calibration set, and the novelty anchors can never drift apart (they used to:
 // this list and seeds.All() were maintained separately, and Big Two was in one
 // but not the other).
@@ -489,8 +527,12 @@ func loadJudgeVerdicts(path string) map[string]float64 {
 }
 
 // emitForJudging writes the top genomes at a chunk boundary to
-// <dir>/gen<NNN>/rankNN.json so the out-of-loop judge can dossier and classify
-// the new compositions, then append verdicts to the table before the next chunk.
+// <dir>/gen<NNN>/rankNN/genome.json so the out-of-loop judge can dossier and
+// classify the new compositions, then append verdicts to the table before the
+// next chunk. One genome.json per rank subdirectory is the discovery
+// convention `judge emit` and `judge backfill` walk (they match on the exact
+// basename genome.json, same as evolution output dirs); the old flat
+// rankNN.json layout was invisible to them.
 func emitForJudging(dir string, gen int, top []*evolution.Individual) {
 	gdir := filepath.Join(dir, fmt.Sprintf("gen%03d", gen))
 	if err := os.MkdirAll(gdir, 0o755); err != nil {
@@ -502,7 +544,12 @@ func emitForJudging(dir string, gen int, top []*evolution.Individual) {
 		if err != nil {
 			continue
 		}
-		os.WriteFile(filepath.Join(gdir, fmt.Sprintf("rank%02d.json", i+1)), data, 0o644)
+		rdir := filepath.Join(gdir, fmt.Sprintf("rank%02d", i+1))
+		if err := os.MkdirAll(rdir, 0o755); err != nil {
+			fmt.Fprintf(os.Stderr, "emit: %v\n", err)
+			continue
+		}
+		os.WriteFile(filepath.Join(rdir, "genome.json"), data, 0o644)
 	}
 	fmt.Printf("  Emitted %d top genomes to %s\n", len(top), gdir)
 }

@@ -121,10 +121,10 @@ type NoveltyEngine struct {
 	addThreshold float64
 
 	// Seed-aware novelty (Wave 2, Config.NoveltySelect). seedDescCache holds
-	// the behavior descriptor of each of the 8 classic seeds, computed once via
-	// seedDescriptors() and reused every generation -- the fixed anchor the
-	// seed-distance term measures against. seedDescOnce gates the one-time
-	// computation.
+	// the behavior descriptor of each of the 11 classic seeds, computed once
+	// via seedDescriptors() and reused every generation -- the fixed anchor
+	// the seed-distance term measures against. seedDescOnce gates the
+	// one-time computation.
 	seedDescCache []BehaviorDescriptor
 	seedDescOnce  bool
 
@@ -160,6 +160,14 @@ func (e *NoveltyEngine) Run(progress func(gen int, best float64, avg float64)) {
 // judge grow Config.JudgeVerdicts, and relaunch to resume. Run() is the
 // whole-run case (untilGen == Generations).
 func (e *NoveltyEngine) RunChunk(progress func(gen int, best float64, avg float64), untilGen int) (done bool) {
+	// Resume-after-complete is a NO-OP: a checkpoint saved after the final
+	// evaluation carries Generation == Config.Generations, and re-entering
+	// would re-run evaluatePopulation at the SAME (BaseSeed, Generation, idx)
+	// seeds, adding a duplicate same-seed sample into every individual's
+	// FitnessSum running mean.
+	if len(e.Population) > 0 && e.Generation >= e.Config.Generations {
+		return true
+	}
 	if len(e.Population) == 0 {
 		e.initialize()
 	}
@@ -589,14 +597,14 @@ func (e *NoveltyEngine) nearestArchiveDistance(skel genome.SkeletonType, b Behav
 }
 
 // seedDescriptors returns the behavior descriptors of the CLASSIC seed genomes
-// (seeds.All() -- the 8 three-skeleton classics plus Big Two), computed once and
+// (seeds.All() -- the 11 classics across all 6 skeletons), computed once and
 // cached. These are the fixed anchors the seed-distance novelty term (Wave 2)
 // measures distance from: an individual far from ALL of them sits in genuinely
 // novel territory relative to the Crazy-Eights/Whist/Gin/Big-Two family of
 // human-validated games.
 //
 // The classics are read from seeds.All() rather than e.Seeds so the anchor is
-// always the true 8 classics even if a caller seeds the population with a
+// always the true 11 classics even if a caller seeds the population with a
 // different set (tests do). Descriptors are built through the canonical
 // BehaviorBatch/ComputeBehavior path -- the same descriptor every other QD
 // consumer sees -- so a seed's own descriptor is identical to the descriptor

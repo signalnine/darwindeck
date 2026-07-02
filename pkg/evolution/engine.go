@@ -59,9 +59,8 @@ type Config struct {
 
 	// NoveltySelect enables SEED-AWARE novelty selection (Wave 2). With it ON,
 	// the NoveltyEngine adds a SEED-DISTANCE term to each individual's novelty
-	// score: the behavioral distance from the nearest of the 8 classic seed
-	// genomes (Crazy Eights, Mau-Mau, Whist, Hearts, Spades, Oh Hell, Gin
-	// Rummy, Knock Rummy). This pushes the search AWAY from the
+	// score: the behavioral distance from the nearest of the 11 classic seed
+	// genomes (seeds.All()). This pushes the search AWAY from the
 	// Crazy-Eights/Whist/Gin attractors specifically, so novelty is AIMED at
 	// rather than incidental. Default OFF (zero value): pure within-population
 	// k-NN novelty, the Wave-1 behavior.

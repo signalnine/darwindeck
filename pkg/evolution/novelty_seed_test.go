@@ -10,7 +10,7 @@ import (
 )
 
 // TestSeedDescriptorsAreClassicCount verifies the engine computes a behavior
-// descriptor for each of the 8 classic seeds, computed once and cached.
+// descriptor for each of the 11 classic seeds, computed once and cached.
 func TestSeedDescriptorsAreClassicCount(t *testing.T) {
 	e := NewNoveltyEngine(Config{Workers: 1, BaseSeed: 7}, allSeeds())
 	ds := e.seedDescriptors()

@@ -10,7 +10,7 @@ package seeds
 
 import "github.com/darwindeck/darwindeck/pkg/genome"
 
-// All returns fresh copies of the 8 classic seed genomes -- the canonical
+// All returns fresh copies of the 11 classic seed genomes -- the canonical
 // human-validated "fun" registry used by the calibration suite. Degenerate
 // fixtures are deliberately NOT included: they are negative ground truth.
 // All returns the calibration ground-truth seeds: real, time-tested published

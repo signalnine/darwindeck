@@ -433,18 +433,17 @@ func validateBorrowed(g *Genome) []string {
 		}
 	}
 
-	// Check for duplicate borrows (keyed on full (Source, Mechanic) pair).
-	type borrowKey struct {
-		source   SkeletonType
-		mechanic MechanicType
-	}
-	seen := make(map[borrowKey]bool)
+	// Check for duplicate borrows, keyed on Mechanic ALONE. Source is
+	// provenance, not behavior: BuildHooks builds one hook per (Source,
+	// Mechanic) entry, so two same-mechanic borrows under different Sources
+	// would silently double-apply the effect (e.g. a MeldBonus banked twice
+	// per event) and the rulebook would print the rule twice.
+	seen := make(map[MechanicType]bool)
 	for _, b := range g.Borrowed {
-		k := borrowKey{b.Source, b.Mechanic}
-		if seen[k] {
-			errs = append(errs, fmt.Sprintf("duplicate borrowed mechanic: %d from %s", b.Mechanic, b.Source))
+		if seen[b.Mechanic] {
+			errs = append(errs, fmt.Sprintf("duplicate borrowed mechanic: %d (second copy from %s); same-mechanic borrows double-apply their hooks regardless of source", b.Mechanic, b.Source))
 		}
-		seen[k] = true
+		seen[b.Mechanic] = true
 	}
 
 	return errs

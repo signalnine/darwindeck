@@ -68,6 +68,19 @@ func MutateWith(g *genome.Genome, rng *rand.Rand, allSeeds []*genome.Genome, cro
 		mutateScoring(child, rng)
 	}
 
+	// Teeth are an INVARIANT, not a graft-time event: the mutations above can
+	// undo giveBorrowTeeth's wiring (tweakParameter can push HandSize back
+	// under the run_play/follow_suit threshold, changeEnum can re-tighten
+	// MatchRule to an inert-making value, RoundsPerGame / KnockThreshold /
+	// CardPoints tweaks can defang a banking or avoidance borrow), silently
+	// turning a live borrow vestigial. Re-run the repair for every borrow the
+	// child still carries so the invariants hold after EVERY mutation, not
+	// only when the borrow was grafted. Repair, not kill: giveBorrowTeeth is
+	// idempotent and valid-in/valid-out.
+	for _, bm := range child.Borrowed {
+		giveBorrowTeeth(child, bm)
+	}
+
 	return child
 }
 
@@ -396,12 +409,12 @@ func addBorrowedMechanic(g *genome.Genome, rng *rand.Rand, crossSkeleton bool) {
 		return
 	}
 
-	// Don't add duplicates (matched on full (Source, Mechanic) key).
+	// Don't add duplicates, matched on Mechanic ALONE: Source is provenance,
+	// not behavior, and BuildHooks builds one hook per entry, so a second
+	// same-mechanic borrow under a different Source would double-apply.
 	pick := candidates[rng.IntN(len(candidates))]
-	for _, b := range g.Borrowed {
-		if b.Source == pick.Source && b.Mechanic == pick.Mechanic {
-			return
-		}
+	if hasBorrowedMechanicType(g, pick.Mechanic) {
+		return
 	}
 
 	// Coherence nudge (Wave 2 step 3): softly discourage the "muddled scoring
