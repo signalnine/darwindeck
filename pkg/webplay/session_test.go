@@ -24,11 +24,12 @@ func playToEnd(t *testing.T, g *genome.Genome) *WebSession {
 	for i := 0; i < 100000; i++ {
 		ws.mu.Lock()
 		st := ws.status
+		ver := ws.moveVersion
 		ws.mu.Unlock()
 		if st != StatusHumanTurn {
 			break
 		}
-		if err := ws.submitMove(0); err != nil {
+		if err := ws.submitMove(0, ver); err != nil {
 			t.Fatalf("submitMove(0): %v", err)
 		}
 	}
@@ -69,35 +70,97 @@ func TestSubmitMoveValidation(t *testing.T) {
 	if ws.status != StatusHumanTurn {
 		t.Fatalf("expected first decision to be the human's, got %q", ws.status)
 	}
-	if err := ws.submitMove(-1); err == nil {
+	if err := ws.submitMove(-1, ws.moveVersion); err == nil {
 		t.Error("expected error for index -1")
 	}
-	if err := ws.submitMove(1 << 20); err == nil {
+	if err := ws.submitMove(1<<20, ws.moveVersion); err == nil {
 		t.Error("expected error for out-of-range index")
+	}
+	// A stale version (double-click against a regenerated list) is a distinct,
+	// retryable rejection: errStaleMove, no state mutation.
+	if err := ws.submitMove(0, ws.moveVersion-1); err != errStaleMove {
+		t.Errorf("expected errStaleMove for stale version, got %v", err)
+	}
+	if ws.status != StatusHumanTurn {
+		t.Fatalf("stale submission mutated session status to %q", ws.status)
 	}
 
 	// Drive to a terminal state, then any submission must error.
 	for i := 0; i < 100000; i++ {
 		ws.mu.Lock()
 		st := ws.status
+		ver := ws.moveVersion
 		ws.mu.Unlock()
 		if st != StatusHumanTurn {
 			break
 		}
-		_ = ws.submitMove(0)
+		_ = ws.submitMove(0, ver)
 	}
-	if err := ws.submitMove(0); err == nil {
+	if err := ws.submitMove(0, ws.moveVersion); err == nil {
 		t.Errorf("expected error submitting after terminal status %q", ws.status)
+	}
+}
+
+// The casino "discard" IS the face-up table you capture from, and the captured
+// piles (state.Tableau) are the win condition: the view must surface both or
+// the game is unplayable by sight (ported from the CLI printState casino fix).
+func TestCasinoViewExposesTableAndCaptured(t *testing.T) {
+	g := seedWithSkeleton(t, genome.Casino)
+	runner := fitness.GetRunner(g)
+	ws := NewWebSession("test", g, runner, &sim.RandomAI{}, 7, "random", "test.json")
+
+	ws.mu.Lock()
+	ws.state.Discard = []sim.Card{{Suit: sim.Hearts, Rank: sim.Five}, {Suit: sim.Spades, Rank: sim.Nine}}
+	ws.state.Tableau[HumanSeat] = []sim.Card{
+		{Suit: sim.Clubs, Rank: sim.Two}, {Suit: sim.Clubs, Rank: sim.Three}, {Suit: sim.Clubs, Rank: sim.Four},
+	}
+	ws.state.Tableau[1] = []sim.Card{{Suit: sim.Diamonds, Rank: sim.Ace}}
+	v := ws.view(false)
+	ws.mu.Unlock()
+
+	want := []string{"5H", "9S"}
+	if len(v.Table.TableCards) != len(want) || v.Table.TableCards[0] != want[0] || v.Table.TableCards[1] != want[1] {
+		t.Errorf("TableCards = %v, want %v", v.Table.TableCards, want)
+	}
+	if v.YourCaptured != 3 {
+		t.Errorf("YourCaptured = %d, want 3", v.YourCaptured)
+	}
+	if len(v.Opponents) == 0 || v.Opponents[0].Captured != 1 {
+		t.Errorf("opponents = %+v, want first opponent Captured=1", v.Opponents)
+	}
+}
+
+// Non-casino skeletons keep the discard pile hidden (count only) -- exposing
+// its contents would leak information the game's rules don't grant.
+func TestNonCasinoViewOmitsTableCards(t *testing.T) {
+	g := firstShedding(t)
+	runner := fitness.GetRunner(g)
+	ws := NewWebSession("test", g, runner, &sim.RandomAI{}, 7, "random", "test.json")
+
+	ws.mu.Lock()
+	v := ws.view(false)
+	ws.mu.Unlock()
+
+	if v.Table.TableCards != nil {
+		t.Errorf("shedding view leaked TableCards = %v", v.Table.TableCards)
+	}
+	if v.YourCaptured != 0 {
+		t.Errorf("shedding view set YourCaptured = %d", v.YourCaptured)
 	}
 }
 
 func firstShedding(t *testing.T) *genome.Genome {
 	t.Helper()
+	return seedWithSkeleton(t, genome.Shedding)
+}
+
+func seedWithSkeleton(t *testing.T, sk genome.SkeletonType) *genome.Genome {
+	t.Helper()
 	for _, g := range seeds.All() {
-		if g.Skeleton == genome.Shedding {
+		if g.Skeleton == sk {
 			return g
 		}
 	}
-	t.Fatal("no shedding seed found")
+	t.Fatalf("no %s seed found", sk)
 	return nil
 }

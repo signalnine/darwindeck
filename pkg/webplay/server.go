@@ -3,8 +3,10 @@ package webplay
 import (
 	"crypto/rand"
 	"embed"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"sync"
@@ -21,8 +23,15 @@ import (
 var staticFS embed.FS
 
 const (
-	maxSessions = 500     // bound in-memory sessions (a DoS guard when -host exposes the server)
-	maxBody     = 4 << 10 // 4 KiB: every request body here is tiny JSON
+	defaultMaxSessions = 500     // cap on CONCURRENT live sessions (idle ones are janitor-evicted)
+	maxBody            = 4 << 10 // 4 KiB: every request body here is tiny JSON
+
+	// Janitor TTLs. Sessions idle past their TTL are evicted, so maxSessions
+	// bounds concurrent live games, not games-ever-created (which would turn the
+	// cap into a permanent 503 after the 500th game until restart).
+	sessionIdleTTL = 30 * time.Minute // untouched sessions are abandoned
+	ratedIdleTTL   = 5 * time.Minute  // finished + rated: nothing left to do
+	janitorPeriod  = time.Minute      // eviction sweep cadence
 )
 
 // Game is one playable genome registered with the server. The client only ever
@@ -42,11 +51,25 @@ type Server struct {
 	byID  map[string]Game
 	mu    sync.RWMutex
 	store map[string]*WebSession
+	// reserved counts slots claimed by in-flight handleNew constructions. The
+	// capacity check charges store+reserved BEFORE the expensive session build,
+	// so a full store rejects with a cheap 503 instead of paying game setup +
+	// AI auto-play + rulebook rendering per request (a CPU DoS).
+	reserved int
 
 	// ResultsPath is where /api/rate appends rating records. Defaults to the
 	// shared playtest.ResultsFile so web and CLI playtests pool into one file;
 	// tests point it at a temp file to avoid polluting the repo.
 	ResultsPath string
+
+	// Eviction knobs, defaulted from the consts above; tests shrink the TTLs or
+	// inject a clock instead of sleeping.
+	maxSessions int
+	idleTTL     time.Duration
+	ratedTTL    time.Duration
+	now         func() time.Time
+
+	janitorStop chan struct{}
 }
 
 // NewServer builds a server over a registry of preloaded, validated genomes.
@@ -60,6 +83,10 @@ func NewServer(games []Game) *Server {
 		byID:        byID,
 		store:       make(map[string]*WebSession),
 		ResultsPath: playtest.ResultsFile,
+		maxSessions: defaultMaxSessions,
+		idleTTL:     sessionIdleTTL,
+		ratedTTL:    ratedIdleTTL,
+		now:         time.Now,
 	}
 }
 
@@ -98,7 +125,59 @@ func (s *Server) ListenAndServe(addr string) error {
 		WriteTimeout:      30 * time.Second, // accommodates a chain of MCTS AI decisions
 		IdleTimeout:       120 * time.Second,
 	}
+	s.StartJanitor(janitorPeriod)
+	defer s.StopJanitor()
 	return srv.ListenAndServe()
+}
+
+// StartJanitor launches the background loop that evicts idle sessions, freeing
+// capacity so maxSessions caps concurrent games rather than lifetime games.
+// Call StopJanitor to shut it down (tests; server teardown).
+func (s *Server) StartJanitor(period time.Duration) {
+	stop := make(chan struct{})
+	s.janitorStop = stop
+	go func() {
+		ticker := time.NewTicker(period)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				s.evictIdle()
+			case <-stop:
+				return
+			}
+		}
+	}()
+}
+
+// StopJanitor stops the eviction loop started by StartJanitor.
+func (s *Server) StopJanitor() {
+	if s.janitorStop != nil {
+		close(s.janitorStop)
+		s.janitorStop = nil
+	}
+}
+
+// evictIdle deletes every session idle past its TTL: ratedTTL once a finished
+// game has been rated (the session's whole point is spent), idleTTL otherwise.
+// Lock order is s.mu then ws.mu, the same direction every handler uses.
+func (s *Server) evictIdle() {
+	now := s.now()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for id, ws := range s.store {
+		ws.mu.Lock()
+		last := ws.lastActive
+		spent := ws.rated && ws.status != StatusHumanTurn
+		ws.mu.Unlock()
+		ttl := s.idleTTL
+		if spent {
+			ttl = s.ratedTTL
+		}
+		if now.Sub(last) > ttl {
+			delete(s.store, id)
+		}
+	}
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
@@ -138,10 +217,13 @@ func (s *Server) handleGames(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, items)
 }
 
+// newReq deliberately has no seed field: the seed is always derived server-side
+// from crypto/rand (see handleNew). A client-chosen or predictable (timestamp)
+// seed lets the client reconstruct hidden state -- vying hole cards become
+// known or brute-forceable. Any "seed" the client sends is ignored.
 type newReq struct {
 	Game       string `json:"game"`
 	Difficulty string `json:"difficulty"`
-	Seed       uint64 `json:"seed"`
 }
 
 func (s *Server) handleNew(w http.ResponseWriter, r *http.Request) {
@@ -180,10 +262,36 @@ func (s *Server) handleNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	seed := req.Seed
-	if seed == 0 {
-		seed = uint64(time.Now().UnixNano())
+	seed, err := randomSeed()
+	if err != nil {
+		http.Error(w, "seed error", http.StatusInternalServerError)
+		return
 	}
+	id, err := newToken()
+	if err != nil {
+		http.Error(w, "token error", http.StatusInternalServerError)
+		return
+	}
+
+	// Reserve a capacity slot BEFORE the expensive construction below: without
+	// the reservation a full store would still pay full setup cost per request
+	// before its 503. The deferred release covers every non-commit exit.
+	s.mu.Lock()
+	if len(s.store)+s.reserved >= s.maxSessions {
+		s.mu.Unlock()
+		http.Error(w, "too many active sessions", http.StatusServiceUnavailable)
+		return
+	}
+	s.reserved++
+	s.mu.Unlock()
+	committed := false
+	defer func() {
+		if !committed {
+			s.mu.Lock()
+			s.reserved--
+			s.mu.Unlock()
+		}
+	}()
 
 	// Build the session and render its rulebook OUTSIDE s.mu: NewWebSession runs
 	// the game setup + AI auto-play to the first human decision (which can be slow
@@ -191,21 +299,14 @@ func (s *Server) handleNew(w http.ResponseWriter, r *http.Request) {
 	// store lock across either would block every other session's lookups. ws is
 	// fully initialized (incl. ws.rules) before it is published to the store, so
 	// the s.mu insert is the only happens-before edge a reader needs.
-	id, err := newToken()
-	if err != nil {
-		http.Error(w, "token error", http.StatusInternalServerError)
-		return
-	}
 	ws := NewWebSession(id, game.Genome, runner, ai, seed, difficulty, game.Path)
 	ws.rules = output.GenerateRulebook(game.Genome)
+	ws.lastActive = s.now() // pre-publish: no other goroutine can hold ws.mu yet
 
 	s.mu.Lock()
-	if len(s.store) >= maxSessions {
-		s.mu.Unlock()
-		http.Error(w, "too many active sessions", http.StatusServiceUnavailable)
-		return
-	}
+	s.reserved--
 	s.store[id] = ws
+	committed = true
 	s.mu.Unlock()
 
 	ws.mu.Lock()
@@ -215,7 +316,7 @@ func (s *Server) handleNew(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
-	ws := s.lookup(w, r.URL.Query().Get("session"))
+	ws := s.lookup(w, sessionToken(r, ""))
 	if ws == nil {
 		return
 	}
@@ -227,8 +328,9 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 }
 
 type moveReq struct {
-	Session string `json:"session"`
+	Session string `json:"session"` // legacy fallback; X-Session-Token preferred
 	Index   int    `json:"index"`
+	Version int    `json:"version"` // moveVersion echo; stale = 409
 }
 
 func (s *Server) handleMove(w http.ResponseWriter, r *http.Request) {
@@ -240,12 +342,16 @@ func (s *Server) handleMove(w http.ResponseWriter, r *http.Request) {
 	if !decodeBody(w, r, &req) {
 		return
 	}
-	ws := s.lookup(w, req.Session)
+	ws := s.lookup(w, sessionToken(r, req.Session))
 	if ws == nil {
 		return
 	}
-	if err := ws.submitMove(req.Index); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if err := ws.submitMove(req.Index, req.Version); err != nil {
+		code := http.StatusBadRequest
+		if errors.Is(err, errStaleMove) {
+			code = http.StatusConflict
+		}
+		http.Error(w, err.Error(), code)
 		return
 	}
 	ws.mu.Lock()
@@ -255,8 +361,8 @@ func (s *Server) handleMove(w http.ResponseWriter, r *http.Request) {
 }
 
 type rateReq struct {
-	Session string `json:"session"`
-	Rating  int    `json:"rating"` // 1-5; 0 = skip
+	Session string `json:"session"` // legacy fallback; X-Session-Token preferred
+	Rating  int    `json:"rating"`  // 1-5; 0 = skip
 	Comment string `json:"comment"`
 }
 
@@ -269,7 +375,7 @@ func (s *Server) handleRate(w http.ResponseWriter, r *http.Request) {
 	if !decodeBody(w, r, &req) {
 		return
 	}
-	ws := s.lookup(w, req.Session)
+	ws := s.lookup(w, sessionToken(r, req.Session))
 	if ws == nil {
 		return
 	}
@@ -280,7 +386,16 @@ func (s *Server) handleRate(w http.ResponseWriter, r *http.Request) {
 		rating = &v
 	}
 
+	// One rating per session: the flag flips under ws.mu before the write, so a
+	// concurrent duplicate loses here (409) instead of double-appending to the
+	// jsonl (unbounded growth / rating-dataset poisoning from replayed calls).
 	ws.mu.Lock()
+	if ws.rated {
+		ws.mu.Unlock()
+		http.Error(w, "session already rated", http.StatusConflict)
+		return
+	}
+	ws.rated = true
 	rec := playtest.Record{
 		Timestamp:  time.Now().Format(time.RFC3339),
 		GenomeID:   ws.Genome.ID,
@@ -296,6 +411,10 @@ func (s *Server) handleRate(w http.ResponseWriter, r *http.Request) {
 	ws.mu.Unlock()
 
 	if err := playtest.AppendRecord(s.ResultsPath, rec); err != nil {
+		// Nothing was appended; let the client retry rather than losing the rating.
+		ws.mu.Lock()
+		ws.rated = false
+		ws.mu.Unlock()
 		http.Error(w, "failed to record rating", http.StatusInternalServerError)
 		return
 	}
@@ -331,7 +450,22 @@ func (s *Server) lookup(w http.ResponseWriter, id string) *WebSession {
 		http.Error(w, "unknown session", http.StatusNotFound)
 		return nil
 	}
+	ws.touch(s.now()) // every authenticated request resets the idle-eviction clock
 	return ws
+}
+
+// sessionToken extracts the client's session token. The X-Session-Token header
+// is preferred -- query strings land verbatim in reverse-proxy access logs
+// (Caddy), leaking a live credential. The JSON-body field and ?session= query
+// parameter remain as fallbacks for older clients.
+func sessionToken(r *http.Request, bodyToken string) string {
+	if h := r.Header.Get("X-Session-Token"); h != "" {
+		return h
+	}
+	if bodyToken != "" {
+		return bodyToken
+	}
+	return r.URL.Query().Get("session")
 }
 
 func aiFor(difficulty string, g *genome.Genome, runner sim.GenericRunner) (sim.AIPlayer, error) {
@@ -353,6 +487,16 @@ func newToken() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(b), nil
+}
+
+// randomSeed draws the game seed from crypto/rand. The seed fully determines
+// the shuffle, so it must be unpredictable to the client (see newReq).
+func randomSeed() (uint64, error) {
+	var b [8]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return 0, err
+	}
+	return binary.LittleEndian.Uint64(b[:]), nil
 }
 
 func decodeBody(w http.ResponseWriter, r *http.Request, dst interface{}) bool {

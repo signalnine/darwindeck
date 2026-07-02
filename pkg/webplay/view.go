@@ -27,6 +27,7 @@ type OppView struct {
 	Score     int  `json:"score"`
 	Folded    bool `json:"folded"`
 	Committed int  `json:"committed,omitempty"`
+	Captured  int  `json:"captured,omitempty"` // casino: captured-pile size (the win condition)
 }
 
 // TableView is the shared/table state, filled per-skeleton (omitempty hides the
@@ -40,32 +41,36 @@ type TableView struct {
 	Pot          int        `json:"pot,omitempty"`
 	CurrentBet   int        `json:"currentBet,omitempty"`
 	Melds        [][]string `json:"melds,omitempty"`
+	TableCards   []string   `json:"tableCards,omitempty"` // casino: the face-up table you capture from
 }
 
 // View is the full client-facing snapshot returned by every game endpoint.
 type View struct {
-	Session     string     `json:"session"`
-	Title       string     `json:"title"`
-	Description string     `json:"description,omitempty"`
-	Skeleton    string     `json:"skeleton"`
-	Status      string     `json:"status"`
-	Turn        int        `json:"turn"`
-	YourSeat    int        `json:"yourSeat"`
-	YourHand    []string   `json:"yourHand"`
-	YourScore   int        `json:"yourScore"`
-	Opponents   []OppView  `json:"opponents"`
-	Table       TableView  `json:"table"`
-	LegalMoves  []MoveView `json:"legalMoves"`
-	Log         []string   `json:"log"`
-	Winner      int        `json:"winner"`
-	WinnerLabel string     `json:"winnerLabel"`
-	Rules       string     `json:"rules,omitempty"`
+	Session      string     `json:"session"`
+	Title        string     `json:"title"`
+	Description  string     `json:"description,omitempty"`
+	Skeleton     string     `json:"skeleton"`
+	Status       string     `json:"status"`
+	Turn         int        `json:"turn"`
+	MoveVersion  int        `json:"moveVersion"` // echo on /api/move; stale = 409
+	YourSeat     int        `json:"yourSeat"`
+	YourHand     []string   `json:"yourHand"`
+	YourScore    int        `json:"yourScore"`
+	YourCaptured int        `json:"yourCaptured,omitempty"` // casino: your captured-pile size
+	Opponents    []OppView  `json:"opponents"`
+	Table        TableView  `json:"table"`
+	LegalMoves   []MoveView `json:"legalMoves"`
+	Log          []string   `json:"log"`
+	Winner       int        `json:"winner"`
+	WinnerLabel  string     `json:"winnerLabel"`
+	Rules        string     `json:"rules,omitempty"`
 }
 
 // view builds the client snapshot. Caller holds mu. includeRules sends the
 // (large) rules markdown only when it changes (new game / explicit refresh).
 func (ws *WebSession) view(includeRules bool) View {
 	st := ws.state
+	isCasino := ws.Genome.Skeleton == genome.Casino
 	v := View{
 		Session:     ws.ID,
 		Title:       gameTitle(ws.Genome),
@@ -73,6 +78,7 @@ func (ws *WebSession) view(includeRules bool) View {
 		Skeleton:    ws.Genome.Skeleton.String(),
 		Status:      ws.status,
 		Turn:        st.Turn,
+		MoveVersion: ws.moveVersion,
 		YourSeat:    HumanSeat,
 		YourHand:    cardStrings(st.Hands[HumanSeat]),
 		YourScore:   scoreAt(st.Scores, HumanSeat),
@@ -81,6 +87,9 @@ func (ws *WebSession) view(includeRules bool) View {
 		Log:         tail(ws.log, logTail),
 		LegalMoves:  []MoveView{},
 		Opponents:   []OppView{},
+	}
+	if isCasino {
+		v.YourCaptured = capturedCount(st, HumanSeat)
 	}
 
 	for seat := 0; seat < st.NumPlayers; seat++ {
@@ -97,6 +106,9 @@ func (ws *WebSession) view(includeRules bool) View {
 		}
 		if seat < len(st.Committed) {
 			opp.Committed = st.Committed[seat]
+		}
+		if isCasino {
+			opp.Captured = capturedCount(st, seat)
 		}
 		v.Opponents = append(v.Opponents, opp)
 	}
@@ -148,6 +160,12 @@ func tableView(st *sim.GameState, g *genome.Genome) TableView {
 	// phantom trump tag for poker/shedding/etc.
 	if g.Skeleton == genome.TrickTaking && st.TrumpSuit >= 0 && st.TrumpSuit <= 3 {
 		t.TrumpSuit = sim.Suit(st.TrumpSuit).String()
+	}
+	// For casino, Discard IS the face-up table you capture from: a count alone
+	// makes captures unplayable-by-sight. Ship the actual cards (the CLI's
+	// printState does the same, labeling the pile "Table" for casino).
+	if g.Skeleton == genome.Casino {
+		t.TableCards = cardStrings(st.Discard)
 	}
 	t.Pot = st.Pot
 	t.CurrentBet = st.CurrentBet
@@ -275,6 +293,15 @@ func gameTitle(g *genome.Genome) string {
 func scoreAt(scores []int, seat int) int {
 	if seat >= 0 && seat < len(scores) {
 		return scores[seat]
+	}
+	return 0
+}
+
+// capturedCount is a seat's captured-pile size (casino's win condition lives in
+// state.Tableau; the casino runner appends every capture and the end sweep there).
+func capturedCount(st *sim.GameState, seat int) int {
+	if seat >= 0 && seat < len(st.Tableau) {
+		return len(st.Tableau[seat])
 	}
 	return 0
 }

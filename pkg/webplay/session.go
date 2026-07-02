@@ -13,10 +13,12 @@
 package webplay
 
 import (
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/darwindeck/darwindeck/pkg/genome"
 	"github.com/darwindeck/darwindeck/pkg/mechanic"
@@ -53,12 +55,20 @@ type WebSession struct {
 	hooks    []sim.HookFunc
 	maxTurns int
 
-	status     string
-	winner     int        // valid when status == game_over; -1 = no winner (max turns / draw)
-	legalMoves []sim.Move // the canonical move list for the current human decision; submit by index
-	log        []string   // append-only narration; the view sends the tail
-	rules      string     // rendered rulebook markdown; set by the server at creation
+	status      string
+	winner      int        // valid when status == game_over; -1 = no winner (max turns / draw)
+	legalMoves  []sim.Move // the canonical move list for the current human decision; submit by index
+	moveVersion int        // bumped every time legalMoves is regenerated; the client must echo it
+	log         []string   // append-only narration; the view sends the tail
+	rules       string     // rendered rulebook markdown; set by the server at creation
+	rated       bool       // set by the first /api/rate; later calls get 409 (one rating per game)
+	lastActive  time.Time  // last state/move/rate touch; the janitor evicts idle sessions
 }
+
+// errStaleMove distinguishes a moveVersion mismatch (client raced its own move,
+// e.g. a double-click against a regenerated move list) from plain bad input, so
+// the handler can answer 409 and the client can just refresh state.
+var errStaleMove = errors.New("stale move version (the move list changed); refresh state")
 
 // NewWebSession sets up a game and advances to the first human decision. runner,
 // ai and the genome's hooks are wired exactly as the CLI session wires them.
@@ -135,6 +145,7 @@ func (ws *WebSession) advance() {
 		if ws.state.Active == HumanSeat {
 			ws.status = StatusHumanTurn
 			ws.legalMoves = moves
+			ws.moveVersion++
 			return
 		}
 
@@ -147,14 +158,20 @@ func (ws *WebSession) advance() {
 }
 
 // submitMove applies the human's chosen move (by index into the move list shown
-// to them) and advances to the next decision. Returns an error the handler turns
-// into a 4xx; it never panics on bad input.
-func (ws *WebSession) submitMove(index int) error {
+// to them) and advances to the next decision. version must match the
+// moveVersion the client saw with that list -- a bare index against a
+// regenerated list would apply an unintended move (double-click race); a
+// mismatch returns errStaleMove (handler: 409). Returns an error the handler
+// turns into a 4xx; it never panics on bad input.
+func (ws *WebSession) submitMove(index, version int) error {
 	ws.mu.Lock()
 	defer ws.mu.Unlock()
 
 	if ws.status != StatusHumanTurn {
 		return fmt.Errorf("not awaiting a move (status %q)", ws.status)
+	}
+	if version != ws.moveVersion {
+		return errStaleMove
 	}
 	if index < 0 || index >= len(ws.legalMoves) {
 		return fmt.Errorf("move index %d out of range [0,%d)", index, len(ws.legalMoves))
@@ -178,6 +195,14 @@ func (ws *WebSession) applyMove(mv sim.Move) []sim.Event {
 		}
 	}
 	return events
+}
+
+// touch records client activity; the server calls it on every session lookup
+// (state/move/rate) so the janitor's idle clock resets while a game is played.
+func (ws *WebSession) touch(t time.Time) {
+	ws.mu.Lock()
+	ws.lastActive = t
+	ws.mu.Unlock()
 }
 
 func (ws *WebSession) logf(format string, args ...interface{}) {

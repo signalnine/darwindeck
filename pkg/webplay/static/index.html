@@ -161,6 +161,7 @@
 <script>
 const $ = id => document.getElementById(id);
 let session = null;
+let moveVersion = 0;
 let lastWinner = -1;
 let chosenRating = 0;
 
@@ -176,9 +177,18 @@ function cardEl(str, small) {
   return el;
 }
 
+// The session token travels in a header, not the URL: query strings land in
+// reverse-proxy access logs.
 async function api(path, opts) {
+  opts = opts || {};
+  opts.headers = Object.assign({}, opts.headers);
+  if (session) opts.headers["X-Session-Token"] = session;
   const res = await fetch(path, opts);
-  if (!res.ok) { throw new Error((await res.text()).trim() || res.statusText); }
+  if (!res.ok) {
+    const err = new Error((await res.text()).trim() || res.statusText);
+    err.status = res.status;
+    throw err;
+  }
   return res.json();
 }
 
@@ -221,21 +231,36 @@ async function sendMove(index) {
     const v = await api("/api/move", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ session, index }),
+      body: JSON.stringify({ index, version: moveVersion }),
     });
     render(v);
   } catch (e) {
+    // 409 = stale move version (e.g. a double-click raced the move list); the
+    // server ignored the click, so just re-sync to its current state.
+    if (e.status === 409) { refreshState(); return; }
     alert("Move rejected: " + e.message);
   }
 }
 
+async function refreshState() {
+  try {
+    render(await api("/api/state"));
+  } catch (e) {
+    alert("Could not refresh: " + e.message);
+  }
+}
+
 function render(v) {
+  moveVersion = v.moveVersion || 0;
   $("subhead").textContent = v.title;
   $("gTitle").textContent = v.title;
   $("gDesc").textContent = v.description || "";
   $("gSkeleton").textContent = v.skeleton;
   $("gTurn").textContent = v.turn;
-  $("handScore").textContent = v.yourScore ? `· score ${v.yourScore}` : "";
+  const hs = [];
+  if (v.yourScore) hs.push(`score ${v.yourScore}`);
+  if (v.yourCaptured) hs.push(`captured ${v.yourCaptured}`);
+  $("handScore").textContent = hs.length ? "· " + hs.join(" · ") : "";
 
   // hand
   const hand = $("hand"); hand.innerHTML = "";
@@ -249,6 +274,7 @@ function render(v) {
     d.className = "opp" + (o.folded ? " folded" : "");
     let t = `<span class="seat">P${o.seat}</span> · ${o.handCount} cards`;
     if (o.score) t += ` · ${o.score} pts`;
+    if (o.captured) t += ` · ${o.captured} captured`;
     if (o.committed) t += ` · bet ${o.committed}`;
     if (o.folded) t += " · folded";
     d.innerHTML = t;
@@ -261,13 +287,14 @@ function render(v) {
   const tag = (label, val) => { const s = document.createElement("span"); s.innerHTML = `${label} <b>${val}</b>`; tags.appendChild(s); };
   const tb = v.table || {};
   tag("deck", tb.deckCount);
-  tag("discard", tb.discardCount);
+  tag(tb.tableCards ? "table" : "discard", tb.discardCount); // casino: the pile IS the table
   if (tb.trumpSuit) tag("trump", tb.trumpSuit);
   if (tb.pot) tag("pot", tb.pot);
   if (tb.currentBet) tag("to call", tb.currentBet);
 
   const tc = $("tableCards"); tc.innerHTML = "";
   if (tb.topCard) { const w = wrap("top", cardEl(tb.topCard, false)); tc.appendChild(w); }
+  if (tb.tableCards && tb.tableCards.length) { const g = document.createElement("div"); g.className = "row"; tb.tableCards.forEach(c => g.appendChild(cardEl(c, true))); tc.appendChild(wrap("table", g)); }
   if (tb.trick && tb.trick.length) { const g = document.createElement("div"); g.className = "row"; tb.trick.forEach(c => g.appendChild(cardEl(c, true))); tc.appendChild(wrap("trick", g)); }
   if (tb.melds && tb.melds.length) {
     tb.melds.forEach((m, i) => { const g = document.createElement("div"); g.className = "row"; m.forEach(c => g.appendChild(cardEl(c, true))); tc.appendChild(wrap("meld " + (i + 1), g)); });
@@ -331,11 +358,16 @@ async function submitRating() {
     await api("/api/rate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ session, rating: chosenRating, comment: $("comment").value }),
+      body: JSON.stringify({ rating: chosenRating, comment: $("comment").value }),
     });
     $("rateMsg").textContent = "Thanks - recorded.";
     $("submitRating").disabled = true;
   } catch (e) {
+    if (e.status === 409) { // already rated (one rating per game)
+      $("rateMsg").textContent = "Already recorded - one rating per game.";
+      $("submitRating").disabled = true;
+      return;
+    }
     $("rateMsg").textContent = "Could not record: " + e.message;
   }
 }
