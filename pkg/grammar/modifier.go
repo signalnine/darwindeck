@@ -81,25 +81,30 @@ func captureOptions(table []sim.Card, played sim.Card, sum bool) [][]sim.Card {
 
 // sumSubsets returns every multi-card (size >= 2) subset of cards whose scopaPip
 // values sum to target. Size-1 captures are the same-rank case already covered.
-// The 2^n scan is bounded (Scopa tables are tiny).
+// Targeted DFS in input order (deterministic): pips are positive, so any branch
+// whose partial sum exceeds the target is pruned immediately -- cheap even on
+// the 22+ card tables random play builds, where the old fixed 2^14 scan made
+// legal sum-captures beyond the first 14 number cards unenumerable.
 func sumSubsets(cards []sim.Card, target int) [][]sim.Card {
-	n := len(cards)
-	if n > 14 {
-		n = 14
-	}
 	var out [][]sim.Card
-	for mask := 1; mask < (1 << n); mask++ {
-		s, sub := 0, []sim.Card(nil)
-		for i := 0; i < n; i++ {
-			if mask&(1<<i) != 0 {
-				s += scopaPip(cards[i].Rank)
-				sub = append(sub, cards[i])
+	var cur []sim.Card
+	var dfs func(start, remaining int)
+	dfs = func(start, remaining int) {
+		if remaining == 0 {
+			if len(cur) >= 2 {
+				out = append(out, append([]sim.Card(nil), cur...))
+			}
+			return
+		}
+		for i := start; i < len(cards); i++ {
+			if v := scopaPip(cards[i].Rank); v > 0 && v <= remaining {
+				cur = append(cur, cards[i])
+				dfs(i+1, remaining-v)
+				cur = cur[:len(cur)-1]
 			}
 		}
-		if s == target && len(sub) >= 2 {
-			out = append(out, sub)
-		}
 	}
+	dfs(0, target)
 	return out
 }
 
@@ -264,6 +269,27 @@ func comboPlays(hand []sim.Card, top sim.Card, hasTop bool, rule MatchRule, play
 				i += len(run) - 1
 			}
 		}
+	}
+	return out
+}
+
+// expandNominate splits each combo move whose LAST card is the wild rank into
+// four variants, one per nominated suit (Move.Amount) -- exactly like the
+// single-card nominate moves. Apply nominates off the combo's last card, so
+// without the split Amount stays 0 and the 8 always names clubs. Amount is
+// folded into Move.Key, so the variants stay distinct for MCTS child keying.
+func expandNominate(moves []sim.Move) []sim.Move {
+	var out []sim.Move
+	for _, m := range moves {
+		if last := m.Cards[len(m.Cards)-1]; int(last.Rank) == wildRank {
+			for suit := 0; suit < 4; suit++ {
+				v := m
+				v.Amount = suit
+				out = append(out, v)
+			}
+			continue
+		}
+		out = append(out, m)
 	}
 	return out
 }

@@ -19,19 +19,25 @@ type Result struct {
 	Decisions    int // turns offering >1 legal move (agency)
 }
 
-// progressSig is a monotone non-increasing potential: every real step (a card
-// leaves a hand, the deck shrinks, a player folds) lowers it; only no-progress
-// loops (e.g. everyone drawing/passing forever) leave it flat. Bounded below by
-// 0, so a stalemate rule on a flat signature guarantees termination.
+// progressSig fingerprints the card distribution: the deck count, each hand
+// count (with the seat's fold bit), and the shared/discard count are mixed as
+// SEPARATE positional terms, so any real step (a card moves between zones, a
+// player folds) changes the signature. A plain sum is insensitive to a draw
+// (deck -> hand leaves the aggregate unchanged), which made a 12-draw streak
+// trip the stalemate net on normally-progressing games. Only true no-progress
+// loops (everyone passing forever) leave the signature flat; card motion is
+// finite, so a flat signature under the stalemate rule still guarantees
+// termination (the turn cap backstops the rest).
 func progressSig(gs *sim.GameState) int {
-	s := len(gs.Deck)
+	sig := len(gs.Deck)
 	for p := 0; p < gs.NumPlayers; p++ {
-		s += len(gs.Hands[p])
+		h := 2 * len(gs.Hands[p])
 		if p < len(gs.Folded) && !gs.Folded[p] {
-			s++
+			h++
 		}
+		sig = sig*31 + h
 	}
-	return s
+	return sig*31 + len(gs.Discard)
 }
 
 // PlayRandom runs one game of the spec under uniform-random play. Termination is

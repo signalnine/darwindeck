@@ -57,13 +57,16 @@ func (a Adapter) ApplyMove(s *sim.GameState, m sim.Move, _ *genome.Genome) []sim
 		ev = append(ev, sim.Event{Type: sim.EventSpecialTriggered, PlayerID: p, Detail: "bid"})
 	}
 	// Turn-order / draw attacks are the interaction signal (IsAttackEvent counts
-	// "draw_two" always, and "skip" for >2 players).
+	// "draw_two" always, and "skip"/"reverse" for >2 players).
 	if m.Type == sim.MovePlay {
 		if a.Spec.hasMod(ModSkip) && hasRank(m.Cards, skipRank) {
 			ev = append(ev, sim.Event{Type: sim.EventSpecialTriggered, PlayerID: p, Detail: "skip"})
 		}
 		if a.Spec.hasMod(ModForceDraw) && hasRank(m.Cards, forceDrawRank) {
 			ev = append(ev, sim.Event{Type: sim.EventSpecialTriggered, PlayerID: p, Detail: "draw_two"})
+		}
+		if a.Spec.hasMod(ModReverse) && hasRank(m.Cards, reverseRank) {
+			ev = append(ev, sim.Event{Type: sim.EventSpecialTriggered, PlayerID: p, Detail: "reverse"})
 		}
 	}
 	// A trick that completes on this play is the interaction signal the metric
@@ -166,6 +169,33 @@ func (a Adapter) Progress(s *sim.GameState, _ *genome.Genome) []float64 {
 	return out
 }
 
+// PlayableCount implements sim.PlayableShareProber for PlayMatch specs, so the
+// fitness layer's playable-share vetoes (dead_match_rule successor,
+// pkg/fitness/degeneracy.go playable_share) are not blind to grammar shedding
+// games. It mirrors LegalMoves' per-card predicate -- match the top under the
+// spec's rule, or an always-playable nominate-8 -- counting every qualifying
+// card once (the prober contract: no move-level dedup). Pure query. Non-shedding
+// move-gens report 0; the veto only reads shedding-skeleton records, and the
+// other Shedding-mapped move-gen (Accumulate) deals no hand, so its records
+// fall under the HandSize >= 2 floor.
+func (a Adapter) PlayableCount(s *sim.GameState, _ *genome.Genome) int {
+	if a.Spec.Move != PlayMatch {
+		return 0
+	}
+	hand := s.Hands[s.Active]
+	top, ok := topOf(s)
+	nominate := a.Spec.hasMod(ModNominate)
+	count := 0
+	for _, c := range hand {
+		if (nominate && int(c.Rank) == wildRank) || matches(c, top, ok, a.Spec.Match) {
+			count++
+		}
+	}
+	return count
+}
+
+var _ sim.PlayableShareProber = Adapter{}
+
 // SpecGenome builds the minimal *genome.Genome the simulation/fitness layer reads
 // alongside the adapter: a best-fit skeleton (so optionDeltaModeFor picks a
 // sensible Interaction mode) plus the player/hand counts. Accumulate (banking) has
@@ -175,11 +205,21 @@ func SpecGenome(s GameSpec) *genome.Genome {
 	if hs < 8 { // MaxTurns() scales by HandSize; a 0-deal (banking) must not zero the cap
 		hs = 8
 	}
-	return &genome.Genome{
+	g := &genome.Genome{
 		Skeleton: specSkeleton(s.Move),
 		Players:  s.Players,
 		HandSize: hs,
 	}
+	if s.Move == Trick {
+		// With TrickTaking nil, MaxTurns() = HandSize*Players -- EXACTLY the play
+		// count of a full trick game, zero headroom: any future Turn-consuming
+		// change flips every trick spec to max_turns truncation. RoundsPerGame=2
+		// doubles the cap through the genome's own derivation (the spec is still
+		// single-round; the cap is a backstop, and the zero-value TrickScoring
+		// leaves the greedy scorer's avoidance check unchanged).
+		g.TrickTaking = &genome.TrickTakingParams{RoundsPerGame: 2}
+	}
+	return g
 }
 
 func specSkeleton(m MoveGen) genome.SkeletonType {

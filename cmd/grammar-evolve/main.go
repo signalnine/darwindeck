@@ -97,7 +97,7 @@ func main() {
 		return ind
 	}
 
-	// The 4 canonical seeds anchor behavioral novelty (v2 uses the 8 classics).
+	// The 7 canonical seeds anchor behavioral novelty (v2 uses the 8 classics).
 	var seeds []vec5
 	for _, s := range grammar.Canonical() {
 		seeds = append(seeds, eval(s).vec)

@@ -108,10 +108,11 @@ func hasRank(cards []sim.Card, rank int) bool {
 const ginKnockThreshold = 2
 
 // followSuitFilter (ModFollowSuit) keeps only plays that follow the discard suit
-// (or a wild) when the player holds the suit -- the move-RESTRICT modifier. If the
+// (or a wild, or -- under ModNominate -- a rank-8: "you may play an eight on
+// anything") when the player holds the suit -- the move-RESTRICT modifier. If the
 // player is void in the suit, or the filter would empty the set, it leaves the
 // moves untouched so the never-empty invariant holds.
-func followSuitFilter(moves []sim.Move, hand []sim.Card, top sim.Card, wild bool) []sim.Move {
+func followSuitFilter(moves []sim.Move, hand []sim.Card, top sim.Card, wild, nominate bool) []sim.Move {
 	holds := false
 	for _, c := range hand {
 		if c.Suit == top.Suit {
@@ -128,7 +129,7 @@ func followSuitFilter(moves []sim.Move, hand []sim.Card, top sim.Card, wild bool
 			continue
 		}
 		for _, c := range m.Cards {
-			if c.Suit == top.Suit || isWild(c, wild) {
+			if c.Suit == top.Suit || isWild(c, wild) || (nominate && int(c.Rank) == wildRank) {
 				kept = append(kept, m)
 				break
 			}
@@ -231,10 +232,17 @@ func (rr Runner) LegalMoves(gs *sim.GameState) []sim.Move {
 			}
 		}
 		if rr.Spec.hasMod(ModRunPlay) { // EXPAND: same-rank set / same-suit run combos
-			moves = append(moves, comboPlays(hand, top, ok, rr.Spec.Match, p)...)
+			combos := comboPlays(hand, top, ok, rr.Spec.Match, p)
+			if nominate {
+				// A combo ending in the wild rank nominates in Apply, so it needs
+				// the same 4-suit branching as a single-card 8 -- otherwise
+				// Amount's zero value silently names clubs with no player choice.
+				combos = expandNominate(combos)
+			}
+			moves = append(moves, combos...)
 		}
 		if rr.Spec.hasMod(ModFollowSuit) && ok { // RESTRICT: must follow the discard suit if held
-			moves = followSuitFilter(moves, hand, top, wild)
+			moves = followSuitFilter(moves, hand, top, wild, nominate)
 		}
 		if len(moves) == 0 { // fallback: draw, or pass if the deck is gone
 			if len(gs.Deck) > 0 {
@@ -756,12 +764,14 @@ func (rr Runner) score(gs *sim.GameState) int {
 		return best
 	case MostCaptured, HighScore:
 		eff := func(p int) int { // scoring modifiers adjust the count from the won pile
-			// ModBid (trick contracts): the winner is whoever best MADE their bid,
-			// not who took the most tricks. Each trick banks NumPlayers cards.
-			if rr.Spec.hasMod(ModBid) && rr.Spec.Move == Trick {
-				return contractScore(gs.Scores[p]/gs.NumPlayers, gs.Bids[p])
-			}
 			v := gs.Scores[p]
+			// ModBid (trick contracts): the base signal is how well the bid was
+			// MADE, not the raw trick count. Each trick banks NumPlayers cards.
+			// The co-typed scoring modifiers below COMPOSE on top of the contract
+			// (Pinochle precedent: bidding and melds coexist), never replace it.
+			if rr.Spec.hasMod(ModBid) && rr.Spec.Move == Trick {
+				v = contractScore(gs.Scores[p]/gs.NumPlayers, gs.Bids[p])
+			}
 			if rr.Spec.hasMod(ModMeldBonus) {
 				v += meldBonus(gs.Tableau[p]) // set/run bonuses
 			}
