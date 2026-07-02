@@ -92,6 +92,35 @@ func TestEmitProducesBlindDossiers(t *testing.T) {
 	}
 }
 
+// knockBorrowGenome returns a Tier-0-valid shedding genome carrying the
+// MechKnock deep borrow, whose rulebook renders the knock borrow rule text --
+// the path that used to leak the "knock" token into a blind dossier.
+func knockBorrowGenome(t *testing.T) *genome.Genome {
+	t.Helper()
+	g := seeds.CrazyEights()
+	g.ID = "knock-borrow"
+	g.Borrowed = []genome.BorrowedMechanic{{Source: genome.Rummy, Mechanic: genome.MechKnock}}
+	if errs := genome.Validate(g); len(errs) > 0 {
+		t.Fatalf("knock-borrow genome fails Tier-0 validation: %v", errs)
+	}
+	return g
+}
+
+// scoredVyingGenome returns a Tier-0-valid vying genome with a scoring borrow,
+// so the rulebook renders writeVyingRules' VyingScored branch ("A strong poker
+// hand ... a poker-weak hand ..."), which the plain SimplePoker seed does not
+// exercise.
+func scoredVyingGenome(t *testing.T) *genome.Genome {
+	t.Helper()
+	g := seeds.SimplePoker()
+	g.ID = "scored-vying"
+	g.Borrowed = []genome.BorrowedMechanic{{Source: genome.Rummy, Mechanic: genome.MechMeldBonus}}
+	if errs := genome.Validate(g); len(errs) > 0 {
+		t.Fatalf("scored-vying genome fails Tier-0 validation: %v", errs)
+	}
+	return g
+}
+
 // TestEmitDossiersAreLeakFree confirms the blind dossiers contain no game
 // names or metric vocabulary -- the core blindness guarantee.
 func TestEmitDossiersAreLeakFree(t *testing.T) {
@@ -101,6 +130,10 @@ func TestEmitDossiersAreLeakFree(t *testing.T) {
 	writeSeed(t, in, "g2", seeds.CrazyEights())
 	writeSeed(t, in, "g3", seeds.Whist())
 	writeSeed(t, in, "g4", seeds.BigTwo())
+	writeSeed(t, in, "g5", seeds.Casino())
+	writeSeed(t, in, "g6", seeds.SimplePoker())
+	writeSeed(t, in, "g7", knockBorrowGenome(t))
+	writeSeed(t, in, "g8", scoredVyingGenome(t))
 
 	if _, err := Emit(in, out, nil); err != nil {
 		t.Fatalf("Emit: %v", err)
@@ -110,11 +143,15 @@ func TestEmitDossiersAreLeakFree(t *testing.T) {
 	// check whole-word game names and metric tokens only. The climbing-skeleton
 	// rulebook used to advertise "climbing game (Big Two / Tichu / President
 	// family)"; neutralizeRulebook now strips both the family names and the
-	// "climbing" keyword, so guard against a regression here.
+	// "climbing" keyword, so guard against a regression here. Likewise the
+	// casino rulebook named its "(Casino / Scopa family)", the vying rulebook
+	// leaked "poker" and "big blind", and the MechKnock borrow rule leaked
+	// "knock" -- all now neutralized.
 	leaks := []string{
 		"gin", "knock", "crazy", "mau", "whist", "spades-game",
 		"oh hell", "oh-hell", "wild union",
 		"big two", "tichu", "president", "climbing",
+		"casino", "scopa", "poker", "blind",
 		"fitness", "veto", "skill=", "coverage",
 	}
 	matches, err := filepath.Glob(filepath.Join(out, "G*.md"))

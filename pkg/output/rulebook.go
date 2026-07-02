@@ -485,9 +485,11 @@ func specialCardEffect(sc genome.SpecialCard) string {
 // TestBorrowedRulesDescribeConcreteMechanics asserts the anchor phrases so this
 // coupling cannot silently drift back into a generic blurb.
 //
-// Only the four whitelisted borrows (MechMeldBonus, MechAvoidance,
-// MechTrickScoring, MechDrawPenalty -- see genome.ValidBorrows) can appear on a
-// valid genome; the reserved cases are kept harmless for defensiveness.
+// Only the whitelisted borrows (the four hook-based scoring borrows
+// MechMeldBonus / MechAvoidance / MechTrickScoring / MechDrawPenalty, plus the
+// runner-implemented deep borrows MechRunPlay / MechFollowSuit / MechKnock --
+// see genome.ValidBorrows) can appear on a valid genome; the reserved cases
+// (MechTrump, MechPlayMultiple) are kept harmless for defensiveness.
 func borrowedDescription(bm genome.BorrowedMechanic) string {
 	switch bm.Mechanic {
 	case genome.MechTrickScoring:

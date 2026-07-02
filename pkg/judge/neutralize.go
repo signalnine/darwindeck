@@ -8,12 +8,15 @@ import (
 )
 
 // neutralizeRulebook rewrites the rummy "Knock"/"Gin" mechanic vocabulary to
-// neutral going-out phrasing, and strips the climbing rulebook's game-name
-// parenthetical ("Big Two / Tichu / President family"). These tokens are
-// emitted identically for every genome of their skeleton by
-// output.GenerateRulebook, so this does not erase any distinguishing signal --
-// it only removes a game-name collision (Gin Rummy; Big Two/Tichu/President)
-// from the blind text. Suit references (Hearts, Spades, etc.) and the
+// neutral going-out phrasing, and strips the game-name parentheticals from the
+// climbing ("Big Two / Tichu / President family"), casino ("Casino / Scopa
+// family"), and vying ("poker family") rulebook intros, along with the vying
+// rulebook's "poker hand" / "big blind" vocabulary and the MechKnock borrow
+// rule's "knock" wording. These tokens are emitted identically for every
+// genome of their skeleton (or borrow) by output.GenerateRulebook, so this
+// does not erase any distinguishing signal -- it only removes game-name
+// collisions (Gin Rummy; Big Two/Tichu/President; Casino/Scopa; poker; Knock
+// Rummy) from the blind text. Suit references (Hearts, Spades, etc.) and the
 // card-attribute word "rank" are left intact: those are legitimate mechanical
 // card text, not identity or metric leaks. The shared output package is never
 // touched; this rewrite lives entirely in the judge tool.
@@ -30,6 +33,24 @@ func neutralizeRulebook(s string) string {
 		// while keeping the mechanic description accurate.
 		"This is a **climbing game** (Big Two / Tichu / President family) — the goal is to be the first player to empty your hand.",
 		"In this game you beat the current play with a stronger same-shape combination or pass — the goal is to be the first player to empty your hand.",
+		// Casino intro: drop the named-game family, keeping the mechanic genre.
+		"This is a **fishing / capture game** (Casino / Scopa family) — you capture cards from a shared table into your own pile.",
+		"This is a **fishing / capture game** — you capture cards from a shared table into your own pile.",
+		// Vying intro/showdown/scoring: drop the "poker family" name and rewrite
+		// every "poker hand" mention to neutral hand-rank phrasing (the showdown
+		// line still lists the concrete ranking, so no mechanic signal is lost),
+		// and replace the "big blind" with a neutral forced-stake phrase.
+		"This is a **vying / betting game** (poker family) — wager chips on hidden hands; the best poker hand at showdown takes the pot.",
+		"This is a **vying / betting game** — wager chips on hidden hands; the best-ranked hand at showdown takes the pot.",
+		"the best poker hand — pair", "the best-ranked hand — pair",
+		"A strong poker hand can net fewer chips", "A strongly ranked hand can net fewer chips",
+		"a poker-weak hand can still gain chips", "a weakly ranked hand can still gain chips",
+		"posts a big blind of", "posts a forced opening stake of",
+		// MechKnock borrow rule: same declare-out vocabulary as the rummy
+		// rewrites above, so knock-borrow dossiers stay consistent with rummy
+		// dossiers and the "knock" token (Knock Rummy) never leaks.
+		"**Knock:** once your hand is down to a few cards, instead of playing you may knock to end the game at once. When you knock, whoever holds the fewest cards wins — so knock when you are ahead, but knocking while someone else is shorter hands them the win",
+		"**Declare out:** once your hand is down to a few cards, instead of playing you may declare out to end the game at once. When you declare out, whoever holds the fewest cards wins — so declare out when you are ahead, but declaring out while someone else is shorter hands them the win",
 	)
 	return repl.Replace(s)
 }
