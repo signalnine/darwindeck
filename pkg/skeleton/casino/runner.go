@@ -12,6 +12,16 @@
 // the face-up table, state.Hands are the hands, state.Tableau[i] is player i's
 // captured pile, and state.TrickLeader records the last capturer (for the
 // end-of-game table sweep).
+//
+// Metric profile: Meaningful-Decisions reads structurally ~1.0 for casino -- a
+// KNOWN OVER-COUNT, unlike vying's justified pin. Every turn with hand >= 2 has
+// >= 2 legal moves (one trail per card), but trail-A vs trail-B is frequently a
+// genuine non-choice, so the count-semantics proxy cannot discriminate casino
+// genomes on this metric. The discriminating signal lives in the other metrics:
+// Interaction (deltaModeCasino -- capture/trail changes the shared table) and
+// Skill (the CasinoScorer's capture-greedy edge over random). A
+// ChoiceConsequenceProber for casino would close the gap; until then, do not
+// read casino Meaningful-Decisions comparatively.
 package casino
 
 import (

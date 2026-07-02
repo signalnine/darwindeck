@@ -149,7 +149,7 @@ and the game always terminates under random play (liveness). So the reachable
 family count is the combinatorial product of the primitives, not the 6 skeletons.
 
 As of 2026-06-26 the grammar represents **~81% of surveyed known card games** (7
-move-generators, 16 modifiers, **137 modified families, all 137/137 playable** --
+move-generators, 15 modifiers, **137 modified families, all 137/137 playable** --
 0 stuck, 0 non-terminating). Coverage trajectory 14% -> 67% -> 81% across three
 blind expert-agent surveys (`results/2026-06-26-grammar-coverage/`).
 
@@ -158,7 +158,7 @@ Two), accumulate (Blackjack/31), capture (Casino/Scopa, rank-match + pip-sum),
 trick (follow-suit), rummy (draw-discard, fewest-deadwood), vying (poker betting,
 max-raises-capped, best-hand showdown).
 
-**Modifiers (16), typed via `Modifier.CompatibleWith(spec)` -- the lift of v2's
+**Modifiers (15), typed via `Modifier.CompatibleWith(spec)` -- the lift of v2's
 hand-maintained per-host borrow whitelist into a small total function:** run_play
 (combos on shedding + climbing), follow_suit, draw_penalty, knock (fewest-cards;
 rummy Gin go-out), meld_bonus, avoidance (Hearts), trump (Spades), bid (trick

@@ -13,7 +13,7 @@ covered; all 7 major families represented.** Trajectory across this session:
 (`coverage-final.json`).
 
 The grammar now has **7 move-generators** -- play_match, beat_or_pass, accumulate,
-capture, trick, rummy, and **vying (poker)** -- and **16 modifiers**: run_play
+capture, trick, rummy, and **vying (poker)** -- and **15 modifiers**: run_play
 (shedding + climbing combos), follow_suit, draw_penalty, knock (shedding/climbing
 fewest-cards + rummy Gin go-out), meld_bonus, avoidance (Hearts), trump (Spades),
 bid (contract), teams (2v2), skip, force_draw, reverse (the Uno set), nominate
