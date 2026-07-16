@@ -170,7 +170,7 @@ func main() {
 	}
 
 	// Run evolution
-	fmt.Println("Starting evolution...\n")
+	fmt.Print("Starting evolution...\n\n")
 	err = engine.Evolve()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "\nEvolution failed: %v\n", err)

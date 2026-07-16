@@ -101,6 +101,7 @@ const GameTimeout = 100 * time.Millisecond
 func RunSingleGameTyped(g *genome.GameGenome, aiType AIPlayerType, mctsIterations int, seed uint64) GameResult {
 	start := time.Now()
 	var metrics GameMetrics
+	rng := rand.New(rand.NewSource(int64(seed)))
 
 	// Initialize game state
 	state := engine.GetState()
@@ -222,7 +223,7 @@ func RunSingleGameTyped(g *genome.GameGenome, aiType AIPlayerType, mctsIteration
 		if hasBettingMoves(moves) {
 			bettingPhase := findBettingPhase(g)
 			if bettingPhase != nil {
-				err := runBettingRoundTyped(state, g, bettingPhase, aiType, &metrics, tensionMetrics, detector)
+				err := runBettingRoundTyped(state, g, bettingPhase, aiType, &metrics, tensionMetrics, detector, rng)
 				if err != "" {
 					tensionMetrics.Finalize(-1)
 					metrics.LeadChanges = uint32(tensionMetrics.LeadChanges)
@@ -265,7 +266,7 @@ func RunSingleGameTyped(g *genome.GameGenome, aiType AIPlayerType, mctsIteration
 			for i := range aiTypes {
 				aiTypes[i] = aiType
 			}
-			runBiddingRoundTyped(state, g, aiTypes)
+			runBiddingRoundTyped(state, g, aiTypes, rng)
 			continue
 		}
 
@@ -301,12 +302,12 @@ func RunSingleGameTyped(g *genome.GameGenome, aiType AIPlayerType, mctsIteration
 		} else {
 			switch aiType {
 			case RandomAI:
-				move = &moves[rand.Intn(len(moves))]
+				move = &moves[rng.Intn(len(moves))]
 			case GreedyAI:
 				move = selectGreedyMoveTyped(state, g, moves)
 			case MCTS100AI, MCTS500AI, MCTS1000AI, MCTS2000AI:
 				// Use bytecode genome for MCTS (requires existing infrastructure)
-				move = mcts.Search(state, bytecodeGenome, mctsIterations, mcts.DefaultExplorationParam)
+				move = mcts.SearchWithRand(state, bytecodeGenome, mctsIterations, mcts.DefaultExplorationParam, rng)
 			default:
 				move = &moves[0]
 			}
@@ -506,7 +507,7 @@ func hasBettingMoves(moves []engine.LegalMove) bool {
 }
 
 // runBettingRoundTyped executes a betting round using typed genome.
-func runBettingRoundTyped(state *engine.GameState, g *genome.GameGenome, bettingPhase *genome.BettingPhase, aiType AIPlayerType, metrics *GameMetrics, tensionMetrics *engine.TensionMetrics, detector engine.LeaderDetector) string {
+func runBettingRoundTyped(state *engine.GameState, g *genome.GameGenome, bettingPhase *genome.BettingPhase, aiType AIPlayerType, metrics *GameMetrics, tensionMetrics *engine.TensionMetrics, detector engine.LeaderDetector, rng *rand.Rand) string {
 	// Convert to engine type for compatibility
 	engineBettingPhase := &engine.BettingPhaseData{
 		MinBet:    bettingPhase.MinBet,
@@ -564,7 +565,7 @@ func runBettingRoundTyped(state *engine.GameState, g *genome.GameGenome, betting
 			handStrength := engine.EvaluateHandStrength(state.Players[currentPlayer].Hand)
 			action = engine.SelectGreedyBettingAction(state, moves, handStrength)
 		default:
-			action = engine.SelectRandomBettingAction(moves, rand.Intn)
+			action = engine.SelectRandomBettingAction(moves, rng.Intn)
 		}
 
 		handStrength := engine.EvaluateHandStrength(state.Players[currentPlayer].Hand)
@@ -605,7 +606,7 @@ func runBettingRoundTyped(state *engine.GameState, g *genome.GameGenome, betting
 }
 
 // runBiddingRoundTyped executes a bidding round using typed genome.
-func runBiddingRoundTyped(state *engine.GameState, g *genome.GameGenome, aiTypes []AIPlayerType) {
+func runBiddingRoundTyped(state *engine.GameState, g *genome.GameGenome, aiTypes []AIPlayerType, rng *rand.Rand) {
 	biddingPhase := findBiddingPhase(g)
 	if biddingPhase == nil {
 		return
@@ -638,7 +639,7 @@ func runBiddingRoundTyped(state *engine.GameState, g *genome.GameGenome, aiTypes
 			handSize := len(state.Players[playerIdx].Hand)
 			bidMoves := engine.GenerateBidMoves(engineBiddingPhase, handSize)
 			if len(bidMoves) > 0 {
-				bid = bidMoves[rand.Intn(len(bidMoves))]
+				bid = bidMoves[rng.Intn(len(bidMoves))]
 			} else {
 				bid = engine.BidMove{Value: 1, IsNil: false}
 			}

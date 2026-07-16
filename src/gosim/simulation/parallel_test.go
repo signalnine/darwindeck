@@ -1,6 +1,7 @@
 package simulation
 
 import (
+	"runtime"
 	"testing"
 	"time"
 
@@ -60,6 +61,13 @@ func createTestGenome() *engine.Genome {
 	bytecode[33] = 0
 	bytecode[34] = 0
 	bytecode[35] = 120
+
+	// Setup at offset 36
+	// CardsPerPlayer = 26
+	bytecode[36] = 0
+	bytecode[37] = 0
+	bytecode[38] = 0
+	bytecode[39] = 26
 
 	// Turn structure at offset 60
 	// PhaseCount = 1
@@ -173,6 +181,9 @@ func TestRunBatchParallel_ProducesSameResultsAsSerial(t *testing.T) {
 func TestRunBatchParallel_IsFasterThanSerial(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping performance test in short mode")
+	}
+	if runtime.GOMAXPROCS(0) < 2 {
+		t.Skip("Parallel speedup requires at least two available CPUs")
 	}
 
 	genome := createTestGenome()

@@ -13,12 +13,18 @@ func TestNodePool(t *testing.T) {
 		t.Error("Expected pre-allocated children slice")
 	}
 
+	n1.Visits = 10
+	n1.Wins = 5
 	PutNode(n1)
 
-	// Should get same instance back
+	// sync.Pool may discard entries at any time, so verify the returned node's
+	// reusable shape and reset state rather than requiring pointer identity.
 	n2 := GetNode()
-	if &n1.Children != &n2.Children {
-		t.Error("Pool did not reuse memory")
+	if cap(n2.Children) == 0 {
+		t.Error("Expected pre-allocated children slice")
+	}
+	if n2.Visits != 0 || n2.Wins != 0 {
+		t.Error("Expected pooled node to be reset")
 	}
 
 	PutNode(n2)

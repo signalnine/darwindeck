@@ -1,9 +1,12 @@
 """Full fitness evaluation with session length constraint (Phase 4)."""
 
 from dataclasses import dataclass, field
-from typing import Dict, Optional
+from typing import TYPE_CHECKING, Dict, Optional
 from darwindeck.genome.schema import GameGenome, PlayPhase, DrawPhase, TableauMode
 from darwindeck.genome.validator import GenomeValidator
+
+if TYPE_CHECKING:
+    from darwindeck.simulation.go_simulator import GoSimulator
 
 
 # Preset weight configurations for different game styles
@@ -825,13 +828,21 @@ class FullFitnessEvaluator:
             use_mcts: Whether to use MCTS AI for skill measurement
         """
         from darwindeck.evolution.coherence import SemanticCoherenceChecker
-        from darwindeck.simulation.go_simulator import GoSimulator
 
         self.coherence_checker = SemanticCoherenceChecker()
         self.fitness_evaluator = FitnessEvaluator(style=style)
-        self.simulator = GoSimulator()
+        self._simulator: Optional["GoSimulator"] = None
         self.num_simulations = num_simulations
         self.use_mcts = use_mcts
+
+    @property
+    def simulator(self) -> "GoSimulator":
+        """Create the optional CGo simulator only when simulation is needed."""
+        if self._simulator is None:
+            from darwindeck.simulation.go_simulator import GoSimulator
+
+            self._simulator = GoSimulator()
+        return self._simulator
 
     def evaluate(self, genome: GameGenome) -> FitnessResult:
         """Evaluate genome fitness.

@@ -12,6 +12,19 @@ const (
 
 // Search performs MCTS from the given state and returns the best move
 func Search(state *engine.GameState, genome *engine.Genome, iterations int, explorationParam float64) *engine.LegalMove {
+	return SearchWithRand(
+		state,
+		genome,
+		iterations,
+		explorationParam,
+		rand.New(rand.NewSource(rand.Int63())),
+	)
+}
+
+// SearchWithRand performs MCTS using the caller's random source.
+// Supplying a per-game source keeps seeded simulations deterministic and
+// prevents concurrent games from sharing package-global random state.
+func SearchWithRand(state *engine.GameState, genome *engine.Genome, iterations int, explorationParam float64, rng *rand.Rand) *engine.LegalMove {
 	if explorationParam == 0 {
 		explorationParam = DefaultExplorationParam
 	}
@@ -43,11 +56,11 @@ func Search(state *engine.GameState, genome *engine.Genome, iterations int, expl
 
 		// 2. Expansion - add a new child node
 		if !node.IsTerminal() && len(node.UntriedMoves) > 0 {
-			node = expand(node, genome)
+			node = expand(node, genome, rng)
 		}
 
 		// 3. Simulation - play out randomly to terminal state
-		winner := simulate(node.State, genome)
+		winner := simulate(node.State, genome, rng)
 
 		// 4. Backpropagation - update statistics
 		backpropagate(node, winner)
@@ -70,9 +83,9 @@ func Search(state *engine.GameState, genome *engine.Genome, iterations int, expl
 }
 
 // expand adds a new child node for an untried move
-func expand(node *MCTSNode, genome *engine.Genome) *MCTSNode {
+func expand(node *MCTSNode, genome *engine.Genome, rng *rand.Rand) *MCTSNode {
 	// Pick a random untried move
-	moveIndex := rand.Intn(len(node.UntriedMoves))
+	moveIndex := rng.Intn(len(node.UntriedMoves))
 	move := node.UntriedMoves[moveIndex]
 
 	// Remove from untried moves
@@ -97,7 +110,7 @@ func expand(node *MCTSNode, genome *engine.Genome) *MCTSNode {
 }
 
 // simulate plays out the game randomly from the current state
-func simulate(state *engine.GameState, genome *engine.Genome) int8 {
+func simulate(state *engine.GameState, genome *engine.Genome, rng *rand.Rand) int8 {
 	simState := state.Clone()
 	defer engine.PutState(simState)
 
@@ -118,7 +131,7 @@ func simulate(state *engine.GameState, genome *engine.Genome) int8 {
 		}
 
 		// Pick a random move
-		move := moves[rand.Intn(len(moves))]
+		move := moves[rng.Intn(len(moves))]
 		engine.ApplyMove(simState, &move, genome)
 	}
 

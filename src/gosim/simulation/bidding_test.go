@@ -1,6 +1,7 @@
 package simulation
 
 import (
+	"math/rand"
 	"testing"
 
 	"github.com/signalnine/darwindeck/gosim/engine"
@@ -81,7 +82,8 @@ func TestRunSingleGameWithBidding(t *testing.T) {
 	
 	// Test runBiddingRound
 	aiTypes := []AIPlayerType{RandomAI, RandomAI, RandomAI, RandomAI}
-	runBiddingRound(state, genome, aiTypes)
+	rng := rand.New(rand.NewSource(42))
+	runBiddingRound(state, genome, aiTypes, rng)
 	
 	// Verify all players have bid
 	if !state.BiddingComplete {

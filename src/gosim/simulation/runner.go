@@ -135,6 +135,7 @@ func RunBatch(genome *engine.Genome, numGames int, aiType AIPlayerType, mctsIter
 func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations int, seed uint64, gameIndex int) GameResult {
 	start := time.Now()
 	var metrics GameMetrics
+	rng := rand.New(rand.NewSource(int64(seed)))
 
 	// Initialize game state
 	state := engine.GetState()
@@ -265,7 +266,7 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 		if hasBettingPhase(moves) {
 			bettingPhase := getBettingPhaseData(genome)
 			if bettingPhase != nil {
-				err := runBettingRound(state, genome, bettingPhase, aiType, &metrics, tensionMetrics, detector)
+				err := runBettingRound(state, genome, bettingPhase, aiType, &metrics, tensionMetrics, detector, rng)
 				if err != "" {
 					tensionMetrics.Finalize(-1)
 					metrics.LeadChanges = uint32(tensionMetrics.LeadChanges)
@@ -330,7 +331,7 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 			for i := range aiTypes {
 				aiTypes[i] = aiType
 			}
-			runBiddingRound(state, genome, aiTypes)
+			runBiddingRound(state, genome, aiTypes, rng)
 			continue // Skip normal move application, re-evaluate moves after bidding
 		}
 
@@ -414,17 +415,17 @@ func RunSingleGame(genome *engine.Genome, aiType AIPlayerType, mctsIterations in
 		} else {
 			switch aiType {
 			case RandomAI:
-				move = &moves[rand.Intn(len(moves))]
+				move = &moves[rng.Intn(len(moves))]
 			case GreedyAI:
 				move = selectGreedyMove(state, genome, moves)
 			case MCTS100AI:
-				move = mcts.Search(state, genome, 100, mcts.DefaultExplorationParam)
+				move = mcts.SearchWithRand(state, genome, 100, mcts.DefaultExplorationParam, rng)
 			case MCTS500AI:
-				move = mcts.Search(state, genome, 500, mcts.DefaultExplorationParam)
+				move = mcts.SearchWithRand(state, genome, 500, mcts.DefaultExplorationParam, rng)
 			case MCTS1000AI:
-				move = mcts.Search(state, genome, 1000, mcts.DefaultExplorationParam)
+				move = mcts.SearchWithRand(state, genome, 1000, mcts.DefaultExplorationParam, rng)
 			case MCTS2000AI:
-				move = mcts.Search(state, genome, 2000, mcts.DefaultExplorationParam)
+				move = mcts.SearchWithRand(state, genome, 2000, mcts.DefaultExplorationParam, rng)
 			default:
 				move = &moves[0]
 			}
@@ -524,6 +525,7 @@ func RunBatchAsymmetric(genome *engine.Genome, numGames int, p0AIType AIPlayerTy
 func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIType AIPlayerType, mctsIterations int, seed uint64, gameIndex int) GameResult {
 	start := time.Now()
 	var metrics GameMetrics
+	rng := rand.New(rand.NewSource(int64(seed)))
 
 	state := engine.GetState()
 	defer engine.PutState(state)
@@ -645,7 +647,7 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 		if hasBettingPhase(moves) {
 			bettingPhase := getBettingPhaseData(genome)
 			if bettingPhase != nil {
-				err := runBettingRoundAsymmetric(state, genome, bettingPhase, p0AIType, p1AIType, &metrics)
+				err := runBettingRoundAsymmetric(state, genome, bettingPhase, p0AIType, p1AIType, &metrics, rng)
 				if err != "" {
 					tensionMetrics.Finalize(-1)
 					metrics.LeadChanges = uint32(tensionMetrics.LeadChanges)
@@ -705,7 +707,7 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 
 		// Check if this is a bidding phase
 		if hasBiddingMoves(moves) {
-			runBiddingRoundAsymmetric(state, genome, p0AIType, p1AIType)
+			runBiddingRoundAsymmetric(state, genome, p0AIType, p1AIType, rng)
 			continue // Skip normal move application, re-evaluate moves after bidding
 		}
 
@@ -780,17 +782,17 @@ func RunSingleGameAsymmetric(genome *engine.Genome, p0AIType AIPlayerType, p1AIT
 		} else {
 			switch aiType {
 			case RandomAI:
-				move = &moves[rand.Intn(len(moves))]
+				move = &moves[rng.Intn(len(moves))]
 			case GreedyAI:
 				move = selectGreedyMove(state, genome, moves)
 			case MCTS100AI:
-				move = mcts.Search(state, genome, 100, mcts.DefaultExplorationParam)
+				move = mcts.SearchWithRand(state, genome, 100, mcts.DefaultExplorationParam, rng)
 			case MCTS500AI:
-				move = mcts.Search(state, genome, 500, mcts.DefaultExplorationParam)
+				move = mcts.SearchWithRand(state, genome, 500, mcts.DefaultExplorationParam, rng)
 			case MCTS1000AI:
-				move = mcts.Search(state, genome, 1000, mcts.DefaultExplorationParam)
+				move = mcts.SearchWithRand(state, genome, 1000, mcts.DefaultExplorationParam, rng)
 			case MCTS2000AI:
-				move = mcts.Search(state, genome, 2000, mcts.DefaultExplorationParam)
+				move = mcts.SearchWithRand(state, genome, 2000, mcts.DefaultExplorationParam, rng)
 			default:
 				move = &moves[0]
 			}
@@ -1311,7 +1313,7 @@ func anyNeedsToAct(needsToAct []bool) bool {
 
 // runBettingRound executes a complete betting round
 // Returns error string if round fails, empty string on success
-func runBettingRound(state *engine.GameState, genome *engine.Genome, bettingPhase *engine.BettingPhaseData, aiType AIPlayerType, metrics *GameMetrics, tensionMetrics *engine.TensionMetrics, detector engine.LeaderDetector) string {
+func runBettingRound(state *engine.GameState, genome *engine.Genome, bettingPhase *engine.BettingPhaseData, aiType AIPlayerType, metrics *GameMetrics, tensionMetrics *engine.TensionMetrics, detector engine.LeaderDetector, rng *rand.Rand) string {
 	// Track who needs to act
 	needsToAct := make([]bool, state.NumPlayers)
 	for i := 0; i < int(state.NumPlayers); i++ {
@@ -1374,7 +1376,7 @@ func runBettingRound(state *engine.GameState, genome *engine.Genome, bettingPhas
 			handStrength := engine.EvaluateHandStrength(state.Players[currentPlayer].Hand)
 			action = engine.SelectGreedyBettingAction(state, moves, handStrength)
 		default: // RandomAI and MCTS use random for betting
-			action = engine.SelectRandomBettingAction(moves, rand.Intn)
+			action = engine.SelectRandomBettingAction(moves, rng.Intn)
 		}
 
 		// Track betting metrics before applying action
@@ -1422,7 +1424,7 @@ func runBettingRound(state *engine.GameState, genome *engine.Genome, bettingPhas
 
 // runBettingRoundAsymmetric executes a complete betting round with different AI per player
 // Returns error string if round fails, empty string on success
-func runBettingRoundAsymmetric(state *engine.GameState, genome *engine.Genome, bettingPhase *engine.BettingPhaseData, p0AIType AIPlayerType, p1AIType AIPlayerType, metrics *GameMetrics) string {
+func runBettingRoundAsymmetric(state *engine.GameState, genome *engine.Genome, bettingPhase *engine.BettingPhaseData, p0AIType AIPlayerType, p1AIType AIPlayerType, metrics *GameMetrics, rng *rand.Rand) string {
 	// Track who needs to act
 	needsToAct := make([]bool, state.NumPlayers)
 	for i := 0; i < int(state.NumPlayers); i++ {
@@ -1493,7 +1495,7 @@ func runBettingRoundAsymmetric(state *engine.GameState, genome *engine.Genome, b
 			handStrength := engine.EvaluateHandStrength(state.Players[currentPlayer].Hand)
 			action = engine.SelectGreedyBettingAction(state, moves, handStrength)
 		default: // RandomAI and MCTS use random for betting
-			action = engine.SelectRandomBettingAction(moves, rand.Intn)
+			action = engine.SelectRandomBettingAction(moves, rng.Intn)
 		}
 
 		// Track betting metrics before applying action
@@ -1604,7 +1606,7 @@ func selectGreedyBid(state *engine.GameState, biddingPhase engine.BiddingPhase, 
 }
 
 // runBiddingRound executes a complete bidding round for all players
-func runBiddingRound(state *engine.GameState, genome *engine.Genome, aiTypes []AIPlayerType) {
+func runBiddingRound(state *engine.GameState, genome *engine.Genome, aiTypes []AIPlayerType, rng *rand.Rand) {
 	biddingData := getBiddingPhaseData(genome)
 	if biddingData == nil {
 		return
@@ -1636,7 +1638,7 @@ func runBiddingRound(state *engine.GameState, genome *engine.Genome, aiTypes []A
 			handSize := len(state.Players[playerIdx].Hand)
 			bidMoves := engine.GenerateBidMoves(biddingPhase, handSize)
 			if len(bidMoves) > 0 {
-				bid = bidMoves[rand.Intn(len(bidMoves))]
+				bid = bidMoves[rng.Intn(len(bidMoves))]
 			} else {
 				bid = engine.BidMove{Value: 1, IsNil: false}
 			}
@@ -1648,7 +1650,7 @@ func runBiddingRound(state *engine.GameState, genome *engine.Genome, aiTypes []A
 }
 
 // runBiddingRoundAsymmetric executes a complete bidding round with different AI per player (for skill evaluation)
-func runBiddingRoundAsymmetric(state *engine.GameState, genome *engine.Genome, p0AIType AIPlayerType, p1AIType AIPlayerType) {
+func runBiddingRoundAsymmetric(state *engine.GameState, genome *engine.Genome, p0AIType AIPlayerType, p1AIType AIPlayerType, rng *rand.Rand) {
 	biddingData := getBiddingPhaseData(genome)
 	if biddingData == nil {
 		return
@@ -1687,7 +1689,7 @@ func runBiddingRoundAsymmetric(state *engine.GameState, genome *engine.Genome, p
 			handSize := len(state.Players[playerIdx].Hand)
 			bidMoves := engine.GenerateBidMoves(biddingPhase, handSize)
 			if len(bidMoves) > 0 {
-				bid = bidMoves[rand.Intn(len(bidMoves))]
+				bid = bidMoves[rng.Intn(len(bidMoves))]
 			} else {
 				bid = engine.BidMove{Value: 1, IsNil: false}
 			}

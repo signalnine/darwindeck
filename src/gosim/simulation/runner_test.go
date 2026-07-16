@@ -3,10 +3,24 @@ package simulation
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/signalnine/darwindeck/gosim/engine"
 )
+
+func TestRunBatchDeterministicForSameSeed(t *testing.T) {
+	genome := createTestGenome()
+	first := RunBatch(genome, 100, RandomAI, 0, 12345)
+	second := RunBatch(genome, 100, RandomAI, 0, 12345)
+
+	// Execution time is intentionally nondeterministic; gameplay statistics are not.
+	first.AvgDurationNs = 0
+	second.AvgDurationNs = 0
+	if !reflect.DeepEqual(first, second) {
+		t.Fatalf("same seed produced different results:\nfirst:  %#v\nsecond: %#v", first, second)
+	}
+}
 
 func TestRunSingleGameWithGoldenGenome(t *testing.T) {
 	// Load golden War genome bytecode

@@ -19,6 +19,32 @@ def create_test_evaluator() -> FitnessEvaluator:
     return FitnessEvaluator(use_cache=False)
 
 
+class RecordingSimulator:
+    """Deterministic simulator that records parameters passed by the evaluator."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[int, bool]] = []
+
+    def simulate(
+        self,
+        genome: GameGenome,
+        num_games: int = 100,
+        use_mcts: bool = False,
+    ) -> SimulationResults:
+        self.calls.append((num_games, use_mcts))
+        return SimulationResults(
+            total_games=num_games,
+            wins=(num_games // 2, num_games - num_games // 2),
+            player_count=2,
+            draws=0,
+            avg_turns=50,
+            errors=0,
+            total_decisions=num_games * 5,
+            forced_decisions=num_games,
+            total_valid_moves=num_games * 15,
+        )
+
+
 def test_parallel_produces_same_results_as_serial():
     """Verify parallel evaluation produces statistically similar results to serial.
 
@@ -175,32 +201,42 @@ def test_different_simulation_counts():
     """Test that different simulation counts work correctly."""
     genomes = [create_war_genome()] * 4
 
+    simulator = RecordingSimulator()
+
     evaluator = ParallelFitnessEvaluator(
-        create_test_evaluator, num_workers=2
+        create_test_evaluator,
+        simulator_factory=lambda: simulator,
+        num_workers=2,
     )
 
     results_10 = evaluator.evaluate_population(genomes, num_simulations=10)
     results_100 = evaluator.evaluate_population(genomes, num_simulations=100)
 
     assert len(results_10) == len(results_100) == 4
-    # Both should return valid results
+    assert simulator.calls == [(10, False)] * 4 + [(100, False)] * 4
     for r10, r100 in zip(results_10, results_100):
         assert r10.valid
         assert r100.valid
+        assert r10.games_simulated == 10
+        assert r100.games_simulated == 100
 
 
 def test_mcts_flag_propagation():
     """Test that use_mcts flag is properly propagated to workers."""
     genomes = [create_war_genome()]
 
+    simulator = RecordingSimulator()
+
     evaluator = ParallelFitnessEvaluator(
-        create_test_evaluator, num_workers=1
+        create_test_evaluator,
+        simulator_factory=lambda: simulator,
+        num_workers=1,
     )
 
     results_random = evaluator.evaluate_population(genomes, use_mcts=False)
     results_mcts = evaluator.evaluate_population(genomes, use_mcts=True)
 
-    # Both should work without errors
+    assert simulator.calls == [(100, False), (100, True)]
     assert len(results_random) == 1
     assert len(results_mcts) == 1
     assert results_random[0].valid
