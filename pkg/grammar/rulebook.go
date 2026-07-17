@@ -194,6 +194,17 @@ func (s GameSpec) winRule() string {
 			}
 			return "The player who won the most cards in tricks wins (less any penalty points)."
 		}
+		// Capture host: the scoring modifiers adjust the count exactly as they
+		// do on the trick host, so the win rule must say so -- the Special
+		// Rules describe a penalty/bonus the winner line otherwise ignored.
+		switch {
+		case s.hasMod(ModAvoidance) && s.hasMod(ModMeldBonus):
+			return "The player with the best adjusted total wins: cards captured, plus combination bonuses, minus penalty points."
+		case s.hasMod(ModAvoidance):
+			return "The player with the best adjusted total wins: cards captured minus penalty points."
+		case s.hasMod(ModMeldBonus):
+			return "The player with the best adjusted total wins: cards captured plus combination bonuses."
+		}
 		return "The player who captured the most cards wins."
 	case HighScore:
 		return "The player with the highest score wins."

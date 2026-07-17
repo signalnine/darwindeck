@@ -796,7 +796,13 @@ func choiceSignatureOf(runner GenericRunner, state *GameState, g *genome.Genome,
 	if m.Type != MovePlay || len(m.Cards) == 0 {
 		return sig
 	}
-	c := m.Cards[0]
+	// Model the play by its LAST card: the shedding runner makes the last
+	// combo card the new top and fires ITS special (a MechRunPlay run
+	// [5H 6H 7H] leaves 7H on top, not 5H). Modeling Cards[0] collapsed a
+	// single 5H and that run to identical signatures and profiled a run
+	// ending on a skip/draw-two card as effectless. Trick plays are always
+	// single cards, so last == first there.
+	c := m.Cards[len(m.Cards)-1]
 	switch mode {
 	case deltaModeShedding:
 		sig.profile = specialEffectProfile(g, c)

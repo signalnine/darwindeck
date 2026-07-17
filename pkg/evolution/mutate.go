@@ -29,8 +29,12 @@ func MutateWith(g *genome.Genome, rng *rand.Rand, allSeeds []*genome.Genome, cro
 	if rng.Float64() < 0.40 {
 		tweakParameter(child, rng)
 	}
-	// Enforce hand_size * players <= 52 after player/hand mutations
-	for child.HandSize*child.Players > 52 {
+	// Enforce the deck budget after player/hand mutations. Casino also deals
+	// TableSize face-up cards, so its Tier-0 rule is HandSize*Players +
+	// TableSize <= 52 (validateCasino); clamping only HandSize*Players let a
+	// near-boundary casino mutant pass repair and die at Tier 0, silently
+	// burning the offspring slot.
+	for child.HandSize*child.Players+casinoTableSize(child) > 52 {
 		if rng.Float64() < 0.5 {
 			child.HandSize--
 		} else {
@@ -41,6 +45,14 @@ func MutateWith(g *genome.Genome, rng *rand.Rand, allSeeds []*genome.Genome, cro
 		}
 		if child.Players < 2 {
 			child.Players = 2
+		}
+		if child.HandSize == 3 && child.Players == 2 {
+			break // floor reached; shrink the table instead of looping forever
+		}
+	}
+	if child.Skeleton == genome.Casino && child.Casino != nil {
+		for child.HandSize*child.Players+child.Casino.TableSize > 52 && child.Casino.TableSize > 0 {
+			child.Casino.TableSize--
 		}
 	}
 	if rng.Float64() < 0.15 {
@@ -528,4 +540,14 @@ func clampInt(v, min, max int) int {
 		return max
 	}
 	return v
+}
+
+// casinoTableSize is the extra deck budget a casino genome spends on its
+// face-up table (0 for every other skeleton) -- part of the Tier-0 rule
+// HandSize*Players + TableSize <= 52 the repair loops must honor.
+func casinoTableSize(g *genome.Genome) int {
+	if g.Skeleton == genome.Casino && g.Casino != nil {
+		return g.Casino.TableSize
+	}
+	return 0
 }

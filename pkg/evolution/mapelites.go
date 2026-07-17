@@ -269,6 +269,10 @@ func (e *MAPElitesEngine) insert(g *genome.Genome, metrics fitness.Metrics, beha
 		archive = &Archive{}
 		e.Archives[g.Skeleton] = archive
 	}
+	// Non-sticky best (both return paths): a challenge re-evaluation below can
+	// drag the current best occupant's mean down even when the challenger
+	// loses, so the headline is recomputed from the archives either way.
+	defer e.updateBestFromArchives()
 	row, col := behavior.GridCell(GridSize)
 
 	cell := archive.Cells[row][col]
@@ -294,12 +298,36 @@ func (e *MAPElitesEngine) insert(g *genome.Genome, metrics fitness.Metrics, beha
 		Behavior: behavior,
 	}
 	archive.QDScore += metrics.TotalFitness
-
-	if metrics.TotalFitness > e.BestFitness {
-		e.BestFitness = metrics.TotalFitness
-		e.BestGenome = g
-	}
 	return true
+}
+
+// updateBestFromArchives recomputes BestFitness/BestGenome from the current
+// occupants' running-mean TotalFitness -- the engines' non-sticky policy
+// (Engine.updateBestFitness): a sticky max of single-seed admissions froze a
+// lucky eval no surviving archive mean matched (the winner's curse the
+// challenge scheme exists to kill). Expect the headline to move down as well
+// as up as re-evaluations drag lucky occupants toward their true value.
+func (e *MAPElitesEngine) updateBestFromArchives() {
+	var bestFit float64
+	var bestGenome *genome.Genome
+	for _, skel := range genome.AllSkeletons() {
+		archive := e.Archives[skel]
+		if archive == nil {
+			continue
+		}
+		for r := 0; r < GridSize; r++ {
+			for c := 0; c < GridSize; c++ {
+				if cell := archive.Cells[r][c]; cell != nil {
+					if f := cell.Individual.Fitness.TotalFitness; bestGenome == nil || f > bestFit {
+						bestFit, bestGenome = f, cell.Individual.Genome
+					}
+				}
+			}
+		}
+	}
+	if bestGenome != nil {
+		e.BestFitness, e.BestGenome = bestFit, bestGenome
+	}
 }
 
 // randomArchiveOccupant returns a random genome from any occupied archive cell.

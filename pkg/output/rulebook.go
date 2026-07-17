@@ -246,7 +246,12 @@ func writeClimbingRules(b *strings.Builder, g *genome.Genome) {
 			if minLen < 3 {
 				minLen = 3
 			}
-			b.WriteString(fmt.Sprintf("- **Run:** %d or more cards of consecutive rank\n", minLen))
+			// "exactly", not "or more": runMoves generates only fixed-length
+			// windows of MinRunLen cards and beats() requires equal length, so
+			// a longer run is unrepresentable -- a human following an "or
+			// more" rulebook would play a combination no engine opponent can
+			// make or beat.
+			b.WriteString(fmt.Sprintf("- **Run:** exactly %d cards of consecutive rank\n", minLen))
 		}
 	}
 	b.WriteString("\n")
@@ -519,9 +524,11 @@ func borrowedDescription(bm genome.BorrowedMechanic) string {
 		// penalty cards left in hand + captures (liveness guarantees CardPoints).
 		return "**Penalty cards:** at the end of each round, lose points equal to the value of any scoring cards (see Card Point Values) still in your hand or among the cards you captured — avoid collecting them"
 	case genome.MechRunPlay:
-		// shedding/runner.go ComboPlay: discard same-rank sets / same-suit runs
-		// of 2+ cards in one turn (when the group matches the top).
-		return "**Combination plays:** instead of one card, you may discard a set of 2 or more cards of the same rank, or a run of 2 or more consecutive cards in one suit, in a single turn — as long as one of those cards legally matches the discard top. Unloading several cards at once lets you empty your hand in bursts, so it pays to hold cards and dump a whole run"
+		// shedding/runner.go findComboPlays: MAXIMAL same-rank sets / same-suit
+		// runs of 2+ cards (all your cards of that rank / the full consecutive
+		// stretch) -- sub-groups are not offered, so the text must not imply
+		// you may hold part of a group back.
+		return "**Combination plays:** instead of one card, you may discard all your cards of one rank together (2 or more, a set), or a full stretch of 2 or more consecutive cards in one suit (a run), in a single turn — as long as one of those cards legally matches the discard top. The whole group goes at once, so it pays to build up runs and dump them in one burst"
 	case genome.MechKnock:
 		// shedding/runner.go Knockable: once your hand is down to a few cards
 		// you may knock to end the game immediately; fewest cards then wins.

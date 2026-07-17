@@ -543,9 +543,14 @@ func emitForJudging(dir string, gen int, top []*evolution.Individual) {
 		fmt.Fprintf(os.Stderr, "emit: %v\n", err)
 		return
 	}
+	// Count what actually landed on disk: a WriteFile failure (disk full,
+	// permissions) once printed "Emitted N" over an empty or partial judge
+	// queue, and the judge-in-loop then labeled an incomplete set.
+	emitted := 0
 	for i, ind := range top {
 		data, err := json.MarshalIndent(ind.Genome, "", "  ")
 		if err != nil {
+			fmt.Fprintf(os.Stderr, "emit rank%02d: %v\n", i+1, err)
 			continue
 		}
 		rdir := filepath.Join(gdir, fmt.Sprintf("rank%02d", i+1))
@@ -553,9 +558,13 @@ func emitForJudging(dir string, gen int, top []*evolution.Individual) {
 			fmt.Fprintf(os.Stderr, "emit: %v\n", err)
 			continue
 		}
-		os.WriteFile(filepath.Join(rdir, "genome.json"), data, 0o644)
+		if err := os.WriteFile(filepath.Join(rdir, "genome.json"), data, 0o644); err != nil {
+			fmt.Fprintf(os.Stderr, "emit rank%02d: %v\n", i+1, err)
+			continue
+		}
+		emitted++
 	}
-	fmt.Printf("  Emitted %d top genomes to %s\n", len(top), gdir)
+	fmt.Printf("  Emitted %d/%d top genomes to %s\n", emitted, len(top), gdir)
 }
 
 func getAllSeeds() []*genome.Genome {

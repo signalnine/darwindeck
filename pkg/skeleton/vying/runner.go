@@ -38,9 +38,22 @@ type Runner struct{}
 
 type Card = sim.Card
 
+
+// vyingParams returns g.Vying, or playable defaults when it is nil -- the
+// same degrade-don't-panic contract every other runner honors (climbing
+// defaults its params, casino nil-checks, shedding/rummy fall back to pass
+// moves). The pipeline always validates first, but a hand-built genome that
+// bypasses Tier 0 must not nil-panic the batch worker.
+func vyingParams(g *genome.Genome) *genome.VyingParams {
+	if g.Vying != nil {
+		return g.Vying
+	}
+	return &genome.VyingParams{StartingChips: 200, MinBet: 5, MaxRaises: 2, RoundsPerGame: 2}
+}
+
 func (r *Runner) Setup(g *genome.Genome, rng *rand.Rand) *sim.GameState {
 	state := sim.NewGameState(g.Players)
-	p := g.Vying
+	p := vyingParams(g)
 	for i := 0; i < g.Players; i++ {
 		state.Scores[i] = p.StartingChips
 	}
@@ -81,7 +94,7 @@ func (r *Runner) beginDeal(state *sim.GameState, g *genome.Genome) {
 	}
 
 	bb := state.Round % state.NumPlayers
-	post := g.Vying.MinBet
+	post := vyingParams(g).MinBet
 	if post > state.Scores[bb] {
 		post = state.Scores[bb] // validation prevents this, but stay solvent
 	}
@@ -184,8 +197,8 @@ func (r *Runner) GenerateMoves(state *sim.GameState, g *genome.Genome) []sim.Mov
 		return nil // unreachable in a well-formed loop (we advance to non-folded)
 	}
 	facing := state.CurrentBet - state.Committed[a]
-	canRaise := state.RaiseCount < g.Vying.MaxRaises &&
-		state.Scores[a] >= facing+g.Vying.MinBet
+	canRaise := state.RaiseCount < vyingParams(g).MaxRaises &&
+		state.Scores[a] >= facing+vyingParams(g).MinBet
 
 	var moves []sim.Move
 	if facing == 0 {
@@ -221,11 +234,11 @@ func (r *Runner) ApplyMove(state *sim.GameState, move sim.Move, g *genome.Genome
 
 	case sim.MoveRaise:
 		// Call the outstanding bet, then raise by MinBet.
-		put := facing + g.Vying.MinBet
+		put := facing + vyingParams(g).MinBet
 		state.Scores[a] -= put
 		state.Committed[a] += put
 		state.Pot += put
-		state.CurrentBet += g.Vying.MinBet
+		state.CurrentBet += vyingParams(g).MinBet
 		state.RaiseCount++
 		// Every other non-folded player now owes a response to the raise.
 		state.ToAct = countNonFolded(state) - 1

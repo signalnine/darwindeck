@@ -398,6 +398,7 @@ func (rr Runner) Apply(gs *sim.GameState, m sim.Move) {
 	if m.Type == sim.MoveBid { // ModBid: record the contract and pass to the next bidder
 		gs.Bids[p] = m.Amount
 		gs.Active = (p + 1) % gs.NumPlayers // after the last seat bids, wraps to 0 to lead trick 1
+		gs.Turn++                           // a bid is a turn, like MoveKnock above (SpecGenome's RoundsPerGame=2 cap leaves ample headroom)
 		return
 	}
 	if s.Move == Rummy { // two-phase turn; counts ONE Turn per draw+discard pair

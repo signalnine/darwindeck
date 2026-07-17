@@ -171,3 +171,42 @@ func TestEmitDossiersAreLeakFree(t *testing.T) {
 		}
 	}
 }
+
+// TestSortIDsNumericIsNumeric: IDs are G%02d, so widths diverge at 100 and a
+// lexicographic compare ordered G100 before G11.
+func TestSortIDsNumericIsNumeric(t *testing.T) {
+	ids := []string{"G100", "G02", "G11", "G9", "G001"}
+	SortIDsNumeric(ids)
+	want := []string{"G001", "G02", "G9", "G11", "G100"}
+	for i := range want {
+		if ids[i] != want[i] {
+			t.Fatalf("order = %v, want %v", ids, want)
+		}
+	}
+}
+
+// TestCleanStaleDossiers: re-emitting a smaller set into a dir that held a
+// larger one left stale G(N+1)+.md dossiers beside a manifest that no longer
+// listed them -- a judge globbing *.md scored dossiers whose IDs resolved to
+// the wrong answer-key entries.
+func TestCleanStaleDossiers(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"G01.md", "G07.md", "prompt.md"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("stale"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(dir, "manifest.json"), []byte("[]"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := cleanStaleDossiers(dir); err != nil {
+		t.Fatal(err)
+	}
+	left, _ := filepath.Glob(filepath.Join(dir, "*.md"))
+	if len(left) != 0 {
+		t.Fatalf("stale .md files survived: %v", left)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "manifest.json")); err != nil {
+		t.Fatalf("non-dossier files must survive the sweep: %v", err)
+	}
+}

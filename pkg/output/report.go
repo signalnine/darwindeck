@@ -93,7 +93,10 @@ func GenerateReport(g *genome.Genome, m fitness.Metrics) string {
 }
 
 func quickTake(g *genome.Genome) string {
-	base := ""
+	// Every skeleton needs a case: a missing one published a report whose
+	// Quick Take line was literally empty ("**Quick Take:** ") for casino and
+	// vying genomes.
+	base := "A card game"
 	switch g.Skeleton {
 	case genome.Shedding:
 		base = "A shedding game"
@@ -103,6 +106,10 @@ func quickTake(g *genome.Genome) string {
 		base = "A rummy-style game"
 	case genome.Climbing:
 		base = "A climbing/ladder game"
+	case genome.Casino:
+		base = "A fishing/capture game"
+	case genome.Vying:
+		base = "A betting/showdown game"
 	}
 
 	modifiers := []string{}
@@ -134,6 +141,15 @@ func borrowedQuickDesc(bm genome.BorrowedMechanic) string {
 		return "penalty cards"
 	case genome.MechDrawPenalty:
 		return "draw penalties"
+	// The deep borrows are the headline hybrids -- the generic "borrowed
+	// mechanics" fallback erased exactly the mechanics the discovery work is
+	// about from Quick Takes and insights.
+	case genome.MechRunPlay:
+		return "multi-card combination plays"
+	case genome.MechFollowSuit:
+		return "a follow-suit obligation"
+	case genome.MechKnock:
+		return "knocking to end the game early"
 	default:
 		return "borrowed mechanics"
 	}

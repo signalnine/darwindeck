@@ -778,8 +778,11 @@ func (e *Engine) TopN(n int) []*Individual {
 		return e.Population[i].OutputRank() > e.Population[j].OutputRank()
 	})
 
-	// Reserve at least n/numSkeletons slots per skeleton type
-	perSkeleton := n / 3
+	// Reserve at least n/numSkeletons slots per skeleton type. The divisor
+	// is the real skeleton count (it was a hardcoded 3 from the original-
+	// skeleton era, so the reservation over-provisioned the best-represented
+	// skeletons by 2x and later skeletons got fewer or no reserved slots).
+	perSkeleton := n / len(genome.AllSkeletons())
 	if perSkeleton < 2 {
 		perSkeleton = 2
 	}

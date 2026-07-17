@@ -68,13 +68,19 @@ func main() {
 	// for judge-certified-novel compositions, not just behavioral novelty.
 	for i := 1; i < len(os.Args)-1; i++ {
 		if os.Args[i] == "-verdicts" {
-			if data, err := os.ReadFile(os.Args[i+1]); err == nil {
-				if err := json.Unmarshal(data, &JudgeVerdicts); err != nil {
-					fmt.Fprintln(os.Stderr, "verdicts:", err)
-				} else {
-					fmt.Printf("loaded %d judge verdicts from %s\n", len(JudgeVerdicts), os.Args[i+1])
-				}
+			// A typo'd path must fail loudly: a silently-ignored verdict file
+			// runs the whole GA with an empty (neutral) verdict table, and the
+			// judge-in-loop run you thought you launched never happened.
+			data, err := os.ReadFile(os.Args[i+1])
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "verdicts:", err)
+				os.Exit(1)
 			}
+			if err := json.Unmarshal(data, &JudgeVerdicts); err != nil {
+				fmt.Fprintln(os.Stderr, "verdicts:", err)
+				os.Exit(1)
+			}
+			fmt.Printf("loaded %d judge verdicts from %s\n", len(JudgeVerdicts), os.Args[i+1])
 		}
 	}
 

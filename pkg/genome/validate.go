@@ -118,6 +118,17 @@ func Validate(g *Genome) []string {
 			errs = append(errs, fmt.Sprintf(
 				"special card %d (%s) is a catch-all (by_rank=0, by_suit=0 matches every card): it deletes the skeleton's match/draw rules; qualify it by rank and/or suit", i, sc.Type))
 		}
+		// Out-of-range qualifiers are the catch-all's mirror image: MatchesCard
+		// never fires (BySuit must equal suit+1 in 1-4; ByRank a real rank
+		// 2-14), but specialCardName renders the unrecognized value as "any
+		// card" -- a rulebook rule the engine never plays. Reachable only via
+		// hand-edited genomes (mutation stays in range); reject at Tier 0.
+		if sc.ByRank != 0 && (sc.ByRank < 2 || sc.ByRank > 14) {
+			errs = append(errs, fmt.Sprintf("special card %d (%s): by_rank %d out of range (0 = any, else 2-14)", i, sc.Type, sc.ByRank))
+		}
+		if sc.BySuit > 4 {
+			errs = append(errs, fmt.Sprintf("special card %d (%s): by_suit %d out of range (0 = any, else 1-4)", i, sc.Type, sc.BySuit))
+		}
 	}
 
 	// Validate borrowed mechanics
@@ -506,6 +517,20 @@ func validateScoring(g *Genome) []string {
 	}
 	if g.TrumpRule == TrumpFixed && g.Scoring.TrumpSuit > 4 {
 		errs = append(errs, fmt.Sprintf("trump_suit must be 1-4, got %d", g.Scoring.TrumpSuit))
+	}
+
+	// Card-points qualifier ranges: MatchCardPoints treats Suit as suit+1
+	// (1-4) and Rank as a real rank (2-14), 0 = wildcard for either. An
+	// out-of-range value never matches any card, but the rulebook's scoring
+	// table still prints the row (as "any suit"/"any rank") -- a rule the
+	// engine never scores. Reachable only via hand-edited genomes.
+	for i, cp := range g.Scoring.CardPoints {
+		if cp.Rank != 0 && (cp.Rank < 2 || cp.Rank > 14) {
+			errs = append(errs, fmt.Sprintf("card_points %d: rank %d out of range (0 = any, else 2-14)", i, cp.Rank))
+		}
+		if cp.Suit > 4 {
+			errs = append(errs, fmt.Sprintf("card_points %d: suit %d out of range (0 = any, else 1-4)", i, cp.Suit))
+		}
 	}
 
 	return errs

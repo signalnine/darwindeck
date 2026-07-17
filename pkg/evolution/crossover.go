@@ -643,8 +643,9 @@ func Crossover(a, b *genome.Genome, rng *rand.Rand) *genome.Genome {
 func repairCrossoverInvariants(child, a, b *genome.Genome, rng *rand.Rand) {
 	// HandSize * Players must fit in a 52-card deck. The standard
 	// engine path relies on Mutate to clamp this; mirror that loop
-	// here so Crossover's contract is "valid in, valid out."
-	for child.HandSize*child.Players > 52 {
+	// here so Crossover's contract is "valid in, valid out." Casino's
+	// budget includes its face-up TableSize (validateCasino).
+	for child.HandSize*child.Players+casinoTableSize(child) > 52 {
 		if rng.Float64() < 0.5 {
 			child.HandSize--
 		} else {
@@ -655,6 +656,14 @@ func repairCrossoverInvariants(child, a, b *genome.Genome, rng *rand.Rand) {
 		}
 		if child.Players < 2 {
 			child.Players = 2
+		}
+		if child.HandSize == 3 && child.Players == 2 {
+			break // floor reached; shrink the table instead of looping forever
+		}
+	}
+	if child.Skeleton == genome.Casino && child.Casino != nil {
+		for child.HandSize*child.Players+child.Casino.TableSize > 52 && child.Casino.TableSize > 0 {
+			child.Casino.TableSize--
 		}
 	}
 

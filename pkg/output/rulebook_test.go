@@ -424,7 +424,9 @@ func TestBorrowedRulesDescribeConcreteMechanics(t *testing.T) {
 		{genome.MechAvoidance, []string{"Penalty cards", "lose points equal to", "Card Point Values"}},
 		{genome.MechTrickScoring, []string{"Capture bonus", "captured the most cards", "equal to the number of cards", "split the bonus evenly"}},
 		{genome.MechDrawPenalty, []string{"Draw penalty", "face card (Jack or higher)", "draw 1 extra card"}},
-		{genome.MechRunPlay, []string{"Combination plays", "set of 2 or more cards of the same rank", "run of 2 or more consecutive"}},
+		// Anchors match the maximal-group semantics (findComboPlays offers ALL
+		// cards of a rank / the full consecutive stretch, never a sub-group).
+		{genome.MechRunPlay, []string{"Combination plays", "all your cards of one rank together", "2 or more consecutive cards in one suit"}},
 	}
 	bannedGeneric := []string{
 		"Earn bonus points for forming sets or runs",

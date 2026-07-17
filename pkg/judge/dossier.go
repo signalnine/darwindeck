@@ -64,8 +64,12 @@ func BuildDossier(g *genome.Genome) (string, error) {
 	// descent toward the win condition -- a sound-but-slow rummy game (Gin)
 	// reaches a legal knock in only a few percent of greedy games, so the
 	// sample must be large enough to observe it reliably.
+	// Disjoint seed range from the trace batch: RunBatch derives game seeds as
+	// base+i, so a base of dossierSeed+2 sat INSIDE the trace batch's
+	// [dossierSeed+1, dossierSeed+1+traceN) range -- the termination stats
+	// were measured on byte-replays of trace games, not an independent sample.
 	const termN = 150
-	term := computeTermination(g, runner, ai, termN, dossierSeed+2)
+	term := computeTermination(g, runner, ai, termN, dossierSeed+1<<20)
 	b.WriteString(renderTermination(term))
 
 	return b.String(), nil

@@ -27,29 +27,19 @@ func runGame(g *genome.Genome, seed uint64) sim.GameResult {
 
 		winner := runner.CheckEnd(state, g)
 		if winner >= 0 {
-			handSizes := make([]int, state.NumPlayers)
-			for i, h := range state.Hands {
-				handSizes[i] = len(h)
-			}
 			return sim.GameResult{
-				Winner:    winner,
-				Turns:     state.Turn,
-				Events:    state.Events,
-				HandSizes: handSizes,
+				Winner: winner,
+				Turns:  state.Turn,
+				Events: state.Events,
 			}
 		}
 
 		if state.Turn >= maxTurns {
-			handSizes := make([]int, state.NumPlayers)
-			for i, h := range state.Hands {
-				handSizes[i] = len(h)
-			}
 			return sim.GameResult{
-				Winner:    -1,
-				Turns:     state.Turn,
-				Events:    state.Events,
-				HandSizes: handSizes,
-				Error:     "max_turns",
+				Winner: -1,
+				Turns:  state.Turn,
+				Events: state.Events,
+				Error:  "max_turns",
 			}
 		}
 

@@ -82,7 +82,12 @@ func EvaluateStability(g *genome.Genome, baseSeed uint64) StabilityResult {
 	// published genome content.
 	off := genomeStabilityOffset(g)
 	for k := 0; k < stabilityEvals; k++ {
-		seed := stabilitySeedBase + off + uint64(k)*7919 // 7919: a prime stride
+		// baseSeed is mixed in (golden-ratio multiplier to spread nearby run
+		// seeds far apart) so the doc contract "deterministic under fixed
+		// (g, baseSeed)" is real: the parameter was previously unused, which
+		// made stability identical across runs regardless of -seed AND let a
+		// run seeded near stabilitySeedBase overlap the stability stream.
+		seed := stabilitySeedBase + baseSeed*0x9e3779b97f4a7c15 + off + uint64(k)*7919 // 7919: a prime stride
 		ev := fitness.Evaluate(g, seed)
 		switch {
 		case ev.Valid:

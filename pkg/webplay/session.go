@@ -149,11 +149,15 @@ func (ws *WebSession) advance() {
 			return
 		}
 
-		// AI / non-human seat: pick, apply, fire hooks, narrate.
+		// AI / non-human seat: pick, apply, fire hooks, narrate. The label is
+		// rendered BEFORE the apply: moveLabel reads state for the vying call
+		// amount, and post-apply the bet is settled and Active has advanced,
+		// so "Call N" showed the NEXT seat's owed amount (usually 0).
 		actor := ws.state.Active
 		mv := ws.ai.SelectMove(moves, ws.state, ws.rng)
+		label := moveLabel(mv, ws.state, ws.Genome)
 		events := ws.applyMove(mv)
-		ws.logf("Player %d: %s%s", actor, moveLabel(mv, ws.state, ws.Genome), eventSuffix(events))
+		ws.logf("Player %d: %s%s", actor, label, eventSuffix(events))
 	}
 }
 
@@ -177,8 +181,9 @@ func (ws *WebSession) submitMove(index, version int) error {
 		return fmt.Errorf("move index %d out of range [0,%d)", index, len(ws.legalMoves))
 	}
 	mv := ws.legalMoves[index]
+	label := moveLabel(mv, ws.state, ws.Genome) // pre-apply: see the aiTurn note in advance
 	events := ws.applyMove(mv)
-	ws.logf("You: %s%s", moveLabel(mv, ws.state, ws.Genome), eventSuffix(events))
+	ws.logf("You: %s%s", label, eventSuffix(events))
 	ws.legalMoves = nil
 	ws.advance()
 	return nil

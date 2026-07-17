@@ -115,9 +115,10 @@ func computeDecisionDensity(result sim.BatchResult) float64 {
 // leader tracks for ALL games including max_turns/stuck/no_moves exits, whose
 // tracks end with a leader but no winner; and a rummy scoring borrow can hand
 // the CheckEnd win (state.Scores incl. hook contributions) to a player who
-// never led on live deadwood (audit Wave D fix 1). Games with fewer than 4
-// leader samples or without a winner (Winner < 0: non-completion) are
-// skipped; a batch with no qualifying game scores 0.
+// never led on live deadwood (audit Wave D fix 1). Games with fewer than 5
+// leader samples (the minimum where the resolution index lands strictly
+// after the midgame sample) or without a winner (Winner < 0: non-completion)
+// are skipped; a batch with no qualifying game scores 0.
 func computeGameArc(result sim.BatchResult) float64 {
 	comeback, resolution, leadChanges, counted := arcStats(result)
 	if counted == 0 {
@@ -134,7 +135,12 @@ func arcStats(result sim.BatchResult) (comeback, resolution, leadChanges float64
 	comebacks, resolutions, changes := 0, 0, 0
 	for i, track := range result.AllLeaders {
 		n := len(track)
-		if n < 4 {
+		// Minimum 5 samples, not 4: the resolution index clamps to n-2, and
+		// only for n >= 5 is n-2 strictly AFTER the midgame sample (n/2). At
+		// n == 4 both read track[2], so "resolution" and "comeback" measured
+		// the same sample and were mechanically anticorrelated -- a 4-sample
+		// game has no probe-able late-game at all.
+		if n < 5 {
 			continue
 		}
 		// Defensive: a hand-built BatchResult without winners carries no
@@ -153,8 +159,8 @@ func arcStats(result sim.BatchResult) (comeback, resolution, leadChanges float64
 		// never the final sample itself. For n <= 10, n*9/10 == n-1, and the
 		// final leader correlates with the winner, so ultra-short games (the
 		// instant-knock degenerate class the calibration suite targets) got
-		// resolution ~1 for free (audit Wave D fix 2). The >= 4 sample
-		// minimum above keeps the index >= 2, after the midgame sample.
+		// resolution ~1 for free (audit Wave D fix 2). The >= 5 sample
+		// minimum above keeps the index strictly after the midgame sample.
 		resIdx := n * 9 / 10
 		if resIdx > n-2 {
 			resIdx = n - 2

@@ -6,6 +6,7 @@ import (
 	"math/rand/v2"
 	"os"
 
+	"github.com/darwindeck/darwindeck/pkg/fitness"
 	"github.com/darwindeck/darwindeck/pkg/genome"
 )
 
@@ -49,6 +50,12 @@ type checkpointConfig struct {
 	TournamentSize int
 	BaseSeed       uint64
 	MCTSDecile     float64
+	// MCTSEval changes the MCTS evaluation stream feeding MctsSum: resuming
+	// under a different search strength would splice two incommensurable MCTS
+	// streams into one running mean -- exactly the corruption this fingerprint
+	// exists to prevent. Old checkpoints lack the field and unmarshal to the
+	// zero value, which matches the default config, so they stay resumable.
+	MCTSEval       fitness.MCTSEvalConfig
 	CrossSkeleton  bool
 	NoveltySelect  bool
 	FitnessFloor   float64
@@ -64,6 +71,7 @@ func (e *NoveltyEngine) configFingerprint() checkpointConfig {
 		TournamentSize: e.Config.TournamentSize,
 		BaseSeed:       e.Config.BaseSeed,
 		MCTSDecile:     e.Config.MCTSDecile,
+		MCTSEval:       e.Config.MCTSEval,
 		CrossSkeleton:  e.Config.CrossSkeleton,
 		NoveltySelect:  e.Config.NoveltySelect,
 		FitnessFloor:   FitnessFloor,

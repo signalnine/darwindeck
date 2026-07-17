@@ -101,13 +101,13 @@ the metrics are blind to it.
 
 ### Fitness Function (5 metrics)
 
-| Metric | Weight | What it measures (current implementation) |
+| Metric | Weight | What it measures (current implementation, post audit-remediation) |
 |--------|--------|-----------------|
-| Meaningful Decisions | 0.25 | Event-log proxy: fraction of move events that are chosen plays (card played, meld laid, draw-from-discard) vs forced deck draws. Does NOT count legal-move alternatives, so trick-taking pins at 1.0 structurally. Real legal-move counting lands in Task 9 of `docs/plans/2026-06-11-audit-remediation.md`. |
-| Game Arc | 0.25 | Across-games proxy: win-distribution entropy across seats (0.6) + turn-count coefficient of variation (0.4). Measures seat balance and length spread, not a within-game arc (remediation Task 10). |
-| Interaction | 0.20 | Event-taxonomy proxy: share of events tagged interactive (specials, trick wins, melds, every discard). Counts discards as interactive regardless of effect on opponents (remediation Task 11). |
-| Skill Gradient | 0.20 | Greedy seat-0 win rate vs the empirical random seat-0 baseline from the same-seed random batch |
-| Session Length | 0.10 | Target 15-40 turns, linear falloff outside; 0 below 5 or above 100. Turn units differ per skeleton (remediation Task 12). |
+| Meaningful Decisions | 0.25 | Fraction of decision points whose choice plausibly MATTERED: >= 2 legal moves AND the batch runner's choice-impact sampling finds sampled moves differing in type, `Move.Amount` (bids/nominations), special-effect profile, or next-player option impact (per-skeleton probes in `turnIsMeaningful`, pkg/sim/batch.go; rummy judges its own turns by deadwood consequence). |
+| Game Arc | 0.25 | Within-game leader-track arc: 0.4*tent(comeback, 0.5) + 0.4*resolution + 0.2*lead-changes, where comeback = P(winner was NOT leading at the midgame sample) and resolution = P(the near-end leader wins). Games need >= 5 leader samples and a real winner to qualify. |
+| Interaction | 0.20 | Share of turns that change the next player's options (per-skeleton OptionDelta counterfactuals -- see the Task 7 table in `docs/plans/2026-06-11-audit-remediation.md`; climbing counts legal PLAYS on both sides; vying scores by move type, raise/fold) or that carry an attack event; ratio scaled by /0.5, clamped to [0,1]. |
+| Skill Gradient | 0.20 | Two-tier: 0.4*greedy-over-random + 0.6*MCTS-over-greedy, each normalized by remaining headroom, divided by skillScale=0.5. |
+| Session Length | 0.10 | Decisions per player per game: 1.0 in the 6-60 band, linear falloff over 3-6 and 60-170, 0 outside. |
 
 ### Validation Pipeline
 

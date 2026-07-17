@@ -224,3 +224,18 @@ func TestNegativeStackPostsNothing(t *testing.T) {
 		t.Fatalf("negative stack changed by posting: %d, want -50", state.Scores[1])
 	}
 }
+
+// TestSetupNilParamsDoesNotPanic: a hand-built genome that bypasses Tier-0
+// validation must degrade to defaults, not nil-panic the batch worker (every
+// other runner honors the same contract).
+func TestSetupNilParamsDoesNotPanic(t *testing.T) {
+	g := &genome.Genome{Skeleton: genome.Vying, Players: 3, HandSize: 5}
+	r := &Runner{}
+	state := r.Setup(g, rand.New(rand.NewPCG(1, 0)))
+	if state == nil || len(state.Hands) != 3 {
+		t.Fatalf("Setup with nil Vying params must produce a playable state")
+	}
+	if moves := r.GenerateMoves(state, g); len(moves) == 0 {
+		t.Fatal("no legal moves from the default-params setup")
+	}
+}

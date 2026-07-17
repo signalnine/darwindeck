@@ -42,8 +42,10 @@ func BuildGrammarDossier(spec grammar.GameSpec, id string) (string, error) {
 	// Termination: the grammar guarantees termination by construction (never-empty
 	// move set + a runner-level deadlock end), so report the observed completion
 	// and state the guarantee rather than the skeleton-specific reachable-win probe.
+	// Disjoint seed range from the trace batch above (RunBatch derives game
+	// seeds as base+i, so +2 would replay trace games 1..termN).
 	const termN = 200
-	termRes := sim.RunBatch(g, runner, ai, termN, dossierSeed+2)
+	termRes := sim.RunBatch(g, runner, ai, termN, dossierSeed+1<<20)
 	pct := 0.0
 	if termRes.GamesPlayed > 0 {
 		pct = 100 * float64(termRes.Completions) / float64(termRes.GamesPlayed)
@@ -63,6 +65,9 @@ func EmitGrammar(specs []grammar.GameSpec, outDir string) (EmitResult, error) {
 		return EmitResult{}, fmt.Errorf("no specs to emit")
 	}
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		return EmitResult{}, err
+	}
+	if err := cleanStaleDossiers(outDir); err != nil {
 		return EmitResult{}, err
 	}
 	res := EmitResult{AnswerKey: map[string]AnswerRec{}, DossierDir: outDir}

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/darwindeck/darwindeck/pkg/genome"
@@ -68,6 +69,9 @@ func Emit(inputDir, outDir string, sources map[string]GameSource) (EmitResult, e
 	}
 
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		return EmitResult{}, err
+	}
+	if err := cleanStaleDossiers(outDir); err != nil {
 		return EmitResult{}, err
 	}
 
@@ -195,10 +199,40 @@ func WriteAnswerKey(path string, key map[string]AnswerRec) error {
 	return writeJSON(path, key)
 }
 
-// SortIDsNumeric sorts neutral IDs (G01, G02, ...) numerically. Used by callers
-// that build ordered displays.
+// SortIDsNumeric sorts neutral IDs (G01, G02, ...) numerically -- actually
+// numerically, not lexicographically: IDs are G%02d, so widths diverge at 100
+// and a string compare put G100 before G11. Non-numeric suffixes fall back to
+// the string order.
 func SortIDsNumeric(ids []string) {
+	num := func(id string) (int, bool) {
+		n, err := strconv.Atoi(strings.TrimPrefix(id, "G"))
+		return n, err == nil
+	}
 	sort.Slice(ids, func(i, j int) bool {
+		ni, iok := num(ids[i])
+		nj, jok := num(ids[j])
+		if iok && jok {
+			return ni < nj
+		}
 		return strings.Compare(ids[i], ids[j]) < 0
 	})
+}
+
+// cleanStaleDossiers removes every .md file already in outDir before a fresh
+// emit. Emit numbers dossiers G01..GNN from scratch, so re-emitting a SMALLER
+// set into a dir that held a larger one left stale G(N+1)+.md files beside a
+// manifest that no longer listed them -- a judge globbing *.md then scored
+// dossiers whose IDs resolve to the WRONG answer-key entries (a silently
+// corrupted blind experiment).
+func cleanStaleDossiers(outDir string) error {
+	stale, err := filepath.Glob(filepath.Join(outDir, "*.md"))
+	if err != nil {
+		return err
+	}
+	for _, p := range stale {
+		if err := os.Remove(p); err != nil {
+			return err
+		}
+	}
+	return nil
 }

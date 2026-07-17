@@ -268,13 +268,30 @@ func applyDrawPenalty(state *sim.GameState, g *genome.Genome, event sim.Event) {
 	if event.Type != sim.EventCardPlayed {
 		return
 	}
-	// Draw 1 extra card on high-value plays (face cards)
-	if len(event.Cards) > 0 && event.Cards[0].Rank >= sim.Jack {
-		if len(state.Deck) > 0 {
-			drawn, rest := sim.DrawN(state.Deck, 1)
-			state.Deck = rest
-			state.Hands[event.PlayerID] = append(state.Hands[event.PlayerID], drawn...)
+	// Draw 1 extra card when the play contains a high card (Jack or higher).
+	// ANY card of the combo counts, matching the rulebook's "whenever you play
+	// a face card": climbing runs are built in ascending rank order, so a
+	// Cards[0]-only check let a 9-10-J run smuggle its Jack past the penalty
+	// while a J-Q-K run paid it. One draw per play regardless of how many high
+	// cards it contains (a pair of Jacks draws 1, as before).
+	high := false
+	for _, c := range event.Cards {
+		if c.Rank >= sim.Jack {
+			high = true
+			break
 		}
+	}
+	if high && len(state.Deck) > 0 {
+		// Cap runaway growth: rummy nets +1 card per penalized discard, and
+		// past ~32 cards the deadwood meld enumerator silently ignores the
+		// overflow (miscounted scores) while the exact-partition DP cost
+		// explodes. No real hand approaches the cap in normal play.
+		if len(state.Hands[event.PlayerID]) >= 31 {
+			return
+		}
+		drawn, rest := sim.DrawN(state.Deck, 1)
+		state.Deck = rest
+		state.Hands[event.PlayerID] = append(state.Hands[event.PlayerID], drawn...)
 	}
 }
 

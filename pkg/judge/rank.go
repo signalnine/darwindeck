@@ -223,7 +223,11 @@ func majorityNovelty(vs []Verdict) string {
 	if novel > 0 {
 		return "novel"
 	}
-	return "novel"
+	// No recognized novelty label at all: refuse to certify novelty on zero
+	// signal. The old default here was "novel" -- a malformed verdict set got
+	// the most generous possible claim for free. Conservative, matching the
+	// tie-break above.
+	return "variant_of_known"
 }
 
 func majorityPlayable(vs []Verdict) bool {
@@ -294,6 +298,26 @@ func LoadVerdicts(path string) ([]Verdict, error) {
 	var vs []Verdict
 	if err := json.Unmarshal(data, &vs); err != nil {
 		return nil, fmt.Errorf("parse verdicts: %w", err)
+	}
+	// Normalize the LLM-judge label vocabulary at the input boundary: judges
+	// drift in case/whitespace ("Publishable"), and an unrecognized quality
+	// silently ranked BELOW degenerate (qualityRank default 0) while an
+	// unrecognized novelty counted toward the generous "novel" default. Warn
+	// on labels that stay unrecognized after normalization -- a malformed
+	// verdict must be visible, not silently mis-ranked.
+	for i := range vs {
+		vs[i].Quality = strings.ToLower(strings.TrimSpace(vs[i].Quality))
+		vs[i].Novelty = strings.ToLower(strings.TrimSpace(vs[i].Novelty))
+		switch vs[i].Quality {
+		case "publishable", "borderline", "degenerate":
+		default:
+			fmt.Fprintf(os.Stderr, "warning: verdict %s rep %d: unrecognized quality %q (ranks below degenerate)\n", vs[i].ID, vs[i].Rep, vs[i].Quality)
+		}
+		switch vs[i].Novelty {
+		case "novel", "variant_of_known":
+		default:
+			fmt.Fprintf(os.Stderr, "warning: verdict %s rep %d: unrecognized novelty %q (ignored by the majority)\n", vs[i].ID, vs[i].Rep, vs[i].Novelty)
+		}
 	}
 	return vs, nil
 }

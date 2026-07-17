@@ -532,6 +532,28 @@ func (g *Genome) HasScoringBorrow() bool {
 	return false
 }
 
+// hasLiveScoringBorrow is HasScoringBorrow restricted to borrows whose hooks
+// actually fire: applyAvoidance returns early on empty CardPoints, so an
+// avoidance-only genome without them carries a DEAD borrow. CasinoScored /
+// VyingScored must use this, not the raw presence check -- otherwise the
+// runner emits the scored-variant machinery (EventRoundEnd, early sweep,
+// showdown muck) and the rulebook prints the scored winning text ("see the
+// Additional Rules below") for a hook that never banks a point and a section
+// LiveBorrows has pruned from the rulebook.
+func (g *Genome) hasLiveScoringBorrow() bool {
+	for _, b := range g.Borrowed {
+		switch b.Mechanic {
+		case MechMeldBonus:
+			return true
+		case MechAvoidance:
+			if len(g.Scoring.CardPoints) > 0 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // CasinoScored reports whether g is a casino host carrying a scoring borrow
 // (MechMeldBonus or MechAvoidance) -- a fishing/capture game scored Scopa-style.
 // The casino runner gates its single end-of-game EventRoundEnd and early table
@@ -544,7 +566,7 @@ func (g *Genome) HasScoringBorrow() bool {
 // scoring borrow is live at casino's single end-of-game tally (LiveBorrows only
 // prunes such borrows on a single-round Shedding host).
 func (g *Genome) CasinoScored() bool {
-	return g.Skeleton == Casino && g.HasScoringBorrow()
+	return g.Skeleton == Casino && g.hasLiveScoringBorrow()
 }
 
 // VyingScored reports whether g is a vying (poker) host carrying a scoring
@@ -559,7 +581,7 @@ func (g *Genome) CasinoScored() bool {
 // chase a meld a weak poker hand still scores. An unscored vying game is
 // byte-identical (no muck, no EventRoundEnd).
 func (g *Genome) VyingScored() bool {
-	return g.Skeleton == Vying && g.HasScoringBorrow()
+	return g.Skeleton == Vying && g.hasLiveScoringBorrow()
 }
 
 // HasBankingBorrow reports whether g carries ANY borrow whose hook banks into
