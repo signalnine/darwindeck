@@ -92,12 +92,12 @@ func cmdExperiment(args []string) {
 		*workers = runtime.NumCPU()
 	}
 
-	allSeeds := []*genome.Genome{
-		seeds.CrazyEights(), seeds.MauMau(),
-		seeds.Whist(), seeds.Hearts(), seeds.Spades(), seeds.OhHell(),
-		seeds.GinRummy(), seeds.KnockRummy(),
-		seeds.BigTwo(), // climbing skeleton seed (novelty evolution)
-	}
+	// seeds.All() is the single source of truth for the init pool -- this list
+	// was once maintained by hand and drifted (Casino and SimplePoker were
+	// missing, so per-skeleton diversity numbers measured a handicapped search
+	// silently non-comparable with `evolve` runs; the exact drift getAllSeeds
+	// in main.go documents fixing).
+	allSeeds := seeds.All()
 
 	fmt.Printf("DarwinDeck Diversity Experiment\n")
 	fmt.Printf("  Configs: %s\n", *configsFlag)
@@ -405,24 +405,26 @@ func computeMetrics(individuals []*evolution.Individual, behaviors []evolution.B
 		skelCount[skel]++
 	}
 
-	// Compute coverage and QD-score
+	// Compute coverage and QD-score. Iterate genome.AllSkeletons() in its
+	// fixed order and walk cells row-major, for two reasons: (1) the skeleton
+	// list was once a hand-coded 3-entry map, so climbing/casino/vying games
+	// landed in the grid but were invisible to Coverage/QD (a handicapped
+	// measurement); (2) summing qd by ranging over the grid MAP accumulated
+	// floats in a random order, so the same run produced last-bit-different
+	// QD scores (the determinism test flaked on exactly this).
 	totalCells := 0
 	totalOccupied := 0
 	totalQD := 0.0
 
-	skelNames := map[genome.SkeletonType]string{
-		genome.Shedding:    "shedding",
-		genome.TrickTaking: "trick_taking",
-		genome.Rummy:       "rummy",
-	}
-
-	for skel, name := range skelNames {
+	for _, skel := range genome.AllSkeletons() {
 		cells := evolution.GridSize * evolution.GridSize
 		occupied := len(skelCoverage[skel])
 		qd := 0.0
-		for key, fit := range grid {
-			if key.skeleton == skel {
-				qd += fit
+		for row := 0; row < evolution.GridSize; row++ {
+			for col := 0; col < evolution.GridSize; col++ {
+				if fit, ok := grid[cellKey{skel, row, col}]; ok {
+					qd += fit
+				}
 			}
 		}
 
@@ -431,7 +433,7 @@ func computeMetrics(individuals []*evolution.Individual, behaviors []evolution.B
 		totalQD += qd
 		skelQD[skel] = qd
 
-		result.PerSkeleton[name] = SkeletonMetrics{
+		result.PerSkeleton[skel.String()] = SkeletonMetrics{
 			Coverage: float64(occupied) / float64(cells),
 			QDScore:  qd,
 			NumGames: skelCount[skel],

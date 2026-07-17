@@ -613,6 +613,9 @@ func genomeHash(g *genome.Genome) string {
 		Shedding     *genome.SheddingParams
 		TrickTaking  *genome.TrickTakingParams
 		Rummy        *genome.RummyParams
+		Climbing     *genome.ClimbingParams
+		Casino       *genome.CasinoParams
+		Vying        *genome.VyingParams
 		Borrowed     []genome.BorrowedMechanic
 		SpecialCards []genome.SpecialCard
 		Scoring      genome.ScoringConfig
@@ -624,6 +627,9 @@ func genomeHash(g *genome.Genome) string {
 		Shedding:     g.Shedding,
 		TrickTaking:  g.TrickTaking,
 		Rummy:        g.Rummy,
+		Climbing:     g.Climbing,
+		Casino:       g.Casino,
+		Vying:        g.Vying,
 		Borrowed:     sortedBorrowed(g.Borrowed),
 		SpecialCards: sortedSpecialCards(g.SpecialCards),
 		Scoring: genome.ScoringConfig{

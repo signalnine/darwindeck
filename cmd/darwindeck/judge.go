@@ -20,6 +20,9 @@ var valueFlags = map[string]bool{
 	"-port": true, "--port": true,
 	"-host": true, "--host": true,
 	"-dir": true, "--dir": true,
+	// playtest
+	"-difficulty": true, "--difficulty": true,
+	"-seed": true, "--seed": true,
 }
 
 // splitPositional separates bare positional arguments from flag arguments so

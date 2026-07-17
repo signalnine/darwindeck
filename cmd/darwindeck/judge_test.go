@@ -40,6 +40,17 @@ func TestSplitPositional(t *testing.T) {
 			wantPos:  []string{"/dossiers", "/v.json"},
 			wantFlag: []string{"--out", "/r.md"},
 		},
+		{
+			// The documented playtest invocation: flags AFTER the genome path.
+			// cmdPlaytest once fed args straight to flag.Parse, which stops at
+			// the first non-flag token -- every flag after the path was
+			// silently dropped (wrong AI, time-derived seed, both logged
+			// wrongly into playtest_results.jsonl).
+			name:     "playtest flags after genome path",
+			args:     []string{"g.json", "--difficulty", "random", "--seed", "7"},
+			wantPos:  []string{"g.json"},
+			wantFlag: []string{"--difficulty", "random", "--seed", "7"},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

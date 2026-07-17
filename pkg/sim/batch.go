@@ -470,11 +470,20 @@ func runSingleGame(g *genome.Genome, runner GenericRunner, ai AIPlayer, rng *ran
 				// constraint (delta 0). next != mover guards the all-pass case
 				// where the lead returns to the mover (self-perturbation is not
 				// coupling, the shedding/rummy rule).
+				//
+				// Count PLAYS only on both sides: the follow position always
+				// carries an extra Pass move and a free lead never does, so a
+				// raw GenerateMoves count was biased +1 -- it produced
+				// impossible positive deltas (a follower whose every combo
+				// beats the table read +1) and read "removed exactly one
+				// option" as 0, undercounting climbing interaction. Every beat
+				// is also a legal lead, so the play-only delta honors the
+				// documented "always <= 0" contract.
 				if move.Type == MovePlay && next != mover {
-					after := probeOptionCount(runner, state, g, next)
+					after := probePlayOptionCount(runner, state, g, next)
 					savedTrick := state.TrickCards
 					state.TrickCards = nil // counterfactual: clear table => free lead
-					free := probeOptionCount(runner, state, g, next)
+					free := probePlayOptionCount(runner, state, g, next)
 					state.TrickCards = savedTrick
 					if after >= 0 && free >= 0 {
 						delta = after - free
@@ -576,9 +585,12 @@ const (
 	// combination (state.TrickCards), forcing the NEXT player to play a strictly
 	// higher same-type combination or pass. The delta on every MovePlay is:
 	//
-	//	OptionDelta = legalMoves(next, with the combo on the table)
-	//	             - legalMoves(next, counterfactual clear table / free lead)
+	//	OptionDelta = legalPLAYS(next, with the combo on the table)
+	//	             - legalPLAYS(next, counterfactual clear table / free lead)
 	//
+	// Plays only, on both sides: the follow position always adds a Pass and a
+	// free lead never does, so a raw move count carried a +1 floor bias that
+	// violated the <= 0 contract below (probePlayOptionCount).
 	// i.e. how much the mover's combination constrains the next player relative
 	// to leading freely. Always <= 0 and nonzero whenever a play restricts the
 	// follower's beating options (i.e. almost every play) -- which is correct:
@@ -687,8 +699,14 @@ const maxChoiceSamples = 4
 // meaningful, never crash a batch worker.
 type choiceSignature struct {
 	moveType MoveType
-	profile  uint8
-	probe    uint64
+	// amount discriminates moves that differ only in Move.Amount -- a
+	// trick-contract bid's target, or a grammar nominate suit. Without it a
+	// bid round's options all sampled identical signatures and the marquee
+	// decision of a bidding game was never "meaningful" (Move.Key encodes
+	// Amount for MCTS; this probe was the only Amount-blind reader).
+	amount  int
+	profile uint8
+	probe   uint64
 }
 
 // choiceSampleIndices fills buf with up to maxChoiceSamples distinct indices
@@ -770,10 +788,11 @@ func turnIsMeaningful(runner GenericRunner, state *GameState, g *genome.Genome, 
 }
 
 // choiceSignatureOf computes one sampled move's signature. Only card plays
-// carry a profile/probe; other move types are discriminated by type alone
-// (a knock vs a pass is trivially a different choice).
+// carry a profile/probe; other move types are discriminated by type and
+// Amount (a knock vs a pass is trivially a different choice; two bids differ
+// in their Amount targets).
 func choiceSignatureOf(runner GenericRunner, state *GameState, g *genome.Genome, m Move, mode optionDeltaMode, scratch *Card) choiceSignature {
-	sig := choiceSignature{moveType: m.Type}
+	sig := choiceSignature{moveType: m.Type, amount: m.Amount}
 	if m.Type != MovePlay || len(m.Cards) == 0 {
 		return sig
 	}
@@ -856,6 +875,30 @@ func probeOptionCount(runner GenericRunner, state *GameState, g *genome.Genome, 
 	}()
 	state.Active = p
 	return len(runner.GenerateMoves(state, g))
+}
+
+// probePlayOptionCount returns how many MovePlay moves player p would have in
+// the current state -- probeOptionCount restricted to plays. Used where the
+// two sides of a counterfactual differ in their non-play floor (climbing's
+// follow position always adds a Pass; a free lead never has one), which would
+// otherwise bias the delta by the floor difference. Returns -1 on probe
+// panic, like probeOptionCount.
+func probePlayOptionCount(runner GenericRunner, state *GameState, g *genome.Genome, p int) (n int) {
+	prevActive := state.Active
+	defer func() {
+		state.Active = prevActive
+		if recover() != nil {
+			n = -1
+		}
+	}()
+	state.Active = p
+	count := 0
+	for _, m := range runner.GenerateMoves(state, g) {
+		if m.Type == MovePlay {
+			count++
+		}
+	}
+	return count
 }
 
 // probePhaseOptionCount returns how many legal moves player p would have in

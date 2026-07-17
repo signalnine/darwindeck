@@ -121,7 +121,11 @@ func (s GameSpec) modifierRules() []string {
 		case ModFollowSuit:
 			out = append(out, "If you hold any card of the same suit as the top of the discard pile, you MUST play one of them -- you may not draw to avoid it.")
 		case ModDrawPenalty:
-			out = append(out, "Whenever you play a face card (Jack, Queen, or King), you must immediately draw one extra card from the deck as a penalty.")
+			// Keep this in sync with the runner: the penalty fires on Rank >= 11
+			// (Jack or HIGHER, so Aces too -- v2's applyDrawPenalty semantics),
+			// and on a multi-card combo it checks only the LAST card set down.
+			// The dossier must describe the game the engine actually plays.
+			out = append(out, "Whenever you play a high card -- Jack, Queen, King, or Ace (on a multi-card play, only the last card counts) -- you must immediately draw one extra card from the deck as a penalty.")
 		case ModKnock:
 			if s.Move == Rummy {
 				out = append(out, "When your unmelded cards are nearly gone, you may KNOCK at the start of your turn to end the game immediately. Whoever has the least deadwood then wins -- knock too early and an opponent with fewer stray cards beats you.")

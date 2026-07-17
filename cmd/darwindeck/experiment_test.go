@@ -105,7 +105,10 @@ func TestSplitCSV(t *testing.T) {
 //	C shedding fit=0.6 behavior=(0.15,0.05) -> cell row0,col1
 //	D trick   fit=0.8 behavior=(0.55,0.95) -> cell row9,col5
 //
-// Coverage: 3 occupied / 300 total cells = 0.01.
+// Coverage: 3 occupied / 600 total cells = 0.005 (the denominator spans ALL
+// SIX skeleton grids -- genome.AllSkeletons() -- since the search space does;
+// it was once a hand-coded 3-skeleton list that made climbing/casino/vying
+// games invisible to the metric).
 // QD-score: best per cell = 0.7 + 0.6 + 0.8 = 2.1.
 // Median fitness over [0.5,0.6,0.7,0.8] = 0.65.
 // Pairwise distance: mean of the 6 Euclidean distances
@@ -139,8 +142,8 @@ func TestComputeMetricsFixture(t *testing.T) {
 	if r.NumGames != 4 {
 		t.Errorf("NumGames = %d, want 4", r.NumGames)
 	}
-	if !approxEq(r.Coverage, 3.0/300.0, 1e-12) {
-		t.Errorf("Coverage = %v, want %v", r.Coverage, 3.0/300.0)
+	if !approxEq(r.Coverage, 3.0/600.0, 1e-12) {
+		t.Errorf("Coverage = %v, want %v", r.Coverage, 3.0/600.0)
 	}
 	if !approxEq(r.QDScore, 2.1, 1e-9) {
 		t.Errorf("QDScore = %v, want 2.1", r.QDScore)

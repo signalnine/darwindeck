@@ -134,6 +134,18 @@ func validateShedding(p *SheddingParams) []string {
 	if p.MatchRule > MatchBoth {
 		errs = append(errs, fmt.Sprintf("invalid match_rule: %d", p.MatchRule))
 	}
+	// MatchBoth is a LIVENESS violation, same class as the catch-all special:
+	// a play must match the top card's suit AND rank, but the only such card
+	// IS the top card, which no hand can hold in a single 52-card deck. No
+	// non-wild play is ever legal, so hands only grow and every game runs to
+	// the max-turns timeout (measured: 0/200 completions vs 198/200 under
+	// MatchEither). A wild special does not restore agency (only the wild rank
+	// is ever playable). Rejected at Tier 0 so mutants die free instead of
+	// burning a full Tier-1/Tier-2 evaluation each; the crossover borrow
+	// repair (giveBorrowTeeth) already relaxes MatchBoth to MatchEither.
+	if p.MatchRule == MatchBoth {
+		errs = append(errs, "match_rule 'both' is statically unplayable (the only suit+rank match of the top card is the top card itself); use suit, rank, or either")
+	}
 	if p.DrawPenalty < 1 || p.DrawPenalty > 3 {
 		errs = append(errs, fmt.Sprintf("draw_penalty must be 1-3, got %d", p.DrawPenalty))
 	}
@@ -430,6 +442,33 @@ func validateBorrowed(g *Genome) []string {
 		}
 		if !allowed[b.Mechanic] {
 			errs = append(errs, fmt.Sprintf("mechanic %d not borrowable by %s skeleton", b.Mechanic, g.Skeleton))
+		}
+		// Contextual rules: some (host, mechanic) pairs are only live under
+		// certain host params -- the same dd-lnh "no inert/degenerate borrow"
+		// bar the whitelist enforces, applied to combinations the flat map
+		// cannot see.
+		switch {
+		case b.Mechanic == MechAvoidance && g.Skeleton == TrickTaking &&
+			g.TrickTaking != nil && g.TrickTaking.TrickScoring != ScorePerTrick:
+			// Under ScoreCardPoints/ScoreAvoidance the host banks MatchCardPoints
+			// per captured card into Scores, and applyAvoidance subtracts the
+			// IDENTICAL MatchCardPoints over the identical captured tableau at
+			// round end -- exact cancellation: every score is 0 and seat 0 wins
+			// the tiebreak 100% of games (measured 300/300). The hybrid builder
+			// (giveBorrowTeeth) deliberately keeps ScorePerTrick for this reason;
+			// this rule makes the degenerate combos invalid instead of breedable.
+			errs = append(errs, "avoidance borrow on trick_taking requires trick_scoring=per_trick: card_points/avoidance native scoring banks the same card points the borrow subtracts (exact cancellation, structural seat-0 win)")
+		case b.Mechanic == MechFollowSuit && g.Skeleton == Shedding &&
+			g.Shedding != nil && g.Shedding.MatchRule == MatchRank:
+			// FollowConstrained keeps only top-suit plays, but under MatchRank a
+			// top-suit card is legal only if it also rank-matches -- i.e. it IS
+			// the top card, impossible. Holding any top-suit card erases every
+			// legal play, so games run all-draw to the timeout (measured 0/200
+			// completions vs 198/200 under MatchEither). The crossover repair
+			// (giveBorrowTeeth) relaxes exactly this combination; validation now
+			// rejects it on the paths that bypass the repair (seed-dir, playtest,
+			// serve). MatchBoth is rejected outright by validateShedding.
+			errs = append(errs, "follow_suit borrow on shedding requires match_rule suit or either: under match_rule=rank a held top-suit card is never itself playable, so the obligation collapses into all-draw and the game cannot complete")
 		}
 	}
 

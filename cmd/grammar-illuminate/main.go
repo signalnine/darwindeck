@@ -92,10 +92,18 @@ func main() {
 
 	// MAP-Elites loop: draw a random elite, mutate, try to place. Empty cells get
 	// filled; occupied cells only improve. No selection pressure toward one peak.
+	// Sort the pool by cell key: ranging over the archive MAP yields a random
+	// order per call, so the seeded rng indexed a shuffled slice and runs were
+	// not reproducible despite the fixed PCG seed.
 	cells := func() []elite {
-		out := make([]elite, 0, len(archive))
-		for _, e := range archive {
-			out = append(out, e)
+		keys := make([]string, 0, len(archive))
+		for k := range archive {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		out := make([]elite, 0, len(keys))
+		for _, k := range keys {
+			out = append(out, archive[k])
 		}
 		return out
 	}
@@ -116,8 +124,11 @@ func main() {
 	fmt.Printf("  specs evaluated               : %d\n", len(cache))
 
 	// The archive IS the diverse judging set: best game per family, sorted.
+	// Iterate cells in sorted order so equal-fitness ties break on the cell
+	// key, not on map iteration order -- the printed judging set must be
+	// identical across runs of the same seed.
 	byFam := map[string]elite{}
-	for _, e := range archive {
+	for _, e := range cells() {
 		f := e.spec.Family()
 		if cur, ok := byFam[f]; !ok || e.fitness > cur.fitness {
 			byFam[f] = e

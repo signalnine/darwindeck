@@ -446,3 +446,31 @@ func TestBorrowedRulesDescribeConcreteMechanics(t *testing.T) {
 		}
 	}
 }
+
+// TestTrickTakingRulebookDescribesRounds: the runner plays RoundsPerGame deals
+// with cumulative scores, and mutation moves RoundsPerGame across 1-13. The
+// rulebook once omitted the round structure entirely, so a human (or a blind
+// judge -- dossiers embed this rulebook) evaluated a one-deal game while the
+// engine's traces reflected seven.
+func TestTrickTakingRulebookDescribesRounds(t *testing.T) {
+	g := &genome.Genome{
+		ID:       "multi-round-whist",
+		Skeleton: genome.TrickTaking,
+		Players:  4,
+		HandSize: 13,
+		TrickTaking: &genome.TrickTakingParams{
+			MustFollowSuit: true,
+			TrickScoring:   genome.ScorePerTrick,
+			RoundsPerGame:  7,
+		},
+	}
+	rb := GenerateRulebook(g)
+	if !strings.Contains(rb, "7 deals") {
+		t.Fatalf("multi-round trick-taking rulebook must state the deal count; got:\n%s", rb)
+	}
+
+	g.TrickTaking.RoundsPerGame = 1
+	if rb := GenerateRulebook(g); strings.Contains(rb, "deals**") {
+		t.Fatalf("single-round rulebook must not describe a rounds structure")
+	}
+}

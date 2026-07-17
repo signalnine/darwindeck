@@ -299,15 +299,19 @@ func cmdPlaytest(args []string) {
 	fs := flag.NewFlagSet("playtest", flag.ExitOnError)
 	difficulty := fs.String("difficulty", "greedy", "AI difficulty: random, greedy, or mcts")
 	seed := fs.Uint64("seed", 0, "random seed (0=random)")
-	fs.Parse(args)
+	// splitPositional, not fs.Parse(args) directly: flag parsing stops at the
+	// first non-flag token, so the documented `playtest genome.json
+	// --difficulty greedy` form silently dropped every flag after the path --
+	// wrong AI, time-derived seed, and a ratings record logging both wrongly.
+	positional, flagArgs := splitPositional(args)
+	fs.Parse(flagArgs)
 
-	remaining := fs.Args()
-	if len(remaining) == 0 {
+	if len(positional) == 0 {
 		fmt.Fprintln(os.Stderr, "usage: darwindeck playtest <genome.json> [--difficulty random|greedy|mcts]")
 		os.Exit(1)
 	}
 
-	data, err := os.ReadFile(remaining[0])
+	data, err := os.ReadFile(positional[0])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error reading file: %v\n", err)
 		os.Exit(1)
@@ -361,7 +365,7 @@ func cmdPlaytest(args []string) {
 	rec := playtest.Record{
 		Timestamp:  time.Now().Format(time.RFC3339),
 		GenomeID:   g.ID,
-		GenomePath: remaining[0],
+		GenomePath: positional[0],
 		Difficulty: *difficulty,
 		Seed:       *seed,
 		Winner:     outcome.WinnerLabel(session.HumanID),

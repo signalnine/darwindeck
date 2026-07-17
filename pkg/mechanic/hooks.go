@@ -148,10 +148,17 @@ func applyAvoidance(state *sim.GameState, g *genome.Genome, event sim.Event) {
 		// and the casino captured pile under the CasinoScored variant -- where
 		// hands are empty at the single end-of-game EventRoundEnd and the penalty
 		// is the cumulative captured pile, Scopa's "cards you take can hurt you").
+		//
+		// NOT on shedding: there state.Tableau is the SHED-CARDS tally the
+		// runner keeps for MechTrickScoring (SheddingTrickScored), not a
+		// captured pile. Counting it penalizes players for penalty cards they
+		// successfully got RID of (inverted avoidance), and a shed card
+		// recycled by refillDeckFromDiscard and redrawn into the same hand
+		// counted twice. Shedding avoidance reads the residual hand only.
 		for _, card := range state.Hands[i] {
 			penalty += cardPenalty(card, g)
 		}
-		if i < len(state.Tableau) {
+		if g.Skeleton != genome.Shedding && i < len(state.Tableau) {
 			for _, card := range state.Tableau[i] {
 				penalty += cardPenalty(card, g)
 			}
@@ -185,7 +192,13 @@ func applyMeldBonus(state *sim.GameState, g *genome.Genome, event sim.Event) {
 	// tally logic).
 	for i := 0; i < state.NumPlayers; i++ {
 		cards := append([]sim.Card(nil), state.Hands[i]...)
-		if i < len(state.Tableau) {
+		// Skip the tableau on shedding: there it is the SHED-CARDS tally kept
+		// for MechTrickScoring, not a captured pile, so including it would
+		// award meld bonuses over the whole shed history (and double-count a
+		// recycled-and-redrawn card). Shedding melds read the residual hand;
+		// the teeth calibration below (~78% of residual hands hold a pair) was
+		// measured on exactly that signal.
+		if g.Skeleton != genome.Shedding && i < len(state.Tableau) {
 			cards = append(cards, state.Tableau[i]...)
 		}
 		bonus := 0

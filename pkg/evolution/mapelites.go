@@ -52,14 +52,14 @@ func NewMAPElitesEngine(config Config, seeds []*genome.Genome) *MAPElitesEngine 
 	if config.Workers == 0 {
 		config.Workers = runtime.NumCPU()
 	}
+	archives := make(map[genome.SkeletonType]*Archive, len(genome.AllSkeletons()))
+	for _, skel := range genome.AllSkeletons() {
+		archives[skel] = &Archive{}
+	}
 	return &MAPElitesEngine{
-		Config: config,
-		Seeds:  seeds,
-		Archives: map[genome.SkeletonType]*Archive{
-			genome.Shedding:    {},
-			genome.TrickTaking: {},
-			genome.Rummy:       {},
-		},
+		Config:   config,
+		Seeds:    seeds,
+		Archives: archives,
 		rng:      rand.New(rand.NewPCG(config.BaseSeed, 0)),
 		evaluate: fitness.Evaluate,
 	}
@@ -265,6 +265,10 @@ func (e *MAPElitesEngine) reevaluateIncumbent(archive *Archive, cell *ArchiveCel
 // collisions only.
 func (e *MAPElitesEngine) insert(g *genome.Genome, metrics fitness.Metrics, behavior BehaviorDescriptor) bool {
 	archive := e.Archives[g.Skeleton]
+	if archive == nil { // future skeleton not in AllSkeletons yet: create, don't panic
+		archive = &Archive{}
+		e.Archives[g.Skeleton] = archive
+	}
 	row, col := behavior.GridCell(GridSize)
 
 	cell := archive.Cells[row][col]
@@ -304,7 +308,7 @@ func (e *MAPElitesEngine) randomArchiveOccupant() *genome.Genome {
 	// Go map iteration order is randomized per process and would otherwise
 	// shuffle the index space passed to rng.IntN.
 	var occupants []*genome.Genome
-	for _, skel := range []genome.SkeletonType{genome.Shedding, genome.TrickTaking, genome.Rummy} {
+	for _, skel := range genome.AllSkeletons() {
 		archive, ok := e.Archives[skel]
 		if !ok {
 			continue
@@ -369,7 +373,7 @@ func (e *MAPElitesEngine) AllQualified() []*Individual {
 	}
 	best := make(map[string]*entry)
 	order := 0
-	for _, skel := range []genome.SkeletonType{genome.Shedding, genome.TrickTaking, genome.Rummy} {
+	for _, skel := range genome.AllSkeletons() {
 		archive, ok := e.Archives[skel]
 		if !ok {
 			continue

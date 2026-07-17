@@ -373,6 +373,14 @@ func giveBorrowTeeth(g *genome.Genome, bm genome.BorrowedMechanic) {
 				// game: win tricks, but penalty cards you capture count against
 				// you.
 				g.TrickTaking.LeadRestriction = genome.LeadNoTrumpUntilBroken
+				// PIN per-trick scoring as a teeth invariant: crossover can
+				// inherit ScoreCardPoints/ScoreAvoidance from the other parent
+				// (and older genomes may carry it), recreating the exact-
+				// cancellation sweep described above. validateBorrowed rejects
+				// the combo; repairing it here keeps the operators
+				// valid-in/valid-out instead of burning the offspring slot on a
+				// Tier-0 kill.
+				g.TrickTaking.TrickScoring = genome.ScorePerTrick
 			}
 		case genome.Rummy:
 			giveRummyAvoidanceTeeth(g)

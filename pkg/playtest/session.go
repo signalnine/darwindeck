@@ -203,6 +203,20 @@ func (s *Session) printState() {
 			len(s.State.Deck), pileLabel, n, formatCards(disc[n-16:]))
 	}
 
+	// Vying: the betting state is the whole decision surface -- without it a
+	// human cannot price a call or a fold. Scores hold the chip stacks there.
+	if s.Genome.Skeleton == genome.Vying {
+		owed := s.State.CurrentBet
+		if s.HumanID < len(s.State.Committed) {
+			owed = s.State.CurrentBet - s.State.Committed[s.HumanID]
+			if owed < 0 {
+				owed = 0
+			}
+		}
+		fmt.Printf("Pot: %d | Current bet: %d | To call: %d | Your chips: %d\n",
+			s.State.Pot, s.State.CurrentBet, owed, s.State.Scores[s.HumanID])
+	}
+
 	for i := 0; i < s.State.NumPlayers; i++ {
 		if i == s.HumanID {
 			continue
@@ -211,10 +225,13 @@ func (s *Session) printState() {
 		if s.State.Scores[i] != 0 {
 			fmt.Printf(" (score: %d)", s.State.Scores[i])
 		}
+		if i < len(s.State.Folded) && s.State.Folded[i] {
+			fmt.Printf(" (folded)")
+		}
 		fmt.Println()
 	}
 
-	if s.State.Scores[s.HumanID] != 0 {
+	if s.State.Scores[s.HumanID] != 0 && s.Genome.Skeleton != genome.Vying {
 		fmt.Printf("Your score: %d\n", s.State.Scores[s.HumanID])
 	}
 }
@@ -301,6 +318,20 @@ func describeMoveShort(m sim.Move) string {
 			return fmt.Sprintf("Play %s to capture %s", m.Cards[0], formatCards(m.Cards[1:]))
 		}
 		return fmt.Sprintf("Play %s (capture)", formatCards(m.Cards))
+	// Vying betting moves. Labels are static (no amounts): this function is
+	// also called AFTER ApplyMove for the AI narration, where the bet state
+	// has already advanced -- the pot/current-bet line in printState is where
+	// the human reads what a call costs.
+	case sim.MoveCheck:
+		return "Check"
+	case sim.MoveCall:
+		return "Call"
+	case sim.MoveRaise:
+		return "Raise"
+	case sim.MoveFold:
+		return "Fold"
+	case sim.MoveBid:
+		return fmt.Sprintf("Bid %d", m.Amount)
 	default:
 		return "Unknown"
 	}

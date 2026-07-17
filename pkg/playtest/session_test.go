@@ -486,3 +486,23 @@ func TestHooksForIsSingleConstructionSite(t *testing.T) {
 		}
 	}
 }
+
+// TestDescribeMoveShortCoversVying: SimplePoker is a seeds.All() member, so
+// the CLI playtest renders vying games; the betting move types once fell to
+// the "Unknown" default, making every poker menu unreadable.
+func TestDescribeMoveShortCoversVying(t *testing.T) {
+	cases := map[sim.MoveType]string{
+		sim.MoveCheck: "Check",
+		sim.MoveCall:  "Call",
+		sim.MoveRaise: "Raise",
+		sim.MoveFold:  "Fold",
+	}
+	for mt, want := range cases {
+		if got := describeMoveShort(sim.Move{Type: mt}); got != want {
+			t.Errorf("describeMoveShort(%v) = %q, want %q", mt, got, want)
+		}
+	}
+	if got := describeMoveShort(sim.Move{Type: sim.MoveBid, Amount: 3}); got != "Bid 3" {
+		t.Errorf("describeMoveShort(bid 3) = %q, want \"Bid 3\"", got)
+	}
+}

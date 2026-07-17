@@ -169,6 +169,15 @@ func writeTrickTakingRules(b *strings.Builder, g *genome.Genome) {
 
 	b.WriteString("The highest card of the led suit wins the trick, unless trumped. The trick winner leads the next trick.\n\n")
 
+	// Multi-round structure: the runner plays RoundsPerGame deals with
+	// cumulative scores (Upkeep redeals when every hand is played out; the
+	// opening lead rotates one seat per deal). Omitting this described a
+	// one-deal game while the engine played up to 13 -- humans and blind
+	// judges were evaluating different rules than the simulation measured.
+	if g.TrickTaking != nil && g.TrickTaking.RoundsPerGame > 1 {
+		b.WriteString(fmt.Sprintf("### Rounds\n\nThe game is played over **%d deals**. When every hand has been played out, reshuffle and deal again; scores carry over across deals, and the opening lead rotates one seat to the left each deal. The winner is decided on the combined total after the final deal.\n\n", g.TrickTaking.RoundsPerGame))
+	}
+
 	b.WriteString("### Scoring\n\n")
 	if g.TrickTaking != nil {
 		b.WriteString(scoringDescription(g.TrickTaking.TrickScoring))

@@ -202,13 +202,28 @@ func changeEnum(g *genome.Genome, rng *rand.Rand) {
 	switch g.Skeleton {
 	case genome.Shedding:
 		if g.Shedding != nil {
-			g.Shedding.MatchRule = genome.MatchRule(rng.IntN(4))
+			// MatchBoth is statically unplayable (Tier 0 rejects it), and a
+			// follow_suit borrow additionally needs the held suit card to be
+			// playable (MatchRank collapses the obligation into all-draw; see
+			// validateBorrowed). Sample only rules valid for THIS genome so
+			// mutation keeps its valid-in/valid-out contract.
+			rules := []genome.MatchRule{genome.MatchSuit, genome.MatchRank, genome.MatchEither}
+			if hasBorrowedMechanicType(g, genome.MechFollowSuit) {
+				rules = []genome.MatchRule{genome.MatchSuit, genome.MatchEither}
+			}
+			g.Shedding.MatchRule = rules[rng.IntN(len(rules))]
 		}
 	case genome.TrickTaking:
 		if g.TrickTaking != nil {
 			switch rng.IntN(2) {
 			case 0:
-				g.TrickTaking.TrickScoring = genome.TrickScoring(rng.IntN(3))
+				// An avoidance borrow pins per-trick scoring: card_points and
+				// native avoidance bank the same MatchCardPoints the hook then
+				// subtracts (exact cancellation -> structural seat-0 win; see
+				// validateBorrowed). Skip the scoring flip on those genomes.
+				if !hasBorrowedMechanicType(g, genome.MechAvoidance) {
+					g.TrickTaking.TrickScoring = genome.TrickScoring(rng.IntN(3))
+				}
 				// If switching to card-points or avoidance, ensure scoring config exists
 				if (g.TrickTaking.TrickScoring == genome.ScoreCardPoints ||
 					g.TrickTaking.TrickScoring == genome.ScoreAvoidance) &&

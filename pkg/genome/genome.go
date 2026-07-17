@@ -16,6 +16,13 @@ const (
 
 var skeletonNames = [6]string{"shedding", "trick_taking", "rummy", "climbing", "casino", "vying"}
 
+// AllSkeletons lists every skeleton type in declaration order -- the single
+// source of truth for code that must cover the full set (per-skeleton archives,
+// diversity loops). Keep in sync with the const block above.
+func AllSkeletons() []SkeletonType {
+	return []SkeletonType{Shedding, TrickTaking, Rummy, Climbing, Casino, Vying}
+}
+
 func (s SkeletonType) String() string {
 	if int(s) >= len(skeletonNames) {
 		return fmt.Sprintf("SkeletonType(%d)", int(s))
