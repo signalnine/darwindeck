@@ -38,7 +38,6 @@ type Runner struct{}
 
 type Card = sim.Card
 
-
 // vyingParams returns g.Vying, or playable defaults when it is nil -- the
 // same degrade-don't-panic contract every other runner honors (climbing
 // defaults its params, casino nil-checks, shedding/rummy fall back to pass
