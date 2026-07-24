@@ -163,12 +163,12 @@ func writeRestampBundle(outDir, runDir string, games []restampGame, elapsed time
 		}
 	}
 	summary := map[string]interface{}{
-		"source_run":     runDir,
-		"restamp_date":   time.Now().Format(time.RFC3339),
-		"restamp_seed":   restampSeed,
-		"games":          len(games),
-		"best_fitness":   best,
-		"note":           "greedy-only best over VETO-STABLE games only; honest exit -- no publishable champion claimed",
+		"source_run":      runDir,
+		"restamp_date":    time.Now().Format(time.RFC3339),
+		"restamp_seed":    restampSeed,
+		"games":           len(games),
+		"best_fitness":    best,
+		"note":            "greedy-only best over VETO-STABLE games only; honest exit -- no publishable champion claimed",
 		"stability_evals": 5,
 	}
 	if err := writeJSONFile(filepath.Join(outDir, "summary.json"), summary); err != nil {
