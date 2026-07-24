@@ -37,14 +37,14 @@ type RunSummary struct {
 // that cannot be determined at runtime are written as "unknown" rather than
 // omitted -- an absent field and an unknowable one are different claims.
 type RunMeta struct {
-	CommitSHA        string             `json:"commit_sha"`
-	CommitDirty      bool               `json:"commit_dirty"`
-	GoVersion        string             `json:"go_version"`
-	Platform         string             `json:"platform"`
-	CLIArgs          []string           `json:"cli_args"`
-	MasterSeed       uint64             `json:"master_seed"`
-	CalibrationSeeds []uint64           `json:"calibration_seeds"`
-	Date             string             `json:"date"`
+	CommitSHA        string   `json:"commit_sha"`
+	CommitDirty      bool     `json:"commit_dirty"`
+	GoVersion        string   `json:"go_version"`
+	Platform         string   `json:"platform"`
+	CLIArgs          []string `json:"cli_args"`
+	MasterSeed       uint64   `json:"master_seed"`
+	CalibrationSeeds []uint64 `json:"calibration_seeds"`
+	Date             string   `json:"date"`
 	// MCTSMode records the skill-tier mode (round-2 hazard 3): "top-decile"
 	// when the decile pass was enabled, "greedy-only" otherwise. The decile
 	// and search knobs make the grant reproducible; knob value 0 means the

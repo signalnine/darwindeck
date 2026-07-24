@@ -1043,7 +1043,7 @@ func TestEvaluateHandPatternFullHouse(t *testing.T) {
 		Method: EvalMethodPatternMatch,
 		Patterns: []HandPattern{
 			{RankPriority: 70, RequiredCount: 5, SameRankGroups: []uint8{3, 2}}, // Full House
-			{RankPriority: 60, RequiredCount: 5, SameSuitCount: 5},               // Flush
+			{RankPriority: 60, RequiredCount: 5, SameSuitCount: 5},              // Flush
 		},
 	}
 
@@ -1066,7 +1066,7 @@ func TestEvaluateHandPatternFlush(t *testing.T) {
 		Method: EvalMethodPatternMatch,
 		Patterns: []HandPattern{
 			{RankPriority: 70, RequiredCount: 5, SameRankGroups: []uint8{3, 2}}, // Full House
-			{RankPriority: 60, RequiredCount: 5, SameSuitCount: 5},               // Flush
+			{RankPriority: 60, RequiredCount: 5, SameSuitCount: 5},              // Flush
 		},
 	}
 
@@ -1175,7 +1175,7 @@ func TestEvaluateHandPatternNoMatch(t *testing.T) {
 		Method: EvalMethodPatternMatch,
 		Patterns: []HandPattern{
 			{RankPriority: 70, RequiredCount: 5, SameRankGroups: []uint8{3, 2}}, // Full House
-			{RankPriority: 60, RequiredCount: 5, SameSuitCount: 5},               // Flush
+			{RankPriority: 60, RequiredCount: 5, SameSuitCount: 5},              // Flush
 		},
 	}
 

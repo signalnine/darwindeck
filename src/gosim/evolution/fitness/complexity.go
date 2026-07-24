@@ -21,8 +21,8 @@ type ComplexityBreakdown struct {
 	FamiliarPatternDiscount float64 // Trick-taking, draw-play, etc.
 
 	// Final score
-	TotalComplexity        float64 // 0.0 = trivial, 1.0 = very complex
-	ExplanationSentences   int     // Estimated sentences to explain
+	TotalComplexity      float64 // 0.0 = trivial, 1.0 = very complex
+	ExplanationSentences int     // Estimated sentences to explain
 }
 
 // InvertedScore returns 1.0 - complexity for fitness (simpler = better).

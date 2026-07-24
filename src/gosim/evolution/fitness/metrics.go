@@ -10,33 +10,33 @@ import (
 // SimulationResults holds the results from batch game simulation.
 type SimulationResults struct {
 	TotalGames  int
-	Wins        []int   // Wins per player (index = player ID)
-	PlayerCount int     // Number of players (2-4)
+	Wins        []int // Wins per player (index = player ID)
+	PlayerCount int   // Number of players (2-4)
 	Draws       int
 	AvgTurns    float64
 	Errors      int
 
 	// Decision instrumentation
-	TotalDecisions  int
-	TotalValidMoves int
-	ForcedDecisions int
-	TotalHandSize   int // For filtering ratio calculation
+	TotalDecisions    int
+	TotalValidMoves   int
+	ForcedDecisions   int
+	TotalHandSize     int // For filtering ratio calculation
 	TotalInteractions int
-	TotalActions    int
+	TotalActions      int
 
 	// Bluffing metrics (ClaimPhase games)
-	TotalClaims      int
-	TotalBluffs      int
-	TotalChallenges  int
-	SuccessfulBluffs int
+	TotalClaims       int
+	TotalBluffs       int
+	TotalChallenges   int
+	SuccessfulBluffs  int
 	SuccessfulCatches int
 
 	// Betting metrics (BettingPhase games)
-	TotalBets    int
+	TotalBets     int
 	BettingBluffs int
-	FoldWins     int
-	ShowdownWins int
-	AllInCount   int
+	FoldWins      int
+	ShowdownWins  int
+	AllInCount    int
 
 	// Tension curve metrics
 	LeadChanges     int

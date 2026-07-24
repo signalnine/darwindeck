@@ -65,9 +65,9 @@ func TestCasinoRulebookRendersRules(t *testing.T) {
 		"capture game",
 		"Capture:",
 		"Trail:",
-		"sum",            // AllowSumCapture seed describes pip-sum capture
-		"Final Sweep",    // refill + end-sweep section
-		"most cards",     // unscored win condition
+		"sum",         // AllowSumCapture seed describes pip-sum capture
+		"Final Sweep", // refill + end-sweep section
+		"most cards",  // unscored win condition
 	} {
 		if !strings.Contains(rb, phrase) {
 			t.Errorf("casino rulebook missing %q\n---\n%s", phrase, rb)
@@ -329,8 +329,8 @@ func TestRulebookOmitsCardPointTableWhenDead(t *testing.T) {
 	}
 
 	liveCases := []*genome.Genome{
-		seeds.Hearts(),                  // TT avoidance scoring
-		seeds.NoFollowAvoidanceTrick(),  // TT avoidance scoring (fixture)
+		seeds.Hearts(),                 // TT avoidance scoring
+		seeds.NoFollowAvoidanceTrick(), // TT avoidance scoring (fixture)
 	}
 	for _, g := range liveCases {
 		rb := GenerateRulebook(g)

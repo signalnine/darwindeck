@@ -5,8 +5,8 @@ import "testing"
 func TestCalculateBlackjackValue_SimpleHand(t *testing.T) {
 	// 10 + 7 = 17
 	cards := []Card{
-		{Rank: 9, Suit: 0},  // 10 (rank 9 = 10)
-		{Rank: 6, Suit: 1},  // 7 (rank 6 = 7)
+		{Rank: 9, Suit: 0}, // 10 (rank 9 = 10)
+		{Rank: 6, Suit: 1}, // 7 (rank 6 = 7)
 	}
 	value := CalculateBlackjackValue(cards)
 	if value != 17 {
@@ -29,8 +29,8 @@ func TestCalculateBlackjackValue_FaceCards(t *testing.T) {
 func TestCalculateBlackjackValue_AceAsEleven(t *testing.T) {
 	// A + 7 = 18 (Ace counts as 11)
 	cards := []Card{
-		{Rank: 0, Suit: 0},  // Ace (rank 0)
-		{Rank: 6, Suit: 1},  // 7 (rank 6 = 7)
+		{Rank: 0, Suit: 0}, // Ace (rank 0)
+		{Rank: 6, Suit: 1}, // 7 (rank 6 = 7)
 	}
 	value := CalculateBlackjackValue(cards)
 	if value != 18 {
@@ -41,9 +41,9 @@ func TestCalculateBlackjackValue_AceAsEleven(t *testing.T) {
 func TestCalculateBlackjackValue_AceAsOne(t *testing.T) {
 	// A + 10 + 5 = 16 (Ace counts as 1 to avoid bust)
 	cards := []Card{
-		{Rank: 0, Suit: 0},  // Ace (rank 0)
-		{Rank: 9, Suit: 1},  // 10 (rank 9 = 10)
-		{Rank: 4, Suit: 2},  // 5 (rank 4 = 5)
+		{Rank: 0, Suit: 0}, // Ace (rank 0)
+		{Rank: 9, Suit: 1}, // 10 (rank 9 = 10)
+		{Rank: 4, Suit: 2}, // 5 (rank 4 = 5)
 	}
 	value := CalculateBlackjackValue(cards)
 	if value != 16 {
@@ -242,8 +242,8 @@ func TestSelectBlackjackMove_StandOnHigh(t *testing.T) {
 	gs.NumPlayers = 2
 	// Player 0: hand value 18 (should stand)
 	gs.Players[0].Hand = []Card{
-		{Rank: 9, Suit: 0},  // 10
-		{Rank: 7, Suit: 1},  // 8
+		{Rank: 9, Suit: 0}, // 10
+		{Rank: 7, Suit: 1}, // 8
 	}
 	gs.CurrentPlayer = 0
 
@@ -265,8 +265,8 @@ func TestSelectBlackjackMove_StandOn17(t *testing.T) {
 	gs.NumPlayers = 2
 	// Player 0: hand value 17 (should stand on 17)
 	gs.Players[0].Hand = []Card{
-		{Rank: 9, Suit: 0},  // 10
-		{Rank: 6, Suit: 1},  // 7
+		{Rank: 9, Suit: 0}, // 10
+		{Rank: 6, Suit: 1}, // 7
 	}
 	gs.CurrentPlayer = 0
 
@@ -288,8 +288,8 @@ func TestSelectBlackjackMove_HitOn16(t *testing.T) {
 	gs.NumPlayers = 2
 	// Player 0: hand value 16 (should hit on 16)
 	gs.Players[0].Hand = []Card{
-		{Rank: 9, Suit: 0},  // 10
-		{Rank: 5, Suit: 1},  // 6
+		{Rank: 9, Suit: 0}, // 10
+		{Rank: 5, Suit: 1}, // 6
 	}
 	gs.CurrentPlayer = 0
 
@@ -311,8 +311,8 @@ func TestSelectBlackjackMove_SoftAce(t *testing.T) {
 	gs.NumPlayers = 2
 	// Player 0: A + 6 = soft 17 (should stand)
 	gs.Players[0].Hand = []Card{
-		{Rank: 0, Suit: 0},  // Ace (11)
-		{Rank: 5, Suit: 1},  // 6
+		{Rank: 0, Suit: 0}, // Ace (11)
+		{Rank: 5, Suit: 1}, // 6
 	}
 	gs.CurrentPlayer = 0
 

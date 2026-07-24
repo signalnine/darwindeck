@@ -19,6 +19,7 @@
 //   - When NOT leading you can always PASS.
 //   - When leading (table clear) you hold >= 1 card, and singles are always a
 //     valid combination type, so you can always play a single.
+//
 // This invariant is pinned by TestGenerateMovesNeverEmpty over many random
 // reachable states.
 //

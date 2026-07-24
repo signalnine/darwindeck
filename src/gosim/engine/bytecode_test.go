@@ -117,13 +117,13 @@ func TestParseInvalidOffsets(t *testing.T) {
 	// Create bytecode with invalid turn structure offset
 	bytecode := make([]byte, 100)
 	// Set header fields
-	bytecode[3] = 1   // version
-	bytecode[15] = 2  // player_count
-	bytecode[19] = 50 // max_turns
-	bytecode[23] = 36 // setup_offset
+	bytecode[3] = 1    // version
+	bytecode[15] = 2   // player_count
+	bytecode[19] = 50  // max_turns
+	bytecode[23] = 36  // setup_offset
 	bytecode[27] = 200 // turn_structure_offset (beyond bytecode length!)
-	bytecode[31] = 36 // win_conditions_offset
-	bytecode[35] = 36 // scoring_offset
+	bytecode[31] = 36  // win_conditions_offset
+	bytecode[35] = 36  // scoring_offset
 
 	_, err := ParseGenome(bytecode)
 	if err == nil {
@@ -134,9 +134,9 @@ func TestParseInvalidOffsets(t *testing.T) {
 func TestParseEffects(t *testing.T) {
 	// Bytecode: HEADER(60), count(2), effect1(4 bytes), effect2(4 bytes)
 	data := []byte{
-		60, 2,          // Header, count=2
-		0, 2, 0, 2,     // TWO, DRAW_CARDS, NEXT_PLAYER, value=2
-		9, 0, 0, 1,     // JACK, SKIP_NEXT, NEXT_PLAYER, value=1
+		60, 2, // Header, count=2
+		0, 2, 0, 2, // TWO, DRAW_CARDS, NEXT_PLAYER, value=2
+		9, 0, 0, 1, // JACK, SKIP_NEXT, NEXT_PLAYER, value=1
 	}
 
 	effects, offset, err := parseEffects(data, 0)
@@ -174,8 +174,8 @@ func TestParseEffects(t *testing.T) {
 func TestParseEffectsBoundsCheck(t *testing.T) {
 	// Truncated bytecode - says 2 effects but only has 1
 	data := []byte{
-		60, 2,          // Header, count=2
-		0, 2, 0, 2,     // Only 1 effect
+		60, 2, // Header, count=2
+		0, 2, 0, 2, // Only 1 effect
 	}
 
 	_, _, err := parseEffects(data, 0)
@@ -417,7 +417,7 @@ func TestParseHandEvaluation(t *testing.T) {
 		0x16,             // bust_threshold = 22
 		0x01,             // 1 card value
 		0x0C, 0x01, 0x0B, // Ace (12), value=1, alt=11
-		0x00,             // 0 patterns
+		0x00, // 0 patterns
 	}
 
 	eval, err := ParseHandEvaluation(bytecode)
@@ -482,15 +482,15 @@ func TestParseHandEvaluationEmpty(t *testing.T) {
 func TestParseHandEvaluationWithPatterns(t *testing.T) {
 	// Poker-style: PATTERN_MATCH with a simple pattern
 	bytecode := []byte{
-		0x03,       // PATTERN_MATCH method
-		0x00,       // target_value = 0 (unused)
-		0x00,       // bust_threshold = 0 (unused)
-		0x00,       // 0 card values
-		0x01,       // 1 pattern
+		0x03, // PATTERN_MATCH method
+		0x00, // target_value = 0 (unused)
+		0x00, // bust_threshold = 0 (unused)
+		0x00, // 0 card values
+		0x01, // 1 pattern
 		// Pattern: rank_priority=1, required_count=5, same_suit=5, seq_len=5, wrap=false
 		0x01, 0x05, 0x05, 0x05, 0x00,
-		0x00,       // 0 same rank groups
-		0x00,       // 0 required ranks
+		0x00, // 0 same rank groups
+		0x00, // 0 required ranks
 	}
 
 	eval, err := ParseHandEvaluation(bytecode)
@@ -570,7 +570,7 @@ func TestParseGenomeVersion2(t *testing.T) {
 	// Then win conditions: count(4) = 0
 
 	bytecode := make([]byte, 48)
-	bytecode[0] = 2  // Version 2
+	bytecode[0] = 2 // Version 2
 
 	// Legacy version = 1 (big-endian)
 	bytecode[4] = 1
@@ -710,11 +710,11 @@ func TestBytecodeHeaderNoTeams(t *testing.T) {
 	// Header without teams (team_mode = false)
 	// Need at least 53 bytes for V2 header with team fields
 	bytecode := make([]byte, 60)
-	bytecode[0] = 2  // version = 2 (V2 format)
+	bytecode[0] = 2   // version = 2 (V2 format)
 	bytecode[28] = 53 // turn_structure_offset
 	bytecode[32] = 57 // win_conditions_offset
-	bytecode[47] = 0 // team_mode = false
-	bytecode[48] = 0 // team_count = 0
+	bytecode[47] = 0  // team_mode = false
+	bytecode[48] = 0  // team_count = 0
 
 	header, err := ParseHeader(bytecode)
 	if err != nil {
@@ -759,19 +759,19 @@ func TestParseBiddingPhase(t *testing.T) {
 	// Bytecode: [70] [1] [13] [0x01] [scoring 12 bytes]
 	// Note: opcode is 70 (from Python OPCODE_BIDDING_PHASE)
 	bytecode := []byte{
-		70,       // opcode
-		1,        // min_bid
-		13,       // max_bid
-		0x01,     // flags (allow_nil)
+		70,   // opcode
+		1,    // min_bid
+		13,   // max_bid
+		0x01, // flags (allow_nil)
 		// ContractScoring (12 bytes)
-		10,       // points_per_trick_bid
-		1,        // overtrick_points
-		10,       // failed_contract_penalty
-		100, 0,   // nil_bonus (uint16 LE)
-		100, 0,   // nil_penalty (uint16 LE)
-		10,       // bag_limit
-		100, 0,   // bag_penalty (uint16 LE)
-		0, 0,     // reserved
+		10,     // points_per_trick_bid
+		1,      // overtrick_points
+		10,     // failed_contract_penalty
+		100, 0, // nil_bonus (uint16 LE)
+		100, 0, // nil_penalty (uint16 LE)
+		10,     // bag_limit
+		100, 0, // bag_penalty (uint16 LE)
+		0, 0, // reserved
 	}
 
 	phase, scoring, consumed := ParseBiddingPhase(bytecode)
@@ -796,19 +796,19 @@ func TestParseBiddingPhase(t *testing.T) {
 func TestParseBiddingPhaseAllFields(t *testing.T) {
 	// Test all ContractScoring fields are parsed correctly
 	bytecode := []byte{
-		70,        // opcode
-		2,         // min_bid
-		7,         // max_bid
-		0x00,      // flags (no allow_nil)
+		70,   // opcode
+		2,    // min_bid
+		7,    // max_bid
+		0x00, // flags (no allow_nil)
 		// ContractScoring (12 bytes)
-		20,        // points_per_trick_bid
-		5,         // overtrick_points
-		50,        // failed_contract_penalty
-		200, 0,    // nil_bonus (uint16 LE) = 200
-		150, 0,    // nil_penalty (uint16 LE) = 150
-		7,         // bag_limit
-		50, 0,     // bag_penalty (uint16 LE) = 50
-		0, 0,      // reserved
+		20,     // points_per_trick_bid
+		5,      // overtrick_points
+		50,     // failed_contract_penalty
+		200, 0, // nil_bonus (uint16 LE) = 200
+		150, 0, // nil_penalty (uint16 LE) = 150
+		7,     // bag_limit
+		50, 0, // bag_penalty (uint16 LE) = 50
+		0, 0, // reserved
 	}
 
 	phase, scoring, consumed := ParseBiddingPhase(bytecode)

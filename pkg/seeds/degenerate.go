@@ -218,11 +218,11 @@ func CatchAllWildShedding() *genome.Genome {
 			RoundsPerGame: 1,
 		},
 		SpecialCards: []genome.SpecialCard{
-			{Type: genome.SpecialWild},                            // catch-all: EVERY card wild
-			{Type: genome.SpecialDrawTwo, ByRank: 11, BySuit: 3},  // J of hearts draw-two
-			{Type: genome.SpecialDrawFour, BySuit: 2},             // suit 2 draw-four
-			{Type: genome.SpecialDrawFour, ByRank: 8},             // 8s draw-four
-			{Type: genome.SpecialDrawTwo, BySuit: 3},              // suit 3 draw-two
+			{Type: genome.SpecialWild},                           // catch-all: EVERY card wild
+			{Type: genome.SpecialDrawTwo, ByRank: 11, BySuit: 3}, // J of hearts draw-two
+			{Type: genome.SpecialDrawFour, BySuit: 2},            // suit 2 draw-four
+			{Type: genome.SpecialDrawFour, ByRank: 8},            // 8s draw-four
+			{Type: genome.SpecialDrawTwo, BySuit: 3},             // suit 3 draw-two
 		},
 		Scoring: genome.ScoringConfig{
 			CardPoints: []genome.CardScoring{
@@ -268,11 +268,11 @@ func ReverseLockoutShedding() *genome.Genome {
 			{Type: genome.SpecialWild, BySuit: 2},
 			{Type: genome.SpecialWild, BySuit: 3},
 			{Type: genome.SpecialWild, BySuit: 4},
-			{Type: genome.SpecialDrawFour, BySuit: 1},             // clubs draw-four
-			{Type: genome.SpecialReverse, ByRank: 10, BySuit: 3},  // 10 of hearts reverses
-			{Type: genome.SpecialReverse, BySuit: 4},              // all spades reverse
-			{Type: genome.SpecialReverse, ByRank: 12, BySuit: 1},  // Q of clubs reverses
-			{Type: genome.SpecialReverse, ByRank: 11},             // all Jacks reverse
+			{Type: genome.SpecialDrawFour, BySuit: 1},            // clubs draw-four
+			{Type: genome.SpecialReverse, ByRank: 10, BySuit: 3}, // 10 of hearts reverses
+			{Type: genome.SpecialReverse, BySuit: 4},             // all spades reverse
+			{Type: genome.SpecialReverse, ByRank: 12, BySuit: 1}, // Q of clubs reverses
+			{Type: genome.SpecialReverse, ByRank: 11},            // all Jacks reverse
 		},
 		Scoring: genome.ScoringConfig{
 			CardPoints: []genome.CardScoring{
@@ -307,9 +307,9 @@ func HeartEngineShedding() *genome.Genome {
 			{Type: genome.SpecialWild, BySuit: 2},
 			{Type: genome.SpecialWild, BySuit: 3},
 			{Type: genome.SpecialWild, BySuit: 4},
-			{Type: genome.SpecialDrawTwo, BySuit: 2},  // diamonds draw-two
-			{Type: genome.SpecialDrawTwo, BySuit: 3},  // hearts draw-two
-			{Type: genome.SpecialSkip, BySuit: 3},     // hearts also skip
+			{Type: genome.SpecialDrawTwo, BySuit: 2}, // diamonds draw-two
+			{Type: genome.SpecialDrawTwo, BySuit: 3}, // hearts draw-two
+			{Type: genome.SpecialSkip, BySuit: 3},    // hearts also skip
 		},
 		Scoring: genome.ScoringConfig{
 			CardPoints: []genome.CardScoring{
@@ -384,12 +384,12 @@ func WildUnionShedding() *genome.Genome {
 			DrawPenalty: 3,
 		},
 		SpecialCards: []genome.SpecialCard{
-			{Type: genome.SpecialDrawTwo, ByRank: 2}, // 2s draw-two
-			{Type: genome.SpecialReverse, ByRank: 10},// 10s reverse
-			{Type: genome.SpecialWild, BySuit: 2},    // suit 2 wild
-			{Type: genome.SpecialWild, BySuit: 3},    // suit 3 wild
-			{Type: genome.SpecialWild, BySuit: 4},    // suit 4 wild
-			{Type: genome.SpecialDrawTwo, BySuit: 1}, // suit 1 draw-two
+			{Type: genome.SpecialDrawTwo, ByRank: 2},  // 2s draw-two
+			{Type: genome.SpecialReverse, ByRank: 10}, // 10s reverse
+			{Type: genome.SpecialWild, BySuit: 2},     // suit 2 wild
+			{Type: genome.SpecialWild, BySuit: 3},     // suit 3 wild
+			{Type: genome.SpecialWild, BySuit: 4},     // suit 4 wild
+			{Type: genome.SpecialDrawTwo, BySuit: 1},  // suit 1 draw-two
 		},
 		Scoring: genome.ScoringConfig{
 			CardPoints: []genome.CardScoring{
@@ -421,12 +421,12 @@ func HeartEngine2SuitShedding() *genome.Genome {
 			DrawPenalty: 2,
 		},
 		SpecialCards: []genome.SpecialCard{
-			{Type: genome.SpecialReverse, ByRank: 10},            // 10s reverse
-			{Type: genome.SpecialWild, BySuit: 3},                // suit 3 wild
-			{Type: genome.SpecialWild, BySuit: 4},                // suit 4 wild
-			{Type: genome.SpecialDrawTwo, BySuit: 1},             // suit 1 draw-two
-			{Type: genome.SpecialDrawTwo, ByRank: 8, BySuit: 1},  // 8 of suit 1 draw-two
-			{Type: genome.SpecialDrawFour, ByRank: 2},            // 2s draw-four
+			{Type: genome.SpecialReverse, ByRank: 10},           // 10s reverse
+			{Type: genome.SpecialWild, BySuit: 3},               // suit 3 wild
+			{Type: genome.SpecialWild, BySuit: 4},               // suit 4 wild
+			{Type: genome.SpecialDrawTwo, BySuit: 1},            // suit 1 draw-two
+			{Type: genome.SpecialDrawTwo, ByRank: 8, BySuit: 1}, // 8 of suit 1 draw-two
+			{Type: genome.SpecialDrawFour, ByRank: 2},           // 2s draw-four
 		},
 		Scoring: genome.ScoringConfig{
 			CardPoints: []genome.CardScoring{

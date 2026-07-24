@@ -13,27 +13,27 @@ type PhaseJSON struct {
 	Type string          `json:"type"`
 	Data json.RawMessage `json:"data,omitempty"`
 	// Python format fields (flat structure)
-	Source             string             `json:"source,omitempty"`
-	Target             string             `json:"target,omitempty"`
-	Count              int                `json:"count,omitempty"`
-	Mandatory          bool               `json:"mandatory,omitempty"`
-	MinCards           int                `json:"min_cards,omitempty"`
-	MaxCards           int                `json:"max_cards,omitempty"`
-	ValidPlayCondition *ConditionJSON     `json:"valid_play_condition,omitempty"`
-	Condition          *ConditionJSON     `json:"condition,omitempty"`
-	LeadSuitRequired   bool               `json:"lead_suit_required,omitempty"`
-	TrumpSuit          *string            `json:"trump_suit,omitempty"`
-	HighCardWins       bool               `json:"high_card_wins,omitempty"`
-	BreakingSuit       *string            `json:"breaking_suit,omitempty"`
-	MinBet             int                `json:"min_bet,omitempty"`
-	MaxRaises          int                `json:"max_raises,omitempty"`
-	MinBid             int                `json:"min_bid,omitempty"`
-	MaxBid             int                `json:"max_bid,omitempty"`
-	AllowNil           bool               `json:"allow_nil,omitempty"`
+	Source             string         `json:"source,omitempty"`
+	Target             string         `json:"target,omitempty"`
+	Count              int            `json:"count,omitempty"`
+	Mandatory          bool           `json:"mandatory,omitempty"`
+	MinCards           int            `json:"min_cards,omitempty"`
+	MaxCards           int            `json:"max_cards,omitempty"`
+	ValidPlayCondition *ConditionJSON `json:"valid_play_condition,omitempty"`
+	Condition          *ConditionJSON `json:"condition,omitempty"`
+	LeadSuitRequired   bool           `json:"lead_suit_required,omitempty"`
+	TrumpSuit          *string        `json:"trump_suit,omitempty"`
+	HighCardWins       bool           `json:"high_card_wins,omitempty"`
+	BreakingSuit       *string        `json:"breaking_suit,omitempty"`
+	MinBet             int            `json:"min_bet,omitempty"`
+	MaxRaises          int            `json:"max_raises,omitempty"`
+	MinBid             int            `json:"min_bid,omitempty"`
+	MaxBid             int            `json:"max_bid,omitempty"`
+	AllowNil           bool           `json:"allow_nil,omitempty"`
 	// ClaimPhase fields
-	SequentialRank     bool               `json:"sequential_rank,omitempty"`
-	AllowChallenge     bool               `json:"allow_challenge,omitempty"`
-	PilePenalty        bool               `json:"pile_penalty,omitempty"`
+	SequentialRank bool `json:"sequential_rank,omitempty"`
+	AllowChallenge bool `json:"allow_challenge,omitempty"`
+	PilePenalty    bool `json:"pile_penalty,omitempty"`
 }
 
 // TurnStructureJSON is used for JSON serialization.
@@ -43,16 +43,16 @@ type TurnStructureJSON struct {
 	TableauMode       string            `json:"tableau_mode,omitempty"`
 	SequenceDirection string            `json:"sequence_direction,omitempty"`
 	// Python format fields
-	IsTrickBased      bool              `json:"is_trick_based,omitempty"`
-	TricksPerHand     *int              `json:"tricks_per_hand,omitempty"`
+	IsTrickBased  bool `json:"is_trick_based,omitempty"`
+	TricksPerHand *int `json:"tricks_per_hand,omitempty"`
 }
 
 // SetupRulesJSON for Python format compatibility.
 type SetupRulesJSON struct {
-	CardsPerPlayer      int    `json:"cards_per_player"`
-	TableauSize         int    `json:"tableau_size,omitempty"`
-	StartingChips       int    `json:"starting_chips,omitempty"`
-	DealToTableau       int    `json:"deal_to_tableau,omitempty"`
+	CardsPerPlayer int `json:"cards_per_player"`
+	TableauSize    int `json:"tableau_size,omitempty"`
+	StartingChips  int `json:"starting_chips,omitempty"`
+	DealToTableau  int `json:"deal_to_tableau,omitempty"`
 	// Python format fields
 	InitialDeck         string `json:"initial_deck,omitempty"`
 	InitialDiscardCount int    `json:"initial_discard_count,omitempty"`
@@ -64,14 +64,14 @@ type SetupRulesJSON struct {
 // GameGenomeJSON is used for JSON serialization.
 // Supports both Go format and Python format.
 type GameGenomeJSON struct {
-	Name          string              `json:"name,omitempty"`
-	Setup         json.RawMessage     `json:"setup"`
-	TurnStructure TurnStructureJSON   `json:"turn_structure"`
-	WinConditions []WinConditionJSON  `json:"win_conditions"`
-	Effects       []SpecialEffect     `json:"effects,omitempty"`
-	CardScoring   []CardScoringRule   `json:"card_scoring,omitempty"`
-	HandEval      *HandEvaluation     `json:"hand_evaluation,omitempty"`
-	Teams         *TeamConfig         `json:"teams,omitempty"`
+	Name          string             `json:"name,omitempty"`
+	Setup         json.RawMessage    `json:"setup"`
+	TurnStructure TurnStructureJSON  `json:"turn_structure"`
+	WinConditions []WinConditionJSON `json:"win_conditions"`
+	Effects       []SpecialEffect    `json:"effects,omitempty"`
+	CardScoring   []CardScoringRule  `json:"card_scoring,omitempty"`
+	HandEval      *HandEvaluation    `json:"hand_evaluation,omitempty"`
+	Teams         *TeamConfig        `json:"teams,omitempty"`
 	// Python format fields
 	SchemaVersion  string              `json:"schema_version,omitempty"`
 	GenomeID       string              `json:"genome_id,omitempty"`
@@ -164,11 +164,11 @@ type ConditionJSON struct {
 	Value    int32  `json:"value,omitempty"`
 	RefLoc   string `json:"ref_loc,omitempty"`
 	// Python format fields
-	Type          string           `json:"type,omitempty"`           // "simple" or "compound"
-	ConditionType string           `json:"condition_type,omitempty"` // Python enum name
-	Reference     interface{}      `json:"reference,omitempty"`      // Can be string or null
-	Logic         string           `json:"logic,omitempty"`          // "AND" or "OR" for compound
-	Conditions    []ConditionJSON  `json:"conditions,omitempty"`     // For compound conditions
+	Type          string          `json:"type,omitempty"`           // "simple" or "compound"
+	ConditionType string          `json:"condition_type,omitempty"` // Python enum name
+	Reference     interface{}     `json:"reference,omitempty"`      // Can be string or null
+	Logic         string          `json:"logic,omitempty"`          // "AND" or "OR" for compound
+	Conditions    []ConditionJSON `json:"conditions,omitempty"`     // For compound conditions
 }
 
 // UnmarshalJSON implements custom JSON unmarshaling for GameGenome.

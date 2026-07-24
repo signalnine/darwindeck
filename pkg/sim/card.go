@@ -9,7 +9,7 @@ import (
 type Suit uint8
 
 const (
-	Clubs    Suit = iota
+	Clubs Suit = iota
 	Diamonds
 	Hearts
 	Spades

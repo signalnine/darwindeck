@@ -102,9 +102,11 @@ func TestCrossBorrowsHaveTeeth(t *testing.T) {
 			scoring: true,
 		},
 		{
-			name:    "trick-scoring on shedding (Crazy Eights host)",
-			base:    seeds.CrazyEights,
-			build:   func() *genome.Genome { return wiredHybrid(seeds.CrazyEights(), genome.TrickTaking, genome.MechTrickScoring) },
+			name: "trick-scoring on shedding (Crazy Eights host)",
+			base: seeds.CrazyEights,
+			build: func() *genome.Genome {
+				return wiredHybrid(seeds.CrazyEights(), genome.TrickTaking, genome.MechTrickScoring)
+			},
 			mech:    genome.MechTrickScoring,
 			scoring: true,
 		},
@@ -116,9 +118,11 @@ func TestCrossBorrowsHaveTeeth(t *testing.T) {
 			scoring: true,
 		},
 		{
-			name:    "avoidance on shedding (Crazy Eights host)",
-			base:    seeds.CrazyEights,
-			build:   func() *genome.Genome { return wiredHybrid(seeds.CrazyEights(), genome.TrickTaking, genome.MechAvoidance) },
+			name: "avoidance on shedding (Crazy Eights host)",
+			base: seeds.CrazyEights,
+			build: func() *genome.Genome {
+				return wiredHybrid(seeds.CrazyEights(), genome.TrickTaking, genome.MechAvoidance)
+			},
 			mech:    genome.MechAvoidance,
 			scoring: true,
 		},

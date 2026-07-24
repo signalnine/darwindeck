@@ -22,11 +22,11 @@ const (
 
 const (
 	// Conditions
-	OpCheckHandSize OpCode = 0
-	OpCheckCardRank OpCode = 1
-	OpCheckCardSuit OpCode = 2
+	OpCheckHandSize     OpCode = 0
+	OpCheckCardRank     OpCode = 1
+	OpCheckCardSuit     OpCode = 2
 	OpCheckLocationSize OpCode = 3
-	OpCheckSequence OpCode = 4
+	OpCheckSequence     OpCode = 4
 	// Optional extensions
 	OpCheckHasSetOfN       OpCode = 5
 	OpCheckHasRunOfN       OpCode = 6

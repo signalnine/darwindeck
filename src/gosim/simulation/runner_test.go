@@ -341,22 +341,22 @@ func makeTeamBytecode() []byte {
 	bytecode := make([]byte, 150) // Plenty of room
 
 	// Header (53 bytes for V2 with teams)
-	bytecode[0] = 2                            // Version 2
-	bytecode[13], bytecode[14] = 0, 0          // player_count (big endian)
-	bytecode[15], bytecode[16] = 0, 4          // 4 players
-	bytecode[17], bytecode[18] = 0, 0          // max_turns (big endian)
-	bytecode[19], bytecode[20] = 0, 200        // 200 max turns
-	bytecode[21], bytecode[22] = 0, 0          // setup_offset
-	bytecode[23], bytecode[24] = 0, 53         // -> byte 53
-	bytecode[25], bytecode[26] = 0, 0          // turn_structure_offset
-	bytecode[27], bytecode[28] = 0, 65         // -> byte 65 (53 + 12)
-	bytecode[29], bytecode[30] = 0, 0          // win_conditions_offset
-	bytecode[31], bytecode[32] = 0, 87         // -> byte 87 (65 + 22)
-	bytecode[37] = 1                           // tableau_mode = WAR
-	bytecode[47] = 1                           // team_mode = true
-	bytecode[48] = 2                           // team_count = 2
-	bytecode[49], bytecode[50] = 0, 0          // team_data_offset (big endian)
-	bytecode[51], bytecode[52] = 0, 92         // -> byte 92
+	bytecode[0] = 2                     // Version 2
+	bytecode[13], bytecode[14] = 0, 0   // player_count (big endian)
+	bytecode[15], bytecode[16] = 0, 4   // 4 players
+	bytecode[17], bytecode[18] = 0, 0   // max_turns (big endian)
+	bytecode[19], bytecode[20] = 0, 200 // 200 max turns
+	bytecode[21], bytecode[22] = 0, 0   // setup_offset
+	bytecode[23], bytecode[24] = 0, 53  // -> byte 53
+	bytecode[25], bytecode[26] = 0, 0   // turn_structure_offset
+	bytecode[27], bytecode[28] = 0, 65  // -> byte 65 (53 + 12)
+	bytecode[29], bytecode[30] = 0, 0   // win_conditions_offset
+	bytecode[31], bytecode[32] = 0, 87  // -> byte 87 (65 + 22)
+	bytecode[37] = 1                    // tableau_mode = WAR
+	bytecode[47] = 1                    // team_mode = true
+	bytecode[48] = 2                    // team_count = 2
+	bytecode[49], bytecode[50] = 0, 0   // team_data_offset (big endian)
+	bytecode[51], bytecode[52] = 0, 92  // -> byte 92
 
 	// Setup section at offset 53 (12 bytes)
 	// cards_per_player = 13 (each player gets 13 cards for 4-player)
@@ -376,8 +376,8 @@ func makeTeamBytecode() []byte {
 	bytecode[70] = 0 // source = deck
 	bytecode[71], bytecode[72] = 0, 0
 	bytecode[73], bytecode[74] = 0, 1 // count = 1
-	bytecode[75] = 1                   // mandatory = true
-	bytecode[76] = 0                   // has_condition = false
+	bytecode[75] = 1                  // mandatory = true
+	bytecode[76] = 0                  // has_condition = false
 
 	// Phase 2: PlayPhase (type=2, 9 bytes)
 	bytecode[77] = 2 // PhaseTypePlay
@@ -399,13 +399,13 @@ func makeTeamBytecode() []byte {
 
 	// Team data at offset 92
 	// Format: [num_teams: 1][team0_size: 1][p0, p2][team1_size: 1][p1, p3]
-	bytecode[92] = 2  // num_teams = 2
-	bytecode[93] = 2  // team0 size = 2
-	bytecode[94] = 0  // player 0
-	bytecode[95] = 2  // player 2
-	bytecode[96] = 2  // team1 size = 2
-	bytecode[97] = 1  // player 1
-	bytecode[98] = 3  // player 3
+	bytecode[92] = 2 // num_teams = 2
+	bytecode[93] = 2 // team0 size = 2
+	bytecode[94] = 0 // player 0
+	bytecode[95] = 2 // player 2
+	bytecode[96] = 2 // team1 size = 2
+	bytecode[97] = 1 // player 1
+	bytecode[98] = 3 // player 3
 
 	return bytecode[:99]
 }
@@ -435,7 +435,7 @@ func makeV2BytecodeWithTableauMode(tableauMode uint8, seqDir uint8) []byte {
 	bytecode := make([]byte, 100) // Plenty of room
 
 	// Header (39 bytes)
-	bytecode[0] = 2  // Version 2
+	bytecode[0] = 2 // Version 2
 	// Legacy version at 1-4 (leave as 0)
 	// Genome ID hash at 5-12 (leave as 0)
 	// Player count at 13-16

@@ -41,7 +41,7 @@ func (m *AddDrawPhaseMutation) Mutate(g *genome.GameGenome, rng *rand.Rand) *gen
 
 	newPhase := &genome.DrawPhase{
 		Source:    sources[rng.Intn(len(sources))],
-		Count:     rng.Intn(3) + 1,    // 1-3 cards
+		Count:     rng.Intn(3) + 1,     // 1-3 cards
 		Mandatory: rng.Float64() < 0.7, // 70% chance mandatory
 	}
 
@@ -86,7 +86,7 @@ func (m *AddPlayPhaseMutation) Mutate(g *genome.GameGenome, rng *rand.Rand) *gen
 	newPhase := &genome.PlayPhase{
 		Target:       targets[rng.Intn(len(targets))],
 		MinCards:     1,
-		MaxCards:     rng.Intn(3) + 1,   // 1-3 cards
+		MaxCards:     rng.Intn(3) + 1,     // 1-3 cards
 		PassIfUnable: rng.Float64() < 0.5, // 50% chance can pass
 	}
 
@@ -174,7 +174,7 @@ func (m *AddTrickPhaseMutation) Mutate(g *genome.GameGenome, rng *rand.Rand) *ge
 	newPhase := &genome.TrickPhase{
 		LeadSuitRequired: rng.Float64() < 0.8,
 		TrumpSuit:        trumpSuit,
-		HighCardWins:      rng.Float64() < 0.9,
+		HighCardWins:     rng.Float64() < 0.9,
 	}
 
 	// Set breaking suit for games like Hearts

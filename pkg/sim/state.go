@@ -9,7 +9,7 @@ import (
 type PhaseType uint8
 
 const (
-	PhasePlay    PhaseType = iota
+	PhasePlay PhaseType = iota
 	PhaseDraw
 	PhaseDiscard
 	PhaseTrick

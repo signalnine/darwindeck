@@ -498,10 +498,10 @@ func TestLeadWinnerLeadsReserved(t *testing.T) {
 func TestValidateRejectsCatchAllSpecialCards(t *testing.T) {
 	mk := func(cards ...SpecialCard) *Genome {
 		return &Genome{
-			Skeleton: Shedding,
-			Players:  2,
-			HandSize: 7,
-			Shedding: &SheddingParams{MatchRule: MatchEither, DrawPenalty: 1},
+			Skeleton:     Shedding,
+			Players:      2,
+			HandSize:     7,
+			Shedding:     &SheddingParams{MatchRule: MatchEither, DrawPenalty: 1},
 			SpecialCards: cards,
 		}
 	}

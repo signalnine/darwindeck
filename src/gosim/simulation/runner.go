@@ -13,12 +13,12 @@ import (
 type AIPlayerType uint8
 
 const (
-	RandomAI    AIPlayerType = 0
-	GreedyAI    AIPlayerType = 1
-	MCTS100AI   AIPlayerType = 2
-	MCTS500AI   AIPlayerType = 3
-	MCTS1000AI  AIPlayerType = 4
-	MCTS2000AI  AIPlayerType = 5
+	RandomAI   AIPlayerType = 0
+	GreedyAI   AIPlayerType = 1
+	MCTS100AI  AIPlayerType = 2
+	MCTS500AI  AIPlayerType = 3
+	MCTS1000AI AIPlayerType = 4
+	MCTS2000AI AIPlayerType = 5
 )
 
 // GameMetrics holds Phase 1 instrumentation counters
@@ -59,12 +59,12 @@ type GameMetrics struct {
 
 // GameResult holds the outcome of a single game
 type GameResult struct {
-	WinnerID       int8
-	WinningTeam    int8   // -1 = no teams or no winner, 0+ = winning team index
-	TurnCount      uint32
-	DurationNs     uint64
-	Error          string
-	Metrics        GameMetrics // Phase 1 instrumentation
+	WinnerID    int8
+	WinningTeam int8 // -1 = no teams or no winner, 0+ = winning team index
+	TurnCount   uint32
+	DurationNs  uint64
+	Error       string
+	Metrics     GameMetrics // Phase 1 instrumentation
 }
 
 // AggregatedStats summarizes multiple game results

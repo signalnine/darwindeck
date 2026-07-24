@@ -20,8 +20,8 @@ const (
 
 // PokerHand represents an evaluated poker hand
 type PokerHand struct {
-	Rank     HandRank
-	Kickers  []uint8 // For tie-breaking (high cards)
+	Rank    HandRank
+	Kickers []uint8 // For tie-breaking (high cards)
 }
 
 // EvaluatePokerHand evaluates a 5-card poker hand
@@ -131,8 +131,9 @@ func EvaluatePokerHand(cards []Card) PokerHand {
 
 // ComparePokerHands compares two poker hands, returns:
 // -1 if hand1 < hand2
-//  0 if hand1 == hand2
-//  1 if hand1 > hand2
+//
+//	0 if hand1 == hand2
+//	1 if hand1 > hand2
 func ComparePokerHands(hand1, hand2 PokerHand) int {
 	if hand1.Rank > hand2.Rank {
 		return 1

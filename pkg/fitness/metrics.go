@@ -353,8 +353,10 @@ func computeSkillGradient(randomResult, greedyResult, mctsResult sim.BatchResult
 // 3..6 and 60..170, hard zero below 3 or above 170. Calibrated (Task 14)
 // from the measured spread of the 8 classic seeds under random play over
 // the pinned CalibrationSeeds (mean decisions/player, 200 games each):
-//   oh-hell 7.0 | mau-mau 12.2 | whist/hearts/spades 13.0 |
-//   crazy-eights 18.8 | knock-rummy 77.1 | gin-rummy 150.6
+//
+//	oh-hell 7.0 | mau-mau 12.2 | whist/hearts/spades 13.0 |
+//	crazy-eights 18.8 | knock-rummy 77.1 | gin-rummy 150.6
+//
 // The original band (15-40 flat, zero >100) hard-zeroed gin rummy -- a
 // human-validated classic -- while degenerate fixtures sat at 1.0.
 //

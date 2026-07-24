@@ -208,14 +208,14 @@ func TestAllSeedGenomesRunnable(t *testing.T) {
 	// Skip genomes with known incomplete support in typed runner
 	// These require features not yet ported (drawing from opponents, bidding, etc.)
 	skipGenomes := map[string]bool{
-		"Go Fish":           true, // Drawing from opponents not fully supported
-		"Spades":            true, // Bidding phase not fully supported
+		"Go Fish":            true, // Drawing from opponents not fully supported
+		"Spades":             true, // Bidding phase not fully supported
 		"Partnership Spades": true, // Bidding phase + teams
-		"Simple Poker":      true, // Complex betting flow
-		"Draw Poker":        true, // Complex betting flow
-		"Blackjack":         true, // Complex betting flow
-		"Scopa":             true, // Set collection not fully supported
-		"Cheat":             true, // Claim/challenge phases not supported
+		"Simple Poker":       true, // Complex betting flow
+		"Draw Poker":         true, // Complex betting flow
+		"Blackjack":          true, // Complex betting flow
+		"Scopa":              true, // Set collection not fully supported
+		"Cheat":              true, // Claim/challenge phases not supported
 	}
 
 	for _, g := range genomes {
@@ -242,7 +242,7 @@ func TestAllSeedGenomesRunnable(t *testing.T) {
 
 func BenchmarkRunBatchTypedSerial(b *testing.B) {
 	g := genome.CreateWarGenome()
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		RunBatchTyped(g, 100, RandomAI, 0, uint64(i))
@@ -251,7 +251,7 @@ func BenchmarkRunBatchTypedSerial(b *testing.B) {
 
 func BenchmarkRunBatchTypedParallel(b *testing.B) {
 	g := genome.CreateWarGenome()
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		RunBatchTypedParallel(g, 100, RandomAI, 0, uint64(i))
@@ -261,23 +261,23 @@ func BenchmarkRunBatchTypedParallel(b *testing.B) {
 func TestRunBatchTypedParallelSpeedup(t *testing.T) {
 	g := genome.CreateWarGenome()
 	numGames := 500
-	
+
 	// Serial
 	start := time.Now()
 	serialResult := RunBatchTyped(g, numGames, RandomAI, 0, 12345)
 	serialTime := time.Since(start)
-	
+
 	// Parallel
 	start = time.Now()
 	parallelResult := RunBatchTypedParallel(g, numGames, RandomAI, 0, 12345)
 	parallelTime := time.Since(start)
-	
+
 	speedup := float64(serialTime) / float64(parallelTime)
-	
+
 	t.Logf("Serial:   %v (%d games)", serialTime, serialResult.TotalGames)
 	t.Logf("Parallel: %v (%d games)", parallelTime, parallelResult.TotalGames)
 	t.Logf("Speedup:  %.2fx", speedup)
-	
+
 	if speedup < 1.5 {
 		t.Logf("Warning: Parallel speedup is low (%.2fx), expected at least 1.5x on multi-core", speedup)
 	}

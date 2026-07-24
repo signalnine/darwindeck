@@ -23,8 +23,8 @@ import (
 // snapshot's metrics stayed frozen (report.md 0.847 vs genome.json 0.808).
 func publishedIndividual() *evolution.Individual {
 	g := seeds.CrazyEights()
-	g.Fitness = 0.808        // stale running mean written by a later eval
-	g.SharedFitness = 0.300  // stale blend
+	g.Fitness = 0.808       // stale running mean written by a later eval
+	g.SharedFitness = 0.300 // stale blend
 	ind := &evolution.Individual{
 		Genome:     g,
 		Valid:      true,

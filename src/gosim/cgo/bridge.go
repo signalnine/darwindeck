@@ -48,10 +48,10 @@ type AggStats struct {
 	AllInCount    uint64
 
 	// Tension metrics
-	LeadChanges      uint32
-	DecisiveTurnPct  float32
-	ClosestMargin    float32
-	TrailingWinners  uint32
+	LeadChanges     uint32
+	DecisiveTurnPct float32
+	ClosestMargin   float32
+	TrailingWinners uint32
 
 	// Solitaire detection metrics
 	MoveDisruptionEvents uint64
@@ -188,10 +188,10 @@ func SimulateBatch(requestPtr unsafe.Pointer, requestLen C.int, responseLen *C.i
 			ShowdownWins:  simStats.ShowdownWins,
 			AllInCount:    simStats.AllInCount,
 			// Tension metrics (aggregated from individual games)
-			LeadChanges:      simStats.LeadChanges,
-			DecisiveTurnPct:  simStats.DecisiveTurnPct,
-			ClosestMargin:    simStats.ClosestMargin,
-			TrailingWinners:  simStats.TrailingWinners,
+			LeadChanges:     simStats.LeadChanges,
+			DecisiveTurnPct: simStats.DecisiveTurnPct,
+			ClosestMargin:   simStats.ClosestMargin,
+			TrailingWinners: simStats.TrailingWinners,
 			// Solitaire detection metrics
 			MoveDisruptionEvents: simStats.MoveDisruptionEvents,
 			ContentionEvents:     simStats.ContentionEvents,

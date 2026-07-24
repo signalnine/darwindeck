@@ -132,7 +132,7 @@ func (v *GenomeValidator) Validate(genome *GameGenome) []ValidationError {
 				}
 				if groupSum > pattern.RequiredCount {
 					errors = append(errors, ValidationError{
-						Field:   "hand_evaluation.patterns",
+						Field: "hand_evaluation.patterns",
 						Message: fmt.Sprintf("HandPattern '%s': same_rank_groups sum (%d) exceeds required_count (%d)",
 							pattern.Name, groupSum, pattern.RequiredCount),
 					})
@@ -165,7 +165,7 @@ func (v *GenomeValidator) Validate(genome *GameGenome) []ValidationError {
 				// If min_bet > starting_chips / 2, players can only bet once
 				if bp.MinBet > starting/2 {
 					errors = append(errors, ValidationError{
-						Field:   "betting_phase.min_bet",
+						Field: "betting_phase.min_bet",
 						Message: fmt.Sprintf("BettingPhase min_bet (%d) is too high relative to starting_chips (%d) - limits meaningful betting",
 							bp.MinBet, starting),
 					})

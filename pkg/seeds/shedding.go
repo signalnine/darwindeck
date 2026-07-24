@@ -33,10 +33,10 @@ func MauMau() *genome.Genome {
 			DrawPenalty: 1,
 		},
 		SpecialCards: []genome.SpecialCard{
-			{Type: genome.SpecialWild, ByRank: uint8(8)},        // 8s are wild
-			{Type: genome.SpecialSkip, ByRank: uint8(7)},        // 7s skip
-			{Type: genome.SpecialDrawTwo, ByRank: uint8(2)},     // 2s draw two
-			{Type: genome.SpecialReverse, ByRank: uint8(10)},    // 10s reverse
+			{Type: genome.SpecialWild, ByRank: uint8(8)},     // 8s are wild
+			{Type: genome.SpecialSkip, ByRank: uint8(7)},     // 7s skip
+			{Type: genome.SpecialDrawTwo, ByRank: uint8(2)},  // 2s draw two
+			{Type: genome.SpecialReverse, ByRank: uint8(10)}, // 10s reverse
 		},
 	}
 }

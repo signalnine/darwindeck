@@ -24,19 +24,19 @@ var (
 
 // CLI flags
 var (
-	generations       int
-	populationSize    int
-	style             string
-	gamesPerEval      int
-	seed              int64
-	checkpointPath    string
+	generations        int
+	populationSize     int
+	style              string
+	gamesPerEval       int
+	seed               int64
+	checkpointPath     string
 	checkpointInterval int
-	skipSkillEval     bool
-	outputDir         string
-	saveTopN          int
-	workers           int
-	verbose           bool
-	showVersion       bool
+	skipSkillEval      bool
+	outputDir          string
+	saveTopN           int
+	workers            int
+	verbose            bool
+	showVersion        bool
 )
 
 func init() {
@@ -256,9 +256,9 @@ func printSummary(engine *evolution.EvolutionEngine, totalTime time.Duration, ou
 
 // GenomeOutput is the JSON structure for saved genomes
 type GenomeOutput struct {
-	Genome         *genome.GameGenome         `json:"genome"`
-	Fitness        float64                    `json:"fitness"`
-	FitnessMetrics map[string]float64         `json:"fitness_metrics,omitempty"`
+	Genome         *genome.GameGenome `json:"genome"`
+	Fitness        float64            `json:"fitness"`
+	FitnessMetrics map[string]float64 `json:"fitness_metrics,omitempty"`
 }
 
 func saveGenome(g *genome.GameGenome, fit float64, metrics *fitness.FitnessMetrics, path string) error {

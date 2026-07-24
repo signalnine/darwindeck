@@ -152,7 +152,7 @@ func TestCrossoverPhaseMixing(t *testing.T) {
 			Phases: []genome.Phase{
 				&genome.TrickPhase{LeadSuitRequired: true},
 			},
-			MaxTurns: 200,
+			MaxTurns:     200,
 			IsTrickBased: true,
 		},
 		WinConditions: []genome.WinCondition{

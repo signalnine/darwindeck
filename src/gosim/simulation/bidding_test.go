@@ -10,15 +10,15 @@ import (
 func TestRunSingleGameWithBidding(t *testing.T) {
 	// Create a simple trick-taking genome with bidding
 	// This mimics what Python would produce for a Spades-style game
-	
+
 	// For now, let's test that the bidding functions don't panic
 	state := engine.GetState()
 	defer engine.PutState(state)
-	
+
 	// Initialize state for 4 players
 	state.NumPlayers = 4
 	state.CardsPerPlayer = 13
-	
+
 	// Initialize players with hands
 	for i := 0; i < 4; i++ {
 		state.Players[i].Hand = make([]engine.Card, 13)
@@ -31,7 +31,7 @@ func TestRunSingleGameWithBidding(t *testing.T) {
 		state.Players[i].CurrentBid = -1
 		state.Players[i].IsNilBid = false
 	}
-	
+
 	// Test hasBiddingPhase with a mock genome
 	genome := &engine.Genome{
 		TurnPhases: []engine.PhaseDescriptor{
@@ -58,17 +58,17 @@ func TestRunSingleGameWithBidding(t *testing.T) {
 			},
 		},
 	}
-	
+
 	if !hasBiddingPhase(genome) {
 		t.Error("Expected hasBiddingPhase to return true")
 	}
-	
+
 	// Test getBiddingPhaseData
 	data := getBiddingPhaseData(genome)
 	if data == nil {
 		t.Error("Expected getBiddingPhaseData to return data")
 	}
-	
+
 	// Test selectGreedyBid
 	biddingPhase := engine.BiddingPhase{
 		MinBid:   1,
@@ -79,25 +79,25 @@ func TestRunSingleGameWithBidding(t *testing.T) {
 	if bid.Value < 1 || bid.Value > 13 {
 		t.Errorf("Expected bid between 1 and 13, got %d", bid.Value)
 	}
-	
+
 	// Test runBiddingRound
 	aiTypes := []AIPlayerType{RandomAI, RandomAI, RandomAI, RandomAI}
 	rng := rand.New(rand.NewSource(42))
 	runBiddingRound(state, genome, aiTypes, rng)
-	
+
 	// Verify all players have bid
 	if !state.BiddingComplete {
 		t.Error("Expected BiddingComplete to be true after runBiddingRound")
 	}
-	
+
 	for i := 0; i < 4; i++ {
 		if state.Players[i].CurrentBid < 0 {
 			t.Errorf("Player %d should have bid, got CurrentBid=%d", i, state.Players[i].CurrentBid)
 		}
 	}
-	
-	t.Logf("Bids: P0=%d, P1=%d, P2=%d, P3=%d", 
-		state.Players[0].CurrentBid, 
+
+	t.Logf("Bids: P0=%d, P1=%d, P2=%d, P3=%d",
+		state.Players[0].CurrentBid,
 		state.Players[1].CurrentBid,
 		state.Players[2].CurrentBid,
 		state.Players[3].CurrentBid)

@@ -108,9 +108,9 @@ func TestMoveKeyDistinguishesMoves(t *testing.T) {
 	base := sim.Move{Type: sim.MovePlay, Cards: []sim.Card{c1}, PlayerID: 0}
 
 	variants := []sim.Move{
-		{Type: sim.MoveDiscard, Cards: []sim.Card{c1}, PlayerID: 0}, // type differs
-		{Type: sim.MovePlay, Cards: []sim.Card{c2}, PlayerID: 0},    // card differs
-		{Type: sim.MovePlay, Cards: []sim.Card{c1}, PlayerID: 1},    // player differs
+		{Type: sim.MoveDiscard, Cards: []sim.Card{c1}, PlayerID: 0},  // type differs
+		{Type: sim.MovePlay, Cards: []sim.Card{c2}, PlayerID: 0},     // card differs
+		{Type: sim.MovePlay, Cards: []sim.Card{c1}, PlayerID: 1},     // player differs
 		{Type: sim.MovePlay, Cards: []sim.Card{c1, c2}, PlayerID: 0}, // extra card
 		{Type: sim.MovePlay, PlayerID: 0},                            // no cards
 	}
@@ -182,8 +182,8 @@ func TestCloneFieldByField(t *testing.T) {
 	}
 
 	checks := []struct {
-		name       string
-		got, want  interface{}
+		name      string
+		got, want interface{}
 	}{
 		{"Deck", cp.Deck, st.Deck},
 		{"Hands", cp.Hands, st.Hands},

@@ -18,9 +18,9 @@ func TestWarGenomeTyped(t *testing.T) {
 		TurnStructure: TurnStructure{
 			Phases: []Phase{
 				&PlayPhase{
-					Target:   LocationTableau,
-					MinCards: 1,
-					MaxCards: 1,
+					Target:    LocationTableau,
+					MinCards:  1,
+					MaxCards:  1,
 					Mandatory: true,
 				},
 			},
@@ -155,9 +155,9 @@ func TestPlayPhaseMovegen(t *testing.T) {
 		TurnStructure: TurnStructure{
 			Phases: []Phase{
 				&PlayPhase{
-					Target:   LocationDiscard,
-					MinCards: 1,
-					MaxCards: 1,
+					Target:    LocationDiscard,
+					MinCards:  1,
+					MaxCards:  1,
 					Mandatory: true,
 				},
 			},
@@ -225,8 +225,8 @@ func TestTrickPhaseMovegen(t *testing.T) {
 
 	// Give player 0 cards of mixed suits
 	state.Players[0].Hand = []engine.Card{
-		{Rank: 2, Suit: 0}, // Hearts
-		{Rank: 5, Suit: 0}, // Hearts
+		{Rank: 2, Suit: 0},  // Hearts
+		{Rank: 5, Suit: 0},  // Hearts
 		{Rank: 10, Suit: 1}, // Diamonds
 	}
 
@@ -564,7 +564,7 @@ func TestJSONRoundTrip(t *testing.T) {
 						OpCode:   12, // check_card_matches_rank
 						Operator: 50, // eq
 						Value:    0,
-						RefLoc:   2,  // discard
+						RefLoc:   2, // discard
 					},
 				},
 				&BettingPhase{

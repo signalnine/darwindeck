@@ -9,9 +9,9 @@ import (
 type HookPoint int
 
 const (
-	HookAfterPlay    HookPoint = iota // After a card is played
-	HookEndOfRound                     // After a round/hand ends
-	HookScoring                        // During scoring phase
+	HookAfterPlay  HookPoint = iota // After a card is played
+	HookEndOfRound                  // After a round/hand ends
+	HookScoring                     // During scoring phase
 )
 
 // Hook is a borrowed mechanic's behavior injected into a skeleton runner.

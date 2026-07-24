@@ -12,7 +12,7 @@ type Tier1Result struct {
 	Passed   bool
 	Reason   string // Why it failed (if applicable)
 	Games    int
-	Winners  []int  // Win count per player
+	Winners  []int // Win count per player
 	AvgTurns float64
 }
 

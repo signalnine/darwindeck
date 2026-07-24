@@ -36,10 +36,10 @@ const (
 // Condition represents a condition that must be met for a phase to execute.
 // nil Condition means the phase always executes.
 type Condition struct {
-	OpCode   uint8  // Condition type (OpCheckHandSize, etc.)
-	Operator uint8  // Comparison operator (OpEQ, OpLT, etc.)
-	Value    int32  // Value to compare against
-	RefLoc   uint8  // Reference location for some conditions
+	OpCode   uint8 // Condition type (OpCheckHandSize, etc.)
+	Operator uint8 // Comparison operator (OpEQ, OpLT, etc.)
+	Value    int32 // Value to compare against
+	RefLoc   uint8 // Reference location for some conditions
 }
 
 // DrawPhase represents drawing cards from a source.
@@ -55,11 +55,11 @@ func (p *DrawPhase) phaseMarker()     {}
 
 // PlayPhase represents playing cards to a target location.
 type PlayPhase struct {
-	Target            Location   // Where to play cards (tableau, discard)
-	MinCards          int        // Minimum cards that must be played
-	MaxCards          int        // Maximum cards that can be played
-	Mandatory         bool       // If true, must play if able
-	PassIfUnable      bool       // If true, can pass when no valid plays
+	Target             Location   // Where to play cards (tableau, discard)
+	MinCards           int        // Minimum cards that must be played
+	MaxCards           int        // Maximum cards that can be played
+	Mandatory          bool       // If true, must play if able
+	PassIfUnable       bool       // If true, can pass when no valid plays
 	ValidPlayCondition *Condition // Optional condition cards must satisfy
 }
 
@@ -128,14 +128,14 @@ func (p *BiddingPhase) phaseMarker()     {}
 type WinConditionType uint8
 
 const (
-	WinTypeEmptyHand    WinConditionType = 0
-	WinTypeHighScore    WinConditionType = 1
-	WinTypeFirstToScore WinConditionType = 2
-	WinTypeCaptureAll   WinConditionType = 3
-	WinTypeLowScore     WinConditionType = 4
+	WinTypeEmptyHand     WinConditionType = 0
+	WinTypeHighScore     WinConditionType = 1
+	WinTypeFirstToScore  WinConditionType = 2
+	WinTypeCaptureAll    WinConditionType = 3
+	WinTypeLowScore      WinConditionType = 4
 	WinTypeAllHandsEmpty WinConditionType = 5
-	WinTypeBestHand     WinConditionType = 6
-	WinTypeMostCaptured WinConditionType = 7
+	WinTypeBestHand      WinConditionType = 6
+	WinTypeMostCaptured  WinConditionType = 7
 )
 
 // WinCondition defines how the game ends and who wins.
@@ -267,18 +267,18 @@ type HandPattern struct {
 // HandEvaluation defines how to evaluate and compare hands.
 type HandEvaluation struct {
 	Method        HandEvaluationMethod
-	TargetValue   uint8       // For POINT_TOTAL (e.g., 21 for Blackjack)
-	BustThreshold uint8       // For POINT_TOTAL (e.g., 22 for Blackjack bust)
-	CardValues    []CardValue // Card point values
+	TargetValue   uint8         // For POINT_TOTAL (e.g., 21 for Blackjack)
+	BustThreshold uint8         // For POINT_TOTAL (e.g., 22 for Blackjack bust)
+	CardValues    []CardValue   // Card point values
 	Patterns      []HandPattern // Hand patterns for PATTERN_MATCH
 }
 
 // SetupRules defines initial game setup.
 type SetupRules struct {
-	CardsPerPlayer int  // Cards dealt to each player
-	TableauSize    int  // Number of tableau piles (0 = none)
-	StartingChips  int  // Chips for betting games (0 = no betting)
-	DealToTableau  int  // Cards dealt to tableau at start
+	CardsPerPlayer int // Cards dealt to each player
+	TableauSize    int // Number of tableau piles (0 = none)
+	StartingChips  int // Chips for betting games (0 = no betting)
+	DealToTableau  int // Cards dealt to tableau at start
 }
 
 // TurnStructure defines the phases of each turn.
@@ -299,15 +299,15 @@ type TeamConfig struct {
 // GameGenome is the complete game definition.
 // This is the top-level struct that fully describes an evolved card game.
 type GameGenome struct {
-	Name          string          // Human-readable game name
-	Generation    int             // Evolution generation number
-	Setup         SetupRules      // Initial setup
-	TurnStructure TurnStructure   // Turn phases and limits
-	WinConditions []WinCondition  // How the game ends
-	Effects       []SpecialEffect // Special card effects
+	Name          string            // Human-readable game name
+	Generation    int               // Evolution generation number
+	Setup         SetupRules        // Initial setup
+	TurnStructure TurnStructure     // Turn phases and limits
+	WinConditions []WinCondition    // How the game ends
+	Effects       []SpecialEffect   // Special card effects
 	CardScoring   []CardScoringRule // Scoring rules
-	HandEval      *HandEvaluation // Hand evaluation (poker, blackjack)
-	Teams         *TeamConfig     // Optional team configuration
+	HandEval      *HandEvaluation   // Hand evaluation (poker, blackjack)
+	Teams         *TeamConfig       // Optional team configuration
 }
 
 // Clone creates a deep copy of the genome.

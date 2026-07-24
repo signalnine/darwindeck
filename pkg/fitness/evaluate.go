@@ -270,4 +270,3 @@ func runMCTSBatch(g *genome.Genome, runner sim.GenericRunner, n int, baseSeed ui
 	ai := &sim.PerPlayerAI{Players: players, Fallback: random}
 	return sim.RunBatch(g, runner, ai, n, baseSeed, hooks...)
 }
-

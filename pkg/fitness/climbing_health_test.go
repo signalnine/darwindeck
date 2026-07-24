@@ -52,11 +52,11 @@ func TestClimbingVariantsArePlayable(t *testing.T) {
 		}
 	}
 	variants := []*genome.Genome{
-		mk(2, 3, false, false, false, 0),  // minimal singles-only
-		mk(2, 13, true, true, true, 3),    // full Big Two, 2p
-		mk(6, 8, true, true, true, 3),     // max players
-		mk(2, 13, false, false, true, 5),  // runs-only, long
-		mk(4, 13, true, false, false, 0),  // pairs-only
+		mk(2, 3, false, false, false, 0), // minimal singles-only
+		mk(2, 13, true, true, true, 3),   // full Big Two, 2p
+		mk(6, 8, true, true, true, 3),    // max players
+		mk(2, 13, false, false, true, 5), // runs-only, long
+		mk(4, 13, true, false, false, 0), // pairs-only
 	}
 	for _, g := range variants {
 		if errs := genome.Validate(g); len(errs) > 0 {

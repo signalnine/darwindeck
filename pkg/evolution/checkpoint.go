@@ -55,10 +55,10 @@ type checkpointConfig struct {
 	// streams into one running mean -- exactly the corruption this fingerprint
 	// exists to prevent. Old checkpoints lack the field and unmarshal to the
 	// zero value, which matches the default config, so they stay resumable.
-	MCTSEval       fitness.MCTSEvalConfig
-	CrossSkeleton  bool
-	NoveltySelect  bool
-	FitnessFloor   float64
+	MCTSEval      fitness.MCTSEvalConfig
+	CrossSkeleton bool
+	NoveltySelect bool
+	FitnessFloor  float64
 }
 
 // configFingerprint captures the engine's stream-determining knobs for the

@@ -23,16 +23,16 @@ type CheckpointData struct {
 	StatsHistory []GenerationStats `json:"stats_history"`
 
 	// Metadata
-	Timestamp   time.Time `json:"timestamp"`
-	RNGSeed     int64     `json:"rng_seed"`
-	Version     string    `json:"version"`
+	Timestamp time.Time `json:"timestamp"`
+	RNGSeed   int64     `json:"rng_seed"`
+	Version   string    `json:"version"`
 }
 
 // IndividualData represents a serializable individual.
 type IndividualData struct {
-	Genome         *genome.GameGenome     `json:"genome"`
-	Fitness        float64                `json:"fitness"`
-	Evaluated      bool                   `json:"evaluated"`
+	Genome         *genome.GameGenome      `json:"genome"`
+	Fitness        float64                 `json:"fitness"`
+	Evaluated      bool                    `json:"evaluated"`
 	FitnessMetrics *fitness.FitnessMetrics `json:"fitness_metrics,omitempty"`
 }
 
@@ -189,18 +189,18 @@ func ResumeFromCheckpoint(path string) (*EvolutionEngine, error) {
 
 // AutoCheckpointer provides automatic checkpoint saving.
 type AutoCheckpointer struct {
-	Engine     *EvolutionEngine
-	Path       string
-	Interval   int  // Save every N generations
-	LastSaved  int  // Last generation saved
+	Engine    *EvolutionEngine
+	Path      string
+	Interval  int // Save every N generations
+	LastSaved int // Last generation saved
 }
 
 // NewAutoCheckpointer creates an auto-checkpointer.
 func NewAutoCheckpointer(engine *EvolutionEngine, path string, interval int) *AutoCheckpointer {
 	return &AutoCheckpointer{
-		Engine:   engine,
-		Path:     path,
-		Interval: interval,
+		Engine:    engine,
+		Path:      path,
+		Interval:  interval,
 		LastSaved: -1,
 	}
 }

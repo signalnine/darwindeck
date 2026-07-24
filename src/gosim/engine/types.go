@@ -41,12 +41,12 @@ type PlayerState struct {
 
 // Claim represents a bluffing claim for games like I Doubt It, Cheat, BS
 type Claim struct {
-	ClaimerID    uint8   // Who made the claim
-	ClaimedRank  uint8   // Claimed rank (0-12 for A-K)
-	ClaimedCount uint8   // Number of cards claimed
-	CardsPlayed  []Card  // Actual cards played (for verification)
-	Challenged   bool    // Has this claim been challenged?
-	ChallengerID uint8   // Who challenged (if Challenged=true)
+	ClaimerID    uint8  // Who made the claim
+	ClaimedRank  uint8  // Claimed rank (0-12 for A-K)
+	ClaimedCount uint8  // Number of cards claimed
+	CardsPlayed  []Card // Actual cards played (for verification)
+	Challenged   bool   // Has this claim been challenged?
+	ChallengerID uint8  // Who challenged (if Challenged=true)
 }
 
 // TrickCard represents a card played to the current trick

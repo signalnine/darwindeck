@@ -37,17 +37,17 @@ func TestSessionLengthScoring(t *testing.T) {
 		dpp      int
 		expected float64
 	}{
-		{2, 0},          // Too short (below hard cutoff)
-		{3, 0},          // Minimum (ramp starts at 0 here)
-		{4, 1.0 / 3.0},  // Ramping up
-		{5, 2.0 / 3.0},  // Ramping up
-		{6, 1.0},        // Target start
-		{7, 1.0},        // oh-hell's natural length: in band since round 2
-		{25, 1.0},       // In range
-		{60, 1.0},       // Target end
-		{115, 0.5},      // Ramping down
-		{170, 0},        // Maximum (ramp reaches 0 here)
-		{180, 0},        // Way too long (above hard cutoff)
+		{2, 0},         // Too short (below hard cutoff)
+		{3, 0},         // Minimum (ramp starts at 0 here)
+		{4, 1.0 / 3.0}, // Ramping up
+		{5, 2.0 / 3.0}, // Ramping up
+		{6, 1.0},       // Target start
+		{7, 1.0},       // oh-hell's natural length: in band since round 2
+		{25, 1.0},      // In range
+		{60, 1.0},      // Target end
+		{115, 0.5},     // Ramping down
+		{170, 0},       // Maximum (ramp reaches 0 here)
+		{180, 0},       // Way too long (above hard cutoff)
 	}
 
 	for _, tt := range tests {

@@ -144,7 +144,7 @@ func TestApplyMoveTableauModeWarTie(t *testing.T) {
 	state := NewGameState(2)
 	state.TableauMode = 1 // WAR
 	state.NumPlayers = 2
-	state.TurnNumber = 0  // Even battle number = player 0 wins ties
+	state.TurnNumber = 0 // Even battle number = player 0 wins ties
 
 	// Setup: both players have same rank
 	state.Players[0].Hand = []Card{{Rank: 7, Suit: 0}}
@@ -504,11 +504,11 @@ func sequencePhaseGenome() *Genome {
 				PhaseType: 2, // PlayPhase
 				Data: []byte{
 					byte(LocationTableau), // target = TABLEAU
-					1,                      // min_cards = 1
-					1,                      // max_cards = 1
-					0,                      // mandatory = false
-					1,                      // pass_if_unable = true
-					0, 0, 0, 0,             // conditionLen = 0 (no condition)
+					1,                     // min_cards = 1
+					1,                     // max_cards = 1
+					0,                     // mandatory = false
+					1,                     // pass_if_unable = true
+					0, 0, 0, 0,            // conditionLen = 0 (no condition)
 				},
 			},
 		},
@@ -532,11 +532,11 @@ func minimalPlayPhaseGenome() *Genome {
 				PhaseType: 2, // PlayPhase
 				Data: []byte{
 					byte(LocationTableau), // target = TABLEAU
-					1,                      // min_cards = 1
-					1,                      // max_cards = 1
-					1,                      // mandatory = true
-					0,                      // pass_if_unable = false
-					0, 0, 0, 0,             // conditionLen = 0 (no condition)
+					1,                     // min_cards = 1
+					1,                     // max_cards = 1
+					1,                     // mandatory = true
+					0,                     // pass_if_unable = false
+					0, 0, 0, 0,            // conditionLen = 0 (no condition)
 				},
 			},
 		},
@@ -579,8 +579,8 @@ func TestCalculateTrickPointsExplicitScoringMultipleRules(t *testing.T) {
 	// Create genome with Hearts-style explicit scoring
 	genome := &Genome{
 		CardScoring: []CardScoringRule{
-			{Suit: 0, Rank: 255, Points: 1, Trigger: TriggerTrickWin},  // Hearts = 1 point
-			{Suit: 3, Rank: 10, Points: 13, Trigger: TriggerTrickWin},  // Queen of Spades = 13 points
+			{Suit: 0, Rank: 255, Points: 1, Trigger: TriggerTrickWin}, // Hearts = 1 point
+			{Suit: 3, Rank: 10, Points: 13, Trigger: TriggerTrickWin}, // Queen of Spades = 13 points
 		},
 	}
 
@@ -1127,8 +1127,8 @@ func TestDualScoringNegative(t *testing.T) {
 // TestDualScoringPlayerOutOfBounds verifies bounds checking
 func TestDualScoringPlayerOutOfBounds(t *testing.T) {
 	state := &GameState{
-		NumPlayers: 2,
-		Players:    []PlayerState{{Score: 0}, {Score: 0}},
+		NumPlayers:   2,
+		Players:      []PlayerState{{Score: 0}, {Score: 0}},
 		TeamScores:   []int32{0, 0},
 		PlayerToTeam: []int8{0, 1},
 		WinningTeam:  -1,
@@ -1172,7 +1172,7 @@ func TestDualScoringIntegrationTrickWin(t *testing.T) {
 	genome := &Genome{
 		TurnPhases: []PhaseDescriptor{
 			{
-				PhaseType: 4, // TrickPhase
+				PhaseType: 4,                    // TrickPhase
 				Data:      []byte{1, 255, 1, 0}, // lead_suit_required, no trump, high wins, hearts breaking
 			},
 		},
@@ -1261,11 +1261,11 @@ func TestDualScoringIntegrationGoFishSet(t *testing.T) {
 				PhaseType: 2, // PlayPhase
 				Data: []byte{
 					byte(LocationDiscard), // target = DISCARD
-					4,                      // min_cards = 4
-					4,                      // max_cards = 4
-					0,                      // mandatory = false
-					0,                      // pass_if_unable = false
-					0, 0, 0, 0,             // conditionLen = 0
+					4,                     // min_cards = 4
+					4,                     // max_cards = 4
+					0,                     // mandatory = false
+					0,                     // pass_if_unable = false
+					0, 0, 0, 0,            // conditionLen = 0
 				},
 			},
 		},

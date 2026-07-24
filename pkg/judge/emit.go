@@ -44,10 +44,10 @@ type ManifestEntry struct {
 
 // EmitResult is what Emit returns to the CLI.
 type EmitResult struct {
-	IDs         []string
-	AnswerKey   map[string]AnswerRec
-	DossierDir  string
-	AnswerPath  string
+	IDs        []string
+	AnswerKey  map[string]AnswerRec
+	DossierDir string
+	AnswerPath string
 }
 
 // Emit discovers all genome.json files under inputDir (recursively), assigns

@@ -51,9 +51,9 @@ func TestOutputRankIsGreedyOnlyMean(t *testing.T) {
 // individual with a higher greedy mean. Pre-fix, the published (MCTS-mode)
 // 0.92 would have outranked the greedy-only 0.80.
 func TestTopNRanksByGreedyOnlyMean(t *testing.T) {
-	granted := mkEvaluated(distinctShedding(0), 3.90, 5, 0.92, 1)  // greedy 0.78, published 0.92
-	ungranted := mkEvaluated(distinctShedding(1), 4.00, 5, 0, 0)   // greedy 0.80, published 0.80
-	third := mkEvaluated(distinctShedding(2), 3.50, 5, 0, 0)       // greedy 0.70
+	granted := mkEvaluated(distinctShedding(0), 3.90, 5, 0.92, 1) // greedy 0.78, published 0.92
+	ungranted := mkEvaluated(distinctShedding(1), 4.00, 5, 0, 0)  // greedy 0.80, published 0.80
+	third := mkEvaluated(distinctShedding(2), 3.50, 5, 0, 0)      // greedy 0.70
 
 	e := &Engine{Population: []*Individual{granted, ungranted, third}}
 	top := e.TopN(3)
@@ -79,8 +79,8 @@ func TestAllQualifiedKeepsGreedyBestCloneMember(t *testing.T) {
 	}
 	e := &NoveltyEngine{
 		Population: []*NoveltyIndividual{
-			mkNov("granted", 3.50, 5, 0.95, 1),   // greedy 0.70, published 0.95
-			mkNov("ungranted", 4.00, 5, 0, 0),    // greedy 0.80, published 0.80
+			mkNov("granted", 3.50, 5, 0.95, 1), // greedy 0.70, published 0.95
+			mkNov("ungranted", 4.00, 5, 0, 0),  // greedy 0.80, published 0.80
 		},
 	}
 
@@ -92,4 +92,3 @@ func TestAllQualifiedKeepsGreedyBestCloneMember(t *testing.T) {
 		t.Errorf("kept %s, want the greedy-best member (ungranted, 0.80 > 0.70)", inds[0].Genome.ID)
 	}
 }
-

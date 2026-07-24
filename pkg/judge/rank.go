@@ -14,10 +14,10 @@ type Verdict struct {
 	ID                  string  `json:"id"`
 	Rep                 int     `json:"rep"`
 	Playable            bool    `json:"playable"`
-	Quality             string  `json:"quality"`               // publishable | borderline | degenerate
-	DegenerateMechanism string  `json:"degenerate_mechanism"`  // why, if degenerate
-	Novelty             string  `json:"novelty"`               // novel | variant_of_known
-	RediscoveryName     string  `json:"rediscovery_name"`      // closest classic family
+	Quality             string  `json:"quality"`              // publishable | borderline | degenerate
+	DegenerateMechanism string  `json:"degenerate_mechanism"` // why, if degenerate
+	Novelty             string  `json:"novelty"`              // novel | variant_of_known
+	RediscoveryName     string  `json:"rediscovery_name"`     // closest classic family
 	Confidence          float64 `json:"confidence"`
 	Reason              string  `json:"reason"`
 }

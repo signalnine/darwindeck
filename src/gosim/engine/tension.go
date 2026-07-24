@@ -3,26 +3,26 @@ package engine
 // WinType constants for tension detection
 // These map to win condition types in bytecode
 const (
-	WinTypeEmptyHand    uint8 = 0 // Shedding games - empty hand wins
-	WinTypeHighScore    uint8 = 1 // Score-based - highest score wins
-	WinTypeFirstToScore uint8 = 2 // Race to threshold
-	WinTypeCaptureAll   uint8 = 3 // War-style capture
-	WinTypeLowScore     uint8 = 4 // Avoidance games (Hearts) - lowest score wins
-	WinTypeAllHandEmpty uint8 = 5 // Trick-taking hand end
-	WinTypeBestHand     uint8 = 6 // Poker-style hand comparison
-	WinTypeMostCaptured uint8 = 7 // Scopa-style most cards
-	WinTypeMostTricks   uint8 = 8 // Trick-collecting games (Spades)
-	WinTypeFewestTricks uint8 = 9 // Trick-avoidance games (Hearts)
+	WinTypeEmptyHand    uint8 = 0  // Shedding games - empty hand wins
+	WinTypeHighScore    uint8 = 1  // Score-based - highest score wins
+	WinTypeFirstToScore uint8 = 2  // Race to threshold
+	WinTypeCaptureAll   uint8 = 3  // War-style capture
+	WinTypeLowScore     uint8 = 4  // Avoidance games (Hearts) - lowest score wins
+	WinTypeAllHandEmpty uint8 = 5  // Trick-taking hand end
+	WinTypeBestHand     uint8 = 6  // Poker-style hand comparison
+	WinTypeMostCaptured uint8 = 7  // Scopa-style most cards
+	WinTypeMostTricks   uint8 = 8  // Trick-collecting games (Spades)
+	WinTypeFewestTricks uint8 = 9  // Trick-avoidance games (Hearts)
 	WinTypeMostChips    uint8 = 10 // Poker cash games
 )
 
 // TensionMetrics tracks tension curve data during simulation
 type TensionMetrics struct {
-	LeadChanges      int     // Number of times leader switched
-	DecisiveTurn     int     // Turn when winner took PERMANENT lead
-	ClosestMargin    float32 // Smallest normalized gap between 1st and 2nd (0 = tied)
-	TotalTurns       int     // For computing decisive turn percentage
-	WinnerWasTrailing bool   // True if winner was behind at midpoint (comeback win)
+	LeadChanges       int     // Number of times leader switched
+	DecisiveTurn      int     // Turn when winner took PERMANENT lead
+	ClosestMargin     float32 // Smallest normalized gap between 1st and 2nd (0 = tied)
+	TotalTurns        int     // For computing decisive turn percentage
+	WinnerWasTrailing bool    // True if winner was behind at midpoint (comeback win)
 
 	// Internal tracking (not serialized)
 	currentLeader int   // Player ID of current leader (-1 for tie)

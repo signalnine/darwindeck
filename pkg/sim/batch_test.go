@@ -666,8 +666,8 @@ func TestMeaningfulSpecialProfileDifferentiates(t *testing.T) {
 		HandSize: 3,
 		Shedding: &genome.SheddingParams{MatchRule: genome.MatchEither, DrawPenalty: 1},
 		SpecialCards: []genome.SpecialCard{
-			{Type: genome.SpecialWild},                // catch-all wild
-			{Type: genome.SpecialDrawTwo, ByRank: 5},  // 5s inflict draw-two
+			{Type: genome.SpecialWild},               // catch-all wild
+			{Type: genome.SpecialDrawTwo, ByRank: 5}, // 5s inflict draw-two
 		},
 	}
 	runner := fixedSetupRunner{

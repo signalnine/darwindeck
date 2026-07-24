@@ -166,10 +166,10 @@ func TestTensionCurveBetting(t *testing.T) {
 
 func TestBluffingDepthClaims(t *testing.T) {
 	results := &SimulationResults{
-		TotalClaims:      100,
-		TotalBluffs:      60,  // 60% bluff rate (near ideal)
-		TotalChallenges:  40,  // 40% challenge rate (near ideal)
-		SuccessfulBluffs: 25,
+		TotalClaims:       100,
+		TotalBluffs:       60, // 60% bluff rate (near ideal)
+		TotalChallenges:   40, // 40% challenge rate (near ideal)
+		SuccessfulBluffs:  25,
 		SuccessfulCatches: 25, // 50/50 balance
 	}
 

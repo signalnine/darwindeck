@@ -103,7 +103,7 @@ func NewStartingChipsMutation(probability float64) *StartingChipsMutation {
 			probability: probability,
 			name:        "StartingChips",
 		},
-		minChips: 0,    // 0 = no betting
+		minChips: 0, // 0 = no betting
 		maxChips: 5000,
 	}
 }
