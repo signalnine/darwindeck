@@ -1,6 +1,7 @@
 package rummy
 
 import (
+	"math/bits"
 	"math/rand/v2"
 	"slices"
 	"sort"
@@ -501,23 +502,189 @@ func calcDeadwood(hand []sim.Card, params *genome.RummyParams) int {
 		return totalValue
 	}
 
-	if n <= 20 {
-		// Candidates are disjoint unions of card values, so the deadwood is
-		// total minus the best meld cover -- no need to reconstruct WHICH
-		// cards were covered. Progress (audit Task 8) calls calcDeadwood
-		// after every applied move, so this path skips bestPartitionMasksDP's
-		// two reconstruction arrays and the backtrack.
-		return totalValue - bestPartitionValueDP(candidates, n)
-	}
+	// Candidates are disjoint unions of card values, so the deadwood is total
+	// minus the best meld cover -- no need to reconstruct WHICH cards were
+	// covered. Progress (audit Task 8) calls calcDeadwood after every applied
+	// move, so this path skips bestPartitionMasksDP's two reconstruction
+	// arrays and the backtrack.
+	//
+	// The maximum cover VALUE is unique (unlike the argmax partition), so
+	// bestPartitionValue may decompose the problem however it likes without
+	// changing a single game trace -- see its doc for why that matters.
+	return totalValue - bestPartitionValue(candidates)
+}
 
-	used := bestPartition(candidates, n)
-	dead := 0
-	for i, card := range hand {
-		if !used[i] {
-			dead += cardValue(card)
+// partitionDPWidth caps the width of ONE connected component solved by the
+// exact subset DP (2^width states). Components above it fall back to the
+// branch-and-bound search. 20 is the historical whole-hand cap kept as a
+// per-component cap, so no input is ever solved with a wider lattice than
+// before this decomposition existed.
+const partitionDPWidth = 20
+
+// bestPartitionValue returns the maximum total value of a disjoint subset of
+// candidates -- the value calcDeadwood subtracts from the hand total.
+//
+// PERFORMANCE (the reason this is not just bestPartitionValueDP): the subset DP
+// is 2^width, and it used to run over the WHOLE HAND. That made the "fast path"
+// for a 20-card hand cost ~2.8ms per call -- roughly 1900x the 1.5us the
+// >20-card backtracking fallback cost on the same data, so the branch was
+// inverted against its own fallback across the entire 16-20 band, and it
+// allocated an 8MB table each time. MechDrawPenalty on a rummy host grows hands
+// into exactly that band (measured max 18 under random play), and Progress calls
+// calcDeadwood for every player after every applied move.
+//
+// Two exact reductions fix the exponent, in this order:
+//
+//  1. CARDS THAT CANNOT MELD ARE NOT STATE. Only cards appearing in some
+//     candidate can ever be covered, so the lattice is compacted to those
+//     (meldComponents' cover mask). A 20-card hand averages ~10.6 meldable
+//     cards under meld_types=both, ~6 under sets-only.
+//  2. COMPONENTS ARE INDEPENDENT. A disjoint partition never spans two
+//     candidate groups that share no card, so the maximum is the SUM of the
+//     per-component maxima. Sets-only components are one rank group (<= 4
+//     cards); runs-only components are one consecutive same-suit stretch
+//     (<= 13).
+//
+// Both are value-preserving identities, not heuristics: the number returned is
+// bit-identical to the old whole-hand DP's. The meld SELECTION path
+// (bestPartitionMasks, used once per game when a knock lays melds down) is
+// deliberately left alone -- ties there pick a specific partition, and changing
+// which one would change game traces for no gain on a cold path.
+func bestPartitionValue(candidates []meldCandidate) int {
+	total := 0
+	for _, comp := range meldComponents(candidates) {
+		if comp.width <= partitionDPWidth {
+			total += bestPartitionValueDP(comp.cands, comp.width)
+			continue
+		}
+		total += bestPartitionValueBnB(comp.cands)
+	}
+	return total
+}
+
+// meldComponent is one connected group of candidates, with its masks already
+// remapped into a compact 0..width-1 index space.
+type meldComponent struct {
+	cands []meldCandidate
+	width int
+}
+
+// meldComponents partitions candidates into connected components (two
+// candidates are related when their masks share a hand index; the relation is
+// closed transitively by union-find over the 32 card slots) and compacts each
+// component's masks. Candidate order is preserved inside every component so the
+// downstream DP stays deterministic.
+func meldComponents(candidates []meldCandidate) []meldComponent {
+	var uf [32]uint8
+	for i := range uf {
+		uf[i] = uint8(i)
+	}
+	find := func(x uint8) uint8 {
+		for uf[x] != x {
+			uf[x] = uf[uf[x]] // path halving
+			x = uf[x]
+		}
+		return x
+	}
+	for _, c := range candidates {
+		m := c.mask
+		if m == 0 {
+			continue
+		}
+		root := find(uint8(bits.TrailingZeros32(m)))
+		for m &= m - 1; m != 0; m &= m - 1 {
+			if r := find(uint8(bits.TrailingZeros32(m))); r != root {
+				uf[r] = root
+			}
 		}
 	}
-	return dead
+
+	// Bucket candidates by component root, in first-seen root order.
+	var roots []uint8
+	var groups [][]meldCandidate
+	var covers []uint32
+	slot := make(map[uint8]int, 8)
+	for _, c := range candidates {
+		if c.mask == 0 {
+			continue
+		}
+		r := find(uint8(bits.TrailingZeros32(c.mask)))
+		i, ok := slot[r]
+		if !ok {
+			i = len(roots)
+			slot[r] = i
+			roots = append(roots, r)
+			groups = append(groups, nil)
+			covers = append(covers, 0)
+		}
+		groups[i] = append(groups[i], c)
+		covers[i] |= c.mask
+	}
+
+	out := make([]meldComponent, 0, len(groups))
+	for i, group := range groups {
+		out = append(out, compactComponent(group, covers[i]))
+	}
+	return out
+}
+
+// compactComponent remaps a component's masks from hand-index space onto
+// 0..width-1, where width is the number of distinct cards the component covers.
+// Values are untouched, so the component's maximum is unchanged.
+func compactComponent(cands []meldCandidate, cover uint32) meldComponent {
+	var remap [32]uint8
+	width := 0
+	for m := cover; m != 0; m &= m - 1 {
+		remap[bits.TrailingZeros32(m)] = uint8(width)
+		width++
+	}
+	out := make([]meldCandidate, len(cands))
+	for i, c := range cands {
+		var nm uint32
+		for m := c.mask; m != 0; m &= m - 1 {
+			nm |= 1 << remap[bits.TrailingZeros32(m)]
+		}
+		out[i] = meldCandidate{mask: nm, value: c.value}
+	}
+	return meldComponent{cands: out, width: width}
+}
+
+// bestPartitionValueBnB is the exact fallback for a component too wide for the
+// subset DP: depth-first over the candidates in descending value order, pruned
+// by the suffix-value bound. The bound is admissible (no disjoint subset drawn
+// from candidates[idx:] can be worth more than their total), so the result is
+// still the exact maximum -- the prune only skips branches that provably cannot
+// beat the incumbent. Descending order finds a strong incumbent immediately,
+// which is what makes the prune bite.
+func bestPartitionValueBnB(cands []meldCandidate) int {
+	ordered := append([]meldCandidate(nil), cands...)
+	sort.SliceStable(ordered, func(i, j int) bool { return ordered[i].value > ordered[j].value })
+
+	suffix := make([]int, len(ordered)+1)
+	for i := len(ordered) - 1; i >= 0; i-- {
+		suffix[i] = suffix[i+1] + ordered[i].value
+	}
+
+	best := 0
+	var used uint32
+	var dfs func(idx, val int)
+	dfs = func(idx, val int) {
+		if val > best {
+			best = val
+		}
+		if idx >= len(ordered) || val+suffix[idx] <= best {
+			return
+		}
+		c := ordered[idx]
+		if used&c.mask == 0 {
+			used |= c.mask
+			dfs(idx+1, val+c.value)
+			used &^= c.mask
+		}
+		dfs(idx+1, val)
+	}
+	dfs(0, 0)
+	return best
 }
 
 // meldCandidate is one disjoint-partition option, identified by hand indices.
@@ -647,22 +814,6 @@ func addCombinations(hand []sim.Card, idxs []uint8, size int, out *[]meldCandida
 		}
 	}
 	pick(0)
-}
-
-// bestPartition finds the max-value disjoint subset of candidates and returns
-// which hand indices it uses. Subset DP for handSize <= 20; backtracking for
-// larger (which shouldn't happen given HandSize is validated <= 13).
-func bestPartition(candidates []meldCandidate, handSize int) []bool {
-	masks := bestPartitionMasks(candidates, handSize)
-	used := make([]bool, handSize)
-	for _, m := range masks {
-		for i := 0; i < handSize; i++ {
-			if m&(1<<uint(i)) != 0 {
-				used[i] = true
-			}
-		}
-	}
-	return used
 }
 
 // bestPartitionMasks returns the masks of the chosen meld candidates that

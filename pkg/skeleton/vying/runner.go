@@ -306,22 +306,42 @@ func (r *Runner) CheckEnd(state *sim.GameState, g *genome.Genome) int {
 	return winner
 }
 
-// Progress is each player's share of all chips in [0,1]; argmax (most chips) is
-// the winner rule, so the eventual winner's final Progress is the maximum. Chips
-// committed to the current pot are momentarily excluded (they return to a stack
-// at showdown), the same one-resolution-late skew the other banked-score
-// skeletons carry. Pure and allocation-light.
+// Progress ranks players by chip stack, min-max normalized into [0,1]; argmax
+// (most chips) is the winner rule, so the eventual winner's final Progress is
+// the maximum. All stacks equal (nothing decided yet) reports all zeros, i.e. no
+// leader. Chips committed to the current pot are momentarily excluded (they
+// return to a stack at showdown), the same one-resolution-late skew the other
+// banked-score skeletons carry. Pure and allocation-light.
+//
+// MIN-MAX, not share-of-total: a VyingScored avoidance penalty can drive a stack
+// NEGATIVE (see ApplyMove -- the scored game is deliberately not a closed chip
+// economy), and s/total then returns a negative "progress", breaking the
+// GenericRunner contract's documented [0,1] range. Measured at 184/10280 samples
+// under a live avoidance borrow. Min-max is the same normalization the other two
+// runners whose scores can go negative already use (casino's CasinoScored branch
+// and shedding's multi-round branch), and it preserves the argmax the leader
+// track reads. It also fixes a real mis-read the share form had: at a total of
+// exactly 0 (say stacks [+10, -10]) the old guard reported "no leader" when
+// player 0 was plainly ahead.
 func (r *Runner) Progress(state *sim.GameState, g *genome.Genome) []float64 {
 	out := make([]float64, state.NumPlayers)
-	total := 0
-	for _, s := range state.Scores {
-		total += s
-	}
-	if total <= 0 {
+	if state.NumPlayers == 0 {
 		return out
 	}
+	lo, hi := state.Scores[0], state.Scores[0]
+	for _, s := range state.Scores[1:] {
+		if s < lo {
+			lo = s
+		}
+		if s > hi {
+			hi = s
+		}
+	}
+	if hi == lo {
+		return out // all tied (e.g. the opening deal, before any showdown)
+	}
 	for i, s := range state.Scores {
-		out[i] = float64(s) / float64(total)
+		out[i] = float64(s-lo) / float64(hi-lo)
 	}
 	return out
 }

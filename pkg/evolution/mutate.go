@@ -156,6 +156,25 @@ func tweakParameter(g *genome.Genome, rng *rand.Rand) {
 			// "unset" encoding to 3.
 			g.Climbing.MinRunLen = clampInt(g.Climbing.MinRunLen+rng.IntN(3)-1, 3, 5)
 		}
+	case genome.Casino:
+		if g.Casino != nil {
+			// TableSize is casino's only int param (AllowSumCapture is a bool,
+			// flipBool's job). Without this case the whole casino search space
+			// was Players x HandSize x borrows -- TableSize sat frozen at
+			// whatever the seed carried for every generation of every run.
+			// Clamp against the deal budget here rather than leaning on
+			// MutateWith's repair loop, which would otherwise pay for a table
+			// mutation by shrinking HandSize or Players (validateCasino:
+			// hand_size*players + table_size <= 52).
+			maxTable := 6
+			if room := 52 - g.HandSize*g.Players; room < maxTable {
+				maxTable = room
+			}
+			if maxTable < 0 {
+				maxTable = 0
+			}
+			g.Casino.TableSize = clampInt(g.Casino.TableSize+rng.IntN(3)-1, 0, maxTable)
+		}
 	case genome.Vying:
 		if g.Vying != nil {
 			// Mutate one betting param, then restore the stack-sufficiency
@@ -181,10 +200,19 @@ func tweakParameter(g *genome.Genome, rng *rand.Rand) {
 
 // flipBool toggles a boolean skeleton parameter. Shedding and rummy no longer
 // expose any runner-consumed bool (CanStack/PlayMultiple/CanLayOff were inert
-// and removed -- dd-027), so trick-taking's MustFollowSuit and climbing's
-// combination toggles (AllowPairs/AllowTriples/AllowRuns) are the only bools.
+// and removed -- dd-027), so the runner-consumed bools are trick-taking's
+// MustFollowSuit, climbing's combination toggles
+// (AllowPairs/AllowTriples/AllowRuns), and casino's AllowSumCapture.
 func flipBool(g *genome.Genome, rng *rand.Rand) {
 	switch g.Skeleton {
+	case genome.Casino:
+		if g.Casino != nil {
+			// AllowSumCapture is the decision-rich core of Casino/Scopa: with it
+			// off the game degrades to plain rank-matching fishing (see
+			// CasinoParams). Without this case it was pinned to the seed's value
+			// forever -- evolution could not explore the axis at all.
+			g.Casino.AllowSumCapture = !g.Casino.AllowSumCapture
+		}
 	case genome.TrickTaking:
 		if g.TrickTaking != nil {
 			g.TrickTaking.MustFollowSuit = !g.TrickTaking.MustFollowSuit
@@ -510,7 +538,12 @@ func mutateScoring(g *genome.Genome, rng *rand.Rand) {
 	if len(g.Scoring.CardPoints) == 0 {
 		// Add a scoring rule. Rank=0 is the "all ranks" wildcard; reach it
 		// with a small probability so catch-all rules like "every Heart
-		// scores N" are evolvable (see dd-eir).
+		// scores N" are evolvable (see dd-eir). Unlike addSpecialCard, a
+		// rank=0 + suit=0 rule needs no guard here: for card points that is
+		// MatchCardPoints' lowest-specificity tier, not a liveness violation
+		// (see the note in genome.validateScoring) -- a uniform per-card value
+		// under an avoidance borrow is Uno's "every card left in hand costs
+		// you", a real mechanic worth reaching.
 		rank := uint8(0)
 		if rng.Float64() >= 0.15 {
 			rank = uint8(rng.IntN(13) + 2) // 2-14 (Rank=1 is invalid)

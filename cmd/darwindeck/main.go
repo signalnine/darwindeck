@@ -92,7 +92,7 @@ func cmdEvolve(args []string) {
 	mctsDecile := fs.Float64("mcts-decile", 0.10,
 		"fraction of each generation (ranked by greedy-only running mean) re-evaluated with MCTS; 0 disables (baseline/hybrid only)")
 	crossSkeleton := fs.Bool("cross-skeleton", false,
-		"enable cross-skeleton recombination: crossing two different-skeleton parents produces a HYBRID child (e.g. shed-to-win scored by tricks) and mutation may add cross-family active borrows; default OFF (baseline/hybrid only -- MAP-Elites crosses same-skeleton only)")
+		"enable cross-skeleton recombination: crossing two different-skeleton parents produces a HYBRID child (e.g. shed-to-win scored by tricks) and mutation may add cross-family active borrows; default OFF. The cross-family borrow MUTATIONS apply to every algorithm including MAP-Elites (casino and vying can reach a borrow only this way); hybrid CROSSOVER applies to baseline/hybrid only, since MAP-Elites crosses same-skeleton archive occupants")
 	noveltySelect := fs.Bool("novelty-select", false,
 		"seed-aware novelty selection (hybrid only): add behavioral distance from the nearest of the 11 classic seeds into each VALID, above-floor individual's novelty score, steering the search away from the Crazy-Eights/Whist/Gin attractors; default OFF")
 	seedDir := fs.String("seed-dir", "",

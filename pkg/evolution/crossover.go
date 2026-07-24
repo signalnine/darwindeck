@@ -607,6 +607,10 @@ func Crossover(a, b *genome.Genome, rng *rand.Rand) *genome.Genome {
 		crossoverRummy(child, a, b, rng)
 	case genome.Climbing:
 		crossoverClimbing(child, a, b, rng)
+	case genome.Casino:
+		crossoverCasino(child, a, b, rng)
+	case genome.Vying:
+		crossoverVying(child, a, b, rng)
 	}
 
 	// Special cards: take from one parent. Only shedding consumes them, and
@@ -664,6 +668,19 @@ func repairCrossoverInvariants(child, a, b *genome.Genome, rng *rand.Rand) {
 	if child.Skeleton == genome.Casino && child.Casino != nil {
 		for child.HandSize*child.Players+child.Casino.TableSize > 52 && child.Casino.TableSize > 0 {
 			child.Casino.TableSize--
+		}
+	}
+
+	// Vying stack sufficiency: StartingChips must cover a player's worst-case
+	// total commitment across every deal, or validateVying rejects the child
+	// (the Tier-0 rule that keeps the betting round free of all-ins and side
+	// pots). crossoverVying flips the four betting params independently, so a
+	// child can take a long game / big raise cap from one parent and a small
+	// stack from the other. Same repair tweakParameter applies after a betting
+	// mutation.
+	if child.Skeleton == genome.Vying && child.Vying != nil {
+		if worst := child.Vying.RoundsPerGame * child.Vying.MinBet * (child.Vying.MaxRaises + 1); child.Vying.StartingChips < worst {
+			child.Vying.StartingChips = worst
 		}
 	}
 
@@ -810,6 +827,44 @@ func crossoverClimbing(child *genome.Genome, a, b *genome.Genome, rng *rand.Rand
 	// run-disabled MinRunLen of 0 from the other).
 	if child.Climbing.AllowRuns && (child.Climbing.MinRunLen < 3 || child.Climbing.MinRunLen > 5) {
 		child.Climbing.MinRunLen = 3
+	}
+}
+
+// crossoverCasino recombines the fishing/capture params. The deal budget
+// (hand_size*players + table_size <= 52) is restored by
+// repairCrossoverInvariants, which already shrinks TableSize to fit.
+func crossoverCasino(child *genome.Genome, a, b *genome.Genome, rng *rand.Rand) {
+	if a.Casino == nil || b.Casino == nil {
+		return
+	}
+	if rng.Float64() < 0.5 {
+		child.Casino.TableSize = b.Casino.TableSize
+	}
+	if rng.Float64() < 0.5 {
+		child.Casino.AllowSumCapture = b.Casino.AllowSumCapture
+	}
+}
+
+// crossoverVying recombines the betting params. The stack-sufficiency invariant
+// (StartingChips >= rounds*min_bet*(max_raises+1), validateVying) is restored by
+// repairCrossoverInvariants: these four coin flips are independent, so a child
+// can otherwise take a big raise cap from one parent and a small stack from the
+// other and die at Tier 0.
+func crossoverVying(child *genome.Genome, a, b *genome.Genome, rng *rand.Rand) {
+	if a.Vying == nil || b.Vying == nil {
+		return
+	}
+	if rng.Float64() < 0.5 {
+		child.Vying.MinBet = b.Vying.MinBet
+	}
+	if rng.Float64() < 0.5 {
+		child.Vying.MaxRaises = b.Vying.MaxRaises
+	}
+	if rng.Float64() < 0.5 {
+		child.Vying.RoundsPerGame = b.Vying.RoundsPerGame
+	}
+	if rng.Float64() < 0.5 {
+		child.Vying.StartingChips = b.Vying.StartingChips
 	}
 }
 

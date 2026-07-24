@@ -88,7 +88,7 @@ func (e *MAPElitesEngine) seedArchives() {
 	// Create initial candidates from seeds + mutations
 	for i := 0; i < e.Config.PopulationSize; i++ {
 		seed := e.Seeds[e.rng.IntN(len(e.Seeds))]
-		g := Mutate(seed, e.rng, e.Seeds)
+		g := e.mutate(seed)
 		g.ID = fmt.Sprintf("init_%d", i)
 		g.Generation = 0
 		candidates = append(candidates, g)
@@ -108,7 +108,7 @@ func (e *MAPElitesEngine) generation(gen int) {
 		if parent == nil {
 			// No occupants yet, mutate a seed
 			seed := e.Seeds[e.rng.IntN(len(e.Seeds))]
-			child := Mutate(seed, e.rng, e.Seeds)
+			child := e.mutate(seed)
 			child.ID = fmt.Sprintf("gen%d_%d", gen+1, e.rng.IntN(100000))
 			child.Generation = gen + 1
 			offspring = append(offspring, child)
@@ -117,16 +117,19 @@ func (e *MAPElitesEngine) generation(gen int) {
 
 		var child *genome.Genome
 		if e.rng.Float64() < 0.3 {
-			// Crossover with another archive occupant of same skeleton
+			// Crossover with another archive occupant of same skeleton. Parents
+			// always share a skeleton here, so CrossoverWith takes the ordinary
+			// same-skeleton path and the flag is genuinely inert on THIS call --
+			// it is threaded for consistency with the mutation path below.
 			parent2 := e.randomArchiveOccupantOfSkeleton(parent.Skeleton)
 			if parent2 != nil {
-				child = Crossover(parent, parent2, e.rng)
+				child = CrossoverWith(parent, parent2, e.rng, e.Config.CrossSkeleton)
 			}
 		}
 		if child == nil {
-			child = Mutate(parent, e.rng, e.Seeds)
+			child = e.mutate(parent)
 		} else {
-			child = Mutate(child, e.rng, e.Seeds)
+			child = e.mutate(child)
 		}
 
 		child.ID = fmt.Sprintf("gen%d_%d", gen+1, e.rng.IntN(100000))
@@ -372,15 +375,59 @@ func (e *MAPElitesEngine) randomArchiveOccupantOfSkeleton(skel genome.SkeletonTy
 	return occupants[e.rng.IntN(len(occupants))]
 }
 
+// mutate applies MutateWith threaded with this engine's cross-skeleton flag, so
+// cross-family borrow MUTATIONS are reachable under -algorithm mapelites (the
+// same seam Engine.mutate provides).
+//
+// This matters more here than the name suggests. addBorrowedMechanic offers
+// casino and vying hosts a borrow candidate ONLY under crossSkeleton, so with
+// the flag hard-off those two skeletons reached ZERO borrows -- ever -- and the
+// deep borrows (run_play / follow_suit / knock / trick_scoring) were unreachable
+// on every host. MAP-Elites is the ILLUMINATION algorithm; hard-wiring the
+// cross-family axis off made it blind to exactly the region it exists to map.
+// (Crossover is a separate question: archive parents always share a skeleton, so
+// hybrid crossover cannot arise here regardless of the flag.)
+func (e *MAPElitesEngine) mutate(g *genome.Genome) *genome.Genome {
+	return MutateWith(g, e.rng, e.Seeds, e.Config.CrossSkeleton)
+}
+
 // totalStats returns total occupied cells and QD-score across all archives.
+// Archives are visited in genome.AllSkeletons() order, then any remaining keys
+// in ascending skeleton order: ranging over the map accumulated the QD floats in
+// a per-process-random order, so the same seeded run reported last-bit-different
+// QD scores (the identical defect fixed in cmd/darwindeck/experiment.go, where
+// it flaked the determinism test).
 func (e *MAPElitesEngine) totalStats() (int, float64) {
 	occupied := 0
 	qdScore := 0.0
-	for _, archive := range e.Archives {
+	for _, skel := range e.archiveOrder() {
+		archive := e.Archives[skel]
 		occupied += archive.Occupied
 		qdScore += archive.QDScore
 	}
 	return occupied, qdScore
+}
+
+// archiveOrder returns every archive key in a deterministic order: the fixed
+// genome.AllSkeletons() list first, then any extra key insert() created for a
+// skeleton not yet in that list, ascending.
+func (e *MAPElitesEngine) archiveOrder() []genome.SkeletonType {
+	out := make([]genome.SkeletonType, 0, len(e.Archives))
+	seen := make(map[genome.SkeletonType]bool, len(e.Archives))
+	for _, skel := range genome.AllSkeletons() {
+		if _, ok := e.Archives[skel]; ok {
+			out = append(out, skel)
+			seen[skel] = true
+		}
+	}
+	var extra []genome.SkeletonType
+	for skel := range e.Archives {
+		if !seen[skel] {
+			extra = append(extra, skel)
+		}
+	}
+	sort.Slice(extra, func(i, j int) bool { return extra[i] < extra[j] })
+	return append(out, extra...)
 }
 
 // AllQualified returns the archive occupants that meet the FitnessFloor.

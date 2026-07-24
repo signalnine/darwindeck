@@ -531,6 +531,18 @@ func validateScoring(g *Genome) []string {
 		if cp.Suit > 4 {
 			errs = append(errs, fmt.Sprintf("card_points %d: suit %d out of range (0 = any, else 1-4)", i, cp.Suit))
 		}
+		// NOTE (deliberately NOT a Tier-0 rule): a rank=0 + suit=0 rule matches
+		// every card. That looks like the catch-all SPECIAL rejected above, but
+		// it is not the same thing. A catch-all special deletes OTHER genes
+		// (every card becomes playable, so match_rule and draw_penalty stop
+		// meaning anything) -- the liveness violation. A catch-all card_points
+		// deletes nothing: it is MatchCardPoints' documented lowest-specificity
+		// tier, the "every other card" fallback under more specific rules, and
+		// on its own it is a real published mechanic -- an avoidance borrow with
+		// a uniform per-card value is exactly Uno/Mau-Mau's "every card left in
+		// your hand costs you". Rejecting it would also invalidate the
+		// no-follow-avoidance-trick fixture, whose degeneracy vector is
+		// non_agentic and which must stay Tier-0 valid to reach that veto.
 	}
 
 	return errs

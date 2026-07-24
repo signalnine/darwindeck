@@ -361,6 +361,35 @@ func writeScoringTable(b *strings.Builder, g *genome.Genome) {
 		b.WriteString(fmt.Sprintf("| %s | %d |\n", card, cp.Points))
 	}
 	b.WriteString("\n")
+	// Precedence note. genome.MatchCardPoints resolves overlapping rules by
+	// SPECIFICITY (suit+rank > suit-only > rank-only > every card), not by table
+	// order, and overlap is common -- a penalty suit plus a single high card is
+	// the standard Hearts shape. Printing the rows alone left a reader (human or
+	// blind judge) to guess which rule wins on the Queen of Spades, or to assume
+	// the two stack. State the rule the engine actually applies.
+	if scoringRulesOverlap(g.Scoring.CardPoints) {
+		b.WriteString("Where two rows could both apply to a card, the **more specific** one wins (a named card beats a whole suit, a suit beats a rank, and a rank beats \"every card\"). Values are never added together.\n\n")
+	}
+}
+
+// scoringRulesOverlap reports whether any two card-point rules can match the
+// same card, i.e. whether the specificity tiebreak in genome.MatchCardPoints is
+// observable in this genome's scoring.
+func scoringRulesOverlap(rules []genome.CardScoring) bool {
+	for rank := uint8(2); rank <= 14; rank++ {
+		for suit := uint8(0); suit <= 3; suit++ {
+			matches := 0
+			for _, cp := range rules {
+				if (cp.Rank == 0 || cp.Rank == rank) && (cp.Suit == 0 || cp.Suit == suit+1) {
+					matches++
+				}
+			}
+			if matches > 1 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // --- Helper description functions ---
@@ -558,6 +587,12 @@ func scoringCardName(cp genome.CardScoring) string {
 		if int(cp.Suit) < len(suits) {
 			suit = suits[cp.Suit]
 		}
+	}
+	if cp.Rank == 0 && cp.Suit == 0 {
+		// The unqualified rule is MatchCardPoints' lowest-specificity tier: it
+		// scores every card no more specific rule claims. "Any of any suit" --
+		// what the generic branch below produced -- named nothing at all.
+		return "Every card"
 	}
 	if cp.Rank == 0 && cp.Suit != 0 {
 		return fmt.Sprintf("All %s", suit)
