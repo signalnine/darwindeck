@@ -149,6 +149,8 @@ go test ./pkg/evolution/ -run TestSmallEvolution -v  # Single test
 
 Full v2 design: `docs/plans/2026-04-11-v2-rewrite-design.md`
 
+Genome JSON format (fields, ranges, enums, borrow whitelist, examples): `docs/genome-schema-v2.md`
+
 ---
 
 ## Generative Grammar (`pkg/grammar`) -- the synthesis, covers most known card games
