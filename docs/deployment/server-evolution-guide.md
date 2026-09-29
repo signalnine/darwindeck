@@ -1,5 +1,9 @@
 # Running Evolution on 256-Core Server (anarres)
 
+> **Legacy v1 (2026-09-28):** historical doc for the v1 Python/CGo system
+> (`src/`); it does not describe the current Go v2 system (`cmd/` + `pkg/`). See
+> `CLAUDE.md` / `README.md` for current.
+
 Quick guide to deploy and run the genetic algorithm on your beefy server.
 
 ## Server Specs
@@ -23,7 +27,7 @@ With 256-core parallelization:
 ### 1. Deploy from Local Machine
 
 ```bash
-# From your local machine (/home/gabe/cards-playtest)
+# From the repo root on your local machine (LOCAL_DIR in the script)
 ./scripts/deploy-to-server.sh
 ```
 
@@ -38,16 +42,16 @@ This will:
 # SSH to the server
 ssh 192.168.1.15
 
-# Navigate to project directory
-cd /home/gabe/cards-playtest
+# Navigate to the project directory (REMOTE_DIR in scripts/deploy-to-server.sh)
+cd <REMOTE_DIR>
 
 # Run setup script
 ./scripts/setup-server.sh
 ```
 
 This will:
-- Install uv if needed
-- Install Python dependencies
+- Install Poetry if needed (the script fetches the upstream Poetry installer)
+- Install Python dependencies (`poetry install --no-dev`)
 - Verify Go simulator is present
 
 ### 3. Run Evolution
@@ -75,7 +79,7 @@ uv run python -m darwindeck.cli.evolve \
 - `--elitism-rate` / `-e`: Top % preserved (default: 0.1)
 - `--crossover-rate` / `-c`: Crossover probability (default: 0.7)
 - `--tournament-size` / `-t`: Tournament selection size (default: 3)
-- `--plateau-threshold`: Generations without improvement before stopping (default: 30)
+- `--enable-plateau N`: Stop after N generations without improvement (disabled by default)
 - `--seed-ratio`: Ratio of known games to mutants (default: 0.7)
 - `--output-dir` / `-o`: Output directory (default: output)
 - `--save-top-n`: Number of top genomes to save (default: 10)
@@ -237,7 +241,7 @@ After making code changes locally:
 
 # SSH to server
 ssh 192.168.1.15
-cd /home/gabe/cards-playtest
+cd <REMOTE_DIR>
 
 # Re-run evolution
 ./scripts/run-evolution.sh

@@ -1,5 +1,9 @@
 # Multi-Core Parallelization Strategy
 
+> **Legacy v1 (2026-09-28):** historical doc for the v1 Python/CGo system
+> (`src/`); it does not describe the current Go v2 system (`cmd/` + `pkg/`). See
+> `CLAUDE.md` / `README.md` for current.
+
 **Date:** 2026-01-10
 **System:** 4 CPU cores available
 **Goal:** Maximize throughput by leveraging all CPU cores
@@ -332,8 +336,8 @@ Could scale population to 400-500 genomes without performance regression:
 ### Phase 3: Go Worker Pool
 
 ```go
-// File: src/gosim/engine/parallel.go
-package engine
+// File: src/gosim/simulation/parallel.go
+package simulation
 
 import (
     "runtime"
@@ -427,7 +431,7 @@ class ParallelFitnessEvaluator:
 
 ## Implementation Results (2026-01-10)
 
-This strategy was implemented in Tasks 1-4 of the parallelization plan. See `/home/gabe/cards-playtest/docs/benchmarks/parallelization-results.md` for detailed results.
+This strategy was implemented in Tasks 1-4 of the parallelization plan. See `docs/benchmarks/parallelization-results.md` for detailed results.
 
 ### Summary of Achievements
 

@@ -1,5 +1,9 @@
 # Analysis: 0.8403 Fitness Ceiling
 
+> **Legacy v1 (2026-09-28):** historical doc for the v1 Python/CGo system
+> (`src/`); it does not describe the current Go v2 system (`cmd/` + `pkg/`). See
+> `CLAUDE.md` / `README.md` for current.
+
 **Date:** 2026-01-10
 **Evolved Games:** output/evolution-20260110-145814/
 

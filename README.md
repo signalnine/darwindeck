@@ -6,7 +6,7 @@ Games are built from six skeleton templates (shedding, trick-taking, rummy, clim
 
 > The system reliably evolves playable games, and the hardened metrics correctly rank faithful Whist/Gin rediscoveries as the most game-like outputs. Across four rounds it never discovered a novel fun game. Evolution games the newest validity rule or rediscovers a public-domain classic. A weighted-sum fun-proxy computed from self-play is exploitable by construction.
 
-Then I built the richer signal that result demanded: an LLM-as-judge, *deep* cross-skeleton borrows (mechanics that change the legal-move set or win condition, not just end-of-round scoring), and a counterfactual novelty pressure. There are three deep borrows now (`run_play`, `follow_suit`, `knock`) plus casino hosting the scoring borrows, and the system evolves blind-frontier-judge-certified **novel playable games**: move+win shedding fusions (4/4 in a controlled run; pure move-tweaks correctly judged 2/2 variant), a Crazy Eights race you end by declaring (knock, 3/3 novel), and a fishing game scored by melds (3/3), all against variant/rediscovery controls that the judge correctly rejects. And the judge is now in the loop: its verdicts (keyed by genome composition) steer novelty selection, grow a verdict table across chunked-checkpoint resumes so novelty pressure compounds, and rank the published leaderboard so the discovered novel games surface above higher-fitness rediscoveries. Whether those games are *fun* to a human is untested. See [the richer signal](#the-richer-signal-novel-discovery).
+Then I built the richer signal that result demanded: an LLM-as-judge, *deep* cross-skeleton borrows (mechanics that change the legal-move set or win condition, not just end-of-round scoring), and a counterfactual novelty pressure. There are three deep borrows now (`run_play`, `follow_suit`, `knock`) plus casino and vying hosting the scoring borrows, and the system evolves blind-frontier-judge-certified **novel playable games**: move+win shedding fusions (4/4 in a controlled run; pure move-tweaks correctly judged 2/2 variant), a Crazy Eights race you end by declaring (knock, 3/3 novel), and a fishing game scored by melds (3/3), all against variant/rediscovery controls that the judge correctly rejects. And the judge is now in the loop: its verdicts (keyed by genome composition) steer novelty selection, grow a verdict table across chunked-checkpoint resumes so novelty pressure compounds, and rank the published leaderboard so the discovered novel games surface above higher-fitness rediscoveries. Whether those games are *fun* to a human is still untested; the rating infrastructure exists now (`darwindeck serve`, see [Human ratings](#human-ratings)) but no ratings have been analyzed. See [the richer signal](#the-richer-signal-novel-discovery).
 
 The most reusable thing here is the failed-review loop and the falsification harness that makes "this metric is gamed" a failing test instead of an argument.
 
@@ -31,6 +31,16 @@ make build-v2
 # Show genome details / run algorithm-comparison experiments
 ./bin/darwindeck describe output/<run>/games/rank01_*/genome.json
 ./bin/darwindeck experiment -configs baseline,hybrid,mapelites,random -seeds 15
+
+# Serve evolved games in a browser (ratings append to playtest_results.jsonl)
+./bin/darwindeck serve -dir results/2026-06-18-served-set -port 8080
+
+# Export the classic seeds as JSON (e.g. to serve as blind anchors)
+./bin/darwindeck seeds export -out <dir>
+
+# LLM-as-judge: emit blind dossiers, then rank ingested verdicts
+./bin/darwindeck judge emit output/<run>/games --out <dossier-dir>
+./bin/darwindeck judge rank <dossier-dir> <verdicts.json>
 ```
 
 ## The four-round failed-review loop
@@ -66,11 +76,11 @@ The negative result was measured with two limits I hadn't spotted. Removing them
 
 **1. The novelty bug was a legibility bug.** Cross-skeleton borrows are the novelty lever, but the rulebook generator rendered every borrow as a generic parameter-free blurb (`"Earn bonus points for forming sets or runs"`), so every judge, human or LLM, scored novelty on text that didn't describe the mechanic. Fixed in `pkg/output/rulebook.go` (`borrowedDescription` now renders each hook's concrete rule). Re-judging the same games on legible dossiers moved a blind frontier judge from "all variant" to 5/7 novel.
 
-**2. Every borrow was shallow** (an end-of-round scoring tally). None touched the legal-move set, turn order, or win condition, so a hybrid was a classic plus a scoring footnote, which a judge reads as a variant. There are now three *deep* borrows, consulted inside the runner where the hook system (post-move scoring only) cannot reach: `MechRunPlay` (climbing's multi-card combinations, dump a same-rank set or same-suit run in one turn) expands the move set, `MechFollowSuit` (trick-taking's follow obligation) restricts it, and `MechKnock` (rummy's knock, declare when your hand is small and fewest cards wins) changes the win condition. Casino additionally hosts the scoring borrows, giving a fishing game scored by melds or penalty cards. `MechMeldGate` (a rummy go-out gate) marks the boundary knock stays inside: a go-out *gate* reads novel but dies under the random-AI playability gate (~7% completion), while knock changes the win condition yet can only end the game sooner, so it terminates by construction.
+**2. Every borrow was shallow** (an end-of-round scoring tally). None touched the legal-move set, turn order, or win condition, so a hybrid was a classic plus a scoring footnote, which a judge reads as a variant. There are now three *deep* borrows, consulted inside the runner where the hook system (post-move scoring only) cannot reach: `MechRunPlay` (climbing's multi-card combinations, dump a same-rank set or same-suit run in one turn) expands the move set, `MechFollowSuit` (trick-taking's follow obligation) restricts it, and `MechKnock` (rummy's knock, declare when your hand is small and fewest cards wins; whitelisted on shedding and climbing) changes the win condition. Casino and vying additionally host the scoring borrows, giving a fishing game scored by melds or penalty cards and a poker game scored at showdown by more than the pot. A rummy go-out gate (tried and rejected, never shipped) marks the boundary knock stays inside: a go-out *gate* reads novel but dies under the random-AI playability gate (~7% completion), while knock changes the win condition yet can only end the game sooner, so it terminates by construction.
 
 The first validated recipe, by hand and under selection: a move-changing borrow (`run_play`) plus a terminating multi-round meld-**points** win condition (`meld_bonus`, `rounds_per_game >= 2`, you can win without going out) = novel and playable. A full `evolve -cross-skeleton -novelty-select` run found this combination on its own. Blind frontier judges (3 reps, name-scrubbed dossiers) certified 4/4 move+win hybrids novel (the clean 2-borrow recipe publishable), the pure-`run_play` contrast 2/2 `variant_of_known`, and a plain-trick control as a Whist rediscovery. Artifacts: [`results/2026-06-14-evolved-novel-hybrids/`](results/2026-06-14-evolved-novel-hybrids/).
 
-Knock and casino-scoring shipped next and were blind-judge-validated the same way ([`results/2026-06-14-knock-casino-scored-novel/`](results/2026-06-14-knock-casino-scored-novel/), 3 judges/game, plain-casino and seed controls). `knock` is novel on its own (3/3): a Crazy Eights race you can end by declaring, fewest cards wins, is a combination no published shedding game has, so a move-change pairing is not required. Casino scored by melds is novel (3/3); casino scored by a single penalty suit is not (2/3 variant, just a house rule). Both controls came back variant, so the verdicts discriminate. The pattern across all of it: a win-condition *structure* change drives novelty (knock; casino meld scoring), a scoring overlay alone does not.
+Knock and casino-scoring shipped next and were blind-judge-validated the same way ([`results/2026-06-14-knock-casino-scored-novel/`](results/2026-06-14-knock-casino-scored-novel/), 3 judges/game, plain-casino and seed controls). `knock` is novel on its own (3/3): a Crazy Eights race you can end by declaring, fewest cards wins, is a combination no published shedding game has, so a move-change pairing is not required. Casino scored by melds is novel (3/3); casino scored by a single penalty suit is not (2/3 variant, just a house rule). Both controls came back variant, so the verdicts discriminate. The pattern across all of it: a win-condition *structure* change drives novelty (knock; casino meld scoring), a scoring overlay alone does not. Vying as a scoring host confirmed it the hard way: vying + meld/avoidance hybrids swept the leaderboard (fitness 0.90-0.92) and judged 3/3 variant, because the poker hand is frozen at the deal and the player can't act on the bonus ([`results/2026-06-15-vying-borrow-run/`](results/2026-06-15-vying-borrow-run/)).
 
 **Novelty is selected-for now, through a pre-filter.** The old novelty signal was a 2-D behavior shadow (decision-density x interaction), blind to mechanic structure: a genuine fusion landing at Crazy Eights' coordinates scored distance 0. CID (counterfactual integration depth) replaces it for borrowed genomes. Drop each borrow singly (leave-one-out, max marginal), re-run at the same seed, and measure how much play changes (win distribution, length, option flow). A deep borrow scores high, an inert or pile-on borrow scores ~0, a borrowless genome scores 0. It's wired as an additive novelty term behind `-novelty-select` (`pkg/evolution`, `CounterfactualIntegration`). Same-seed A/Bs pull integrated hybrids up the rankings monotonically with weight: best move+win hybrid at rank 7 (weight 0), rank 5 (0.5), rank 1 (2.0); the production weight of 1.5 puts all of the top 10 on borrows.
 
@@ -85,6 +95,10 @@ CID rewards integration, which is a different thing from novelty. A fully integr
 Everything is byte-identical with no verdict table loaded (each term is gated on it), so calibration and un-judged runs are unchanged.
 
 Scope: novelty here is LLM-judge-certified (blind, 3-rep, with a variant/rediscovery contrast), not human-validated. The structural metrics still can't judge novelty, which is why the judge exists. Quality runs borderline-to-publishable (clean 2-borrow recipe publishable, 3-borrow stacks borderline from a dump-fast-vs-hold incentive clash). Whether any of it is fun to a human is untested.
+
+### Human ratings
+
+The plumbing for the human test exists; the test itself hasn't produced data yet. `darwindeck serve` plays any genome (or a directory of them, as a game picker) in the browser against Random/Greedy/MCTS AI (`pkg/webplay`), and each game session can be rated once (1-5); ratings append to the same `playtest_results.jsonl` the CLI playtest writes (`pkg/playtest`). [`results/2026-06-18-served-set/`](results/2026-06-18-served-set/) is the served set: 7 evolved games blind-mixed with 3 classic anchors (Crazy Eights, Gin Rummy, Big Two) under uniform invented titles, so the question "do evolved games rate near the classics" has a baseline. `scripts/ratings-report.sh` pulls the log from the host and reports per-game means and evolved-vs-classic. No ratings analysis is in the repo yet.
 
 ## How it works
 
@@ -101,7 +115,7 @@ Six skeleton templates guarantee mechanical playability by construction: the gam
 
 Genomes encode parameters (hand size, player count, trump rules, special cards, scoring, win conditions) and may borrow whitelisted cross-skeleton mechanics, like a multi-round shedding game with rummy-style meld bonuses.
 
-**Cross-skeleton recombination and novelty search.** With `-cross-skeleton`, crossover of two different-family parents produces a hybrid (a base family's core plus an outcome-significant cross-family mechanic). With `-novelty-select`, the hybrid algorithm rewards behavioral distance from the classic seeds (gated on playability) plus the CID integration term. Borrows come in two depths: shallow scoring tallies (`meld_bonus`, `avoidance`, `trick_scoring`, `draw_penalty`) implemented as hooks, and deep mechanics (`run_play`, `follow_suit`, `knock`) implemented inside the runner that change the move set or win condition, with casino additionally hosting the scoring borrows. A deep *move* borrow also needs the host's greedy scorer taught about it or a third of the fitness function stays blind: the `run_play` games read skill 0 until the shedding scorer learned to value dumping a larger combo (skill 0.00 -> ~0.5, same lesson as "a new skeleton needs a runner and an OptionDelta mode and a greedy scorer"). The deep borrows plus CID plus the LLM judge are what produce reliably novel games (see above).
+**Cross-skeleton recombination and novelty search.** With `-cross-skeleton`, crossover of two different-family parents produces a hybrid (a base family's core plus an outcome-significant cross-family mechanic). With `-novelty-select`, the hybrid algorithm rewards behavioral distance from the classic seeds (gated on playability) plus the CID integration term. Borrows come in two depths: shallow scoring tallies (`meld_bonus`, `avoidance`, `trick_scoring`, `draw_penalty`) implemented as hooks, and deep mechanics (`run_play`, `follow_suit`, `knock`) implemented inside the runner that change the move set or win condition, with casino and vying additionally hosting the scoring borrows (`meld_bonus`, `avoidance`) and `knock` whitelisted on both shedding and climbing. A deep *move* borrow also needs the host's greedy scorer taught about it or a third of the fitness function stays blind: the `run_play` games read skill 0 until the shedding scorer learned to value dumping a larger combo (skill 0.00 -> ~0.5, same lesson as "a new skeleton needs a runner and an OptionDelta mode and a greedy scorer"). The deep borrows plus CID plus the LLM judge are what produce reliably novel games (see above).
 
 **Judge-in-the-loop: the restart loop failed, the chunked-checkpoint loop works.** The first attempt was a judge-gated RESTART loop (`evolve -seed-dir <dir>`): evolve, judge the elite, re-seed the next round from the novel survivors. Over 3 rounds (`results/2026-06-14-judge-in-loop`) it did not compound novelty (trajectory 1 -> 2 -> 0) -- re-seeding from only the elite threw away the population's diversity, so in-round fitness eroded the novel hybrids faster than between-round selection accumulated them. The working version (above) fixes both failure modes: verdicts feed novelty SELECTION continuously (not just at round boundaries), and the chunked checkpoint carries the WHOLE population across judge calls (not just the elite), so the pressure compounds. The `-seed-dir` flag remains for seeding a run from custom genomes.
 
@@ -114,7 +128,7 @@ Five metrics, each normalized to [0, 1], combined by a frozen weighted sum. Thes
 | Meaningful Decisions | 0.25 | Fraction of decision points whose choice plausibly matters: a turn counts only with >= 2 legal moves AND sampled moves that differ in type / special-effect profile / next-player option set (rummy uses a deadwood-consequence probe). Forced turns and consequence-free choices do not count. |
 | Game Arc | 0.25 | Within-game trajectory from per-turn lead tracking: early uncertainty (winner not already leading at midgame) + late resolution (leader near the end wins) + lead changes. A wire-to-wire foregone conclusion and a last-turn coin flip both score low. |
 | Interaction | 0.20 | Fraction of turns whose move perturbed the next player's legal options or carried a direct-attack event. Self-tempo effects (2p skip/reverse) and discards that change nothing for the opponent do not count. Climbing's beat/pass constraint is measured via `deltaModeClimbing`. |
-| Skill Gradient | 0.20 | Two-tier: greedy win rate over an empirical same-seed random baseline (0.4 term) plus an ISMCTS-over-greedy uplift (0.6 term). All rates are seat-0; baselines are empirical. |
+| Skill Gradient | 0.20 | Two-tier: greedy win rate over an empirical random baseline from an independent (not same-seed) random batch (0.4 term) plus an ISMCTS-over-greedy uplift (0.6 term). All rates are seat-0; baselines are empirical. |
 | Session Length | 0.10 | Game length in decisions per player (uniform across skeletons), scored against a calibrated target band. |
 
 Weights are frozen at 0.25 / 0.25 / 0.20 / 0.20 / 0.10 and were not tuned in response to any review after round 1.
@@ -124,13 +138,13 @@ Weights are frozen at 0.25 / 0.25 / 0.20 / 0.20 / 0.10 and were not tuned in res
 - **Tier 0** (free): static analysis on the genome struct (deck overflow, parameter ranges, borrow whitelist) plus liveness rules (no catch-all wild special with no qualifier; `min_meld_size >= 3` so melding is consequence-bearing).
 - **Tier 1** (10 random-AI games): smoke test; kill if any game errors, timeouts/completions breach a tolerance band, or completed games end instantly.
 - **Tier 2** (200 random + 200 greedy games -> metrics): full evaluation. Before fitness is computed the batches pass the degeneracy veto stack: random-batch vetoes (`non_agentic`, `tempo_monopoly`, `seat_participation`, `draw_supply_churn`, `dead_match_rule`, `playable_share`) and greedy-batch vetoes (`greedy_timeout`, `greedy_tempo_monopoly`, `greedy_seat_participation`, `greedy_longest_run`). A vetoed genome reads fitness 0, same as a Tier-1 kill. Every veto threshold has a measured >= ~1.2x margin to every classic seed.
-- **Skill tier**: the 20-game ISMCTS batch is expensive (~2s/genome with game-parallel batches), so the production mode is MCTS-for-top-decile: rank a generation by the greedy two-tier evaluation, then grant the second ISMCTS tier only to the top decile. The mode is recorded in each run's `meta.json`.
+- **Skill tier**: the 20-game ISMCTS batch is expensive (~14.5s per 20-game batch at production search strength, measured single-threaded on gin rummy, ~7x over the 2s/genome budget; >95% of it is rummy move generation, see `pkg/sim/mcts.go`), so the production mode is MCTS-for-top-decile: rank a generation by the greedy two-tier evaluation, then grant the second ISMCTS tier only to the top decile. The mode is recorded in each run's `meta.json`.
 
 ### Calibration gate
 
 The 11 classic seed games are the fun ground truth: real, time-tested published games (a game still in circulation is fun by survival). The calibration suite (`pkg/fitness/calibration_test.go`, run untagged in the default `go test`) asserts that every classic outscores every known-degenerate fixture by a margin, that the fitness floor admits every classic, and that Gin beats the instant-knock degenerate. Any future metric change that lets a degenerate fixture outrank a classic is a build failure.
 
-Big Two (climbing) and Casino joined the calibration set as their skeletons gained the instrumentation to measure them. Big Two had been excluded because the Interaction metric was climbing-blind: it scored Interaction 0.000 / TotalFitness ~0.401, skimming the floor as a measurement artifact, despite passing every degeneracy veto. `deltaModeClimbing` measures its beat/pass constraint, Big Two now scores ~0.55 (on par with Gin Rummy). Casino shipped with its own `deltaModeCasino` and a greedy capture scorer and calibrates at ~0.772, the strongest classic. The lesson both teach: a new skeleton needs a runner AND an OptionDelta mode for Interaction AND a greedy scorer for the skill gradient, or the metrics are blind to it.
+Big Two (climbing) and Casino joined the calibration set as their skeletons gained the instrumentation to measure them. Big Two had been excluded because the Interaction metric was climbing-blind: it scored Interaction 0.000 / TotalFitness ~0.401, skimming the floor as a measurement artifact, despite passing every degeneracy veto. `deltaModeClimbing` measures its beat/pass constraint, Big Two now scores ~0.55 (on par with Gin Rummy). Casino shipped with its own `deltaModeCasino` and a greedy capture scorer and calibrates at ~0.772, with two caveats: Meaningful Decisions structurally over-counts casino (~0.87 here, because trail-A vs trail-B is usually a non-choice the probe can't tell apart; see the "Metric profile" note in `pkg/skeleton/casino/runner.go`), and the seed is a simplified Casino (no builds, no card/sweep points, most captured cards wins; `pkg/seeds/casino.go`). SimplePoker (vying, with `deltaModeVying` and a hand-strength betting scorer) is the strongest classic at ~0.844, but its Meaningful Decisions and Interaction both read 1.000 in calibration: every betting action is a materially different choice, which the code treats as correct rather than an over-count, so vying genomes are discriminated by Skill, Interaction, and Arc instead. The lesson all three teach: a new skeleton needs a runner AND an OptionDelta mode for Interaction AND a greedy scorer for the skill gradient, or the metrics are blind to it.
 
 ### Veto-stable publication
 
@@ -163,16 +177,23 @@ Two caveats. **Truncation:** the matrix was designed for 15 seeds/config but sto
 ## Architecture
 
 ```
-cmd/darwindeck/         CLI entry point (evolve, experiment, calibrate, restamp, playtest, describe)
+cmd/
+├── darwindeck/         CLI (evolve, experiment, calibrate, restamp, playtest, serve, describe,
+│                       seeds export, judge emit/rank/backfill, version)
+├── grammar-proto/      Grammar expressiveness, family count, playable-by-construction check
+├── grammar-fitness/    Each canonical grammar spec's 5 metrics vs its hand-coded seed
+├── grammar-evolve/     Novelty + niche-sharing GA over GameSpecs (-verdicts)
+├── grammar-illuminate/ MAP-Elites over the typed grammar space
+└── grammar-judge/      Blind dossiers for grammar compositions
 pkg/
 ├── genome/             Genome struct, skeleton params, Tier-0 static validation + liveness rules
 ├── skeleton/
 │   ├── shedding/       Shedding runner (match suit/rank, special cards, multi-round scoring, run_play/follow_suit/knock deep borrows)
 │   ├── tricktaking/    Trick-taking runner (suit following, trump, tricks)
 │   ├── rummy/          Rummy runner (draw-meld-discard, knock/gin)
-│   ├── climbing/       Climbing runner (beat-or-pass combinations, ladder)
+│   ├── climbing/       Climbing runner (beat-or-pass combinations, ladder, knock deep borrow)
 │   ├── casino/         Casino runner (fishing capture: rank-match or pip-sum, trail; scoring-borrow host)
-│   └── vying/          Vying runner (poker: hidden hands, betting rounds, showdown by hand rank)
+│   └── vying/          Vying runner (poker: hidden hands, betting rounds, showdown; scoring-borrow host)
 ├── sim/                Card types, GameState, AI players (Random/Greedy/ISMCTS), batch runner
 ├── mechanic/           Borrowed-mechanic hook system (single HooksFor construction site)
 ├── evolution/          Mutation, crossover, selection, novelty (k-NN + seed-distance + CID)
@@ -183,9 +204,32 @@ pkg/
 ├── fitness/            5 rebuilt metrics, tiered pipeline, degeneracy vetoes, calibration gate
 ├── output/             Rulebook/report generation, veto-stable publication
 ├── playtest/           Interactive playtest session (runs the same hooks fitness does)
-├── judge/              LLM-as-judge: blind dossier emitter + verdict ingest/rank
-└── seeds/              10 seed games + the degenerate calibration fixtures
+├── judge/              LLM-as-judge: blind dossier emitter + verdict ingest/rank/backfill
+├── grammar/            Generative grammar: typed primitives + one generic interpreter
+├── webplay/            Browser playtest server behind `darwindeck serve` (ratings log)
+└── seeds/              11 classic seed games + the degenerate calibration fixtures
 ```
+
+## Generative grammar
+
+The skeletons cap the space at six hand-coded families. `pkg/grammar` is the generalization: a game is a composition of typed primitives (move-generator x end-condition x scoring, plus typed modifiers) run by one generic interpreter (`runner.go`), and every well-typed composition is playable by construction -- `LegalMoves` is never empty and the game terminates under random play. Termination lives in the runner (the play-match all-pass deadlock, the capture can't-redeal end, the rummy deck drain, the vying max-raises cap), not in a harness stalemate net.
+
+- **7 move-generators:** play_match, beat_or_pass, accumulate, capture, trick, rummy, vying.
+- **15 modifiers**, typed by `Modifier.CompatibleWith(spec)` (the lift of the v2 borrow whitelist): run_play, follow_suit, wild, draw_penalty, knock, meld_bonus, avoidance, trump, skip, force_draw, bid, teams, nominate, reverse, sum_capture.
+- **137 modified families, 137/137 playable** under random AI (0 stuck, 0 non-terminating), from 7 well-typed base families. `go run ./cmd/grammar-proto/` reproduces the count.
+- **Coverage:** 21/26 = ~81% of the in-scope games in a 60-game surveyed corpus are covered or partially covered (11 fully), across three blind expert-agent surveys (14% -> 67% -> 81%). About 10 games are out of scope by design (real-time, no-decision, multi-gap stacks) and 5 in-scope games still aren't representable (Euchre/Bridge-style bid-named trump, Hold'em/Stud community cards). See [`results/2026-06-26-grammar-coverage/`](results/2026-06-26-grammar-coverage/).
+
+A grammar spec runs in the real batch engine through an adapter, so it gets the same 5 metrics (`fitness.EvaluateWithRunner`) and the same blind judge (dossiers keyed on the spec's composition). The grammar has its own GA and MAP-Elites drivers; it is not yet wired into `darwindeck evolve`.
+
+```bash
+go run ./cmd/grammar-proto/        # expressiveness + family count + playable-by-construction
+go run ./cmd/grammar-fitness/      # canonical specs' metrics vs the hand-coded seeds
+go run ./cmd/grammar-evolve/       # novelty + niche-sharing GA over GameSpecs (-verdicts <file>)
+go run ./cmd/grammar-illuminate/   # MAP-Elites over the behavior grid
+go run ./cmd/grammar-judge/ emit -out <dir>   # blind dossiers per composition
+```
+
+Findings: [`results/2026-06-23-grammar-prototype/`](results/2026-06-23-grammar-prototype/) (the de-risk through the blind judge) and the coverage survey above.
 
 ## Seed games
 
@@ -221,12 +265,8 @@ go test ./pkg/evolution/ -run TestSmallEvolution -v
 - `cmd/darwindeck/` -- CLI entry point
 - `pkg/` -- pure Go library code (stdlib + math/rand/v2 only)
 - `docs/plans/` -- design documents, the audit-remediation plan and checkpoint
-- `results/` -- tracked result artifacts (each with a `meta.json`); the round-4 exit bundle lives here
+- `results/` -- tracked result artifacts. The evolution-run bundles (flagship-r3/r4, pre-fix-*, experiments-final) carry a `meta.json` recording the evaluation mode; the later judge, borrow, served-set, and grammar dirs carry a `README.md` instead. The round-4 exit bundle lives here
 - `output/` -- raw evolution run outputs (gitignored)
-
-## License
-
-MIT
 
 ## Citation
 

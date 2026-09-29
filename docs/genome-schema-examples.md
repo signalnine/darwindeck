@@ -1,7 +1,11 @@
 # Genome Schema Reference
 
+> **Legacy v1 (2026-09-28):** historical doc for the v1 Python/CGo system
+> (`src/`); it does not describe the current Go v2 system (`cmd/` + `pkg/`). See
+> `CLAUDE.md` / `README.md` for current.
+
 **Date:** 2026-01-11
-**Status:** Current implementation
+**Status:** Legacy v1 schema (Python `src/darwindeck/genome/schema.py`), not the v2 Go genome
 
 This document describes the actual genome schema as implemented in the codebase.
 

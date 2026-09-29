@@ -1,5 +1,9 @@
 # Phase 1 Implementation Status
 
+> **Legacy v1 (2026-09-28):** historical doc for the v1 Python/CGo system
+> (`src/`); it does not describe the current Go v2 system (`cmd/` + `pkg/`). See
+> `CLAUDE.md` / `README.md` for current.
+
 **Date:** 2026-01-10
 **Goal:** Implement real gameplay instrumentation for decision_density and interaction_frequency
 

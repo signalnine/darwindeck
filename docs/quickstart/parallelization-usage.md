@@ -1,5 +1,9 @@
 # Using Parallelization in Production
 
+> **Legacy v1 (2026-09-28):** historical doc for the v1 Python/CGo system
+> (`src/`); it does not describe the current Go v2 system (`cmd/` + `pkg/`). See
+> `CLAUDE.md` / `README.md` for current.
+
 Quick guide to using the parallelization features in the evolutionary card game system.
 
 ## Quick Start
@@ -42,7 +46,7 @@ If calling the Go simulator directly:
 package main
 
 import (
-    "github.com/yourusername/cards-playtest/src/gosim/simulation"
+    "github.com/signalnine/darwindeck/gosim/simulation"
 )
 
 func main() {
@@ -526,10 +530,10 @@ results = evaluator.evaluate_population(
 
 ## Further Reading
 
-- **Detailed benchmarks:** `/home/gabe/cards-playtest/docs/benchmarks/parallelization-results.md`
-- **Implementation strategy:** `/home/gabe/cards-playtest/docs/parallelization-strategy.md`
-- **Benchmark analysis:** `/home/gabe/cards-playtest/BENCHMARK_ANALYSIS.md`
-- **Quick reference:** `/home/gabe/cards-playtest/BENCHMARK_SUMMARY.md`
+- **Detailed benchmarks:** `docs/benchmarks/parallelization-results.md`
+- **Implementation strategy:** `docs/parallelization-strategy.md`
+- **Benchmark analysis:** `docs/benchmarks/BENCHMARK_ANALYSIS.md`
+- **Quick reference:** `docs/benchmarks/BENCHMARK_SUMMARY.md`
 
 ## Support
 

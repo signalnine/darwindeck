@@ -1,5 +1,9 @@
 # Python-Go Integration Architecture
 
+> **Legacy v1 (2026-09-28):** historical doc for the v1 Python/CGo system
+> (`src/`); it does not describe the current Go v2 system (`cmd/` + `pkg/`). See
+> `CLAUDE.md` / `README.md` for current.
+
 This document explains how DarwinDeck's Python and Go components interact to achieve high-performance evolutionary simulation.
 
 ## Overview

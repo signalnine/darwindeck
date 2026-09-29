@@ -100,7 +100,7 @@ game.
 Three invariants keep borrows honest, all enforced at the operator level
 rather than by filtering:
 
-1. **Whitelisting.** `genome.ValidBorrows` is a per-host table -- e.g. casino
+1. **Whitelisting.** `genome.ValidBorrows()` returns (a copy of) the per-host table -- e.g. casino
    rejects `MechDrawPenalty` because growing one hand breaks its equal-hands
    redeal invariant. An illegal (host, mechanic) pair fails Tier-0 validation.
 2. **Teeth.** `giveBorrowTeeth` rewires supporting parameters when a borrow is
@@ -151,10 +151,13 @@ Evaluation is a funnel, ordered by cost:
 
 - **Tier 0 (free):** static checks on the struct -- deck overflow, parameter
   ranges, borrow whitelist, duplicate mechanics.
-- **Tier 1 (5 games):** random-AI smoke test. Any hang, error, or degenerate
-  outcome kills the genome.
-- **Tier 2 (~400 games):** 200 random-AI games plus 200 greedy-AI games at the
-  same seeds; the top fitness decile also gets a 20-game MCTS batch.
+- **Tier 1 (10 games):** random-AI smoke test with a tolerance band. Any
+  error fails it; so do >= 3 timeouts, < 7 completions, a completed-game
+  average under 5 turns, or (3+ player games) one player winning every
+  completed game.
+- **Tier 2 (~400 games):** 200 random-AI games plus 200 greedy-AI games, each
+  batch at its own seed offset (random +100, greedy +1000 -- not same-seed
+  paired); the top fitness decile also gets a 20-game MCTS batch (+2000).
 
 Tier 2 feeds a battery of **degeneracy vetoes** before any metric is computed:
 `seat_participation` (a seat that never acts), `tempo_monopoly` (one player
@@ -162,19 +165,21 @@ takes long uninterrupted runs), `non_agentic` (too few real choices),
 `dead_match_rule` / `playable_share` (a match rule so tight nothing is ever
 playable), `draw_supply_churn` (the game is mostly reshuffling). A vetoed
 genome scores zero regardless of its metrics. Because a genome is published
-from a single evaluation, publication re-runs each top-N candidate at K fresh
-seeds and records `VetoStable` -- a genome that fails its own veto on a
-minority of seeds gets demoted rather than shipped.
+from a single evaluation, publication re-runs each top-N candidate at K=5 fresh
+seeds and records `VetoStable`: a genome valid on >= 3 of 5 re-evals is
+published as stable (a minority failure is flagged via `stable_evals`, not
+condemned), while one that fails the majority is demoted in the published
+order.
 
 Five metrics, fixed weights:
 
 | Metric | Weight | What it actually measures |
 |---|---|---|
-| Meaningful Decisions | 0.25 | fraction of move events that are chosen plays vs forced draws |
-| Game Arc | 0.25 | win-entropy across seats (0.6) + turn-count variation (0.4) |
+| Meaningful Decisions | 0.25 | fraction of decision turns marked Meaningful: >= 2 legal moves AND the choice-impact probe (`turnIsMeaningful`) finds the options actually differ |
+| Game Arc | 0.25 | 0.4*tent(comeback, 0.5) + 0.4*resolution + 0.2*min(leadChanges/3, 1), from per-game leader tracks |
 | Interaction | 0.20 | share of events that touch opponents, via per-skeleton OptionDelta probes |
 | Skill Gradient | 0.20 | two-tier: greedy over random (0.4 of scale) + MCTS over greedy (0.6) |
-| Session Length | 0.10 | target 15-40 turns, linear falloff |
+| Session Length | 0.10 | decisions per player per game: 1.0 in 6-60, linear falloff over 3-6 and 60-170, 0 outside |
 
 The skill formula is the one worth spelling out:
 
@@ -183,8 +188,9 @@ raw = 0.4 * max(0, greedyWR - randomWR) / (1 - randomWR)
     + 0.6 * max(0, mctsWR  - greedyWR)  / (1 - greedyWR)
 ```
 
-with `randomWR` measured empirically from the same-seed random batch (never
-assumed to be 1/players -- seat advantages are real) and the MCTS term
+with `randomWR` measured empirically from the independent random batch (never
+assumed to be 1/players -- seat advantages are real; the batches use distinct
+seed offsets, so first-player advantage cancels in expectation, not pairwise) and the MCTS term
 available only to genomes that earned an MCTS grant. Skill a one-ply greedy
 can detect saturates at 0.4; the top 0.6 is reachable only by lookahead
 outplaying greed. That structure exists because "greedy crushes random" is
@@ -231,15 +237,17 @@ seeds means the mean was describing a genome we can no longer trust.
 | mutateScoring | 0.03 | reweight card points / triggers |
 | changeSkeleton | 0.02 | re-seat the params on a different skeleton |
 
-then repairs invariants: `hand_size * players <= 52`, and teeth re-applied to
+then repairs invariants: `hand_size * players (+ casino table_size) <= 52`, and teeth re-applied to
 every carried borrow. Repair beats rejection here -- a rejected child wastes a
 tournament slot, a repaired one keeps the mutation's intent.
 
-**Crossover** happens for 30% of non-elite slots: two tournament parents,
-`hybridCrossover` blends parameters within a skeleton, and with
-`-cross-skeleton` enabled it can graft a borrow representing the other
-parent's family (the child stays on one skeleton; the foreign parent
-contributes a gene, never half a game loop). The child is then mutated too.
+**Crossover** happens for 30% of non-elite slots: two tournament parents.
+Same-skeleton parents go through `Crossover` (uniform, per-parameter coin
+flips). Different-skeleton parents fall back to plain mutation unless `-cross-skeleton` is on,
+in which case `hybridCrossover` clones parent A and grafts one active borrow
+representing parent B's family (the child stays on one skeleton; the foreign
+parent contributes a gene, never half a game loop). The child is then mutated
+too.
 
 **Selection** is elitism plus tournament, ranked not by raw fitness but by
 `SharedFitness` -- which is where the interesting machinery lives.

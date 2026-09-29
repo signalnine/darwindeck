@@ -1,5 +1,8 @@
 # Can We Represent Poker?
 
+> **Legacy v1 (2026-09-28):** historical doc for the v1 Python/CGo system (`src/`), not the current Go v2 system (`cmd/` + `pkg/`); see `CLAUDE.md` / `README.md` for current.
+> v2 now ships a dedicated vying (poker) skeleton in `pkg/skeleton/vying/`.
+
 **Date:** 2026-01-10
 **Question:** Does our enhanced dataclass schema support poker-like games?
 

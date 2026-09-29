@@ -1,5 +1,9 @@
 # Hoyle's Card Games - Genome Schema Examples
 
+> **Legacy v1 (2026-09-28):** historical doc for the v1 Python/CGo system
+> (`src/`); it does not describe the current Go v2 system (`cmd/` + `pkg/`). See
+> `CLAUDE.md` / `README.md` for current.
+
 **Date:** 2026-01-10
 **Source:** Hoyle's Encyclopedia of Card Games by Walter B. Gibson (Doubleday; consult a purchased or library copy -- the book is copyrighted and is not distributed with this repository)
 **Purpose:** Validate genome schema against real card games from Hoyle's

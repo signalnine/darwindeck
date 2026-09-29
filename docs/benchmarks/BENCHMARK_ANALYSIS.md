@@ -223,9 +223,9 @@ The parallel worker pool implementation demonstrates:
 ## Raw Benchmark Data
 
 Full benchmark results are available in:
-- `/home/gabe/cards-playtest/benchmark_results.txt` - Complete run
-- `/home/gabe/cards-playtest/benchmark_serial.txt` - Serial only (5 runs)
-- `/home/gabe/cards-playtest/benchmark_parallel.txt` - Parallel only (5 runs)
+- `docs/benchmarks/benchmark_results.txt` - Complete run
+- `docs/benchmarks/benchmark_serial.txt` - Serial only (5 runs)
+- `docs/benchmarks/benchmark_parallel.txt` - Parallel only (5 runs)
 
 ## Next Steps
 

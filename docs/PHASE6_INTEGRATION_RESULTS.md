@@ -1,5 +1,8 @@
 # Phase 6: Integration Testing Results
 
+> **Legacy v1 (2026-09-28):** historical doc for the v1 Python/CGo system (`src/`), not the current Go v2 system (`cmd/` + `pkg/`); see `CLAUDE.md` / `README.md` for current.
+> The "Pure Go Evolution System" here is v1's `src/gosim/cmd/evolve` (`bin/darwindeck-evolve` via `make build-evolve`), not v2's `bin/darwindeck`.
+
 ## Summary
 
 All integration tests **PASSED**. The Pure Go Evolution System meets or exceeds all acceptance criteria.

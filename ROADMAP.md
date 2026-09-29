@@ -2,18 +2,40 @@
 
 This document tracks planned features, known limitations, and future work.
 
-## v2 Scope Decisions (recorded 2026-06-11)
+## v2 Scope Decisions (recorded 2026-06-11, updated 2026-09-28)
 
-The active system is the pure Go v2 rewrite (`cmd/`, `pkg/`). Everything below this section describes the legacy v1 Python/Go hybrid (`src/`), which is no longer developed. Scope explicitly dropped or deferred in v2:
+The active system is the pure Go v2 rewrite (`cmd/`, `pkg/`). The "v2 shipped" and "v2 open" sections below cover it; everything from "Current Status (v1 legacy)" down describes the legacy v1 Python/Go hybrid (`src/`), which is no longer developed. Status of the capabilities v2 originally dropped or deferred:
 
-| Capability | v2 status | Decision |
-|------------|-----------|----------|
-| MCTS skill evaluation | **Absent** | v1's MCTS was omniscient (it cloned hidden hands) and was not ported. v2's skill ceiling is currently 1-ply greedy; a determinized ISMCTS player is scheduled in Phase 5 of `docs/plans/2026-06-11-audit-remediation.md`. |
-| Pareto / NSGA-II selection | **Open question** | Weighted-sum fitness is in use. Multi-objective selection remains the day-one open question, tracked as an optional experiment (Phase 8 of the remediation plan). |
-| Betting/wagering | **v1-only** | Not representable in the three v2 skeletons (shedding, trick-taking, rummy); no port planned. |
-| Bidding/contracts | **v1-only** | Same -- v1 `BiddingPhase`/`ContractScoring` were not carried into v2. |
-| Team/partnership play | **v1-only** | v1 `team_mode`/`teams` were not carried into v2. |
-| Web UI | **v1-only** | The FastAPI + SvelteKit UI targets the v1 engine; v2 is CLI-only. |
+| Capability | v2 status | Notes |
+|------------|-----------|-------|
+| MCTS skill evaluation | **Done** | v1's MCTS was omniscient (it cloned hidden hands) and was not ported. v2 has a determinized ISMCTS player (`pkg/sim/mcts.go`) feeding the second tier of a two-tier skill gradient. It costs ~14.5s per 20-game batch (~7x over the 2s/genome budget), so production grants it only to the top decile of each generation (`evolve -mcts-decile`, default 0.10). |
+| Pareto / NSGA-II selection | **Open** | Still weighted-sum fitness. Multi-objective selection remains the day-one open question (Phase 8 of the remediation plan). |
+| Betting/wagering | **Done (new design)** | The vying skeleton (`pkg/skeleton/vying`: hidden hands, fold/call/raise, max-raises cap, showdown) and the grammar's `vying` move-generator. Not a port of v1's `BettingPhase`. |
+| Bidding/contracts | **Grammar only** | `ModBid` in `pkg/grammar/modifier.go` (declare a trick target, scored by making the contract). Not in the v2 genome/skeletons. |
+| Team/partnership play | **Grammar only** | `ModTeams` in `pkg/grammar/modifier.go` (2v2, evens vs odds). Not in the v2 genome/skeletons. |
+| Web UI | **Done (new design)** | `darwindeck serve` (`pkg/webplay`): a Go browser playtest server with a game picker and a 1-5 rating per session. The v1 FastAPI + SvelteKit UI still targets only the v1 engine. |
+
+## v2 Shipped
+
+- **Six skeletons** (2026-04-11 -> 2026-06-15): shedding, trick-taking, rummy (2026-04-11), climbing (2026-06-13), casino (2026-06-14), vying (2026-06-15); 11 classic seeds across them, all in the calibration gate.
+- **Audit remediation and the four-round failed-review loop** (2026-06-11 -> 2026-06-13): rebuilt metrics, degeneracy-veto stack, calibration gate, veto-stable publication, `restamp`, the experiment matrix with a random-search null.
+- **Cross-skeleton recombination + novelty search** (2026-06-13): `-cross-skeleton`, `-novelty-select`.
+- **Deep borrows** (2026-06-14 -> 2026-06-15): `run_play` (shedding), `follow_suit` (shedding), `knock` (shedding, then climbing). Casino (2026-06-14) and vying (2026-06-15) host the scoring borrows. A rummy go-out gate was tried and rejected (does not terminate under random play).
+- **CID novelty pressure** (2026-06-14): `CounterfactualIntegration` in `pkg/evolution/behavior.go`, leave-one-out, default weight 1.5.
+- **LLM judge, then judge in the loop** (2026-06-13 -> 2026-06-23): blind dossiers (`judge emit`/`rank`), judge-novelty selection term, chunked whole-population checkpoint/resume so the verdict table grows mid-run, judge-aware publication ranking, `judge backfill` to complete the composition table. Procedure: `docs/judge-in-loop.md`.
+- **MAP-Elites** as a v2 algorithm (`pkg/evolution/mapelites.go`) and over the grammar space (`cmd/grammar-illuminate`, 2026-06-26).
+- **Browser playtest + ratings** (2026-06-16 -> 2026-06-18): `darwindeck serve`, named game lobby, `seeds export` for blind classic anchors, the served set (`results/2026-06-18-served-set/`), `scripts/ratings-report.sh`.
+- **Generative grammar** (`pkg/grammar`, 2026-06-23 -> 2026-06-26): 7 move-generators, 15 modifiers, 137/137 modified families playable by construction, ~81% of in-scope surveyed games representable (`results/2026-06-26-grammar-coverage/`).
+- **Bughunts** (2026-07-01, 2026-07-17, 2026-07-24): judge dossier leaks, webplay session lifecycle, grammar fidelity, simulation determinism, operator coverage gaps, deadwood width cliff, Progress contract.
+
+## v2 Open
+
+- NSGA-II / Pareto selection (see above).
+- Feed human ratings into fitness (below).
+- Wire the grammar into `darwindeck evolve` (it has its own GA/MAP-Elites drivers today).
+- Grammar coverage gaps: bid-named trump + bowers (Euchre/Bridge), community cards (Hold'em/Stud).
+- A casino choice-consequence prober: Meaningful Decisions over-counts casino (~0.87 of trail-vs-trail non-choices).
+- ISMCTS cost: rummy move generation dominates the ~14.5s/batch.
 
 > **Historical-accuracy note (2026-06-11 audit):** the v1 checklists below are preserved as history, but two classes of claims no longer match the v1 code as it stands: (1) the "Python-level process pool (~4x speedup)" and "360x combined" parallelization items -- `ParallelFitnessEvaluator` runs serially on current code (`num_workers` is ignored; Python 3.13 multiprocessing hangs with CGo); (2) the Python-Go golden equivalence tests (`tests/integration/test_bytecode_equivalence.py`) are `@pytest.mark.skip` in the current suite, so cross-language equivalence is not verified.
 
@@ -54,7 +76,8 @@ The active system is the pure Go v2 rewrite (`cmd/`, `pkg/`). Everything below t
 ### Human Playtesting
 
 **Feedback-Driven Evolution**
-- [ ] Use playtest ratings to adjust fitness function
+- [x] Collect human ratings: v2 `darwindeck serve` appends a 1-5 rating per session to `playtest_results.jsonl`; `scripts/ratings-report.sh` reports per-game means and evolved-vs-classic against blind classic anchors (2026-06-18, commit 9a3a0fe)
+- [ ] Use playtest ratings to adjust fitness function (no ratings analysis in the repo yet)
 - [ ] Track which evolved mechanics humans find fun
 - [ ] A/B testing of rule variations
 
@@ -264,3 +287,22 @@ To work on a roadmap item:
 | 2026-01-17 | 0.3.3 | Interaction metrics with multi-signal solitaire detection |
 | 2026-01-17 | 0.4.0 | Team play support - partnership games now evolvable |
 | 2026-01-21 | 0.5.0 | Bidding/contracts complete - Spades-style games now evolvable |
+
+v2 has no release versions: `darwindeck version` prints `git describe` (no tags exist, so it's a commit hash). v2 milestones by date:
+
+| Date | Milestone |
+|------|-----------|
+| 2026-04-11 | v2 pure Go rewrite: shedding, trick-taking, rummy skeletons, greedy AI, fitness, evolution engine |
+| 2026-06-11 | Audit remediation: rebuilt metrics, calibration gate, determinized ISMCTS + two-tier skill gradient |
+| 2026-06-12 | Degeneracy vetoes; failed-review rounds 1-4 |
+| 2026-06-13 | Veto-stable publication + `restamp`; experiment matrix; LLM-as-judge; cross-skeleton + novelty-select; climbing skeleton |
+| 2026-06-14 | Deep borrows (`run_play`, `follow_suit`, `knock`); CID novelty; casino skeleton; first judge-certified novel games |
+| 2026-06-15 | Vying skeleton (6th family); vying scoring host; judge-in-loop selection, chunked checkpoints, judge-aware ranking |
+| 2026-06-16 | `darwindeck serve` browser playtest |
+| 2026-06-18 | Game lobby, classic anchors, ratings report |
+| 2026-06-23 | Complete verdict table + `judge backfill`; grammar prototype |
+| 2026-06-26 | Grammar: all six families + vying move-gen, 15 modifiers, ~81% coverage |
+| 2026-07-01 | Bughunt: judge leaks, webplay lifecycle, grammar fidelity, evolution hardening |
+| 2026-07-15 | Simulation determinism + parallel execution fix |
+| 2026-07-17 | Bughunt (all high/medium findings, then close-out) |
+| 2026-07-24 | Bughunt: operator coverage gaps, deadwood width cliff, Progress contract; repo-wide gofmt |

@@ -1,5 +1,9 @@
 # Python ↔ Golang Interface Decision
 
+> **Legacy v1 (2026-09-28):** historical doc for the v1 Python/CGo system
+> (`src/`); it does not describe the current Go v2 system (`cmd/` + `pkg/`). See
+> `CLAUDE.md` / `README.md` for current.
+
 ## Benchmark Results
 
 - War game speedup: 2.9x
