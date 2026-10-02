@@ -100,18 +100,63 @@ func TestClimbingKnockGreedyScorer(t *testing.T) {
 		t.Fatalf("losing knock must score below passing, got %v", got)
 	}
 
-	// Tied for fewest: CheckEnd breaks ties to the lowest seat, so the
-	// lowest-seat tied player WINS the knock and a higher-seat tied player
-	// loses it. The scorer must agree with that resolution.
+	// Tied for fewest: CheckEnd applies the UNDERCUT rule (a tied knocker loses
+	// to the tied opponent, whatever their seats), so a tied knock is a losing
+	// knock from EVERY seat. The scorer must agree with that resolution (see
+	// TestClimbingKnockTieUndercut).
 	tied := sim.NewGameState(3)
 	tied.Hands[0] = make([]sim.Card, 1)
 	tied.Hands[1] = make([]sim.Card, 1)
 	tied.Hands[2] = make([]sim.Card, 3)
-	if got := sc.ScoreMove(sim.Move{Type: sim.MoveKnock, PlayerID: 0}, tied); got <= 30 {
-		t.Fatalf("tied-for-fewest at the lowest seat must be a winning knock, got %v", got)
+	for seat := 0; seat < 2; seat++ {
+		if got := sc.ScoreMove(sim.Move{Type: sim.MoveKnock, PlayerID: seat}, tied); got >= 0 {
+			t.Fatalf("tied-for-fewest knock at seat %d must be a losing knock, got %v", seat, got)
+		}
 	}
-	if got := sc.ScoreMove(sim.Move{Type: sim.MoveKnock, PlayerID: 1}, tied); got >= 0 {
-		t.Fatalf("tied-for-fewest at a later seat must be a losing knock, got %v", got)
+}
+
+// TestClimbingKnockTieUndercut: the climbing host resolves a knock by the same
+// undercut rule as shedding (genome.KnockWinner) -- no fixed-seat tiebreak.
+// Big Two + knock under random play used to hand seat 0 ~35% of a 4-player
+// game.
+func TestClimbingKnockTieUndercut(t *testing.T) {
+	g := climbingKnockGenome()
+	cases := []struct {
+		name    string
+		sizes   []int
+		knocker int
+		want    int
+	}{
+		{"strictly fewest knocker wins", []int{2, 3, 3}, 0, 0},
+		{"strictly fewest knocker wins from a late seat", []int{3, 3, 2}, 2, 2},
+		{"tied knocker at seat 0 is undercut", []int{2, 2, 3}, 0, 1},
+		{"tied knocker at seat 1 is undercut", []int{2, 2, 3}, 1, 0},
+		{"three-way tie: nearest after the knocker, not the lowest seat", []int{2, 2, 2}, 1, 2},
+		{"knocker behind: fewest other player wins", []int{3, 1, 2}, 0, 1},
+		{"knocker behind, others tied: nearest after the knocker", []int{3, 1, 1}, 2, 1},
+	}
+	for _, tc := range cases {
+		runner := &Runner{}
+		state := sim.NewGameState(len(tc.sizes))
+		state.Direction = 1
+		for i, n := range tc.sizes {
+			for k := 0; k < n; k++ {
+				state.Hands[i] = append(state.Hands[i], sim.Card{Suit: sim.Suit(i % 4), Rank: sim.Rank(2 + k)})
+			}
+		}
+		// A combination is on the table, owned by someone other than the
+		// knocker, with a full pass-around pending: the post-knock Upkeep must
+		// not disturb the knock resolution.
+		state.TrickCards = []sim.Card{{Suit: sim.Clubs, Rank: sim.Ace}}
+		state.TrickLeader = (tc.knocker + 1) % len(tc.sizes)
+		state.PassCount = len(tc.sizes) - 1
+		state.Active = tc.knocker
+
+		runner.ApplyMove(state, sim.Move{Type: sim.MoveKnock, PlayerID: tc.knocker}, g)
+		runner.Upkeep(state, g)
+		if got := runner.CheckEnd(state, g); got != tc.want {
+			t.Errorf("%s: hands %v, P%d knocks: winner = P%d, want P%d", tc.name, tc.sizes, tc.knocker, got, tc.want)
+		}
 	}
 }
 

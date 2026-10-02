@@ -49,8 +49,22 @@ func neutralizeRulebook(s string) string {
 		// MechKnock borrow rule: same declare-out vocabulary as the rummy
 		// rewrites above, so knock-borrow dossiers stay consistent with rummy
 		// dossiers and the "knock" token (Knock Rummy) never leaks.
-		"**Knock:** once your hand is down to a few cards, instead of playing you may knock to end the game at once. When you knock, whoever holds the fewest cards wins — so knock when you are ahead, but knocking while someone else is shorter hands them the win",
-		"**Declare out:** once your hand is down to a few cards, instead of playing you may declare out to end the game at once. When you declare out, whoever holds the fewest cards wins — so declare out when you are ahead, but declaring out while someone else is shorter hands them the win",
+		//
+		// TOKEN-LEVEL, not a whole-sentence pair: the rulebook's knock wording is
+		// host-dependent (2026-10 bughunt: it states the hand threshold and the
+		// undercut tie rule, and on a multi-round host says the knock ends the
+		// ROUND), and the rummy section describes the knock procedure in several
+		// sentences, so an exact-sentence pair silently stopped matching whenever
+		// the text was corrected. strings.Replacer tries patterns in ARGUMENT
+		// order at each position, so the exact pairs above still win where they
+		// apply and these catch every remaining form. Longer forms first.
+		"knocking", "declaring out",
+		"Knocking", "Declaring out",
+		"knocker", "declarer",
+		"knocked", "declared out",
+		"knocks", "declares out",
+		"knock", "declare out",
+		"Knock", "Declare out",
 	)
 	return repl.Replace(s)
 }

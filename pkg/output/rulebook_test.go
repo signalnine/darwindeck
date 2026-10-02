@@ -435,7 +435,9 @@ func TestBorrowedRulesDescribeConcreteMechanics(t *testing.T) {
 		"Certain cards carry penalty points — avoid collecting them",
 	}
 	for _, c := range cases {
-		desc := borrowedDescription(genome.BorrowedMechanic{Mechanic: c.mech})
+		// A rummy host: the generic wording (host-specific variants are pinned
+		// by the rulebook_*_test.go files alongside this one).
+		desc := borrowedDescription(&genome.Genome{Skeleton: genome.Rummy}, genome.BorrowedMechanic{Mechanic: c.mech})
 		for _, a := range c.anchors {
 			if !strings.Contains(desc, a) {
 				t.Errorf("mechanic %v: description missing concrete anchor %q\n  got: %s", c.mech, a, desc)

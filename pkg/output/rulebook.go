@@ -40,7 +40,7 @@ func GenerateRulebook(g *genome.Genome) string {
 	}
 
 	if borrows := liveBorrows(g); len(borrows) > 0 {
-		writeBorrowedRules(&b, borrows)
+		writeBorrowedRules(&b, g, borrows)
 	}
 
 	// Only render the point table when a rule actually consumes it: a table
@@ -106,7 +106,11 @@ func writeSheddingRoundStructure(b *strings.Builder, g *genome.Genome) {
 	rounds := g.Shedding.RoundsPerGame
 
 	b.WriteString("### Rounds\n\n")
-	b.WriteString(fmt.Sprintf("The game is played over **%d rounds**. Playing your last card ends the round: everyone's hand is scored (see Additional Rules), the scores are banked, and all cards are gathered, shuffled, and redealt for the next round.\n\n", rounds))
+	ends := "Playing your last card ends the round"
+	if g.Knockable() {
+		ends = "Playing your last card -- or a knock (see Additional Rules) -- ends the round"
+	}
+	b.WriteString(fmt.Sprintf("The game is played over **%d rounds**. %s: everyone's hand is scored (see Additional Rules), the scores are banked, and all cards are gathered, shuffled, and redealt for the next round.\n\n", rounds, ends))
 
 	b.WriteString("### Winning\n\n")
 	if hasAvoidanceBorrow(g) && !hasMeldBonusBorrow(g) {
@@ -406,10 +410,10 @@ func specialOverlaps(rules []genome.SpecialCard) (multi, drawBoth bool) {
 	return multi, drawBoth
 }
 
-func writeBorrowedRules(b *strings.Builder, borrows []genome.BorrowedMechanic) {
+func writeBorrowedRules(b *strings.Builder, g *genome.Genome, borrows []genome.BorrowedMechanic) {
 	b.WriteString("## Additional Rules\n\n")
 	for _, bm := range borrows {
-		b.WriteString(fmt.Sprintf("- %s\n", borrowedDescription(bm)))
+		b.WriteString(fmt.Sprintf("- %s\n", borrowedDescription(g, bm)))
 	}
 	b.WriteString("\n")
 }
@@ -607,7 +611,12 @@ func specialCardEffect(sc genome.SpecialCard, players int) string {
 // runner-implemented deep borrows MechRunPlay / MechFollowSuit / MechKnock --
 // see genome.ValidBorrows) can appear on a valid genome; the reserved cases
 // (MechTrump, MechPlayMultiple) are kept harmless for defensiveness.
-func borrowedDescription(bm genome.BorrowedMechanic) string {
+//
+// The HOST genome is a parameter because the same borrow resolves differently
+// per host (a knock ends the round on a multi-round shedding host but the game
+// elsewhere; captures are "shed cards" on shedding; a meld bonus is subtracted
+// where the lowest score wins) and the text must describe what THIS game does.
+func borrowedDescription(g *genome.Genome, bm genome.BorrowedMechanic) string {
 	switch bm.Mechanic {
 	case genome.MechTrickScoring:
 		// applyTrickScoring: at EventRoundEnd, the player with the most
@@ -633,9 +642,17 @@ func borrowedDescription(bm genome.BorrowedMechanic) string {
 		// you may hold part of a group back.
 		return "**Combination plays:** instead of one card, you may discard all your cards of one rank together (2 or more, a set), or a full stretch of 2 or more consecutive cards in one suit (a run), in a single turn — as long as one of those cards legally matches the discard top. The whole group goes at once, so it pays to build up runs and dump them in one burst"
 	case genome.MechKnock:
-		// shedding/runner.go Knockable: once your hand is down to a few cards
-		// you may knock to end the game immediately; fewest cards then wins.
-		return "**Knock:** once your hand is down to a few cards, instead of playing you may knock to end the game at once. When you knock, whoever holds the fewest cards wins — so knock when you are ahead, but knocking while someone else is shorter hands them the win"
+		// Runner: the knock is offered at genome.KnockHandThreshold cards or
+		// fewer (shedding + climbing GenerateMoves).
+		if g.SheddingMultiRound() {
+			// Banked-score rounds: a knock ends the ROUND (shedding ApplyMove
+			// emits EventRoundEnd, Upkeep redeals); nobody "wins" on card count.
+			return fmt.Sprintf("**Knock:** once your hand is down to %d cards or fewer, instead of playing you may knock to end the round at once. Every hand is then scored exactly as if a player had gone out, and the next round is dealt (knocking in the last round ends the game) -- so knock when the hands as they stand score well for you", genome.KnockHandThreshold)
+		}
+		// Single game: fewest cards wins under the undercut tie rule
+		// (genome.KnockWinner) -- the knocker only when STRICTLY fewest, every
+		// tie to the tied player nearest after the knocker in turn order.
+		return fmt.Sprintf("**Knock:** once your hand is down to %d cards or fewer, instead of playing you may knock to end the game at once. When you knock, the player holding the fewest cards wins, and ties go against you: you win only if you hold strictly fewer cards than every other player. If anyone else holds as few cards as you (or fewer), the fewest-cards player among them wins; if several of them are tied, it is the one who would play soonest after you", genome.KnockHandThreshold)
 	case genome.MechTrump:
 		return "One suit is designated as trump and beats other suits"
 	case genome.MechPlayMultiple:

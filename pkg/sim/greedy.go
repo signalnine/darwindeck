@@ -137,23 +137,24 @@ func (s *SheddingScorer) ScoreMove(move Move, state *GameState) float64 {
 		return -1
 
 	case MoveKnock:
-		// MechKnock: knocking ends the game now and the fewest-cards player wins,
-		// ties broken to the lowest seat (CheckEnd). Knock iff WE would win that
-		// resolution: nobody holds strictly fewer, and nobody tied with us sits at
-		// an earlier seat. (A plain "strictly fewest" test would refuse a winning
-		// knock when we are tied for fewest but are the lowest such seat.) The
-		// magnitudes dominate the normal play scores (capped ~25) so a winning
-		// knock is always taken and a losing one never is -- the skill random lacks.
+		// MechKnock: knocking ends the game now and the fewest-cards player wins
+		// under the UNDERCUT tie rule (genome.KnockWinner): a knocker who is
+		// merely tied LOSES to the tied opponent. Knock iff we are STRICTLY
+		// fewest -- the only resolution we win. (On a multi-round banked host a
+		// knock only ends the round; holding strictly fewest cards is still the
+		// safe moment to cut it short.) The magnitudes dominate the normal play
+		// scores (capped ~25) so a winning knock is always taken and a losing one
+		// never is -- the skill random lacks.
 		mine := len(state.Hands[move.PlayerID])
 		for i := 0; i < state.NumPlayers; i++ {
 			if i == move.PlayerID {
 				continue
 			}
-			if len(state.Hands[i]) < mine || (len(state.Hands[i]) == mine && i < move.PlayerID) {
-				return -100.0 // someone wins the fewest-cards tie-break ahead of us
+			if len(state.Hands[i]) <= mine {
+				return -100.0 // someone holds as few or fewer: the knock is undercut
 			}
 		}
-		return 200.0 // we are the fewest-cards winner -> knock to win
+		return 200.0 // we are strictly fewest -> knock to win
 
 	default:
 		return 0
@@ -428,23 +429,22 @@ func (s *ClimbingScorer) ScoreMove(move Move, state *GameState) float64 {
 		return 8.0
 
 	case MoveKnock:
-		// MechKnock: knocking ends the game now and the fewest-cards player wins,
-		// ties broken to the lowest seat (CheckEnd). Knock iff WE would win that
-		// resolution: nobody holds strictly fewer, and nobody tied with us sits at
-		// an earlier seat. (A plain "strictly fewest" test would refuse a winning
-		// knock when we are tied for fewest but are the lowest such seat.) The
-		// magnitudes dominate the normal play scores (capped ~30) so a winning
-		// knock is always taken and a losing one never is -- the skill random lacks.
+		// MechKnock: knocking ends the game now and the fewest-cards player wins
+		// under the UNDERCUT tie rule (genome.KnockWinner): a knocker who is
+		// merely tied LOSES to the tied opponent. Knock iff we are STRICTLY
+		// fewest -- the only resolution we win. The magnitudes dominate the
+		// normal play scores (capped ~30) so a winning knock is always taken and
+		// a losing one never is -- the skill random lacks.
 		mine := len(state.Hands[move.PlayerID])
 		for i := 0; i < state.NumPlayers; i++ {
 			if i == move.PlayerID {
 				continue
 			}
-			if len(state.Hands[i]) < mine || (len(state.Hands[i]) == mine && i < move.PlayerID) {
-				return -100.0 // someone wins the fewest-cards tie-break ahead of us
+			if len(state.Hands[i]) <= mine {
+				return -100.0 // someone holds as few or fewer: the knock is undercut
 			}
 		}
-		return 200.0 // we are the fewest-cards winner -> knock to win
+		return 200.0 // we are strictly fewest -> knock to win
 
 	default:
 		return 0
