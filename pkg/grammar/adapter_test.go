@@ -141,3 +141,49 @@ func TestAdapterEventsAreLegible(t *testing.T) {
 		}
 	}
 }
+
+// TestPlayableCountMatchesLegalMoves: PlayableCount feeds the playable_share
+// veto (the share of a hand that is legally playable), so it must count exactly
+// the cards LegalMoves lets the player lay as a single card. It ignored
+// follow_suit: holding 2C/7D/7H on a 7 of clubs it reported 3 playable cards
+// when the rule leaves exactly one (the club), overstating the playable share
+// for every follow_suit family.
+func TestPlayableCountMatchesLegalMoves(t *testing.T) {
+	// The pinned case from the bughunt.
+	s := GameSpec{Players: 2, Deal: 7, Shared: 1, Move: PlayMatch, Match: MatchEither, End: EmptyHand, Score: FirstOut, Mods: []Modifier{ModFollowSuit}}
+	a := Adapter{s}
+	gs := a.Setup(nil, rand.New(rand.NewPCG(1, 1)))
+	top := sim.Card{Suit: sim.Clubs, Rank: 7}
+	gs.TopCard = &top
+	gs.Hands[0] = []sim.Card{{Suit: sim.Clubs, Rank: 2}, {Suit: sim.Diamonds, Rank: 7}, {Suit: sim.Hearts, Rank: 7}}
+	if got := a.PlayableCount(gs, nil); got != 1 {
+		t.Errorf("follow_suit, 2C/7D/7H on 7C: PlayableCount = %d, want 1 (only the club may be played)", got)
+	}
+
+	// The property, over every well-typed shedding spec and every reached state.
+	checked := 0
+	for _, s := range allWellTypedSpecs() {
+		if s.Move != PlayMatch {
+			continue
+		}
+		a := Adapter{s}
+		for seed := uint64(1); seed <= 4; seed++ {
+			playRandomGame(s, seed, func(gs *sim.GameState, moves []sim.Move) {
+				single := map[sim.Card]bool{}
+				for _, m := range moves {
+					if m.Type == sim.MovePlay && len(m.Cards) == 1 {
+						single[m.Cards[0]] = true
+					}
+				}
+				checked++
+				if got := a.PlayableCount(gs, nil); got != len(single) {
+					t.Fatalf("%s seed %d: PlayableCount = %d but LegalMoves offers %d distinct single-card plays (top %v, hand %v)",
+						s, seed, got, len(single), gs.TopCard, gs.Hands[gs.Active])
+				}
+			})
+		}
+	}
+	if checked == 0 {
+		t.Fatal("property checked no states")
+	}
+}

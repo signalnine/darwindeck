@@ -252,8 +252,10 @@ func (a Adapter) Progress(s *sim.GameState, _ *genome.Genome) []float64 {
 // fitness layer's playable-share vetoes (dead_match_rule successor,
 // pkg/fitness/degeneracy.go playable_share) are not blind to grammar shedding
 // games. It mirrors LegalMoves' per-card predicate -- match the top under the
-// spec's rule, or an always-playable nominate-8 -- counting every qualifying
-// card once (the prober contract: no move-level dedup). Pure query. Non-shedding
+// spec's rule, or an always-playable nominate-8, narrowed by ModFollowSuit when
+// that obligation is live -- counting every qualifying card once (the prober
+// contract: no move-level dedup). It equals the number of distinct single-card
+// plays LegalMoves offers (TestPlayableCountMatchesLegalMoves). Pure query. Non-shedding
 // move-gens report 0; the veto only reads shedding-skeleton records, and the
 // other Shedding-mapped move-gen (Accumulate) deals no hand, so its records
 // fall under the HandSize >= 2 floor.
@@ -264,13 +266,42 @@ func (a Adapter) PlayableCount(s *sim.GameState, _ *genome.Genome) int {
 	hand := s.Hands[s.Active]
 	top, ok := topOf(s)
 	nominate := a.Spec.hasMod(ModNominate)
-	count := 0
+	wild := a.Spec.hasMod(ModWild)
+	// count: cards playable under the match rule. follow: the subset that also
+	// satisfies ModFollowSuit (the discard suit, a wild, or a nominate-8) --
+	// followSuitFilter's keep predicate. holds: the obligation is live.
+	count, follow, holds := 0, 0, false
 	for _, c := range hand {
-		if (nominate && int(c.Rank) == wildRank) || matches(c, top, ok, a.Spec.Match) {
+		eight := nominate && int(c.Rank) == wildRank
+		if ok && c.Suit == top.Suit {
+			holds = true
+		}
+		if eight || matches(c, top, ok, a.Spec.Match) || isWild(c, wild) {
 			count++
+			if c.Suit == top.Suit || eight || isWild(c, wild) {
+				follow++
+			}
 		}
 	}
-	return count
+	if !a.Spec.hasMod(ModFollowSuit) || !holds {
+		return count
+	}
+	// ModFollowSuit RESTRICTS the plays to the discard suit when it is held, so
+	// only those cards are playable. (Ignoring it reported 3 playable cards for
+	// 2C/7D/7H on a 7C when the rule leaves one, inflating the playable share.)
+	if follow > 0 {
+		return follow
+	}
+	// The suit is held but no single card satisfies the obligation (only under a
+	// rank-only match rule). Whether the filter then falls through depends on the
+	// multi-card plays, so count what LegalMoves actually offers.
+	seen := make(map[sim.Card]struct{})
+	for _, m := range (Runner{a.Spec}).LegalMoves(s) {
+		if m.Type == sim.MovePlay && len(m.Cards) == 1 {
+			seen[m.Cards[0]] = struct{}{}
+		}
+	}
+	return len(seen)
 }
 
 var _ sim.PlayableShareProber = Adapter{}
