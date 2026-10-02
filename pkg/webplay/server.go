@@ -390,6 +390,15 @@ func (s *Server) handleRate(w http.ResponseWriter, r *http.Request) {
 	// concurrent duplicate loses here (409) instead of double-appending to the
 	// jsonl (unbounded growth / rating-dataset poisoning from replayed calls).
 	ws.mu.Lock()
+	// Only a finished game is rateable. A mid-game rating would be logged as
+	// winner:"none" (indistinguishable from a real turn-limit game) and would
+	// spend the session's one rating before the player has seen the game end.
+	// Checked before the rated flag flips, so a refusal leaves the slot unused.
+	if ws.status != StatusGameOver && ws.status != StatusStuck {
+		ws.mu.Unlock()
+		http.Error(w, "game not finished", http.StatusConflict)
+		return
+	}
 	if ws.rated {
 		ws.mu.Unlock()
 		http.Error(w, "session already rated", http.StatusConflict)

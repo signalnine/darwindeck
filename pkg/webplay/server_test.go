@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/darwindeck/darwindeck/pkg/genome"
+	"github.com/darwindeck/darwindeck/pkg/playtest"
 	"github.com/darwindeck/darwindeck/pkg/seeds"
 )
 
@@ -68,6 +69,45 @@ func doJSON(t *testing.T, h http.Handler, method, path string, hdr map[string]st
 		}
 	}
 	return rec.Code
+}
+
+// finishGame plays the session to a terminal state over the handler by always
+// submitting the first legal move (legal by construction; the max-turns cap in
+// advance() guarantees termination). v is updated to the final view.
+func finishGame(t *testing.T, h http.Handler, hdr map[string]string, v *View) {
+	t.Helper()
+	for i := 0; i < 100000 && v.Status == StatusHumanTurn; i++ {
+		if code := doJSON(t, h, "POST", "/api/move", hdr, map[string]interface{}{"index": 0, "version": v.MoveVersion}, v); code != http.StatusOK {
+			t.Fatalf("move: %d", code)
+		}
+	}
+	if v.Status == StatusHumanTurn {
+		t.Fatal("game did not finish")
+	}
+}
+
+// readRecords parses the ratings jsonl (a missing file is zero records).
+func readRecords(t *testing.T, path string) []playtest.Record {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		t.Fatalf("read results: %v", err)
+	}
+	var recs []playtest.Record
+	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+		if line == "" {
+			continue
+		}
+		var rec playtest.Record
+		if err := json.Unmarshal([]byte(line), &rec); err != nil {
+			t.Fatalf("bad results line %q: %v", line, err)
+		}
+		recs = append(recs, rec)
+	}
+	return recs
 }
 
 func postJSON(t *testing.T, url string, body map[string]interface{}, out interface{}) int {
@@ -302,6 +342,7 @@ func TestRateOncePerSession(t *testing.T) {
 		t.Fatalf("new: %d", code)
 	}
 	hdr := map[string]string{"X-Session-Token": v.Session}
+	finishGame(t, h, hdr, &v) // only a finished game is rateable
 	if code := doJSON(t, h, "POST", "/api/rate", hdr, map[string]interface{}{"rating": 4, "comment": "fun"}, nil); code != http.StatusOK {
 		t.Fatalf("first rate: want 200, got %d", code)
 	}
@@ -408,5 +449,107 @@ func TestClientSeedIgnored(t *testing.T) {
 	}
 	if ws.Seed == 42 {
 		t.Error("client-supplied seed was honored; seeds must be server-random")
+	}
+}
+
+// A game can only be rated once it has ended. A mid-game rating used to be
+// logged with winner:"none" (indistinguishable from a turn-limit game) and
+// spent the session's one rating; now it is refused with 409, logs nothing,
+// and leaves the rating slot free for the real end-of-game rating.
+func TestRateRefusedBeforeGameEnds(t *testing.T) {
+	srv := serverWith(t, firstShedding(t))
+	h := srv.Handler()
+
+	var v View
+	if code := doJSON(t, h, "POST", "/api/new", nil, map[string]interface{}{"difficulty": "random"}, &v); code != http.StatusOK {
+		t.Fatalf("new: %d", code)
+	}
+	if v.Status != StatusHumanTurn {
+		t.Fatalf("expected a game in progress, got %q", v.Status)
+	}
+	hdr := map[string]string{"X-Session-Token": v.Session}
+
+	if code := doJSON(t, h, "POST", "/api/rate", hdr, map[string]interface{}{"rating": 1}, nil); code != http.StatusConflict {
+		t.Fatalf("mid-game rate: want 409, got %d", code)
+	}
+	if recs := readRecords(t, srv.ResultsPath); len(recs) != 0 {
+		t.Fatalf("mid-game rate logged %d record(s), want 0: %+v", len(recs), recs)
+	}
+
+	// The refusal must not have consumed the one-rating slot.
+	finishGame(t, h, hdr, &v)
+	if code := doJSON(t, h, "POST", "/api/rate", hdr, map[string]interface{}{"rating": 4}, nil); code != http.StatusOK {
+		t.Fatalf("end-of-game rate after a refused mid-game rate: want 200, got %d", code)
+	}
+	recs := readRecords(t, srv.ResultsPath)
+	if len(recs) != 1 {
+		t.Fatalf("results file has %d records, want 1", len(recs))
+	}
+	if recs[0].Rating == nil || *recs[0].Rating != 4 {
+		t.Errorf("logged rating = %v, want 4", recs[0].Rating)
+	}
+	if recs[0].Turns != v.Turn || recs[0].Turns == 0 {
+		t.Errorf("logged turns = %d, want the finished game's %d (non-zero)", recs[0].Turns, v.Turn)
+	}
+}
+
+// A stuck game is also over (nothing left to play), so it stays rateable and
+// the record says so.
+func TestRateAllowedWhenStuck(t *testing.T) {
+	srv := serverWith(t, firstShedding(t))
+	h := srv.Handler()
+
+	var v View
+	if code := doJSON(t, h, "POST", "/api/new", nil, map[string]interface{}{"difficulty": "random"}, &v); code != http.StatusOK {
+		t.Fatalf("new: %d", code)
+	}
+	srv.mu.RLock()
+	ws := srv.store[v.Session]
+	srv.mu.RUnlock()
+	ws.mu.Lock()
+	ws.status = StatusStuck
+	ws.legalMoves = nil
+	ws.mu.Unlock()
+
+	hdr := map[string]string{"X-Session-Token": v.Session}
+	if code := doJSON(t, h, "POST", "/api/rate", hdr, map[string]interface{}{"rating": 2}, nil); code != http.StatusOK {
+		t.Fatalf("rate a stuck game: want 200, got %d", code)
+	}
+	recs := readRecords(t, srv.ResultsPath)
+	if len(recs) != 1 {
+		t.Fatalf("results file has %d records, want 1", len(recs))
+	}
+	if !recs[0].Stuck || recs[0].Winner != "stuck" {
+		t.Errorf("stuck record = %+v, want stuck:true winner:\"stuck\"", recs[0])
+	}
+}
+
+// indexPage fetches the embedded UI through the real handler.
+func indexPage(t *testing.T) string {
+	t.Helper()
+	srv := serverWith(t, firstShedding(t))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /: %d", rec.Code)
+	}
+	return rec.Body.String()
+}
+
+// The rating panel is the only place the page calls /api/rate from, and it is
+// revealed only for a terminal status. A 409 while the page does not believe
+// the game is over is the not-finished refusal, which must not be reported as
+// "already recorded" (that would also disable the submit button for good).
+func TestIndexRatingOnlyOfferedAtGameEnd(t *testing.T) {
+	page := indexPage(t)
+	for _, want := range []string{
+		`id="overPanel" hidden`, // the rating panel starts hidden
+		`gameOver = v.status === "game_over" || v.status === "stuck";`,
+		`$("overPanel").hidden = !gameOver;`,
+		`if (e.status === 409 && !gameOver)`, // not-finished handled apart from already-rated
+	} {
+		if !strings.Contains(page, want) {
+			t.Errorf("index.html is missing %q", want)
+		}
 	}
 }

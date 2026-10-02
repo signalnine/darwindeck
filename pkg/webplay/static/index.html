@@ -164,6 +164,7 @@ let session = null;
 let moveVersion = 0;
 let lastWinner = -1;
 let chosenRating = 0;
+let gameOver = false; // last rendered status was terminal; only then is a game rateable
 
 const SUIT = { C: ["♣", false], D: ["♦", true], H: ["♥", true], S: ["♠", false] };
 
@@ -322,9 +323,9 @@ function render(v) {
   log.scrollTop = log.scrollHeight;
 
   // game over
-  const over = v.status === "game_over" || v.status === "stuck";
-  $("overPanel").hidden = !over;
-  if (over) {
+  gameOver = v.status === "game_over" || v.status === "stuck";
+  $("overPanel").hidden = !gameOver;
+  if (gameOver) {
     lastWinner = v.winner;
     const won = v.winner === v.yourSeat;
     const ot = $("overText");
@@ -363,6 +364,10 @@ async function submitRating() {
     $("rateMsg").textContent = "Thanks - recorded.";
     $("submitRating").disabled = true;
   } catch (e) {
+    // The server only rates finished games. The rating panel is hidden until
+    // then, so this means the page is out of sync: re-sync (which hides the
+    // panel again) instead of claiming the rating was recorded.
+    if (e.status === 409 && !gameOver) { refreshState(); return; }
     if (e.status === 409) { // already rated (one rating per game)
       $("rateMsg").textContent = "Already recorded - one rating per game.";
       $("submitRating").disabled = true;
