@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -22,7 +23,7 @@ func TestBuildGrammarDossierIsLegibleAndBlind(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"# G07", "## How to Play", "## Special Rules", "KNOCK", "## Sample Game Traces", "## Termination"} {
+	for _, want := range []string{"# G07", "## How to Play", "## Special Rules", "DECLARE OUT", "## Sample Game Traces", "## Termination"} {
 		if !strings.Contains(d, want) {
 			t.Errorf("dossier missing %q", want)
 		}
@@ -31,6 +32,48 @@ func TestBuildGrammarDossierIsLegibleAndBlind(t *testing.T) {
 	for _, leak := range []string{spec.Composition(), "play_match", "modifier", "GameSpec", "well-typed"} {
 		if strings.Contains(d, leak) {
 			t.Errorf("dossier leaks %q (should be blind)", leak)
+		}
+	}
+}
+
+// gameNameLeak matches vocabulary that names (or all but names) a published game.
+// A blind novelty dossier that says "KNOCK" or "poker hand" tells the judge which
+// classic it is looking at before it has read a rule. Suit names (hearts, spades)
+// and generic mechanic words (trump, meld, trick, wild, raise, fold) are fine.
+var gameNameLeak = regexp.MustCompile(`(?i)\b(knock\w*|gin|poker|rummy|deadwood|crazy eights|uno|scopa|casino|blackjack|big two|president|whist|bridge|euchre|pinochle|tichu)\b`)
+
+// TestGrammarDossiersAreNameBlind: grammar dossiers wrote spec.Rulebook raw,
+// skipping the neutralization every v2 dossier gets -- "KNOCK"/"knocking" in 33
+// of 137 dossiers, "five-card poker hand" in every betting one. The whole dossier
+// (rulebook AND traces, where the going-out event used to read "knock") must be
+// free of game-name vocabulary, for every family.
+func TestGrammarDossiersAreNameBlind(t *testing.T) {
+	leaky := 0
+	for _, spec := range grammar.EnumerateModified() {
+		// Every family's rulebook, through the same neutralizer the dossier uses.
+		if m := gameNameLeak.FindString(neutralizeRulebook(spec.Rulebook("G00"))); m != "" {
+			if leaky++; leaky <= 5 {
+				t.Errorf("%s: rulebook leaks %q", spec.Composition(), m)
+			}
+		}
+	}
+	if leaky > 5 {
+		t.Errorf("... %d families leak in total", leaky)
+	}
+	// Full dossiers (rulebook + sample traces) for the families that used to leak.
+	knock := []grammar.Modifier{grammar.ModKnock}
+	for _, spec := range []grammar.GameSpec{
+		{Players: 3, Deal: 7, Shared: 1, Move: grammar.PlayMatch, Match: grammar.MatchEither, End: grammar.EmptyHand, Score: grammar.FirstOut, Mods: knock},
+		{Players: 3, Deal: 7, Move: grammar.BeatOrPass, End: grammar.EmptyHand, Score: grammar.FirstOut, Mods: knock},
+		{Players: 2, Deal: 10, Move: grammar.Rummy, End: grammar.DeckOut, Score: grammar.FewestDeadwood, Mods: knock},
+		{Players: 4, Deal: 5, Move: grammar.Vying, End: grammar.Showdown, Score: grammar.BestHand},
+	} {
+		d, err := BuildGrammarDossier(spec, "G00")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if m := gameNameLeak.FindString(d); m != "" {
+			t.Errorf("%s: dossier leaks %q", spec.Composition(), m)
 		}
 	}
 }

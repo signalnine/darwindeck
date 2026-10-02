@@ -22,7 +22,10 @@ func BuildGrammarDossier(spec grammar.GameSpec, id string) (string, error) {
 	ai := fitness.GetGreedyAI(g)
 
 	var b strings.Builder
-	b.WriteString(spec.Rulebook(id))
+	// Same neutralizer as every v2 dossier (BuildDossier): the grammar rulebook is
+	// written name-blind at the source (grammar.TestRulebookIsNameBlind), and this
+	// keeps the blind surface on ONE scrubber should either side drift.
+	b.WriteString(neutralizeRulebook(spec.Rulebook(id)))
 	b.WriteString("\n---\n\n")
 
 	const traceN = 400

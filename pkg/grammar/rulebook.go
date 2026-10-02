@@ -11,6 +11,12 @@ import (
 // dossier reads as "variant"). It deliberately describes the game in plain rules,
 // never in grammar internals (no "move-gen", "modifier", "spec"): the reader sees
 // a card game, not a synthesized composition. title is the neutral heading.
+//
+// NAME-BLIND: this text goes straight into blind novelty dossiers, so it must not
+// use vocabulary that names a published game -- "knock", "gin", "deadwood",
+// "poker" and the like. Going out is "DECLARE OUT", a ranked hand is described by
+// its ranking. TestRulebookIsNameBlind pins this for every family; identifiers in
+// the code (ModKnock, deadwood()) are free to keep the familiar names.
 func (s GameSpec) Rulebook(title string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# %s\n\n", title)
@@ -87,7 +93,7 @@ func (s GameSpec) objective() string {
 		return "Form your cards into melds -- sets of three or more of the same rank, or runs of three or more consecutive cards in one suit -- leaving as few stray (unmelded) cards as possible. " +
 			"When a hand is counted, sets are formed first and runs are then formed from the cards left over."
 	case BestHand:
-		return "Hold the best five-card poker hand at the showdown, and bet boldly enough that the others fold or pay to see it."
+		return "Hold the best five-card hand at the showdown, and bet boldly enough that the others fold or pay to see it. " + handRanking
 	}
 	return ""
 }
@@ -174,9 +180,9 @@ func (s GameSpec) modifierRules() []string {
 		case ModKnock:
 			if s.Move == Rummy {
 				// ginKnockThreshold: the knock move is offered at deadwood <= 2.
-				out = append(out, fmt.Sprintf("When you have %d or fewer unmelded cards, you may KNOCK at the start of your turn, instead of drawing, to end the game immediately. Whoever has the least deadwood then wins -- knock too early and an opponent with fewer stray cards beats you.", ginKnockThreshold))
+				out = append(out, fmt.Sprintf("When you have %d or fewer unmelded cards, you may DECLARE OUT at the start of your turn, instead of drawing, to end the game immediately. Whoever has the fewest unmelded cards then wins -- declare out too early and an opponent with fewer stray cards beats you.", ginKnockThreshold))
 			} else {
-				out = append(out, "When you are down to 3 or fewer cards, you may KNOCK on your turn, instead of playing, to end the game at once. Whoever holds the fewest cards then wins -- so knocking while you are NOT lowest hands the win to someone else; "+turnOrderTie("the knocker")+".")
+				out = append(out, "When you are down to 3 or fewer cards, you may DECLARE OUT on your turn, instead of playing, to end the game at once. Whoever holds the fewest cards then wins -- so declaring out while you are NOT lowest hands the win to someone else; "+turnOrderTie("the player who declared out")+".")
 			}
 		case ModWild:
 			// deadwood(): each wild completes one leftover NEAR-meld (a pair or
@@ -241,6 +247,10 @@ func (s GameSpec) endRule() string {
 // runner.go). A tie the rulebook does not settle is a game a table cannot finish,
 // and one the runner settles differently is a rulebook that lies -- keep in sync.
 const (
+	// handRanking spells out vying.HandCategory (lowest to highest) so the
+	// betting games never need to say whose hand ranking it is.
+	handRanking = "Hands rank, from lowest to highest: high card, one pair, two pair, three of a kind, straight (five consecutive ranks), flush (five of one suit), " +
+		"full house (three of a kind plus a pair), four of a kind, straight flush; between two hands of the same type the higher-ranked cards win."
 	// suitOrderHigh / suitOrderLow spell out cardOrder for the card rule.
 	suitOrderHigh = "ace high; between cards of equal rank spades beat hearts, hearts beat diamonds, diamonds beat clubs"
 	suitOrderLow  = "a two is lowest; between cards of equal rank clubs are lowest, then diamonds, hearts, spades"
@@ -306,11 +316,11 @@ func (s GameSpec) winRule() string {
 	case HighScore:
 		return "The player with the highest score wins."
 	case FewestDeadwood:
-		return fmt.Sprintf("The player whose hand has the fewest unmelded cards (the least deadwood) wins. "+
+		return fmt.Sprintf("The player whose hand has the fewest unmelded cards wins. "+
 			"If players tie on that count, the lower total point value of those unmelded cards wins (aces count 1, face cards 10, other cards their number); "+
 			"if that is equal too, the tied player holding the lowest card wins (%s).", suitOrderLow)
 	case BestHand:
-		return "At the showdown the best five-card poker hand among the players still in wins; if everyone else folds, the last player in wins uncontested. " +
+		return "At the showdown the best-ranked five-card hand among the players still in wins; if everyone else folds, the last player in wins uncontested. " +
 			"An exact tie (the same ranks in both hands) goes to the tied player holding the highest card by suit (spades high, then hearts, diamonds, clubs)."
 	}
 	return ""

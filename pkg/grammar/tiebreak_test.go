@@ -401,8 +401,8 @@ func TestRulebookStatesTieBreaks(t *testing.T) {
 		}
 	}
 	knock := GameSpec{Players: 3, Deal: 7, Shared: 1, Move: PlayMatch, Match: MatchEither, End: EmptyHand, Score: FirstOut, Mods: []Modifier{ModKnock}}
-	if rb := knock.Rulebook("X"); !strings.Contains(rb, "tie goes to the knocker") {
-		t.Errorf("knock rulebook does not say who wins a tied knock:\n%s", rb)
+	if rb := knock.Rulebook("X"); !strings.Contains(rb, "tie goes to the player who declared out") {
+		t.Errorf("declare-out rulebook does not say who wins a tied declare-out:\n%s", rb)
 	}
 	teams := GameSpec{Players: 4, Deal: 13, Move: Trick, End: DeckOut, Score: MostCaptured, Mods: []Modifier{ModTeams}}
 	if rb := teams.Rulebook("X"); !strings.Contains(rb, "partnership that won the last trick") {

@@ -1,6 +1,7 @@
 package grammar
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 
@@ -239,4 +240,36 @@ func TestRulebookMatchesRunner(t *testing.T) {
 		}
 		has(t, s.Rulebook("X"), "At most 4 raises")
 	})
+}
+
+// gameNameWords matches vocabulary that names (or all but names) a published
+// game. Suit names and generic mechanic words (trump, meld, trick, wild, raise,
+// fold, stick, bust) are fine.
+var gameNameWords = regexp.MustCompile(`(?i)\b(knock\w*|gin|poker|rummy|deadwood|crazy eights|uno|scopa|casino|blackjack|big two|president|whist|bridge|euchre|pinochle|tichu)\b`)
+
+// TestRulebookIsNameBlind: the rulebook is written straight into blind novelty
+// dossiers, so it must describe mechanics without naming the classic they come
+// from. "KNOCK"/"knocking" appeared in every going-out family (33 of 137) and
+// "five-card poker hand" in every betting one. Checked for every family at every
+// player count, at the source (no downstream scrubber needed).
+func TestRulebookIsNameBlind(t *testing.T) {
+	leaky := 0
+	for _, s := range allWellTypedSpecs() {
+		if m := gameNameWords.FindString(s.Rulebook("G00")); m != "" {
+			if leaky++; leaky <= 6 {
+				t.Errorf("%s: rulebook uses %q", s, m)
+			}
+		}
+	}
+	if leaky > 6 {
+		t.Errorf("... %d specs in total", leaky)
+	}
+	// The going-out rule and the hand ranking must still be THERE, in neutral words.
+	out := GameSpec{Players: 2, Deal: 10, Move: Rummy, End: DeckOut, Score: FewestDeadwood, Mods: []Modifier{ModKnock}}
+	if rb := out.Rulebook("G00"); !strings.Contains(rb, "DECLARE OUT") {
+		t.Error("going-out rule is missing its neutral name (DECLARE OUT)")
+	}
+	if rb := Canonical()[6].Rulebook("G00"); !strings.Contains(rb, "full house") || !strings.Contains(rb, "straight flush") {
+		t.Error("betting rulebook must spell out the hand ranking it no longer names")
+	}
 }
