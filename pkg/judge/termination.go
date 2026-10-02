@@ -33,6 +33,18 @@ type TerminationInfo struct {
 	// Skeleton drives which reachable-win field below is populated.
 	Skeleton genome.SkeletonType
 
+	// AnyCompleted is true iff at least one sampled game (at either cap) ended
+	// with a winner. It is the skeleton-INDEPENDENT reachable-win evidence: a
+	// game that was observed to end has a reachable terminal state, whatever
+	// the skeleton-specific probes below did or did not see. Without it a
+	// shedding game that ends by a declare-out (the knock borrow) was reported
+	// "may be hard or impossible to reach" beside a 100% completion rate.
+	AnyCompleted bool
+	// AnyDeclaredOut is true iff a sampled game was ended by a player declaring
+	// out through the knock BORROW on a shedding/climbing host (the runner's
+	// EventSpecialTriggered "knock"), so the dossier can say how it ended.
+	AnyDeclaredOut bool
+
 	// --- rummy reachable-win signal ---
 	// ReachableKnock is true iff, in at least one sampled game, some player's
 	// deadwood fell to <= the knock threshold so that a knock/gin became a
@@ -98,6 +110,12 @@ func computeTermination(g *genome.Genome, runner sim.GenericRunner, ai sim.AIPla
 	// (the whole point of the fix -- a sound but slow game like Gin must not be
 	// reported unreachable just because one cap's sample missed the knock).
 	record := func(obs gameObservation) {
+		if obs.completed {
+			info.AnyCompleted = true
+		}
+		if obs.completed && obs.declaredOut {
+			info.AnyDeclaredOut = true
+		}
 		if obs.knockBecameLegal {
 			info.ReachableKnock = true
 			knockLegalTurns = append(knockLegalTurns, obs.firstKnockLegalTurn)
@@ -158,6 +176,10 @@ type gameObservation struct {
 	// emptyHandTurn: the turn at which a shedding player first emptied their
 	// hand (the round/game win moment). 0 if it never happened.
 	emptyHandTurn int
+	// declaredOut: a player ended the game through the knock BORROW on a
+	// shedding/climbing host (EventSpecialTriggered "knock"; the rummy knock
+	// is the EventRoundEnd tracked by knockOrGinEnded).
+	declaredOut bool
 }
 
 // observeGame plays one instrumented game to the given cap. It mirrors the
@@ -226,6 +248,9 @@ func observeGame(g *genome.Genome, runner sim.GenericRunner, ai sim.AIPlayer, rn
 
 		// Round-end signals from events.
 		for _, e := range events {
+			if e.Type == sim.EventSpecialTriggered && e.Detail == "knock" {
+				obs.declaredOut = true
+			}
 			if e.Type == sim.EventRoundEnd {
 				switch e.Detail {
 				case "knock", "gin":

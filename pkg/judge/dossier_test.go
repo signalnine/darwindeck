@@ -200,6 +200,67 @@ func TestContractScoringSignal(t *testing.T) {
 	}
 }
 
+// unreachableText is the phrase the Termination section uses to tell the judge
+// a game may never end -- which the rubric turns into a "degenerate" verdict.
+const unreachableText = "may be hard or impossible to reach"
+
+// TestKnockSheddingTerminationIsReachable: a shedding game with the knock
+// borrow ends when a player declares out, usually before any hand empties.
+// The shedding reachable-win signal only looked for an EMPTIED hand, so the
+// dossier said "No sampled game saw a player empty their hand ... The terminal
+// state may be hard or impossible to reach" directly under "100% of sampled
+// games ended with a winner".
+func TestKnockSheddingTerminationIsReachable(t *testing.T) {
+	g := knockBorrowGenome(t)
+	g.ID = "G01"
+	doc, err := BuildDossier(g)
+	if err != nil {
+		t.Fatalf("BuildDossier: %v", err)
+	}
+	sec := termSection(doc)
+	if !strings.Contains(sec, "**100%** of 150 sampled games ended with a winner") {
+		t.Fatalf("fixture drift: the knock-borrow game no longer completes 100%%:\n%s", sec)
+	}
+	if strings.Contains(sec, unreachableText) {
+		t.Errorf("termination section calls a 100%%-completing game possibly unreachable:\n%s", sec)
+	}
+	if !strings.Contains(sec, "IS reachable") {
+		t.Errorf("termination section does not state the win condition is reachable:\n%s", sec)
+	}
+	if !strings.Contains(sec, "declaring out") {
+		t.Errorf("termination section does not say HOW the games ended (declaring out):\n%s", sec)
+	}
+}
+
+// TestRenderTerminationNeverContradictsCompletion: for EVERY skeleton, a game
+// that was observed to end with a winner has a reachable terminal state, no
+// matter what the skeleton-specific probe saw; and a game that never ended
+// still gets the warning.
+func TestRenderTerminationNeverContradictsCompletion(t *testing.T) {
+	for _, sk := range genome.AllSkeletons() {
+		ended := renderTermination(TerminationInfo{
+			Skeleton: sk, GamesSampled: 150, CapStd: 100, CapExt: 400,
+			CompletionStdPct: 100, CompletionExtPct: 100, AnyCompleted: true,
+		})
+		if strings.Contains(ended, unreachableText) {
+			t.Errorf("%s: completed games rendered as possibly unreachable:\n%s", sk, ended)
+		}
+		if !strings.Contains(ended, "IS reachable") {
+			t.Errorf("%s: completed games not rendered as reachable:\n%s", sk, ended)
+		}
+
+		never := renderTermination(TerminationInfo{
+			Skeleton: sk, GamesSampled: 150, CapStd: 100, CapExt: 400,
+		})
+		if !strings.Contains(never, unreachableText) {
+			t.Errorf("%s: a game that never ended carries no unreachable warning:\n%s", sk, never)
+		}
+		if strings.Contains(never, "IS reachable") {
+			t.Errorf("%s: a game that never ended rendered as reachable:\n%s", sk, never)
+		}
+	}
+}
+
 func termSection(doc string) string {
 	idx := strings.Index(doc, "## Termination")
 	if idx < 0 {

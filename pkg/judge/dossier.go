@@ -99,11 +99,24 @@ func renderTermination(t TerminationInfo) string {
 	}
 
 	b.WriteString("\n**Win-condition reachable (by design):**\n\n")
+	// Each skeleton-specific probe looks for ONE way the game ends (a legal
+	// going-out move, an emptied hand, a completed round). A game can end
+	// another way -- a borrowed declare-out, a points-over-rounds total -- so a
+	// probe that saw nothing is NOT evidence the game cannot end. Any sampled
+	// game that ended with a winner (AnyCompleted) proves the terminal state
+	// reachable; the "may be hard or impossible" warning is reserved for games
+	// where no probe fired AND no sampled game ended. It used to follow from
+	// the probe alone, contradicting a 100% completion line two bullets above.
+	const reachedByCompletion = "- Sampled games ended with a winner under the rules above. The terminal state IS reachable by the rules.\n"
+	const neverEnded = "- No sampled game ended with a winner within either turn cap. The terminal state may be hard or impossible to reach -- weigh this against the rules.\n"
 	switch t.Skeleton {
 	case genome.Rummy:
-		if t.ReachableKnock {
+		switch {
+		case t.ReachableKnock:
 			b.WriteString(fmt.Sprintf("- A going-out move became LEGAL in sampled games (a player's leftover-card total dropped to the threshold), first becoming legal at a median of **turn %d**. The terminal state IS reachable by the rules.\n", t.MedianTurnsToKnockLegal))
-		} else {
+		case t.AnyCompleted:
+			b.WriteString(reachedByCompletion)
+		default:
 			b.WriteString("- No sampled game reached a state where a going-out move was legal within the cap. The terminal state may be hard or impossible to reach -- weigh this against the rules.\n")
 		}
 		if t.AnyKnockOrGin {
@@ -112,19 +125,39 @@ func renderTermination(t TerminationInfo) string {
 			b.WriteString("- No sampled game actually ended by going out within the cap (the automated players were slow to do so).\n")
 		}
 	case genome.Shedding:
-		if t.MedianTurnsToEmptyHand > 0 {
+		switch {
+		case t.MedianTurnsToEmptyHand > 0:
 			b.WriteString(fmt.Sprintf("- A player emptied their hand (the win condition) in completed sampled games, at a median of **turn %d**. The terminal state IS reachable by the rules.\n", t.MedianTurnsToEmptyHand))
-		} else {
+			if t.AnyDeclaredOut {
+				b.WriteString("- Some sampled games instead ended by a player declaring out before any hand was emptied.\n")
+			}
+		case t.AnyDeclaredOut:
+			b.WriteString("- No sampled game saw a player empty their hand, because the sampled games ended earlier by a player declaring out (the early-ending rule above). The terminal state IS reachable by the rules.\n")
+		case t.AnyCompleted:
+			b.WriteString(reachedByCompletion)
+		default:
 			b.WriteString("- No sampled game saw a player empty their hand within the cap. The terminal state may be hard or impossible to reach -- weigh this against the rules.\n")
 		}
 	case genome.TrickTaking:
-		if t.RoundsComplete {
+		switch {
+		case t.RoundsComplete:
 			b.WriteString("- Rounds reached completion in sampled games (all tricks were played out and scored). The terminal state IS reachable by the rules.\n")
-		} else {
+		case t.AnyCompleted:
+			b.WriteString(reachedByCompletion)
+		default:
 			b.WriteString("- No sampled round reached completion within the cap. The terminal state may be hard or impossible to reach -- weigh this against the rules.\n")
 		}
 	default:
-		b.WriteString("- (No skeleton-specific reachable-win signal available.)\n")
+		// No skeleton-specific probe (climbing, casino, vying): the observed
+		// game endings are the evidence.
+		if t.AnyCompleted {
+			b.WriteString(reachedByCompletion)
+			if t.AnyDeclaredOut {
+				b.WriteString("- Some sampled games ended by a player declaring out (the early-ending rule above).\n")
+			}
+		} else {
+			b.WriteString(neverEnded)
+		}
 	}
 
 	yn := func(v bool) string {
