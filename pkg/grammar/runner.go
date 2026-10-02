@@ -478,12 +478,16 @@ func (rr Runner) Apply(gs *sim.GameState, m sim.Move) {
 			for _, c := range m.Cards { // one card, or a same-rank set under ModRunPlay
 				gs.Hands[p] = removeCard(gs.Hands[p], c)
 			}
+			// The beaten combination goes to the discard pile -- overwriting it
+			// silently dropped cards from the game (52 -> 51 from turn 2 on).
+			gs.Discard = append(gs.Discard, gs.TrickCards...)
 			gs.TrickCards = append([]sim.Card(nil), m.Cards...) // new combination to beat
 			gs.TrickLeader = p
 			gs.PassCount = 0
 		case sim.MovePass:
 			gs.PassCount++
 			if gs.PassCount >= gs.NumPlayers-1 { // all others passed: table clears
+				gs.Discard = append(gs.Discard, gs.TrickCards...) // cleared cards are discarded, not lost
 				gs.TrickCards = nil
 				gs.PassCount = 0
 			}
@@ -498,6 +502,7 @@ func (rr Runner) Apply(gs *sim.GameState, m sim.Move) {
 				gs.Discard = gs.Discard[:len(gs.Discard)-1]
 			}
 			gs.Scores[p] += cardValue(c.Rank)
+			gs.Tableau[p] = append(gs.Tableau[p], c) // the taken card is KEPT in the taker's pile, not dropped
 			rr.refillMarket(gs)
 			if gs.Scores[p] > s.Target {
 				gs.Folded[p] = true // bust
@@ -507,6 +512,7 @@ func (rr Runner) Apply(gs *sim.GameState, m sim.Move) {
 			gs.Deck = rem
 			if len(drawn) > 0 {
 				gs.Scores[p] += cardValue(drawn[0].Rank)
+				gs.Tableau[p] = append(gs.Tableau[p], drawn[0])
 				if gs.Scores[p] > s.Target {
 					gs.Folded[p] = true
 				}
