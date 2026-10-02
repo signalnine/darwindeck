@@ -244,7 +244,17 @@ func applyMeldBonus(state *sim.GameState, g *genome.Genome, event sim.Event) {
 			bonus += runBonus(run)
 		}
 
-		state.Scores[i] += bonus
+		// Bank the meld in the WINNING direction. Every host but one picks the
+		// highest state.Scores; a trick-taking host scored Hearts-style
+		// (trick_scoring=avoidance, genome.LowestScoreWins) picks the LOWEST,
+		// where adding the "bonus" was a penalty -- capturing three 5s pushed a
+		// player toward last place while the rulebook called it a bonus. There
+		// the meld points come OFF the total (the rulebook says so).
+		if g.LowestScoreWins() {
+			state.Scores[i] -= bonus
+		} else {
+			state.Scores[i] += bonus
+		}
 	}
 }
 
@@ -280,6 +290,15 @@ func applyDrawPenalty(state *sim.GameState, g *genome.Genome, event sim.Event) {
 			high = true
 			break
 		}
+	}
+	// Going out is exempt. The hook runs AFTER the play is applied, so without
+	// this a player who went out on a face card was handed a fresh card: the
+	// climbing race ("first to empty their hand wins") did not end, and a rummy
+	// gin discard left a deadwood card in the gin hand. No draw when the play
+	// emptied the hand, or when it already ended the round (rummy sets
+	// Phase=PhaseEnd on a knock/gin before hooks fire).
+	if len(state.Hands[event.PlayerID]) == 0 || state.Phase == sim.PhaseEnd {
+		return
 	}
 	if high && len(state.Deck) > 0 {
 		// Cap runaway growth: rummy nets +1 card per penalized discard, and

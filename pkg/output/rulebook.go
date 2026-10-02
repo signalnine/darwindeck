@@ -622,15 +622,52 @@ func borrowedDescription(g *genome.Genome, bm genome.BorrowedMechanic) string {
 		// applyTrickScoring: at EventRoundEnd, the player with the most
 		// captured cards (tableau captures + laid-down melds) gains a bonus
 		// equal to that count; ties split it evenly.
-		return "**Capture bonus:** at the end of each round, whoever has captured the most cards (from won tricks and laid-down melds) scores bonus points equal to the number of cards they captured; players tied for the most split the bonus evenly"
+		//
+		// What "captured" means is host-specific, and the text must name what
+		// THIS game has: a shedding host has no tricks and no melds -- the
+		// runner tallies each player's SHED cards for the hook
+		// (SheddingTrickScored); a rummy host has only laid-down melds.
+		switch g.Skeleton {
+		case genome.Shedding:
+			return "**Capture bonus:** at the end of each round, whoever has shed the most cards that round (every card they played to the discard pile) scores bonus points equal to the number of cards they shed; players tied for the most split the bonus evenly (rounded down)"
+		case genome.Rummy:
+			return "**Capture bonus:** at the end of the round, whoever has laid down the most cards in melds scores bonus points equal to the number of cards they laid down; players tied for the most split the bonus evenly (rounded down)"
+		}
+		return "**Capture bonus:** at the end of each round, whoever has captured the most cards (from won tricks and laid-down melds) scores bonus points equal to the number of cards they captured; players tied for the most split the bonus evenly (rounded down)"
 	case genome.MechMeldBonus:
 		// applyMeldBonus + runBonus: scored at EventRoundEnd over hand +
 		// captured cards. Sets: 3+ same rank = 5/card, pair = 2/card. Runs:
 		// 3+ consecutive same-suit = 3/card, 2-card run = 1/card.
-		return "**Meld bonus:** at the end of each round, score points for card combinations across your hand and the cards you have captured — a set of 3 or more of the same rank scores 5 points per card (a plain pair scores 2 per card), and a run of 3 or more consecutive cards in one suit scores 3 points per card (a 2-card run scores 1 per card)"
+		//
+		// Which cards count is host-specific (the hook reads hand + tableau, but
+		// a shedding tableau is skipped, a trick/casino hand is empty at round
+		// end, and a vying fold is mucked). On a lowest-score-wins host
+		// (genome.LowestScoreWins) the hook SUBTRACTS the meld points -- say so,
+		// or "bonus" next to "Lowest score wins" reads as a penalty.
+		where := "across your hand and the cards you have captured"
+		switch g.Skeleton {
+		case genome.Shedding:
+			where = "among the cards still in your hand"
+		case genome.TrickTaking, genome.Casino:
+			where = "among the cards you have captured"
+		case genome.Vying:
+			where = "in the hand you show (a folded hand scores nothing)"
+		}
+		text := fmt.Sprintf("**Meld bonus:** at the end of each round, score points for card combinations %s — a set of 3 or more of the same rank scores 5 points per card (a plain pair scores 2 per card), and a run of 3 or more consecutive cards in one suit scores 3 points per card (a 2-card run scores 1 per card)", where)
+		if g.LowestScoreWins() {
+			text += ". The lowest score wins this game, so these meld points are subtracted from your score -- melds help you"
+		}
+		return text
 	case genome.MechDrawPenalty:
 		// applyDrawPenalty: after playing a Jack-or-higher, draw 1 extra card.
-		return "**Draw penalty:** whenever you play a face card (Jack or higher), you must immediately draw 1 extra card from the deck"
+		// One draw per play however many face cards it contains; no draw when
+		// the deck is empty, and none when the play goes out (empties the hand
+		// or ends the round). On a rummy host the only "play" is the discard.
+		verb := "play a face card (Jack or higher), alone or in a combination"
+		if g.Skeleton == genome.Rummy {
+			verb = "discard a face card (Jack or higher)"
+		}
+		return fmt.Sprintf("**Draw penalty:** whenever you %s, you must immediately draw 1 extra card from the deck (nothing is drawn if the deck is empty). Going out is exempt: a play that empties your hand or ends the round draws nothing", verb)
 	case genome.MechAvoidance:
 		// applyAvoidance: at round end, subtract the Card Point Values of
 		// penalty cards left in hand + captures (liveness guarantees CardPoints).
@@ -640,7 +677,7 @@ func borrowedDescription(g *genome.Genome, bm genome.BorrowedMechanic) string {
 		// runs of 2+ cards (all your cards of that rank / the full consecutive
 		// stretch) -- sub-groups are not offered, so the text must not imply
 		// you may hold part of a group back.
-		return "**Combination plays:** instead of one card, you may discard all your cards of one rank together (2 or more, a set), or a full stretch of 2 or more consecutive cards in one suit (a run), in a single turn — as long as one of those cards legally matches the discard top. The whole group goes at once, so it pays to build up runs and dump them in one burst"
+		return "**Combination plays:** instead of one card, you may discard all your cards of one rank together (2 or more, a set), or a full stretch of 2 or more consecutive cards in one suit (a run), in a single turn — as long as one of those cards legally matches the discard top. The whole group goes at once, so it pays to build up runs and dump them in one burst. The group's last card becomes the new top of the discard pile -- the highest card of a run, or for a set the card of that rank you took into your hand most recently -- and only that card's special effect (if any) applies"
 	case genome.MechKnock:
 		// Runner: the knock is offered at genome.KnockHandThreshold cards or
 		// fewer (shedding + climbing GenerateMoves).

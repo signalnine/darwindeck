@@ -83,6 +83,17 @@ func (g *Genome) LiveLeadRestriction() bool {
 		g.TrumpRule != TrumpNone
 }
 
+// LowestScoreWins reports whether g's winner is the player with the LOWEST
+// state.Scores: only a trick-taking host scored Hearts-style
+// (trick_scoring=avoidance; see the trick-taking runner's findWinner). Every
+// other host/variant picks the highest. Borrowed scoring that is meant to
+// REWARD a player (the meld bonus) must bank in the winning direction, and the
+// rulebook words it accordingly.
+func (g *Genome) LowestScoreWins() bool {
+	return g.Skeleton == TrickTaking && g.TrickTaking != nil &&
+		g.TrickTaking.TrickScoring == ScoreAvoidance
+}
+
 // VyingWorstCaseCommitment returns the most chips one player can lose over a
 // whole vying game: on every deal, funding the capped betting round
 // (MinBet*(MaxRaises+1): the blind plus MaxRaises raises) and losing the pot,

@@ -422,7 +422,7 @@ func TestBorrowedRulesDescribeConcreteMechanics(t *testing.T) {
 		// rulebook silently (the gap a review caught: partial magnitudes only).
 		{genome.MechMeldBonus, []string{"Meld bonus", "5 points per card", "2 per card", "3 points per card", "1 per card", "run of 3 or more"}},
 		{genome.MechAvoidance, []string{"Penalty cards", "lose points equal to", "Card Point Values"}},
-		{genome.MechTrickScoring, []string{"Capture bonus", "captured the most cards", "equal to the number of cards", "split the bonus evenly"}},
+		{genome.MechTrickScoring, []string{"Capture bonus", "laid down the most cards in melds", "equal to the number of cards", "split the bonus evenly"}},
 		{genome.MechDrawPenalty, []string{"Draw penalty", "face card (Jack or higher)", "draw 1 extra card"}},
 		// Anchors match the maximal-group semantics (findComboPlays offers ALL
 		// cards of a rank / the full consecutive stretch, never a sub-group).
