@@ -3,8 +3,10 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/darwindeck/darwindeck/pkg/judge"
 )
@@ -74,25 +76,33 @@ func printJudgeUsage() {
 	fmt.Println(`Usage: darwindeck judge <subcommand> [flags]
 
 Subcommands:
-  emit <input> --out <dir> [--answer-key <path>]
+  emit <input> --out <dir> [--answer-key <path>] [--force]
       Build BLIND dossiers (one per genome.json found recursively under
       <input>) into <dir>, plus manifest.json and prompt.md. Writes a PRIVATE
       answer-key.json OUTSIDE <dir> (default: <dir>/../answer-key.json).
+      Dossier ids (G01..) are assigned in a pseudo-random order, not in
+      input/rank order: the answer key (path, composition per id) is the only
+      id -> genome mapping. An existing answer key is never overwritten
+      without --force; give each dossier set its own --answer-key.
 
   rank <dossier-dir> <verdicts.json> [--out <report.md>]
       Ingest verdicts, aggregate majority-of-3 per id, re-rank by judged
       quality, flag rediscoveries, and write judged-report.md + judged.json.
 
   backfill -table <verdicts.json> -dir <genome-dir> -out <dossier-dir>
+           [-answer-key <path>] [-force]
       Emit blind dossiers for every composition present under <genome-dir>
       that is NOT yet in <verdicts.json>, so the composition-keyed table can be
-      completed and the in-loop judge becomes a zero-cost lookup.`)
+      completed and the in-loop judge becomes a zero-cost lookup. The answer
+      key (default: <dossier-dir>/../answer-key.json) maps each id to its
+      composition; same overwrite rule as emit.`)
 }
 
 func cmdJudgeEmit(args []string) {
 	fs := flag.NewFlagSet("judge emit", flag.ExitOnError)
 	out := fs.String("out", "", "output dossier directory (required)")
-	answerKey := fs.String("answer-key", "", "private answer-key.json path (default: <out>/../answer-key.json)")
+	answerKey := fs.String("answer-key", "", "private answer-key.json path, outside <out> (default: <out>/../answer-key.json)")
+	force := fs.Bool("force", false, "overwrite an existing answer key (it maps the ids of an earlier dossier set)")
 	// Parse with the leading positional(s) hoisted out, so flags may appear
 	// either before OR after the <input> argument (Go's flag package otherwise
 	// stops at the first positional).
@@ -100,39 +110,50 @@ func cmdJudgeEmit(args []string) {
 	fs.Parse(flagArgs)
 
 	if len(positional) == 0 || *out == "" {
-		fmt.Fprintln(os.Stderr, "usage: darwindeck judge emit <input> --out <dir> [--answer-key <path>]")
+		fmt.Fprintln(os.Stderr, "usage: darwindeck judge emit <input> --out <dir> [--answer-key <path>] [--force]")
 		os.Exit(1)
 	}
-	input := positional[0]
-
-	res, err := judge.Emit(input, *out, nil)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "judge emit error: %v\n", err)
+	if err := runJudgeEmit(positional[0], *out, *answerKey, *force, os.Stdout); err != nil {
+		fmt.Fprintf(os.Stderr, "judge emit: %v\n", err)
 		os.Exit(1)
 	}
+}
 
-	keyPath := *answerKey
+// runJudgeEmit is `judge emit` minus flag parsing and the process exit, so its
+// failure modes are testable.
+//
+// The answer-key path is vetted BEFORE anything is emitted. The key used to be
+// written last with no check at all: a second emit sharing the default
+// <out>/../answer-key.json silently replaced the first set's key (ids restart
+// at G01 every emit, so that key was the only mapping of dossiers possibly
+// already out for judging), and `--out .` put the key inside the blind dir.
+// Refusing only after the dossiers were swept and renumbered would leave the
+// dossier dir describing a different set than the surviving key.
+func runJudgeEmit(input, out, answerKey string, force bool, stdout io.Writer) error {
+	keyPath := answerKey
 	if keyPath == "" {
-		// Default: sibling of the dossier dir, so it stays OUT of the blind set.
-		keyPath = filepath.Join(filepath.Dir(filepath.Clean(*out)), "answer-key.json")
+		// Default: the parent of the dossier dir, so it stays OUT of the blind set.
+		keyPath = judge.DefaultAnswerKeyPath(out)
+	}
+	if err := judge.CheckAnswerKeyPath(keyPath, out, force); err != nil {
+		return err
+	}
+
+	res, err := judge.Emit(input, out, nil)
+	if err != nil {
+		return err
 	}
 	if err := judge.WriteAnswerKey(keyPath, res.AnswerKey); err != nil {
-		fmt.Fprintf(os.Stderr, "judge emit: failed to write answer key: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to write answer key: %w", err)
 	}
 
-	fmt.Printf("Emitted %d dossiers to %s\n", len(res.IDs), *out)
-	fmt.Printf("Manifest: %s\n", filepath.Join(*out, "manifest.json"))
-	fmt.Printf("Prompt:   %s\n", filepath.Join(*out, "prompt.md"))
-	fmt.Printf("Answer key (PRIVATE, kept out of the dossier dir): %s\n", keyPath)
-	fmt.Printf("IDs: ")
-	for i, id := range res.IDs {
-		if i > 0 {
-			fmt.Printf(" ")
-		}
-		fmt.Printf("%s", id)
-	}
-	fmt.Println()
+	fmt.Fprintf(stdout, "Emitted %d dossiers to %s\n", len(res.IDs), out)
+	fmt.Fprintf(stdout, "Manifest: %s\n", filepath.Join(out, "manifest.json"))
+	fmt.Fprintf(stdout, "Prompt:   %s\n", filepath.Join(out, "prompt.md"))
+	fmt.Fprintf(stdout, "Answer key (PRIVATE, kept out of the dossier dir): %s\n", keyPath)
+	fmt.Fprintf(stdout, "IDs: %s\n", strings.Join(res.IDs, " "))
+	fmt.Fprintf(stdout, "Ids are assigned in a pseudo-random order, NOT in input/rank order: map an id to its genome through the answer key (path, composition).\n")
+	return nil
 }
 
 func cmdJudgeRank(args []string) {
