@@ -20,7 +20,9 @@ var CalibrationSeeds = []uint64{11, 22, 33, 44, 55, 66, 77, 88, 99, 110}
 const tier1Games = 10
 
 // GamesPerEvaluation returns the number of simulated games one Evaluate call
-// played for the given result: the Tier 1 quick batch always runs; the
+// played for the given result: none when Tier 0 rejected the genome (static
+// validation, or no runner for the skeleton -- both exit before any
+// simulation); otherwise the Tier 1 quick batch always runs; the
 // Tier 2 random batch runs when Tier 1 passes; the greedy batch is skipped
 // when the degeneracy veto fires on the RANDOM batch (Task 28 round 2) but
 // HAS run when a greedy-batch veto fired (round 3 -- Degeneracy.GreedyRan
@@ -29,6 +31,9 @@ const tier1Games = 10
 // DEFAULT MODE ONLY (Task 20): EvaluateWithMCTS plays tier2MCTSGames more
 // when Tier 1 passes; no throughput-accounting caller uses that path.
 func GamesPerEvaluation(res EvaluationResult) int {
+	if len(res.Tier0Errors) > 0 {
+		return 0
+	}
 	games := tier1Games
 	if res.Tier1.Passed {
 		games += tier2RandomGames

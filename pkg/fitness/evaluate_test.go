@@ -128,3 +128,60 @@ func TestEvaluateWithMCTSRespectsEarlyTiers(t *testing.T) {
 			res.Valid, res.Tier0Errors)
 	}
 }
+
+// TestGamesPerEvaluationTier0RejectIsZero (2026-10 bughunt): a genome that
+// Tier 0 rejects never reaches RunTier1 -- evaluate() returns before any
+// simulation -- so it played ZERO games. GamesPerEvaluation used to charge it
+// the 10 Tier 1 games unconditionally, overstating throughput for any caller
+// that accounts over a population containing static rejects.
+func TestGamesPerEvaluationTier0RejectIsZero(t *testing.T) {
+	g := seeds.CrazyEights()
+	g.HandSize = 40 // 2 * 40 cards from a 52-card deck: Tier 0 reject
+	res := Evaluate(g, 1)
+	if len(res.Tier0Errors) == 0 {
+		t.Fatal("fixture must be Tier-0 invalid")
+	}
+	if got := GamesPerEvaluation(res); got != 0 {
+		t.Errorf("Tier-0 reject played no games, GamesPerEvaluation = %d, want 0", got)
+	}
+
+	// The "no runner for skeleton type" exit is reported through Tier0Errors
+	// too and is equally simulation-free.
+	if got := GamesPerEvaluation(EvaluationResult{Tier0Errors: []string{"no runner for skeleton type"}}); got != 0 {
+		t.Errorf("runner-less genome played no games, GamesPerEvaluation = %d, want 0", got)
+	}
+}
+
+// TestGamesPerEvaluationCountsByTier pins the count for every exit the
+// pipeline has past Tier 0, so the Tier-0 case above cannot regress the rest:
+// Tier 1 always costs tier1Games, the random batch runs iff Tier 1 passed,
+// and the greedy batch runs unless a RANDOM-batch veto skipped it.
+func TestGamesPerEvaluationCountsByTier(t *testing.T) {
+	cases := []struct {
+		name string
+		res  EvaluationResult
+		want int
+	}{
+		{"tier-1 kill", EvaluationResult{Tier1: Tier1Result{Passed: false, Reason: "timeouts"}}, tier1Games},
+		{"random-batch veto (greedy skipped)",
+			EvaluationResult{Tier1: Tier1Result{Passed: true}, DegenerateReason: "non_agentic"},
+			tier1Games + tier2RandomGames},
+		{"greedy-batch veto (greedy ran)",
+			EvaluationResult{Tier1: Tier1Result{Passed: true}, DegenerateReason: "greedy_timeout",
+				Degeneracy: DegeneracyStats{GreedyRan: true}},
+			tier1Games + tier2RandomGames + tier2GreedyGames},
+		{"valid",
+			EvaluationResult{Tier1: Tier1Result{Passed: true}, Valid: true, Degeneracy: DegeneracyStats{GreedyRan: true}},
+			tier1Games + tier2RandomGames + tier2GreedyGames},
+	}
+	for _, c := range cases {
+		if got := GamesPerEvaluation(c.res); got != c.want {
+			t.Errorf("%s: GamesPerEvaluation = %d, want %d", c.name, got, c.want)
+		}
+	}
+
+	// And against the real pipeline: a healthy classic plays all three batches.
+	if got, want := GamesPerEvaluation(Evaluate(seeds.Whist(), 11)), tier1Games+tier2RandomGames+tier2GreedyGames; got != want {
+		t.Errorf("whist seed 11: GamesPerEvaluation = %d, want %d", got, want)
+	}
+}
