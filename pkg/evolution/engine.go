@@ -555,6 +555,7 @@ func (e *Engine) Select() []*Individual {
 			child := CrossoverWith(parent.Genome, parent2.Genome, e.rng, e.Config.CrossSkeleton)
 			if child != nil {
 				child = e.mutate(child)
+				child.ID = offspringID(e.Generation+1, i)
 				nextGen[i] = &Individual{Genome: child}
 				continue
 			}
@@ -562,6 +563,7 @@ func (e *Engine) Select() []*Individual {
 
 		// Mutation only
 		child := e.mutate(parent.Genome)
+		child.ID = offspringID(e.Generation+1, i)
 		nextGen[i] = &Individual{Genome: child}
 	}
 
@@ -569,6 +571,19 @@ func (e *Engine) Select() []*Individual {
 	e.dedup(nextGen)
 
 	return nextGen
+}
+
+// offspringID is the genome ID for the individual born into population slot
+// `slot` of generation `gen`. (birth generation, slot) is unique within a run
+// by construction: each slot receives at most one new genome per generation
+// (a dedup replacement overwrites the slot's own offspring). The engines used
+// to keep MutateWith's "gen<G>_<rng.IntN(100000)>", which let two DIFFERENT
+// genomes born in the same generation share an ID (12 colliding pairs over 10
+// generations at population 500), and ID-keyed consumers then dropped one of
+// them. Deterministic in (generation, slot), so it is independent of worker
+// count and survives a checkpoint resume unchanged.
+func offspringID(gen, slot int) string {
+	return fmt.Sprintf("gen%d_%d", gen, slot)
 }
 
 // mutate applies MutateWith threaded with this engine's cross-skeleton flag,
@@ -603,6 +618,8 @@ func (e *Engine) dedup(pop []*Individual) {
 			parent := e.dedupParent(pop, top, seen, hash, i)
 			if parent != nil {
 				child := e.mutate(parent)
+				// pop is the NEXT generation; slot i now holds a new genome.
+				child.ID = offspringID(e.Generation+1, i)
 				pop[i].Genome = child
 				pop[i].Valid = false
 				// The genome changed: prior evaluations are meaningless --
@@ -705,6 +722,11 @@ func outputHash(g *genome.Genome) string {
 	}
 	return genomeHash(c)
 }
+
+// OutputHash exposes the output-ranking dedup key to publication code outside
+// this package (the evolve command's sortAndTrim): two genomes with equal
+// OutputHash are the same published game, whatever their IDs.
+func OutputHash(g *genome.Genome) string { return outputHash(g) }
 
 func sortedBorrowed(in []genome.BorrowedMechanic) []genome.BorrowedMechanic {
 	if len(in) == 0 {

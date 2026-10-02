@@ -100,6 +100,13 @@ func (e *MAPElitesEngine) seedArchives() {
 
 // generation produces PopulationSize offspring and attempts archive insertion.
 func (e *MAPElitesEngine) generation(gen int) {
+	e.evaluateAndInsert(e.breed(gen), gen+1)
+}
+
+// breed builds generation gen's PopulationSize offspring from the archives
+// (sequentially: the RNG is not goroutine-safe and the draw order is what
+// makes a seeded run reproducible).
+func (e *MAPElitesEngine) breed(gen int) []*genome.Genome {
 	var offspring []*genome.Genome
 
 	for i := 0; i < e.Config.PopulationSize; i++ {
@@ -109,7 +116,7 @@ func (e *MAPElitesEngine) generation(gen int) {
 			// No occupants yet, mutate a seed
 			seed := e.Seeds[e.rng.IntN(len(e.Seeds))]
 			child := e.mutate(seed)
-			child.ID = fmt.Sprintf("gen%d_%d", gen+1, e.rng.IntN(100000))
+			child.ID = offspringID(gen+1, i)
 			child.Generation = gen + 1
 			offspring = append(offspring, child)
 			continue
@@ -132,12 +139,12 @@ func (e *MAPElitesEngine) generation(gen int) {
 			child = e.mutate(child)
 		}
 
-		child.ID = fmt.Sprintf("gen%d_%d", gen+1, e.rng.IntN(100000))
+		child.ID = offspringID(gen+1, i)
 		child.Generation = gen + 1
 		offspring = append(offspring, child)
 	}
 
-	e.evaluateAndInsert(offspring, gen+1)
+	return offspring
 }
 
 // evaluateAndInsert evaluates genomes in parallel and inserts qualifying ones into archives.

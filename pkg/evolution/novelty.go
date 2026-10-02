@@ -719,7 +719,7 @@ func (e *NoveltyEngine) selectNext() []*NoveltyIndividual {
 			child = e.mutate(child)
 		}
 
-		child.ID = fmt.Sprintf("gen%d_%d", e.Generation+1, e.rng.IntN(100000))
+		child.ID = offspringID(e.Generation+1, i)
 		child.Generation = e.Generation + 1
 		nextGen[i] = &NoveltyIndividual{
 			Individual: Individual{Genome: child},
