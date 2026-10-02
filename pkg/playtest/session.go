@@ -29,6 +29,17 @@ type Session struct {
 	// pipeline uses (audit Task 24). They run after every applied move so a
 	// human plays exactly the game fitness evaluated.
 	Hooks []sim.HookFunc
+	// Out is where the session prints (nil = os.Stdout). Tests point it at a
+	// buffer to assert on what the player is shown.
+	Out io.Writer
+}
+
+// out returns the session's output stream.
+func (s *Session) out() io.Writer {
+	if s.Out != nil {
+		return s.Out
+	}
+	return os.Stdout
 }
 
 // Outcome summarizes a finished session for ratings capture (audit Task 24).
@@ -94,8 +105,8 @@ func (s *Session) Run() Outcome {
 	s.State = s.Runner.Setup(s.Genome, s.RNG)
 	maxTurns := s.Genome.MaxTurns()
 
-	fmt.Printf("\n=== %s ===\n", gameName(s.Genome))
-	fmt.Printf("Skeleton: %s | Players: %d | Hand: %d cards\n\n",
+	fmt.Fprintf(s.out(), "\n=== %s ===\n", gameName(s.Genome))
+	fmt.Fprintf(s.out(), "Skeleton: %s | Players: %d | Hand: %d cards\n\n",
 		s.Genome.Skeleton, s.Genome.Players, s.Genome.HandSize)
 
 	for {
@@ -111,13 +122,22 @@ func (s *Session) Run() Outcome {
 			return Outcome{Winner: winner, Turns: s.State.Turn}
 		}
 		if s.State.Turn >= maxTurns {
-			fmt.Printf("\nGame ended at max turns (%d).\n", maxTurns)
+			fmt.Fprintf(s.out(), "\nGame ended at max turns (%d).\n", maxTurns)
+			return Outcome{Winner: -1, Turns: s.State.Turn}
+		}
+
+		// A blocked shedding game (deck exhausted, nobody can play) is a draw
+		// by the rulebook. The runner itself only ever passes there until the
+		// turn cap (see shedding.Runner.Blocked for why it must not name a
+		// winner); a human should not have to sit through that.
+		if bd, ok := s.Runner.(blockedDetector); ok && bd.Blocked(s.State, s.Genome) {
+			fmt.Fprintln(s.out(), "\nThe deck is exhausted and no player can play: the game is blocked and ends in a draw.")
 			return Outcome{Winner: -1, Turns: s.State.Turn}
 		}
 
 		moves := s.Runner.GenerateMoves(s.State, s.Genome)
 		if len(moves) == 0 {
-			fmt.Println("No legal moves — game stuck!")
+			fmt.Fprintln(s.out(), "No legal moves — game stuck!")
 			return Outcome{Winner: -1, Turns: s.State.Turn, Stuck: true}
 		}
 
@@ -144,12 +164,12 @@ func (s *Session) afterMove(events []sim.Event) {
 }
 
 func (s *Session) humanTurn(moves []sim.Move) {
-	fmt.Printf("\n--- Turn %d (You) ---\n", s.State.Turn+1)
+	fmt.Fprintf(s.out(), "\n--- Turn %d (You) ---\n", s.State.Turn+1)
 	s.printState()
 
-	fmt.Println("\nLegal moves:")
+	fmt.Fprintln(s.out(), "\nLegal moves:")
 	for i, m := range moves {
-		fmt.Printf("  %d) %s\n", i+1, describeMoveShort(m))
+		fmt.Fprintf(s.out(), "  %d) %s\n", i+1, describeMoveShort(m))
 	}
 
 	choice := s.getChoice(len(moves))
@@ -158,7 +178,7 @@ func (s *Session) humanTurn(moves []sim.Move) {
 	s.afterMove(events)
 	for _, e := range events {
 		if e.Detail != "" {
-			fmt.Printf("  > %s\n", describeEvent(e))
+			fmt.Fprintf(s.out(), "  > %s\n", describeEvent(e))
 		}
 	}
 }
@@ -169,107 +189,220 @@ func (s *Session) aiTurn(moves []sim.Move) int {
 	events := s.Runner.ApplyMove(s.State, move, s.Genome)
 	s.afterMove(events)
 
-	fmt.Printf("  Player %d: %s", actor, describeMoveShort(move))
+	fmt.Fprintf(s.out(), "  Player %d: %s", actor, describeMoveShort(move))
 	for _, e := range events {
 		if e.Type == sim.EventSpecialTriggered {
-			fmt.Printf(" [%s]", e.Detail)
+			fmt.Fprintf(s.out(), " [%s]", e.Detail)
 		}
 	}
-	fmt.Println()
+	fmt.Fprintln(s.out())
 	return actor
 }
 
+// blockedDetector is implemented by runners that can recognize a permanently
+// blocked position (the shedding runner's all-pass deadlock).
+type blockedDetector interface {
+	Blocked(state *sim.GameState, g *genome.Genome) bool
+}
+
+var suitLongNames = [4]string{"Clubs", "Diamonds", "Hearts", "Spades"}
+
+// seatName labels a seat from the human's point of view.
+func (s *Session) seatName(p int) string {
+	if p == s.HumanID {
+		return "You"
+	}
+	return fmt.Sprintf("Player %d", p)
+}
+
+// capturesShown reports whether per-player captured piles (state.Tableau) are
+// part of this game's public state: trick-taking tricks and casino captures.
+// (A shedding tableau is only the trick-scoring borrow's shed tally.)
+func (s *Session) capturesShown() bool {
+	return s.Genome.Skeleton == genome.TrickTaking || s.Genome.Skeleton == genome.Casino
+}
+
+func (s *Session) capturedCount(p int) int {
+	if p < len(s.State.Tableau) {
+		return len(s.State.Tableau[p])
+	}
+	return 0
+}
+
+// printState shows the human everything public that bears on their move. Each
+// skeleton keeps different things on the table, so the middle block is
+// per-skeleton: the trump suit and the trick in progress (trick-taking), the
+// combination to beat (climbing), the melds (rummy), the table and captured
+// piles (casino), the pot (vying).
 func (s *Session) printState() {
-	fmt.Printf("Your hand: %s\n", formatCards(s.State.Hands[s.HumanID]))
-
-	if s.State.TopCard != nil {
-		fmt.Printf("Top card: %s\n", s.State.TopCard)
+	st, w := s.State, s.out()
+	fmt.Fprintf(w, "Your hand: %s\n", formatCards(st.Hands[s.HumanID]))
+	if st.MaxRound > 1 {
+		fmt.Fprintf(w, "Round %d of %d\n", st.Round+1, st.MaxRound)
 	}
 
-	// Show the shared pile's actual cards, not just a count: for casino this is the
-	// face-up TABLE you capture from (you cannot choose a capture without seeing
-	// it); elsewhere it is the discard pile. Cap very long piles to the recent tail.
-	pileLabel := "Discard"
-	if s.Genome.Skeleton == genome.Casino {
-		pileLabel = "Table"
-	}
-	switch disc, n := s.State.Discard, len(s.State.Discard); {
-	case n == 0:
-		fmt.Printf("Deck: %d cards | %s: (empty)\n", len(s.State.Deck), pileLabel)
-	case n <= 16:
-		fmt.Printf("Deck: %d cards | %s: %s\n", len(s.State.Deck), pileLabel, formatCards(disc))
-	default:
-		fmt.Printf("Deck: %d cards | %s: %d cards (recent: %s)\n",
-			len(s.State.Deck), pileLabel, n, formatCards(disc[n-16:]))
-	}
+	switch s.Genome.Skeleton {
+	case genome.TrickTaking:
+		switch {
+		case st.TrumpSuit >= 0 && st.TrumpSuit < len(suitLongNames):
+			fmt.Fprintf(w, "Trump: %s\n", suitLongNames[st.TrumpSuit])
+		case st.TrumpSuit == -2:
+			fmt.Fprintln(w, "Trump: not set yet (the first suit led becomes trump)")
+		default:
+			fmt.Fprintln(w, "Trump: none")
+		}
+		if len(st.TrickCards) == 0 {
+			fmt.Fprintln(w, "Current trick: (you lead)")
+		} else {
+			parts := make([]string, len(st.TrickCards))
+			for i, c := range st.TrickCards {
+				who := "?"
+				if i < len(st.TrickPlayers) {
+					who = s.seatName(st.TrickPlayers[i])
+				}
+				parts[i] = fmt.Sprintf("%s: %s", who, c)
+			}
+			fmt.Fprintf(w, "Current trick: %s\n", strings.Join(parts, ", "))
+		}
 
-	// Vying: the betting state is the whole decision surface -- without it a
-	// human cannot price a call or a fold. Scores hold the chip stacks there.
-	if s.Genome.Skeleton == genome.Vying {
-		owed := s.State.CurrentBet
-		if s.HumanID < len(s.State.Committed) {
-			owed = s.State.CurrentBet - s.State.Committed[s.HumanID]
+	case genome.Climbing:
+		if len(st.TrickCards) == 0 {
+			fmt.Fprintln(w, "Table is clear: you lead any combination")
+		} else {
+			passes := "no passes since"
+			if st.PassCount == 1 {
+				passes = "1 pass since"
+			} else if st.PassCount > 1 {
+				passes = fmt.Sprintf("%d passes since", st.PassCount)
+			}
+			fmt.Fprintf(w, "To beat: %s (played by %s; %s)\n", formatCards(st.TrickCards), s.seatName(st.TrickLeader), passes)
+		}
+		if len(st.Deck) > 0 {
+			fmt.Fprintf(w, "Deck: %d cards\n", len(st.Deck))
+		}
+
+	case genome.Vying:
+		// The betting state is the whole decision surface -- without it a
+		// human cannot price a call or a fold. Scores hold the chip stacks.
+		owed := st.CurrentBet
+		if s.HumanID < len(st.Committed) {
+			owed = st.CurrentBet - st.Committed[s.HumanID]
 			if owed < 0 {
 				owed = 0
 			}
 		}
-		fmt.Printf("Pot: %d | Current bet: %d | To call: %d | Your chips: %d\n",
-			s.State.Pot, s.State.CurrentBet, owed, s.State.Scores[s.HumanID])
+		fmt.Fprintf(w, "Pot: %d | Current bet: %d | To call: %d | Your chips: %d\n",
+			st.Pot, st.CurrentBet, owed, st.Scores[s.HumanID])
+
+	default: // shedding, rummy, casino: a deck and a shared face-up pile
+		if st.TopCard != nil {
+			fmt.Fprintf(w, "Top card: %s\n", st.TopCard)
+		}
+		// Show the shared pile's actual cards, not just a count: for casino
+		// this is the face-up TABLE you capture from (you cannot choose a
+		// capture without seeing it); elsewhere it is the discard pile. Cap
+		// very long piles to the recent tail.
+		pileLabel := "Discard"
+		if s.Genome.Skeleton == genome.Casino {
+			pileLabel = "Table"
+		}
+		switch disc, n := st.Discard, len(st.Discard); {
+		case n == 0:
+			fmt.Fprintf(w, "Deck: %d cards | %s: (empty)\n", len(st.Deck), pileLabel)
+		case n <= 16:
+			fmt.Fprintf(w, "Deck: %d cards | %s: %s\n", len(st.Deck), pileLabel, formatCards(disc))
+		default:
+			fmt.Fprintf(w, "Deck: %d cards | %s: %d cards (recent: %s)\n",
+				len(st.Deck), pileLabel, n, formatCards(disc[n-16:]))
+		}
+		// Rummy: melds laid on the table, by owner.
+		if len(st.Melds) > 0 {
+			fmt.Fprintln(w, "Melds on the table:")
+			for i, meld := range st.Melds {
+				owner := "?"
+				if i < len(st.MeldOwner) {
+					owner = s.seatName(st.MeldOwner[i])
+				}
+				fmt.Fprintf(w, "  %s: %s\n", owner, formatCards(meld))
+			}
+		}
 	}
 
-	for i := 0; i < s.State.NumPlayers; i++ {
+	for i := 0; i < st.NumPlayers; i++ {
 		if i == s.HumanID {
 			continue
 		}
-		fmt.Printf("Player %d: %d cards", i, len(s.State.Hands[i]))
-		if s.State.Scores[i] != 0 {
-			fmt.Printf(" (score: %d)", s.State.Scores[i])
+		fmt.Fprintf(w, "Player %d: %d cards", i, len(st.Hands[i]))
+		if s.capturesShown() {
+			fmt.Fprintf(w, ", captured %d", s.capturedCount(i))
 		}
-		if i < len(s.State.Folded) && s.State.Folded[i] {
-			fmt.Printf(" (folded)")
+		if st.Scores[i] != 0 {
+			fmt.Fprintf(w, " (score: %d)", st.Scores[i])
 		}
-		fmt.Println()
+		if i < len(st.Folded) && st.Folded[i] {
+			fmt.Fprintf(w, " (folded)")
+		}
+		fmt.Fprintln(w)
 	}
 
-	if s.State.Scores[s.HumanID] != 0 && s.Genome.Skeleton != genome.Vying {
-		fmt.Printf("Your score: %d\n", s.State.Scores[s.HumanID])
+	if s.capturesShown() {
+		fmt.Fprintf(w, "You have captured %d cards\n", s.capturedCount(s.HumanID))
+	}
+	if st.Scores[s.HumanID] != 0 && s.Genome.Skeleton != genome.Vying {
+		fmt.Fprintf(w, "Your score: %d\n", st.Scores[s.HumanID])
 	}
 }
 
+// printFinalState reports the result in the terms the game is decided by:
+// captured cards for casino (plus the banked bonus when a scoring borrow is
+// live), points and captures for trick-taking, chips for vying, points and
+// cards left in hand elsewhere.
 func (s *Session) printFinalState(winner int) {
-	fmt.Printf("\n=== Game Over (turn %d) ===\n", s.State.Turn)
+	st, w := s.State, s.out()
+	fmt.Fprintf(w, "\n=== Game Over (turn %d) ===\n", st.Turn)
 	if winner == s.HumanID {
-		fmt.Println("You win!")
+		fmt.Fprintln(w, "You win!")
 	} else {
-		fmt.Printf("Player %d wins!\n", winner)
+		fmt.Fprintf(w, "Player %d wins!\n", winner)
 	}
 
-	fmt.Println("\nFinal scores:")
-	for i := 0; i < s.State.NumPlayers; i++ {
-		label := fmt.Sprintf("Player %d", i)
-		if i == s.HumanID {
-			label = "You"
+	fmt.Fprintln(w, "\nFinal scores:")
+	for i := 0; i < st.NumPlayers; i++ {
+		label := s.seatName(i)
+		switch s.Genome.Skeleton {
+		case genome.Casino:
+			if s.Genome.CasinoScored() {
+				fmt.Fprintf(w, "  %s: %d cards captured %+d bonus = %d\n",
+					label, s.capturedCount(i), st.Scores[i], s.capturedCount(i)+st.Scores[i])
+			} else {
+				fmt.Fprintf(w, "  %s: %d cards captured\n", label, s.capturedCount(i))
+			}
+		case genome.TrickTaking:
+			fmt.Fprintf(w, "  %s: %d points, %d cards captured\n", label, st.Scores[i], s.capturedCount(i))
+		case genome.Vying:
+			fmt.Fprintf(w, "  %s: %d chips\n", label, st.Scores[i])
+		default:
+			fmt.Fprintf(w, "  %s: %d points, %d cards remaining\n",
+				label, st.Scores[i], len(st.Hands[i]))
 		}
-		fmt.Printf("  %s: %d points, %d cards remaining\n",
-			label, s.State.Scores[i], len(s.State.Hands[i]))
 	}
 }
 
 func (s *Session) getChoice(numMoves int) int {
 	for {
-		fmt.Printf("Choose (1-%d): ", numMoves)
+		fmt.Fprintf(s.out(), "Choose (1-%d): ", numMoves)
 		if !s.Scanner.Scan() {
-			fmt.Println("\nGoodbye!")
+			fmt.Fprintln(s.out(), "\nGoodbye!")
 			os.Exit(0)
 		}
 		input := strings.TrimSpace(s.Scanner.Text())
 		if input == "q" || input == "quit" {
-			fmt.Println("Quitting...")
+			fmt.Fprintln(s.out(), "Quitting...")
 			os.Exit(0)
 		}
 		n, err := strconv.Atoi(input)
 		if err != nil || n < 1 || n > numMoves {
-			fmt.Printf("Invalid choice. Enter 1-%d or 'q' to quit.\n", numMoves)
+			fmt.Fprintf(s.out(), "Invalid choice. Enter 1-%d or 'q' to quit.\n", numMoves)
 			continue
 		}
 		return n - 1

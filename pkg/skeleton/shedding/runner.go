@@ -318,17 +318,71 @@ func (r *Runner) PlayableCount(state *sim.GameState, g *genome.Genome) int {
 	if g.Shedding != nil {
 		rule = g.Shedding.MatchRule
 	}
+	// MechFollowSuit: a player holding the discard top's suit may only play
+	// that suit or a wild (GenerateMoves' FollowConstrained filter), so an
+	// off-suit rank match is NOT playable for them. Mirror the filter here or
+	// the count overstates what the player can actually play.
+	mustFollow := false
+	if g.FollowConstrained() && state.TopCard != nil {
+		for _, c := range hand {
+			if c.Suit == state.TopCard.Suit {
+				mustFollow = true
+				break
+			}
+		}
+	}
 	count := 0
 	for _, card := range hand {
+		wild := isWild(card, g.SpecialCards)
+		if mustFollow && card.Suit != state.TopCard.Suit && !wild {
+			continue
+		}
 		if state.TopCard != nil && matchesTop(card, *state.TopCard, rule) {
 			count++
 			continue
 		}
-		if isWild(card, g.SpecialCards) {
+		if wild {
 			count++
 		}
 	}
 	return count
+}
+
+// Blocked reports whether the game is in the permanent all-pass deadlock: the
+// deck is exhausted, the discard pile holds nothing to recycle (Upkeep refills
+// the deck from it otherwise), nobody has gone out, and EVERY player's only
+// legal move is a pass. Passing changes nothing, so the position can never
+// unblock -- this is the "nobody can play and the deck has run out: the game is
+// a draw" of the rulebook.
+//
+// The runner deliberately does NOT end the game here (CheckEnd keeps returning
+// -1 and the batch runner records the max-turns timeout that IS the engine's
+// "no winner"): CheckEnd can only name a winner, and awarding a blocked game to
+// anyone would let genomes that deadlock by construction pass as completed
+// games, masking them from the Tier-1 / greedy_timeout detectors. Blocked lets
+// an interactive caller (the playtest session) declare the draw at once
+// instead of making a human pass until the turn cap.
+//
+// Call it after Upkeep. Pure apart from a save/restore of state.Active while
+// each seat's moves are probed.
+func (r *Runner) Blocked(state *sim.GameState, g *genome.Genome) bool {
+	if len(state.Deck) > 0 || len(state.Discard) > 1 || anyHandEmpty(state) {
+		return false
+	}
+	if state.Phase == sim.PhaseEnd {
+		return false // a knock already ended the game or the round
+	}
+	saved := state.Active
+	defer func() { state.Active = saved }()
+	for p := 0; p < state.NumPlayers; p++ {
+		state.Active = p
+		for _, m := range r.GenerateMoves(state, g) {
+			if m.Type != sim.MovePass {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // refillDeckFromDiscard moves all but the top discard card into the deck and

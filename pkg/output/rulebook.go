@@ -86,7 +86,13 @@ func writeSheddingRules(b *strings.Builder, g *genome.Genome) {
 	if g.Shedding != nil {
 		matchDesc := matchRuleDescription(g.Shedding.MatchRule)
 		b.WriteString(fmt.Sprintf("Play a card from your hand that **%s** the top card of the discard pile.\n\n", matchDesc))
-		b.WriteString(fmt.Sprintf("If you cannot play, **draw %d card(s)** from the deck.\n\n", g.Shedding.DrawPenalty))
+		// KEEP IN SYNC with the shedding runner: a play is forced when one
+		// exists (the draw is only generated with no legal play), a draw ends
+		// the turn (ApplyMove advances the player), Upkeep recycles the discard
+		// pile under its top card when the deck is empty, and with nothing to
+		// draw the player passes.
+		b.WriteString(fmt.Sprintf("If you can play, you must. If you cannot play, **draw %d card(s)** from the deck and your turn ends (you may not play a card you just drew); if fewer cards are left you draw what there is, and if there are none you pass.\n\n", g.Shedding.DrawPenalty))
+		b.WriteString("When the deck runs out, the discard pile (except its top card) is shuffled to form a new deck.\n\n")
 	}
 
 	if g.SheddingMultiRound() {
@@ -94,8 +100,11 @@ func writeSheddingRules(b *strings.Builder, g *genome.Genome) {
 		return
 	}
 
+	// The blocked case: shedding.Runner.Blocked. The runner never names a
+	// winner there (every seat passes until the turn cap, a no-winner result);
+	// the playtest session declares the draw the moment it arises.
 	b.WriteString("### Winning\n\n")
-	b.WriteString("The first player to play all their cards wins. If no player can play and the deck runs out, the game ends in a draw.\n\n")
+	b.WriteString("The first player to play all their cards wins. If the deck is exhausted, there are no discards left to reshuffle, and no player can play, the game is blocked and ends in a draw.\n\n")
 }
 
 // writeSheddingRoundStructure renders the multi-round win rules (Task 22):
@@ -124,6 +133,9 @@ func writeSheddingRoundStructure(b *strings.Builder, g *genome.Genome) {
 	// banked score, then fewest cards in hand, then seat order (the runner's
 	// strict comparison keeps the earliest-seated tied player).
 	b.WriteString("If scores are tied, the tied player holding the fewest cards at the end of the final round wins; if that is tied too, the tied player seated earliest in the turn order (closest to the dealer's left) wins.\n\n")
+	// shedding.Runner.Blocked: a blocked round can never finish, so the whole
+	// game ends without a result.
+	b.WriteString("If a round becomes blocked -- the deck is exhausted, there are no discards left to reshuffle, and no player can play -- the game ends there with no winner.\n\n")
 }
 
 // hasAvoidanceBorrow / hasMeldBonusBorrow read the LIVE borrows only: a dead
