@@ -442,7 +442,7 @@ func (e *MAPElitesEngine) archiveOrder() []genome.SkeletonType {
 // stepping stones; output keeps the floor so they are never published.
 //
 // Functionally identical genomes occupying multiple cells are deduplicated
-// by outputHash, keeping the best-fitness occupant (Task 28 round 2: the
+// by outputHash, keeping the best-estimated occupant (Task 28 round 2: the
 // flagship published clone groups under distinct IDs; Wave K fix 2 widened
 // the key to ignore dead genes).
 func (e *MAPElitesEngine) AllQualified() []*Individual {
@@ -468,9 +468,10 @@ func (e *MAPElitesEngine) AllQualified() []*Individual {
 				}
 				hash := outputHash(cell.Individual.Genome)
 				if cur, ok := best[hash]; ok {
-					// Clone-group keep is by OutputRank, the commensurable
-					// leaderboard key (Wave K fix 1).
-					if cell.Individual.OutputRank() > cur.ind.OutputRank() {
+					// Clone-group keep: the better-estimated occupant, then
+					// OutputRank (the commensurable leaderboard key, Wave K
+					// fix 1) -- see betterCloneMember.
+					if betterCloneMember(cell.Individual, cur.ind) {
 						cur.ind = cell.Individual // keep first-seen order
 					}
 					continue

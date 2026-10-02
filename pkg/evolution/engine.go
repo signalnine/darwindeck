@@ -759,11 +759,19 @@ func sortedSpecialCards(in []genome.SpecialCard) []genome.SpecialCard {
 	return out
 }
 
+// sortedCardPoints canonicalizes a card_points block for hashing: a sorted
+// COPY with CardScoring.Event zeroed. Event is a dead field -- no runner, hook
+// or rulebook reads it (genome.MatchCardPoints matches on rank and suit alone)
+// -- so hashing it made event-only variants distinct to population dedup and
+// to the output ranking. The genome itself (and its JSON) is untouched.
 func sortedCardPoints(in []genome.CardScoring) []genome.CardScoring {
 	if len(in) == 0 {
 		return nil
 	}
 	out := append([]genome.CardScoring(nil), in...)
+	for i := range out {
+		out[i].Event = 0
+	}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Rank != out[j].Rank {
 			return out[i].Rank < out[j].Rank
@@ -771,12 +779,24 @@ func sortedCardPoints(in []genome.CardScoring) []genome.CardScoring {
 		if out[i].Suit != out[j].Suit {
 			return out[i].Suit < out[j].Suit
 		}
-		if out[i].Event != out[j].Event {
-			return out[i].Event < out[j].Event
-		}
 		return out[i].Points < out[j].Points
 	})
 	return out
+}
+
+// betterCloneMember reports whether cand should replace cur as the published
+// member of one clone group (individuals with equal outputHash). The
+// better-ESTIMATED member wins -- more greedy-mode evaluations in its running
+// mean -- and OutputRank only breaks ties between equally-sampled members.
+// Ranking first kept whichever estimate was luckiest: in the hybrid engine a
+// frozen single-evaluation archive snapshot beat its own live twin whenever
+// the twin's longer running mean had regressed, the winner's curse
+// reintroduced at publication.
+func betterCloneMember(cand, cur *Individual) bool {
+	if cand.EvalCount != cur.EvalCount {
+		return cand.EvalCount > cur.EvalCount
+	}
+	return cand.OutputRank() > cur.OutputRank()
 }
 
 // Run executes the full evolution loop.

@@ -749,7 +749,7 @@ func (e *NoveltyEngine) tournament() *NoveltyIndividual {
 // AllQualified returns all individuals meeting the fitness floor.
 //
 // Functionally identical genomes are deduplicated by outputHash, keeping
-// each clone group's best-fitness member (Task 28 round 2: ID-only dedup let
+// each clone group's best-estimated member (Task 28 round 2: ID-only dedup let
 // the flagship publish a 6-way clone group under distinct IDs; Wave K fix 2
 // widened the key from byte-identical to identical-modulo-dead-genes after
 // flagship-r3 ranks 1/2/3). Behaviors stay parallel to individuals
@@ -766,9 +766,10 @@ func (e *NoveltyEngine) AllQualified() ([]*Individual, []BehaviorDescriptor) {
 	add := func(ind *Individual, b BehaviorDescriptor) {
 		hash := outputHash(ind.Genome)
 		if cur, ok := best[hash]; ok {
-			// Clone-group keep is by OutputRank, the commensurable
-			// leaderboard key (Wave K fix 1).
-			if ind.OutputRank() > cur.ind.OutputRank() {
+			// Clone-group keep: the better-estimated member, then OutputRank
+			// (the commensurable leaderboard key, Wave K fix 1) -- see
+			// betterCloneMember.
+			if betterCloneMember(ind, cur.ind) {
 				cur.ind, cur.behavior = ind, b // keep first-seen order
 			}
 			return
