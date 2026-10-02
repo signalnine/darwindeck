@@ -185,6 +185,60 @@ func TestGrammarFuzzInvariants(t *testing.T) {
 	}
 }
 
+// TestProgressLeaderIsWinner: Progress is the leader track the Game Arc metric
+// reads (sim/batch.go leaderOf), so at the FINAL state its leader must be the
+// player the rules name the winner -- an exact tie at the top is allowed (the
+// winner was then named by a tie-break), a strictly-ahead non-winner is not.
+// Progress used to read the RAW card share and ignore avoidance, bid contracts,
+// combination bonuses and partnerships, and a busted banking total clamped to
+// 1.0: the final "leader" lost 14-22 of 40 games under trick+avoidance, 16-21 of
+// 40 under trick+bid, and 15-38 of 80 in banking.
+func TestProgressLeaderIsWinner(t *testing.T) {
+	seeds := uint64(12)
+	if testing.Short() {
+		seeds = 3
+	}
+	bad := map[string]int{}
+	for _, s := range allWellTypedSpecs() {
+		a := Adapter{s}
+		for seed := uint64(1); seed <= seeds; seed++ {
+			gs, w := playRandomGame(s, seed, nil)
+			if w < 0 {
+				t.Fatalf("%s seed %d: did not terminate", s, seed)
+			}
+			pr := a.Progress(gs, nil)
+			for p, v := range pr {
+				if v > pr[w] {
+					if bad[s.Family()]++; bad[s.Family()] == 1 {
+						t.Errorf("%s seed %d: winner is seat %d (progress %.4f) but seat %d leads (%.4f); progress %v",
+							s, seed, w, pr[w], p, v, pr)
+					}
+					break
+				}
+			}
+		}
+	}
+	for fam, n := range bad {
+		t.Logf("%-70s final leader != winner in %d games", fam, n)
+	}
+}
+
+// TestProgressBustIsZero: a busted banking player is OUT -- their progress is 0,
+// not the 1.0 a clamped over-target total used to read as (which made every bust
+// the "leader").
+func TestProgressBustIsZero(t *testing.T) {
+	s := GameSpec{Players: 3, Shared: 3, Move: Accumulate, Target: 21, End: Bust, Score: ClosestTarget}
+	gs := Runner{s}.Setup(rand.New(rand.NewPCG(1, 1)))
+	gs.Scores = []int{25, 18, 21}
+	pr := Adapter{s}.Progress(gs, nil)
+	if pr[0] != 0 {
+		t.Errorf("busted seat (25 over a target of 21) has progress %v, want 0", pr[0])
+	}
+	if !(pr[2] > pr[1] && pr[1] > pr[0]) || pr[2] != 1 {
+		t.Errorf("progress %v: want seat 2 (21) = 1 > seat 1 (18) > seat 0 (bust) = 0", pr)
+	}
+}
+
 // TestClimbingBeatenCardsGoToDiscard: a beaten combination (and a table cleared
 // by an all-pass) used to be overwritten / nil'ed, so cards silently left the
 // game from turn 2 on (52 -> 51 -> ...). They now go to the discard pile, so the

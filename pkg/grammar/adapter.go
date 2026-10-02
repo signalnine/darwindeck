@@ -150,21 +150,68 @@ func (a Adapter) Progress(s *sim.GameState, _ *genome.Genome) []float64 {
 		for p := range out {
 			v := float64(s.Scores[p]) / float64(t)
 			if v > 1 {
+				// Over the target. Under closest_target that is a BUST: the
+				// player is out, so 0 -- clamping to 1 made every bust the leader.
 				v = 1
+				if a.Spec.Score == ClosestTarget {
+					v = 0
+				}
 			}
 			out[p] = v
 		}
-	case Capture, Trick: // share of cards captured / tricks won so far
-		total := 0
-		for p := 0; p < s.NumPlayers; p++ {
-			total += s.Scores[p]
+	case Capture, Trick:
+		// Share of the EFFECTIVE count -- the same Runner.effScore the winner is
+		// decided by, so avoidance penalties, bid contracts and combination
+		// bonuses move the leader track exactly as they move the result. (The
+		// raw card share named a leader who then lost about half the games
+		// under trick+avoidance or trick+bid.)
+		r := Runner{a.Spec}
+		rank := make([]int, s.NumPlayers)
+		for p := range rank {
+			rank[p] = r.effScore(s, p)
+		}
+		if a.Spec.hasMod(ModTeams) {
+			// Partnerships: a seat ranks by its TEAM's total, and within the team
+			// the top seat (the one a team win is reported as) edges its partner.
+			// Top seats of level teams tie exactly, as do level partners.
+			var team, top [2]int
+			top[0], top[1] = -1<<31, -1<<31
+			for p, v := range rank {
+				team[teamOf(p)] += v
+				if v > top[teamOf(p)] {
+					top[teamOf(p)] = v
+				}
+			}
+			for p, v := range rank {
+				rank[p] = 2 * team[teamOf(p)]
+				if v == top[teamOf(p)] {
+					rank[p]++
+				}
+			}
+		}
+		// Effective counts can be negative (penalties, a failed contract): shift
+		// so the lowest sits at 0, then take shares. With no negative value the
+		// shift is 0 and this is the plain share of cards won.
+		low, total := 0, 0
+		for _, v := range rank {
+			if v < low {
+				low = v
+			}
+		}
+		for _, v := range rank {
+			total += v - low
 		}
 		for p := range out {
 			if total > 0 {
-				out[p] = float64(s.Scores[p]) / float64(total)
+				out[p] = float64(rank[p]-low) / float64(total)
 			}
 		}
-	case Rummy: // closeness to winning = fewer unmelded cards
+	case Rummy:
+		// Closeness to winning = fewer unmelded cards, then fewer points in them
+		// -- the two keys Runner.score ranks by, folded into one number (the
+		// count dominates; the points only order equal counts). A hand holds at
+		// most Deal+1 cards (mid-turn), each worth at most 10, so the result is
+		// always inside (0,1].
 		d := a.Spec.Deal
 		if d < 1 {
 			d = 1
@@ -173,8 +220,10 @@ func (a Adapter) Progress(s *sim.GameState, _ *genome.Genome) []float64 {
 		if a.Spec.hasMod(ModWild) {
 			wr = wildRank
 		}
+		w := 10*(d+1) + 1 // exceeds any hand's stray-point total
 		for p := range out {
-			v := 1 - float64(deadwood(s.Hands[p], wr))/float64(d)
+			cnt, pts := deadwoodStats(s.Hands[p], wr)
+			v := 1 - float64(cnt*w+pts)/float64((d+2)*w)
 			if v < 0 {
 				v = 0
 			}
