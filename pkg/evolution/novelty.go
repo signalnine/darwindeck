@@ -115,6 +115,9 @@ type NoveltyEngine struct {
 	Archive    []*NoveltyIndividual // Novelty archive (memory of exploration)
 	Generation int
 	rng        *rand.Rand
+	// pcg is rng's source, kept so SaveCheckpoint can persist the exact stream
+	// state (rand.Rand itself is opaque). nil only on hand-built engines.
+	pcg *rand.PCG
 
 	// addThreshold is the current absolute archive-admission threshold,
 	// adapted each generation (see NoveltyAddThreshold).
@@ -138,10 +141,12 @@ func NewNoveltyEngine(config Config, seeds []*genome.Genome) *NoveltyEngine {
 	if config.Workers == 0 {
 		config.Workers = runtime.NumCPU()
 	}
+	pcg := rand.NewPCG(config.BaseSeed, 0)
 	return &NoveltyEngine{
 		Config:       config,
 		Seeds:        seeds,
-		rng:          rand.New(rand.NewPCG(config.BaseSeed, 0)),
+		rng:          rand.New(pcg),
+		pcg:          pcg,
 		addThreshold: NoveltyAddThreshold,
 	}
 }

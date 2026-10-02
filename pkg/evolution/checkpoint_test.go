@@ -178,19 +178,12 @@ func TestResumeAfterCompleteNoDoubleEval(t *testing.T) {
 	}
 }
 
-// TestChunkedResumeDeterminism tests what LoadCheckpoint's contract actually
-// claims: the mutation RNG is re-seeded deterministically from (BaseSeed,
-// Generation) and the per-genome evaluation seeds derive from
-// BaseSeed+generation, so RESUMING THE SAME CHECKPOINT is bit-reproducible --
-// two resumes of one checkpoint produce identical populations and best
-// fitness.
-//
-// Deliberately NOT pinned: chunked (2+2) == unchunked (4 straight). That
-// stronger property does NOT hold, by design: the resume re-seeds a FRESH PCG
-// at the chunk boundary ("without repeating the previous chunk's stream"),
-// while an unchunked run's selectNext keeps consuming its original stream, so
-// the two mutation streams diverge from the boundary onward. Verified
-// divergent at this scale when the guard below was written.
+// TestChunkedResumeDeterminism: RESUMING THE SAME CHECKPOINT is
+// bit-reproducible -- two resumes of one checkpoint produce identical
+// populations and best fitness. The stronger property, chunked (2+2) ==
+// unchunked (4 straight), is pinned by TestChunkedResumeEqualsUninterruptedRun
+// (checkpoint_resume_test.go); it did not hold while LoadCheckpoint re-seeded
+// a fresh PCG at the chunk boundary instead of restoring the saved stream.
 func TestChunkedResumeDeterminism(t *testing.T) {
 	cfg := checkpointTestConfig()
 	first := NewNoveltyEngine(cfg, allSeeds())
