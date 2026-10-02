@@ -524,6 +524,87 @@ func TestRateAllowedWhenStuck(t *testing.T) {
 	}
 }
 
+// finishedSession starts a game on a fresh single-seed server and plays it to
+// the end, returning everything a rating test needs.
+func finishedSession(t *testing.T) (*Server, http.Handler, map[string]string) {
+	t.Helper()
+	srv := serverWith(t, firstShedding(t))
+	h := srv.Handler()
+	var v View
+	if code := doJSON(t, h, "POST", "/api/new", nil, map[string]interface{}{"difficulty": "random"}, &v); code != http.StatusOK {
+		t.Fatalf("new: %d", code)
+	}
+	hdr := map[string]string{"X-Session-Token": v.Session}
+	finishGame(t, h, hdr, &v)
+	return srv, h, hdr
+}
+
+// A rating outside 1-5 that is not the explicit skip (0) is a client error. It
+// used to be saved as rating:null with a 200 -- silently turning "9" into a
+// skip and spending the session's one rating. Now: 400, nothing logged, and
+// the slot is still free for a valid rating.
+func TestRateOutOfRangeRejected(t *testing.T) {
+	srv, h, hdr := finishedSession(t)
+
+	for _, bad := range []interface{}{9, -3, 6, -1, 3.5} {
+		if code := doJSON(t, h, "POST", "/api/rate", hdr, map[string]interface{}{"rating": bad}, nil); code != http.StatusBadRequest {
+			t.Errorf("rating %v: want 400, got %d", bad, code)
+		}
+	}
+	if recs := readRecords(t, srv.ResultsPath); len(recs) != 0 {
+		t.Fatalf("rejected ratings logged %d record(s), want 0: %+v", len(recs), recs)
+	}
+
+	// None of the rejections consumed the one-rating slot.
+	if code := doJSON(t, h, "POST", "/api/rate", hdr, map[string]interface{}{"rating": 5}, nil); code != http.StatusOK {
+		t.Fatalf("valid rating after rejected ones: want 200, got %d", code)
+	}
+	recs := readRecords(t, srv.ResultsPath)
+	if len(recs) != 1 || recs[0].Rating == nil || *recs[0].Rating != 5 {
+		t.Fatalf("records = %+v, want exactly one with rating 5", recs)
+	}
+}
+
+// Skip stays a first-class answer: rating 0 (what the page sends when no star
+// is picked) and an omitted rating field both record rating:null.
+func TestRateSkipRecordsNullRating(t *testing.T) {
+	for name, body := range map[string]map[string]interface{}{
+		"explicit zero": {"rating": 0, "comment": "skipped"},
+		"omitted field": {"comment": "skipped"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			srv, h, hdr := finishedSession(t)
+			if code := doJSON(t, h, "POST", "/api/rate", hdr, body, nil); code != http.StatusOK {
+				t.Fatalf("skip: want 200, got %d", code)
+			}
+			recs := readRecords(t, srv.ResultsPath)
+			if len(recs) != 1 {
+				t.Fatalf("results file has %d records, want 1", len(recs))
+			}
+			if recs[0].Rating != nil {
+				t.Errorf("skip logged rating %d, want null", *recs[0].Rating)
+			}
+			if recs[0].Comment != "skipped" {
+				t.Errorf("skip dropped the comment: %+v", recs[0])
+			}
+		})
+	}
+}
+
+// The ends of the 1-5 scale are valid ratings and are logged as given.
+func TestRateBoundsAccepted(t *testing.T) {
+	for _, rating := range []int{1, 5} {
+		srv, h, hdr := finishedSession(t)
+		if code := doJSON(t, h, "POST", "/api/rate", hdr, map[string]interface{}{"rating": rating}, nil); code != http.StatusOK {
+			t.Fatalf("rating %d: want 200, got %d", rating, code)
+		}
+		recs := readRecords(t, srv.ResultsPath)
+		if len(recs) != 1 || recs[0].Rating == nil || *recs[0].Rating != rating {
+			t.Errorf("rating %d: records = %+v, want exactly one with that rating", rating, recs)
+		}
+	}
+}
+
 // indexPage fetches the embedded UI through the real handler.
 func indexPage(t *testing.T) string {
 	t.Helper()

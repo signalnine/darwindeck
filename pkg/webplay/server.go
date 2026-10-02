@@ -380,10 +380,19 @@ func (s *Server) handleRate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 0 is the explicit skip (logged as rating:null); anything else must be on
+	// the 1-5 scale. An out-of-range value used to fall through to the skip
+	// path -- a 200 that recorded null and spent the session's one rating.
+	// Rejected here, before the rated flag is touched, so the slot stays free.
 	var rating *int
-	if req.Rating >= 1 && req.Rating <= 5 {
+	switch {
+	case req.Rating == 0:
+	case req.Rating >= 1 && req.Rating <= 5:
 		v := req.Rating
 		rating = &v
+	default:
+		http.Error(w, "rating must be 1-5 (or 0 to skip)", http.StatusBadRequest)
+		return
 	}
 
 	// One rating per session: the flag flips under ws.mu before the write, so a
