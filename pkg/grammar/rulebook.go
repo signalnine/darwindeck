@@ -91,7 +91,7 @@ func (s GameSpec) turnRules() string {
 			"- Or pass. When every other player passes in a row, the table is cleared and the last player to play leads a fresh card of their choice."
 	case Accumulate:
 		return fmt.Sprintf("- Take one card -- either a face-up card from the table or an unseen card from the deck -- and add its value to your running total (face cards count 10, aces 11).\n"+
-			"- Or STICK to lock in your current total and take no more cards. If your total ever exceeds %d, you have busted and are out of the round.", s.Target)
+			"- Or STICK to lock in your current total and take no more cards. You must take at least one card before you may stick. If your total ever exceeds %d, you have busted and are out of the round.", s.Target)
 	case Capture:
 		return "- Play one card from your hand onto the table. If it matches the rank of one or more cards already on the table, you CAPTURE those cards (and the played card) into your score pile.\n" +
 			"- If it matches nothing, it stays face-up on the table for others to capture later."
@@ -130,7 +130,7 @@ func (s GameSpec) modifierRules() []string {
 			if s.Move == Rummy {
 				out = append(out, "When your unmelded cards are nearly gone, you may KNOCK at the start of your turn to end the game immediately. Whoever has the least deadwood then wins -- knock too early and an opponent with fewer stray cards beats you.")
 			} else {
-				out = append(out, "When you are down to 3 or fewer cards, you may KNOCK on your turn to end the game at once. Whoever holds the fewest cards then wins -- so knocking while you are NOT lowest hands the win to someone else.")
+				out = append(out, "When you are down to 3 or fewer cards, you may KNOCK on your turn to end the game at once. Whoever holds the fewest cards then wins -- so knocking while you are NOT lowest hands the win to someone else; "+turnOrderTie("the knocker")+".")
 			}
 		case ModWild:
 			out = append(out, "Eights are WILD: a wild card stands in for any card you need to complete a set or a run, so holding wilds lets you finish melds and cut your deadwood.")
@@ -162,13 +162,20 @@ func (s GameSpec) modifierRules() []string {
 func (s GameSpec) endRule() string {
 	switch s.End {
 	case EmptyHand:
-		return "The game ends the moment any player has played the last card from their hand."
+		end := "The game ends the moment any player has played the last card from their hand."
+		if s.Move == PlayMatch {
+			// The runner's all-pass deadlock end (CheckEnd, PassCount >= players).
+			end += " If the deck has run out and no player can play, so that every player passes in turn, the game ends at once and the player holding the fewest cards wins; " +
+				turnOrderTie("the last player to pass") + "."
+		}
+		return end
 	case DeckOut:
 		if s.Move == Trick {
 			return "The game ends once every player has played out their whole hand."
 		}
 		if s.Move == Rummy {
-			return "The game ends the moment the draw deck runs out."
+			// Turn boundary: the runner lets the last drawer discard before it ends.
+			return "The game ends once the draw deck has run out and the player who drew its last card has made their discard, so every hand is the same size."
 		}
 		return "The game ends once the deck is exhausted and the players' hands are empty."
 	case Showdown:
@@ -179,6 +186,21 @@ func (s GameSpec) endRule() string {
 	return ""
 }
 
+// The tie rules below are RULES OF THE GAME, not implementation detail: they
+// mirror Runner.score / decide / tieOrigin exactly (see the tie-breaking note in
+// runner.go). A tie the rulebook does not settle is a game a table cannot finish,
+// and one the runner settles differently is a rulebook that lies -- keep in sync.
+const (
+	// suitOrderHigh / suitOrderLow spell out cardOrder for the card rule.
+	suitOrderHigh = "ace high; between cards of equal rank spades beat hearts, hearts beat diamonds, diamonds beat clubs"
+	suitOrderLow  = "a two is lowest; between cards of equal rank clubs are lowest, then diamonds, hearts, spades"
+)
+
+// turnOrderTie is the turn-order tie rule counted from a named player.
+func turnOrderTie(anchor string) string {
+	return fmt.Sprintf("a tie goes to %s if they are among the tied players, otherwise to the tied player who sits soonest after them in turn order", anchor)
+}
+
 func (s GameSpec) winRule() string {
 	switch s.Score {
 	case FirstOut:
@@ -186,32 +208,41 @@ func (s GameSpec) winRule() string {
 	case FewestCards:
 		return "The player holding the fewest cards wins."
 	case ClosestTarget:
-		return fmt.Sprintf("Among players who did not bust, the highest total (closest to %d) wins.", s.Target)
+		return fmt.Sprintf("Among players who did not bust, the highest total (closest to %d) wins. If every player busts, the player who went over by the least wins. "+
+			"A tie goes to the tied player who took fewer cards; if that is equal too, to the tied player whose pile holds the highest card (%s).", s.Target, suitOrderHigh)
 	case MostCaptured:
 		if s.Move == Trick {
-			if s.hasMod(ModBid) {
-				return "Each player is scored on their contract: take at least as many tricks as you bid (or none if you bid zero) to score it, miss it and you are penalised. Highest contract score wins."
+			tie := " If players tie, " + turnOrderTie("the player who won the last trick") + "."
+			if s.hasMod(ModTeams) {
+				tie = " A tied result goes to the partnership that won the last trick."
 			}
-			return "The player who won the most cards in tricks wins (less any penalty points)."
+			if s.hasMod(ModBid) {
+				return "Each player is scored on their contract: take at least as many tricks as you bid (or none if you bid zero) to score it, miss it and you are penalised. Highest contract score wins." + tie
+			}
+			return "The player who won the most cards in tricks wins (less any penalty points)." + tie
 		}
 		// Capture host: the scoring modifiers adjust the count exactly as they
 		// do on the trick host, so the win rule must say so -- the Special
 		// Rules describe a penalty/bonus the winner line otherwise ignored.
+		tie := fmt.Sprintf(" A tie goes to the tied player whose captured pile holds the highest card (%s).", suitOrderHigh)
 		switch {
 		case s.hasMod(ModAvoidance) && s.hasMod(ModMeldBonus):
-			return "The player with the best adjusted total wins: cards captured, plus combination bonuses, minus penalty points."
+			return "The player with the best adjusted total wins: cards captured, plus combination bonuses, minus penalty points." + tie
 		case s.hasMod(ModAvoidance):
-			return "The player with the best adjusted total wins: cards captured minus penalty points."
+			return "The player with the best adjusted total wins: cards captured minus penalty points." + tie
 		case s.hasMod(ModMeldBonus):
-			return "The player with the best adjusted total wins: cards captured plus combination bonuses."
+			return "The player with the best adjusted total wins: cards captured plus combination bonuses." + tie
 		}
-		return "The player who captured the most cards wins."
+		return "The player who captured the most cards wins." + tie
 	case HighScore:
 		return "The player with the highest score wins."
 	case FewestDeadwood:
-		return "The player whose hand has the fewest unmelded cards (the least deadwood) wins."
+		return fmt.Sprintf("The player whose hand has the fewest unmelded cards (the least deadwood) wins. "+
+			"If players tie on that count, the lower total point value of those unmelded cards wins (aces count 1, face cards 10, other cards their number); "+
+			"if that is equal too, the tied player holding the lowest card wins (%s).", suitOrderLow)
 	case BestHand:
-		return "At the showdown the best five-card poker hand among the players still in wins; if everyone else folds, the last player in wins uncontested."
+		return "At the showdown the best five-card poker hand among the players still in wins; if everyone else folds, the last player in wins uncontested. " +
+			"An exact tie (the same ranks in both hands) goes to the tied player holding the highest card by suit (spades high, then hearts, diamonds, clubs)."
 	}
 	return ""
 }
