@@ -44,7 +44,7 @@ Single Go binary, three layers: CLI → Evolution Engine → Simulation Core.
 
 **The validated recipe:** a move-changing borrow (`run_play`) + a terminating multi-round meld-**points** win condition (`meld_bonus`, `rounds_per_game >= 2`) = novel + playable. Blind judges certify such combos 4/4 novel; pure move-tweaks (no win-condition change) are correctly 2/2 variant. The 2-borrow form is publishable; 3-borrow stacks are novel-but-borderline (incentive clash). Note the earlier failed `evolve -seed-dir` judge-gated restart loop (`results/2026-06-14-judge-in-loop`, 1->2->0): novelty pressure needs generation granularity (CID, in-loop) not round boundaries — which CID provides.
 
-**Cross-skeleton novelty:** Genomes can borrow mechanics from other skeletons (e.g., a shedding game with rummy-style meld bonuses). Borrows are whitelisted and validated. SHALLOW borrows (MeldBonus/Avoidance/TrickScoring/DrawPenalty) are hook-based scoring tallies (hosted by shedding, casino, and vying among others; see `ValidBorrows()` in `pkg/genome/validate.go`); DEEP borrows (`MechRunPlay`, `MechFollowSuit`, `MechKnock` -- run_play/follow_suit/knock on shedding, knock also on climbing) live in the skeleton runner and change moves/turns/win condition. `MechTrump` / `MechPlayMultiple` exist in the enum but are reserved (not whitelisted).
+**Cross-skeleton novelty:** Genomes can borrow mechanics from other skeletons (e.g., a shedding game with rummy-style meld bonuses). Borrows are whitelisted and validated. SHALLOW borrows (MeldBonus/Avoidance/TrickScoring/DrawPenalty) are hook-based scoring tallies (hosted by shedding, casino, and vying among others; see `ValidBorrows()` in `pkg/genome/validate.go`); DEEP borrows (`MechRunPlay`, `MechFollowSuit`, `MechKnock` -- run_play/follow_suit/knock on shedding, knock also on climbing) live in the skeleton runner and change moves/turns/win condition. Knock ends the ROUND on a multi-round shedding host (the game on a single-round one) and uses the undercut rule: a knocker who is only tied for fewest cards does not win (`genome.KnockWinner`). `MechTrump` / `MechPlayMultiple` exist in the enum but are reserved (not whitelisted).
 
 ### Package Layout
 
@@ -86,11 +86,11 @@ as their skeletons landed.** A new skeleton's seed enters seeds.All() only once
 the metrics can measure it: Big Two was blocked until `deltaModeClimbing`
 (`pkg/sim/batch.go`) measured climbing's beat/pass constraint (before that it
 scored interact=0.000 / TotalFitness ~0.401, a measurement artifact, despite
-passing every veto; after, ~0.55, on par with Gin Rummy). Casino shipped with its
+passing every veto; after, ~0.56, a little above the rummy seeds at ~0.49-0.51). Casino shipped with its
 own `deltaModeCasino` (capture/trail changes the shared table) and `CasinoScorer`,
 scoring ~0.77. Vying (poker) shipped with `deltaModeVying` (betting interaction is
 move-type: a raise/fold is interactive, an option-count probe under-measures it)
-and the `VyingScorer` (tight-aggressive bet-by-hand-strength), scoring ~0.844 (the
+and the `VyingScorer` (tight-aggressive bet-by-hand-strength), scoring ~0.845 (the
 strongest classic). The lesson all three teach: a new skeleton needs a runner AND
 an OptionDelta mode for Interaction AND a greedy scorer for the skill gradient, or
 the metrics are blind to it.
@@ -111,7 +111,7 @@ the metrics are blind to it.
 | Meaningful Decisions | 0.25 | Fraction of decision points whose choice plausibly MATTERED: >= 2 legal moves AND the batch runner's choice-impact sampling finds sampled moves differing in type, `Move.Amount` (bids/nominations), special-effect profile, or next-player option impact (`turnIsMeaningful`, pkg/sim/batch.go: the sampling probe runs for shedding and trick-taking, rummy judges its own turns by deadwood consequence via `ChoiceConsequenceProber`; climbing, casino, vying, and grammar runners fall back to plain >= 2 legal moves). |
 | Game Arc | 0.25 | Within-game leader-track arc: 0.4*tent(comeback, 0.5) + 0.4*resolution + 0.2*lead-changes, where comeback = P(winner was NOT leading at the midgame sample) and resolution = P(the near-end leader wins). Games need >= 5 leader samples and a real winner to qualify. |
 | Interaction | 0.20 | Share of turns that change the next player's options (per-skeleton OptionDelta counterfactuals -- see the Task 7 table in `docs/plans/2026-06-11-audit-remediation.md`; climbing counts legal PLAYS on both sides; vying scores by move type, raise/fold) or that carry an attack event; ratio scaled by /0.5, clamped to [0,1]. |
-| Skill Gradient | 0.20 | Two-tier: 0.4*greedy-over-random + 0.6*MCTS-over-greedy, each normalized by remaining headroom, divided by skillScale=0.5. |
+| Skill Gradient | 0.20 | Two-tier: 0.4*greedy-over-random + 0.6*MCTS-over-max(greedy, random), each normalized by remaining headroom, divided by skillScale=0.5. The MCTS tier's reference is the HIGHER of the greedy and random seat-0 rates, so a search that merely beats a sub-random greedy scores 0 (2026-10-02 bughunt). |
 | Session Length | 0.10 | Decisions per player per game: 1.0 in the 6-60 band, linear falloff over 3-6 and 60-170, 0 outside. |
 
 ### Validation Pipeline
@@ -141,9 +141,11 @@ go test ./pkg/evolution/ -run TestSmallEvolution -v  # Single test
 ./bin/darwindeck serve -dir results/2026-06-18-served-set/   # game picker
 
 # Blind novelty judging (see docs/judge-in-loop.md)
-./bin/darwindeck judge emit <in> --out <dir>
+./bin/darwindeck judge emit <in> --out <dir>        # ids are a pseudo-random permutation; the private key goes to <dir>/../<dir-name>.answer-key.json
 ./bin/darwindeck judge rank|backfill ...
 ```
+
+evolve/experiment/calibrate reject stray positional arguments (a stray token used to silently drop every flag after it). Dossier simulations apply the genome's borrow hooks (`mechanic.HooksFor`), same as fitness -- before 2026-10-02 they did not, so verdicts on hook-borrow genomes judged from older dossiers are suspect (see `results/2026-06-14-evolved-novel-hybrids/README.md`).
 
 ### Design Doc
 
@@ -177,8 +179,18 @@ max-raises-capped, best-hand showdown).
 hand-maintained per-host borrow whitelist into a small total function:** run_play
 (combos on shedding + climbing), follow_suit, draw_penalty, knock (fewest-cards;
 rummy Gin go-out), meld_bonus, avoidance (Hearts), trump (Spades), bid (trick
-contract), teams (2v2), skip, force_draw, reverse (the Uno set), nominate (Crazy
-Eights), wild (rummy melds), sum_capture (Scopa building).
+contract), teams (2v2), skip, force_draw, reverse (the Uno set; ill-typed at 2
+players, where it is inert), nominate (Crazy Eights), wild (rummy melds),
+sum_capture (Scopa building).
+
+**Ties are never settled by absolute seat index** (2026-10-02 bughunt: seat-0
+tie-breaks produced up to 2:1 seat skews). Each family breaks ties by a stated
+rule -- a secondary score, then the single highest/lowest card, or turn order
+from whoever ended the game -- and `rulebook.go` states it. Rummy ends only at a
+turn boundary (after the discard); accumulate requires taking a card before
+sticking; `Progress` (adapter.go) is computed from the same effective score that
+decides the winner. `TestNoFixedSeatAdvantage` and `TestProgressLeaderIsWinner`
+pin these.
 
 **Key types:** `GameSpec` (the composition); `GameSpec.WellTyped()` (the coherence
 type -- makes inert/degenerate compositions unrepresentable, e.g. an inert score

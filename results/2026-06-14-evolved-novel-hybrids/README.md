@@ -4,6 +4,15 @@ A full `evolve -cross-skeleton -novelty-select` run (pop 200, gen 60) that disco
 the **move-change + win-condition-change** recipe in the wild, with blind frontier
 judges (3 reps each) certifying the result.
 
+> **Caveat (2026-10-02 bughunt):** the dossiers these verdicts were judged from
+> simulated their sample traces and termination stats WITHOUT the hook-based
+> borrows (`meld_bonus`, `avoidance`), while the rulebook text described them.
+> For rank07-10, 331-334 of 400 dossier games have a different winner once the
+> hooks are applied. The rulebooks were correct and the `run_play`-only games
+> (rank19, rank20) and the plain-trick control are unaffected, but the four
+> "novel" verdicts below should be re-judged on dossiers regenerated with the
+> fixed `judge emit` before being cited. The re-judge has not been run.
+
 ## Verdicts (3-rep majority, blind, name-scrubbed dossiers)
 
 | rank | borrows | judge novelty | quality |

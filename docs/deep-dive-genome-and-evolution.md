@@ -162,8 +162,8 @@ Evaluation is a funnel, ordered by cost:
 Tier 2 feeds a battery of **degeneracy vetoes** before any metric is computed:
 `seat_participation` (a seat that never acts), `tempo_monopoly` (one player
 takes long uninterrupted runs), `non_agentic` (too few real choices),
-`dead_match_rule` / `playable_share` (a match rule so tight nothing is ever
-playable), `draw_supply_churn` (the game is mostly reshuffling). A vetoed
+`dead_match_rule` / `playable_share` (a match rule so loose that nearly every
+card is always playable, so matching is no constraint), `draw_supply_churn` (the game is mostly reshuffling). A vetoed
 genome scores zero regardless of its metrics. Because a genome is published
 from a single evaluation, publication re-runs each top-N candidate at K=5 fresh
 seeds and records `VetoStable`: a genome valid on >= 3 of 5 re-evals is
@@ -178,15 +178,20 @@ Five metrics, fixed weights:
 | Meaningful Decisions | 0.25 | fraction of decision turns marked Meaningful: >= 2 legal moves AND the choice-impact probe (`turnIsMeaningful`) finds the options actually differ |
 | Game Arc | 0.25 | 0.4*tent(comeback, 0.5) + 0.4*resolution + 0.2*min(leadChanges/3, 1), from per-game leader tracks |
 | Interaction | 0.20 | share of events that touch opponents, via per-skeleton OptionDelta probes |
-| Skill Gradient | 0.20 | two-tier: greedy over random (0.4 of scale) + MCTS over greedy (0.6) |
+| Skill Gradient | 0.20 | two-tier: greedy over random (0.4 of scale) + MCTS over the better of greedy and random (0.6) |
 | Session Length | 0.10 | decisions per player per game: 1.0 in 6-60, linear falloff over 3-6 and 60-170, 0 outside |
 
 The skill formula is the one worth spelling out:
 
 ```
 raw = 0.4 * max(0, greedyWR - randomWR) / (1 - randomWR)
-    + 0.6 * max(0, mctsWR  - greedyWR)  / (1 - greedyWR)
+    + 0.6 * max(0, mctsWR  - ref)       / (1 - ref)      where ref = max(greedyWR, randomWR)
 ```
+
+The second tier references the better of greedy and random: when the greedy
+scorer is worse than random play (it happens, e.g. Big Two with a knock
+borrow), beating greedy alone proves nothing, so a search that is itself
+below random scores 0.
 
 with `randomWR` measured empirically from the independent random batch (never
 assumed to be 1/players -- seat advantages are real; the batches use distinct
@@ -250,7 +255,9 @@ parent contributes a gene, never half a game loop). The child is then mutated
 too.
 
 **Selection** is elitism plus tournament, ranked not by raw fitness but by
-`SharedFitness` -- which is where the interesting machinery lives.
+`SharedFitness` -- which is where the interesting machinery lives. The one
+exception: the raw-fitness best individual always holds an elite slot, so the
+best game found so far is never lost to the sharing/novelty blend.
 
 ## Novelty: how it avoids re-evolving Crazy Eights forever
 

@@ -1,6 +1,6 @@
 # Genome Schema Reference (v2)
 
-**Date:** 2026-09-28
+**Date:** 2026-09-28 (updated 2026-10-02 for the bughunt validation and rule fixes)
 **Source of truth:** `pkg/genome/genome.go` (types), `pkg/genome/validate.go` (Tier-0 rules), `pkg/genome/liveness.go` (which genes actually affect outcome)
 
 This is the `genome.json` format read by `darwindeck playtest|describe|serve`, `evolve -seed-dir`, and `judge emit`, and written by `evolve` and `seeds export`. It replaces the v1 Python schema in `docs/genome-schema-examples.md`.
@@ -18,8 +18,8 @@ A v2 genome never encodes game logic. It picks one of six skeleton runners (each
 
 | Field | Type | Range / rule | Notes |
 |---|---|---|---|
-| `id` | string | | Free-form identifier. |
-| `description` | string | optional | One-line pitch shown in the `serve` lobby. Cosmetic; never read by evolution or metrics. |
+| `id` | string | | Free-form identifier. Evolution writes `gen<birth generation>_<population slot>` (unique within a run); older bundles have a random suffix. |
+| `description` | string | optional | One-line pitch shown in the `serve` lobby. Cosmetic; never read by evolution or metrics, and cleared on mutated or recombined descendants. |
 | `generation` | int | | Generation the genome was born in (0 for seeds). |
 | `skeleton` | enum | 0-5 | 0 shedding, 1 trick_taking, 2 rummy, 3 climbing, 4 casino, 5 vying. |
 | `players` | int | 2-6 | |
@@ -28,7 +28,7 @@ A v2 genome never encodes game logic. It picks one of six skeleton runners (each
 | `borrowed` | array | optional | Cross-skeleton mechanics. See [Borrowed mechanics](#borrowed-mechanics). |
 | `special_cards` | array | optional, shedding only | See [Special cards](#special-cards). |
 | `scoring` | object | | `card_points` and `trump_suit`. See [Scoring](#scoring). |
-| `trump_rule` | enum | 0-3 | 0 none, 1 fixed, 2 cut, 3 led. Rejected on rummy, climbing, casino, vying. |
+| `trump_rule` | enum | 0-3 | 0 none, 1 fixed, 2 cut, 3 led. Only trick-taking has trump: any other skeleton rejects a non-zero value. |
 
 **Output-only metadata** (written into published `genome.json`, never read by selection or metrics):
 
@@ -49,7 +49,7 @@ Empty your hand first by discarding onto a pile that each card must match.
 |---|---|---|---|
 | `match_rule` | enum | 0-2 | 0 suit, 1 rank, 2 either. 3 (both) is rejected as statically unplayable (only the top card itself matches). |
 | `draw_penalty` | int | 1-3 | Cards drawn when you can't match. |
-| `rounds_per_game` | int | 0-5 | 0 = unset, which means 1. Values > 1 only take effect with a banking borrow (`meld_bonus`, `avoidance`, `trick_scoring`): the game becomes banked-score rounds, highest total wins (`Genome.SheddingMultiRound`). Without one, the game stays single-round. |
+| `rounds_per_game` | int | 0-5 | 0 = unset, which means 1. Values > 1 only take effect with a LIVE banking borrow (`meld_bonus`, `trick_scoring`, or `avoidance` with non-empty `card_points`): the game becomes banked-score rounds, highest total wins (`Genome.SheddingMultiRound`). Without one, the game stays single-round. |
 
 ### `trick_taking` (skeleton 1) -- Whist, Hearts, Spades, Oh Hell
 
@@ -57,10 +57,10 @@ Empty your hand first by discarding onto a pile that each card must match.
 |---|---|---|---|
 | `must_follow_suit` | bool | | |
 | `trick_scoring` | enum | 0-2 | 0 per_trick, 1 card_points, 2 avoidance (points are bad, Hearts-style). 1 and 2 require non-empty `scoring.card_points`. |
-| `lead_restriction` | enum | 0-1 | 0 none, 1 no_trump_until_broken. 2 (winner_leads) is reserved and rejected: winner-leads is already the fixed turn order. |
+| `lead_restriction` | enum | 0-1 | 0 none, 1 no_trump_until_broken (inert when `trump_rule` is 0: there is no trump suit to restrict, and the rulebook omits the line). 2 (winner_leads) is reserved and rejected: winner-leads is already the fixed turn order. |
 | `rounds_per_game` | int | 1-13 | |
 
-Trump (`trump_rule` + `scoring.trump_suit`) is only consulted by this skeleton: fixed uses `trump_suit`, cut takes the suit of the top card of the pre-deal deck, led makes the first suit led trump.
+Trump (`trump_rule` + `scoring.trump_suit`) is only consulted by this skeleton: fixed uses `trump_suit`, cut draws the trump suit independently of the deal (it used to read the card then dealt to seat 0, so the opening leader always held a trump), led makes the first suit led trump. A tie on score goes to the winner of the last trick if they are among the tied players, else the next tied player after them in turn order.
 
 ### `rummy` (skeleton 2) -- Gin Rummy, Knock Rummy
 
@@ -69,7 +69,7 @@ Trump (`trump_rule` + `scoring.trump_suit`) is only consulted by this skeleton: 
 | `meld_types` | enum | 0-2 | 0 sets, 1 runs, 2 both. |
 | `min_meld_size` | int | 3-4 | 2 is rejected (a 2-card meld is trivially formable). |
 | `draw_from` | enum | 0-2 | 0 deck, 1 discard, 2 either. |
-| `knock_threshold` | int | 0-100 | Max deadwood to knock; 0 = gin only. |
+| `knock_threshold` | int | 0-100 | Max deadwood to knock; 0 = gin only. A knock is a combined "discard X and knock" move judged on the 10-card hand you keep, not on the hand including the drawn card. Ties on deadwood go against the knocker (undercut); gin wins ties. |
 
 ### `climbing` (skeleton 3) -- Big Two
 
@@ -97,12 +97,12 @@ Each deal: hidden hands, a rotating big blind of `min_bet`, one betting round (f
 
 | Field | Type | Range | Notes |
 |---|---|---|---|
-| `starting_chips` | int | > 0 | Must be >= `rounds_per_game * min_bet * (max_raises + 1)` so no all-in or side pot can arise. |
+| `starting_chips` | int | > 0 | Must be >= `rounds_per_game * (min_bet * (max_raises + 1) + P)` so no all-in or side pot can arise, where P is the worst-case avoidance penalty of one hand (the `hand_size` highest `card_points` values) when an `avoidance` borrow is present, else 0 (`Genome.VyingWorstCaseCommitment`). |
 | `min_bet` | int | > 0 | Big blind and raise increment. |
 | `max_raises` | int | >= 1 | Per betting round; guarantees the round closes. |
 | `rounds_per_game` | int | >= 1 | Deals played. |
 
-`hand_size` must also be >= 2 (enforced by the vying validator; the global floor of 3 already covers it).
+`hand_size` must also be >= 2 (enforced by the vying validator; the global floor of 3 already covers it). Hands of fewer than 5 cards cannot make straights or flushes; the rulebook lists only the categories reachable at that hand size.
 
 ## Special cards
 
@@ -134,7 +134,7 @@ At least one of `by_rank` / `by_suit` must be set: a catch-all (both 0) would ma
 | `card_points[].rank` | uint8 | 0 = any, else 2-14. |
 | `card_points[].suit` | uint8 | 0 = any, else 1-4. |
 | `card_points[].points` | int | |
-| `card_points[].event` | enum | 0 trick_win, 1 capture, 2 play, 3 hand_end. **Not consulted by any runner today**: card points apply the same way regardless of this value. |
+| `card_points[].event` | enum | Reserved: must be 0. No runner consults it (card points apply the same way whatever the event), so non-zero values (1 capture, 2 play, 3 hand_end) are rejected at Tier 0. |
 | `trump_suit` | uint8 | 1-4; required when `trump_rule` is 1 (fixed). |
 
 When several `card_points` rules match one card, the most specific wins (suit+rank > suit > rank > catch-all), so rule order never matters.
@@ -152,9 +152,9 @@ When several `card_points` rules match one card, the most specific wins (suit+ra
 | Value | Name | Depth | What it does |
 |---|---|---|---|
 | 0 | `trick_scoring` | shallow (banking) | Banks a per-round capture bonus into scores. |
-| 1 | `meld_bonus` | shallow (banking) | Banks a bonus for sets/runs at round end. |
-| 2 | `draw_penalty` | shallow (direct) | Extra draw penalty; always live. |
-| 3 | `knock` | **deep** | Knock when your hand is small to end the game; fewest cards wins, so a wrong knock hands someone else the win. |
+| 1 | `meld_bonus` | shallow (banking) | Banks a bonus for sets/runs at round end. On a lowest-score-wins trick host (`trick_scoring` avoidance) the bonus is subtracted, so it stays favorable. |
+| 2 | `draw_penalty` | shallow (direct) | Extra draw penalty; always live. Skipped when the play empties the hand or ends the round (going out wins). |
+| 3 | `knock` | **deep** | Knock when your hand is 3 cards or fewer (`KnockHandThreshold`); fewest cards wins, so a wrong knock hands someone else the win. Undercut rule: a knocker who is only tied for fewest does not win; among tied others, the nearest after the knocker in turn order wins (`KnockWinner`). On a multi-round shedding host the knock ends the round, not the game. |
 | 4 | `trump` | reserved | No implementation; rejected. |
 | 5 | `avoidance` | shallow (banking) | Penalty cards (uses `scoring.card_points`; inert without them). |
 | 6 | `play_multiple` | reserved | No implementation; rejected. |
@@ -176,6 +176,7 @@ Shallow borrows are hooks that fire after moves and adjust scores. Deep borrows 
 
 Extra rules:
 - No duplicate mechanics, even from different sources: their hooks would apply twice.
+- Overlapping `draw_two` and `draw_four` specials on one card are allowed; the larger draw applies, whatever the rule order.
 - `avoidance` on trick_taking requires `trick_scoring` = 0 (per_trick). With native card-point scoring, the borrow cancels the points exactly and seat 0 always wins.
 - `follow_suit` on shedding requires `match_rule` suit or either. Under rank matching, the obligation collapses into all-draw and the game can't finish.
 - Banking borrows (`meld_bonus`, `avoidance`, `trick_scoring`) on a single-round shedding host are dead: nothing reads the banked scores. `LiveBorrows()` prunes them from the rulebook and from output dedup.
@@ -200,7 +201,7 @@ Classic seeds, exported with `darwindeck seeds export -out <dir>` (source: `pkg/
 }
 ```
 
-**Hearts** (trick-taking avoidance; each heart 1 point, Q of spades 13; can't lead hearts until broken):
+**Hearts** (trick-taking avoidance; each heart 1 point, Q of spades 13; its `lead_restriction` is inert because there is no trump suit):
 
 ```json
 {

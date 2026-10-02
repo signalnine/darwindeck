@@ -72,13 +72,27 @@ So the table self-heals for explored compositions rather than statically coverin
 all 66. Run `darwindeck judge backfill -table <verdicts.json> -dir <run-output>
 -out <dossiers>` at a chunk boundary: it emits a blind dossier per composition
 present in the run but absent from the table; judge those (the workflow below),
-append `composition -> score`. Adding a skeleton or a borrow opens new
-compositions to backfill.
+append `composition -> score` (the id -> composition mapping is in the answer
+key, `<dossiers>/../<dir-name>.answer-key.json` or `-answer-key <path>`; an
+existing key is never overwritten without `-force`). Backfill exits non-zero if
+`-dir` is missing or holds no parsable genome. Adding a skeleton or a borrow
+opens new compositions to backfill.
 
 For per-genome (not per-composition) verdicts, `darwindeck judge rank
 <dossier-dir> <verdicts.json> [--out report.md]` ingests raw judge verdicts,
-takes the majority of 3 per dossier id, re-ranks by judged quality, flags
-rediscoveries, and writes `judged-report.md` + `judged.json`.
+takes the majority of 3 per dossier id (a duplicated repetition counts once;
+vote counts other than 3 are warned about and shown in the report), re-ranks by
+judged quality, flags rediscoveries, and writes `judged-report.md` +
+`judged.json`.
+
+**Dossier fidelity (2026-10-02).** Dossier traces and termination stats are
+simulated with the genome's borrow hooks applied (the same `mechanic.HooksFor`
+fitness uses) and show every decision, including bets, folds, and passes.
+Before this fix the simulations ran WITHOUT hook-based borrows (meld_bonus,
+avoidance, trick_scoring, draw_penalty), so a dossier's rulebook described
+mechanics its traces did not play. Table entries for compositions containing
+mechanic 0, 1, 2, or 5 that were judged from simulated dossiers before that
+date should be re-judged before being trusted.
 
 ## The loop (one chunk)
 
@@ -89,7 +103,10 @@ darwindeck evolve -algorithm hybrid -cross-skeleton -novelty-select \
   -judge-verdicts run/verdicts.json -checkpoint run/ck.json -emit-dir run/queue \
   -output run/out
 
-# 2. build blind dossiers for the emitted top genomes (real tool, not a throwaway)
+# 2. build blind dossiers for the emitted top genomes (real tool, not a throwaway).
+#    Dossier ids (G01..) are a pseudo-random permutation, NOT rank order; the private
+#    answer key run/dossiers/gen020.answer-key.json maps each id to its genome path
+#    and composition. Re-emitting into the same dir needs --force.
 darwindeck judge emit run/queue/gen020 --out run/dossiers/gen020
 
 # 3. judge the NEW compositions with Sonnet (3-judge majority) -- see the workflow below.

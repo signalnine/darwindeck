@@ -27,6 +27,7 @@ The active system is the pure Go v2 rewrite (`cmd/`, `pkg/`). The "v2 shipped" a
 - **Browser playtest + ratings** (2026-06-16 -> 2026-06-18): `darwindeck serve`, named game lobby, `seeds export` for blind classic anchors, the served set (`results/2026-06-18-served-set/`), `scripts/ratings-report.sh`.
 - **Generative grammar** (`pkg/grammar`, 2026-06-23 -> 2026-06-26): 7 move-generators, 15 modifiers, 137/137 modified families playable by construction, ~81% of in-scope surveyed games representable (`results/2026-06-26-grammar-coverage/`).
 - **Bughunts** (2026-07-01, 2026-07-17, 2026-07-24): judge dossier leaks, webplay session lifecycle, grammar fidelity, simulation determinism, operator coverage gaps, deadwood width cliff, Progress contract.
+- **Bughunt 2026-10-02** (six parallel hunters, ~60 verified findings, all fixed with regression tests): judge dossiers simulated games without their hook borrows; fixed-seat tie-breaks across runners and the grammar (up to 2:1 seat skews); rummy knock judged before the discard; elitism losing the raw-best genome; checkpoint resume diverging from an uninterrupted run; output ID collisions; MCTS skill tier crediting sub-random play; ratings accepted mid-game; rulebook text the runners did not enforce.
 
 ## v2 Open
 
@@ -306,3 +307,4 @@ v2 has no release versions: `darwindeck version` prints `git describe` (no tags 
 | 2026-07-15 | Simulation determinism + parallel execution fix |
 | 2026-07-17 | Bughunt (all high/medium findings, then close-out) |
 | 2026-07-24 | Bughunt: operator coverage gaps, deadwood width cliff, Progress contract; repo-wide gofmt |
+| 2026-10-02 | Bughunt: dossier hook fidelity, seat-neutral tie rules, rummy discard-then-knock, raw-best elitism, exact resume, unique IDs, MCTS tier reference, grammar scoring/Progress fixes |
