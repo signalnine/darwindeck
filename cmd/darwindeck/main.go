@@ -546,6 +546,14 @@ func sortAndTrim(inds []*evolution.Individual, n int, verdicts map[string]float6
 		}
 	}
 
+	// The two passes decide WHO is published; the published ORDER is best
+	// first. Returning the passes back to back put a reserved 0.60 game at a
+	// better rank than a 0.89 fill game, so a rankNN directory did not mean
+	// rank NN.
+	sort.SliceStable(result, func(i, j int) bool {
+		return pubScore(result[i]) > pubScore(result[j])
+	})
+
 	return result
 }
 

@@ -92,3 +92,43 @@ func TestSortAndTrimReservesSlotsForEverySkeleton(t *testing.T) {
 		}
 	}
 }
+
+// TestSortAndTrimPublishedOrderIsMonotone (2026-10-02 bughunt review): the
+// selection is two passes (per-skeleton reservation, then best-of-the-rest),
+// and the result used to be returned in pass order -- so a reserved 0.60 game
+// landed at a better rank than a 0.89 fill game, and "rankNN" did not mean
+// rank. Which games are published is unchanged; they are returned best first.
+func TestSortAndTrimPublishedOrderIsMonotone(t *testing.T) {
+	var inds []*evolution.Individual
+	n := 0
+	for _, g := range []*genome.Genome{seeds.SimplePoker(), seeds.Casino(), seeds.CrazyEights()} {
+		for i := 0; i < 10; i++ {
+			c := g.Clone()
+			c.HandSize = 3 + i
+			inds = append(inds, rankedInd(c, fmt.Sprintf("strong%d", n), 0.9-float64(n)*0.001))
+			n++
+		}
+	}
+	for i, g := range []*genome.Genome{seeds.Whist(), seeds.GinRummy(), seeds.BigTwo()} {
+		inds = append(inds, rankedInd(g, fmt.Sprintf("weak%d", i), 0.6))
+	}
+
+	out := sortAndTrim(inds, 20, nil)
+
+	for i := 1; i < len(out); i++ {
+		if out[i].OutputRank() > out[i-1].OutputRank() {
+			t.Fatalf("rank %d (%.3f) outranks rank %d (%.3f): the published order is not best-first",
+				i+1, out[i].OutputRank(), i, out[i-1].OutputRank())
+		}
+	}
+	// The reservation still decides WHO is published.
+	count := map[genome.SkeletonType]int{}
+	for _, ind := range out {
+		count[ind.Genome.Skeleton]++
+	}
+	for _, skel := range genome.AllSkeletons() {
+		if count[skel] == 0 {
+			t.Errorf("no %s game in the top 20 after re-ordering (counts: %v)", skel, count)
+		}
+	}
+}

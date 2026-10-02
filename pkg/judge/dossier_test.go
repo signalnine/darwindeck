@@ -268,3 +268,33 @@ func termSection(doc string) string {
 	}
 	return doc[idx:]
 }
+
+// TestMultiRoundKnockTerminationDescribesRounds (2026-10-02 bughunt review): on
+// a multi-round shedding host an emptied hand or a declare-out ends a ROUND,
+// and the game is decided on banked totals after the last round. The
+// termination section called the emptied hand "the win condition" and said
+// games "instead ended by a player declaring out", contradicting the rulebook
+// printed above it in the same dossier.
+func TestMultiRoundKnockTerminationDescribesRounds(t *testing.T) {
+	g := multiRoundKnockShedding(t)
+	g.ID = "G01"
+	doc, err := BuildDossier(g)
+	if err != nil {
+		t.Fatalf("BuildDossier: %v", err)
+	}
+	sec := termSection(doc)
+	for _, wrong := range []string{"(the win condition)", "instead ended by a player declaring out"} {
+		if strings.Contains(sec, wrong) {
+			t.Errorf("termination section of a multi-round game says %q:\n%s", wrong, sec)
+		}
+	}
+	if !strings.Contains(sec, "3 rounds") {
+		t.Errorf("termination section does not say the game runs 3 rounds:\n%s", sec)
+	}
+	if !strings.Contains(sec, "IS reachable") {
+		t.Errorf("termination section does not state the terminal state is reachable:\n%s", sec)
+	}
+	if strings.Contains(sec, unreachableText) {
+		t.Errorf("termination section calls a completing game possibly unreachable:\n%s", sec)
+	}
+}

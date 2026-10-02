@@ -356,8 +356,8 @@ func CheckAnswerKeyPath(keyPath, outDir string, force bool) error {
 
 // pathInside reports whether path lies inside dir (or is dir itself).
 func pathInside(path, dir string) bool {
-	absPath, err1 := filepath.Abs(path)
-	absDir, err2 := filepath.Abs(dir)
+	absPath, err1 := resolvePath(path)
+	absDir, err2 := resolvePath(dir)
 	if err1 != nil || err2 != nil {
 		return false
 	}
@@ -366,6 +366,30 @@ func pathInside(path, dir string) bool {
 		return false
 	}
 	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// resolvePath returns path as an absolute path with symlinks resolved, for
+// "is this inside that directory" checks: a lexical comparison is fooled by a
+// dossier dir (or a key path) addressed through a symlink. The path need not
+// exist yet (an answer key about to be written, an out dir about to be made):
+// the longest existing ancestor is resolved and the rest re-joined.
+func resolvePath(path string) (string, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	if real, err := filepath.EvalSymlinks(abs); err == nil {
+		return real, nil
+	}
+	parent := filepath.Dir(abs)
+	if parent == abs {
+		return abs, nil
+	}
+	realParent, err := resolvePath(parent)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(realParent, filepath.Base(abs)), nil
 }
 
 // SortIDsNumeric sorts neutral IDs (G01, G02, ...) numerically -- actually

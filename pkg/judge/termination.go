@@ -64,6 +64,12 @@ type TerminationInfo struct {
 	// games, at which a player first emptied their hand (i.e. won the round).
 	// 0 if no game completed.
 	MedianTurnsToEmptyHand int
+	// SheddingRounds is the number of banked-score rounds when the shedding
+	// host is multi-round (Genome.SheddingMultiRound), else 0. On such a host
+	// an emptied hand or a declare-out ends a ROUND, and the game is decided
+	// on banked totals after the last one -- so neither is "the win
+	// condition" and the termination text must not say so.
+	SheddingRounds int
 
 	// --- trick-taking reachable-win signal ---
 	// RoundsComplete is true iff at least one sampled game reached round
@@ -94,6 +100,7 @@ func computeTermination(g *genome.Genome, runner sim.GenericRunner, ai sim.AIPla
 		CapStd:             g.MaxTurns(),
 		CapExt:             g.MaxTurns() * 4,
 		HasContractScoring: hasContractScoring(g),
+		SheddingRounds:     sheddingRounds(g),
 	}
 
 	stdCompletions := 0
@@ -270,6 +277,15 @@ func observeGame(g *genome.Genome, runner sim.GenericRunner, ai sim.AIPlayer, rn
 			}
 		}
 	}
+}
+
+// sheddingRounds returns the round count of a multi-round shedding host, else
+// 0. See TerminationInfo.SheddingRounds.
+func sheddingRounds(g *genome.Genome) int {
+	if g.SheddingMultiRound() {
+		return g.Shedding.RoundsPerGame
+	}
+	return 0
 }
 
 // hasContractScoring derives whether the game uses bid/contract-style scoring

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/darwindeck/darwindeck/pkg/genome"
 	"github.com/darwindeck/darwindeck/pkg/mechanic"
 	"github.com/darwindeck/darwindeck/pkg/seeds"
 	"github.com/darwindeck/darwindeck/pkg/sim"
@@ -19,9 +20,15 @@ import (
 // drift here would put a different game in front of the judge than the one
 // fitness evaluated -- the very defect the borrow-hook fix closed.
 func TestPlayTracedMatchesRunBatch(t *testing.T) {
-	genomes := append(seeds.All(), runPlayMeldShedding(t), drawPenaltyRummy(t), knockBorrowGenome(t), scoredVyingGenome(t))
+	// The knock fixtures cover every way a knock ends play: the game on a
+	// single-round shedding host, the ROUND on a multi-round one (banked
+	// scores, redeal), the climbing race, and rummy's discard-then-knock.
+	knockers := []*genome.Genome{knockBorrowGenome(t), multiRoundKnockShedding(t), knockClimbing(t), seeds.KnockRummy()}
+	genomes := append(seeds.All(), runPlayMeldShedding(t), drawPenaltyRummy(t), scoredVyingGenome(t))
+	genomes = append(genomes, knockers...)
 	const n = 40
 	const base = uint64(977)
+	knocks := map[string]int{}
 	for _, g := range genomes {
 		runner, ai := mustRunner(t, g), mustAI(g)
 		hooks := mechanic.HooksFor(g)
@@ -32,8 +39,54 @@ func TestPlayTracedMatchesRunBatch(t *testing.T) {
 			if got.winner != want.AllWinners[i] {
 				t.Errorf("%s game %d: traced loop winner %d, RunBatch winner %d", g.ID, i, got.winner, want.AllWinners[i])
 			}
+			// A knock shows up in the trace as a declare-out line (the move
+			// line DECLARE_OUT, or the runner's neutralized knock event).
+			for _, line := range got.lines {
+				if strings.Contains(strings.ToLower(line), "declare") {
+					knocks[g.ID]++
+					break
+				}
+			}
 		}
 	}
+	// Parity on a knock host only means something if knocks were played.
+	for _, g := range knockers {
+		if knocks[g.ID] == 0 {
+			t.Errorf("%s: no knock was played in %d traced games, so the knock path is not covered by the parity check", g.ID, n)
+		}
+	}
+}
+
+// multiRoundKnockShedding: a knock on a multi-round shedding host ends the
+// ROUND (scores bank, hands redeal), not the game.
+func multiRoundKnockShedding(t *testing.T) *genome.Genome {
+	t.Helper()
+	g := seeds.CrazyEights()
+	g.ID = "knock-multi-round"
+	g.Shedding.RoundsPerGame = 3
+	g.Borrowed = []genome.BorrowedMechanic{
+		{Source: genome.Rummy, Mechanic: genome.MechKnock},
+		{Source: genome.Rummy, Mechanic: genome.MechMeldBonus},
+	}
+	if errs := genome.Validate(g); len(errs) > 0 {
+		t.Fatalf("multi-round knock genome fails Tier-0 validation: %v", errs)
+	}
+	if !g.SheddingMultiRound() {
+		t.Fatal("fixture drift: the multi-round knock genome is not multi-round")
+	}
+	return g
+}
+
+// knockClimbing: Big Two with the knock borrow (the climbing knock path).
+func knockClimbing(t *testing.T) *genome.Genome {
+	t.Helper()
+	g := seeds.BigTwo()
+	g.ID = "knock-climbing"
+	g.Borrowed = []genome.BorrowedMechanic{{Source: genome.Rummy, Mechanic: genome.MechKnock}}
+	if errs := genome.Validate(g); len(errs) > 0 {
+		t.Fatalf("climbing knock genome fails Tier-0 validation: %v", errs)
+	}
+	return g
 }
 
 // TestTraceOmitsForcedTurnKeepingPass pins which event-less moves get a

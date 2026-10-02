@@ -100,3 +100,28 @@ func TestDefaultAnswerKeyPathIsPerDossierDir(t *testing.T) {
 		t.Errorf("default key for gen020 = %s, want %s", a, want)
 	}
 }
+
+// TestCheckAnswerKeyPathRejectsInsideSymlinkedOut (2026-10-02 bughunt review):
+// "inside the dossier dir" was decided lexically, so a key addressed through
+// the dossier dir's real path while --out named a symlink to it (or the other
+// way round) landed inside the blind set.
+func TestCheckAnswerKeyPathRejectsInsideSymlinkedOut(t *testing.T) {
+	root := t.TempDir()
+	real := filepath.Join(root, "dossiers")
+	if err := os.MkdirAll(real, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(root, "blind")
+	if err := os.Symlink(real, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	if err := CheckAnswerKeyPath(filepath.Join(real, "answer-key.json"), link, false); err == nil {
+		t.Error("a key inside the dossier dir was accepted because --out named it through a symlink")
+	}
+	if err := CheckAnswerKeyPath(filepath.Join(link, "answer-key.json"), real, false); err == nil {
+		t.Error("a key addressed through a symlink into the dossier dir was accepted")
+	}
+	if err := CheckAnswerKeyPath(filepath.Join(root, "blind.answer-key.json"), link, false); err != nil {
+		t.Errorf("a key beside the symlinked dossier dir was rejected: %v", err)
+	}
+}

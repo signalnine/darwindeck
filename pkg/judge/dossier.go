@@ -126,6 +126,16 @@ func renderTermination(t TerminationInfo) string {
 		}
 	case genome.Shedding:
 		switch {
+		case t.SheddingRounds > 1 && t.AnyCompleted:
+			// Multi-round host: emptying a hand (or declaring out) ends a
+			// round; the game is decided on banked totals after the last one.
+			b.WriteString(fmt.Sprintf("- The game is played over **%d rounds** and decided on the banked totals after the last one. Sampled games completed every round and named a winner. The terminal state IS reachable by the rules.\n", t.SheddingRounds))
+			if t.MedianTurnsToEmptyHand > 0 {
+				b.WriteString(fmt.Sprintf("- A round first ended by a player emptying their hand at a median of **turn %d**.\n", t.MedianTurnsToEmptyHand))
+			}
+			if t.AnyDeclaredOut {
+				b.WriteString("- Some rounds in the sampled games ended by a player declaring out (the early-ending rule above) rather than by an emptied hand.\n")
+			}
 		case t.MedianTurnsToEmptyHand > 0:
 			b.WriteString(fmt.Sprintf("- A player emptied their hand (the win condition) in completed sampled games, at a median of **turn %d**. The terminal state IS reachable by the rules.\n", t.MedianTurnsToEmptyHand))
 			if t.AnyDeclaredOut {

@@ -191,3 +191,31 @@ func TestRankRestampGamesDemotesUnstable(t *testing.T) {
 		t.Errorf("unstable-hi (0.95) was not demoted below the stable games")
 	}
 }
+
+// TestRestampRefusesInPlaceThroughSymlink (2026-10-02 bughunt review): the
+// out == run guard compared cleaned absolute paths, so an out dir that is a
+// symlink to the run dir slipped through and the restamp overwrote (and, with
+// the stale-rank-dir sweep, deleted from) its own input.
+func TestRestampRefusesInPlaceThroughSymlink(t *testing.T) {
+	root := t.TempDir()
+	runDir, genomePath := restampRun(t, root)
+	before, err := os.ReadFile(genomePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(root, "alias")
+	if err := os.Symlink(runDir, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	var stdout, stderr bytes.Buffer
+	if err := runRestamp(runDir, link, &stdout, &stderr); err == nil {
+		t.Error("restamp into a symlink to the run dir was not refused")
+	}
+	after, err := os.ReadFile(genomePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Error("the input genome.json was modified through the symlinked out dir")
+	}
+}

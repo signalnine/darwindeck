@@ -83,7 +83,18 @@ func checkRestampDirs(runDir, outDir string) error {
 	if err != nil {
 		return err
 	}
-	if absRun == absOut {
+	// Lexical equality misses an out dir that is a symlink to the run dir (or
+	// reaches it through one); compare the directories themselves when both
+	// exist.
+	same := absRun == absOut
+	if !same {
+		if ri, err := os.Stat(absRun); err == nil {
+			if oi, err := os.Stat(absOut); err == nil {
+				same = os.SameFile(ri, oi)
+			}
+		}
+	}
+	if same {
 		return fmt.Errorf("out dir %s is the run dir itself: restamp would overwrite its own input (pass a different <out-dir>; the default is results/<run-basename>)", outDir)
 	}
 	return nil
