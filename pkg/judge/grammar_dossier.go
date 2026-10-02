@@ -1,9 +1,12 @@
 package judge
 
 import (
+	"bytes"
+	"crypto/sha256"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/darwindeck/darwindeck/pkg/fitness"
@@ -73,9 +76,28 @@ func EmitGrammar(specs []grammar.GameSpec, outDir string) (EmitResult, error) {
 	if err := cleanStaleDossiers(outDir); err != nil {
 		return EmitResult{}, err
 	}
+	// Ids are assigned by ascending SHA-256 of the composition key, not in the
+	// caller's (enumeration) order: G01..Gnn used to walk the families
+	// move-generator by move-generator, so the id alone leaked structure. The
+	// digest order is a deterministic pseudo-random permutation of the set --
+	// re-emitting the same specs, in any order, reproduces the same ids -- and
+	// the answer key is the only id -> composition mapping.
+	type item struct {
+		spec   grammar.GameSpec
+		digest [sha256.Size]byte
+	}
+	items := make([]item, len(specs))
+	for i, spec := range specs {
+		items[i] = item{spec: spec, digest: sha256.Sum256([]byte(spec.Composition()))}
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		return bytes.Compare(items[i].digest[:], items[j].digest[:]) < 0
+	})
+
 	res := EmitResult{AnswerKey: map[string]AnswerRec{}, DossierDir: outDir}
 	var manifest []ManifestEntry
-	for i, spec := range specs {
+	for i, it := range items {
+		spec := it.spec
 		id := fmt.Sprintf("G%02d", i+1)
 		res.IDs = append(res.IDs, id)
 		dossier, err := BuildGrammarDossier(spec, id)
@@ -93,7 +115,7 @@ func EmitGrammar(specs []grammar.GameSpec, outDir string) (EmitResult, error) {
 		manifest = append(manifest, ManifestEntry{
 			ID: id, Dossier: name, Skeleton: g.Skeleton.String(), Players: spec.Players, HandSize: spec.Deal,
 		})
-		res.AnswerKey[id] = AnswerRec{Source: "grammar", TrueName: spec.Composition(), Skeleton: g.Skeleton.String()}
+		res.AnswerKey[id] = AnswerRec{Source: "grammar", TrueName: spec.Composition(), Skeleton: g.Skeleton.String(), Composition: spec.Composition()}
 	}
 	if err := writeJSON(filepath.Join(outDir, "manifest.json"), manifest); err != nil {
 		return EmitResult{}, err

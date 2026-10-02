@@ -2,8 +2,10 @@ package judge
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -95,9 +97,16 @@ func TestEmitGrammarWritesBlindSet(t *testing.T) {
 			t.Errorf("missing %s", name)
 		}
 	}
-	// answer key keyed by neutral id, true_name = composition
-	if rec, ok := res.AnswerKey["G01"]; !ok || rec.TrueName != specs[0].Composition() {
-		t.Errorf("answer key G01 true_name = %q, want %q", rec.TrueName, specs[0].Composition())
+	// answer key keyed by neutral id, true_name = composition; every spec is
+	// covered exactly once.
+	seen := map[string]bool{}
+	for _, id := range res.IDs {
+		seen[res.AnswerKey[id].TrueName] = true
+	}
+	for _, spec := range specs {
+		if !seen[spec.Composition()] {
+			t.Errorf("answer key has no id for composition %q", spec.Composition())
+		}
 	}
 	// manifest is blind (no true_name field on disk)
 	data, _ := os.ReadFile(filepath.Join(dir, "manifest.json"))
@@ -117,7 +126,8 @@ func TestEmitGrammarWritesBlindSet(t *testing.T) {
 func TestEmitGrammarManifestHandSize(t *testing.T) {
 	dir := t.TempDir()
 	specs := grammar.Canonical()
-	if _, err := EmitGrammar(specs, dir); err != nil {
+	res, err := EmitGrammar(specs, dir)
+	if err != nil {
 		t.Fatal(err)
 	}
 	data, _ := os.ReadFile(filepath.Join(dir, "manifest.json"))
@@ -125,12 +135,83 @@ func TestEmitGrammarManifestHandSize(t *testing.T) {
 	if err := json.Unmarshal(data, &manifest); err != nil {
 		t.Fatal(err)
 	}
-	for i, m := range manifest {
-		if m.HandSize != specs[i].Deal {
-			t.Errorf("%s (%s): manifest hand size = %d, want the real deal %d", m.ID, specs[i].Family(), m.HandSize, specs[i].Deal)
+	// Ids are permuted, so the answer key links a manifest row to its spec.
+	byComp := map[string]grammar.GameSpec{}
+	for _, s := range specs {
+		byComp[s.Composition()] = s
+	}
+	for _, m := range manifest {
+		spec, ok := byComp[res.AnswerKey[m.ID].TrueName]
+		if !ok {
+			t.Fatalf("%s: answer key names no emitted spec", m.ID)
 		}
-		if m.Players != specs[i].Players {
-			t.Errorf("%s: manifest players = %d, want %d", m.ID, m.Players, specs[i].Players)
+		if m.HandSize != spec.Deal {
+			t.Errorf("%s (%s): manifest hand size = %d, want the real deal %d", m.ID, spec.Family(), m.HandSize, spec.Deal)
+		}
+		if m.Players != spec.Players {
+			t.Errorf("%s: manifest players = %d, want %d", m.ID, m.Players, spec.Players)
+		}
+	}
+}
+
+// TestEmitGrammarPermutesIDs: ids used to follow the enumeration order, so
+// G01..Gnn walked the families move-generator by move-generator and a judge
+// could read structure off the id alone (the v2 emit leak, grammar side). Ids
+// are a deterministic pseudo-random permutation of the input set, and the
+// dossier written under an id is the game the answer key names for it.
+func TestEmitGrammarPermutesIDs(t *testing.T) {
+	specs := grammar.EnumerateModified()[:24]
+	res, err := EmitGrammar(specs, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	inOrder := true
+	for i, id := range res.IDs {
+		if want := fmt.Sprintf("G%02d", i+1); id != want {
+			t.Fatalf("ids[%d] = %s, want %s", i, id, want)
+		}
+		if res.AnswerKey[id].TrueName != specs[i].Composition() {
+			inOrder = false
+		}
+	}
+	if inOrder {
+		t.Error("dossier ids follow the enumeration order, so the id leaks the family order")
+	}
+
+	// Deterministic for a fixed set, whatever order the caller passes it in.
+	rev := make([]grammar.GameSpec, len(specs))
+	for i, s := range specs {
+		rev[len(specs)-1-i] = s
+	}
+	again, err := EmitGrammar(rev, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(res.AnswerKey, again.AnswerKey) {
+		t.Error("the id assignment depends on the caller's spec order")
+	}
+
+	// The dossier under an id is the game its answer-key record names.
+	byComp := map[string]grammar.GameSpec{}
+	for _, s := range specs {
+		byComp[s.Composition()] = s
+	}
+	dir := t.TempDir()
+	res2, err := EmitGrammar(specs, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range res2.IDs {
+		want, err := BuildGrammarDossier(byComp[res2.AnswerKey[id].TrueName], id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := os.ReadFile(filepath.Join(dir, id+".md"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(got) != want {
+			t.Errorf("%s.md is not the dossier of the composition its answer key names", id)
 		}
 	}
 }
