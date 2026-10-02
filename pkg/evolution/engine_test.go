@@ -793,3 +793,33 @@ func TestGenomeHashStableUnderSliceReorder(t *testing.T) {
 			genomeHash(a), genomeHash(b))
 	}
 }
+
+// TestBaselineProgressReportsCurrentGenerationBest: the progress callback's
+// `best` must describe the generation it is reported for. updateBestFitness
+// only ran inside Select -- AFTER the callback -- so every line was one
+// generation stale and generation 0 always printed best=0.000 (the hybrid
+// engine, which updates inside evaluatePopulation, printed 0.950 for the
+// same seed).
+func TestBaselineProgressReportsCurrentGenerationBest(t *testing.T) {
+	cfg := Config{PopulationSize: 6, Generations: 2, EliteSize: 1, TournamentSize: 2, Workers: 4, BaseSeed: 42}
+	e := NewEngine(cfg, allSeeds())
+	calls := 0
+	e.Run(func(gen int, best, avg float64) {
+		calls++
+		want := 0.0
+		for _, ind := range e.Population {
+			if ind.Valid && ind.Fitness.TotalFitness > want {
+				want = ind.Fitness.TotalFitness
+			}
+		}
+		if want == 0 {
+			t.Fatalf("gen %d: no valid individual; fixture cannot exercise the report", gen)
+		}
+		if best != want {
+			t.Errorf("gen %d: progress best = %.3f, want the current population's best %.3f", gen, best, want)
+		}
+	})
+	if calls != cfg.Generations {
+		t.Fatalf("progress called %d times, want %d", calls, cfg.Generations)
+	}
+}

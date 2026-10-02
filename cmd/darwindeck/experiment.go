@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -76,11 +77,12 @@ func cmdExperiment(args []string) {
 	generations := fs.Int("generations", 100, "number of generations")
 	workers := fs.Int("workers", 0, "parallel workers (0=auto)")
 	outputDir := fs.String("output", "output/experiments", "output directory")
-	parallel := fs.Int("parallel", 3, "number of experiments to run in parallel")
+	parallel := fs.Int("parallel", 3, "number of experiments to run in parallel (<= 0 means 1)")
 	configsFlag := fs.String("configs", "baseline,map-elites,novelty,random", "comma-separated list of configs to run")
 	mctsDecile := fs.Float64("mcts-decile", 0.10,
 		"fraction of each generation (ranked by greedy-only running mean) re-evaluated with MCTS; 0 disables; applies to baseline/novelty (map-elites and random ignore it)")
 	fs.Parse(args)
+	rejectStrayArgs(fs)
 
 	configs := splitCSV(*configsFlag)
 	if err := validateConfigs(configs); err != nil {
@@ -91,6 +93,7 @@ func cmdExperiment(args []string) {
 	if *workers == 0 {
 		*workers = runtime.NumCPU()
 	}
+	*parallel = experimentParallelism(*parallel)
 
 	// seeds.All() is the single source of truth for the init pool -- this list
 	// was once maintained by hand and drifted (Casino and SimplePoker were
@@ -116,7 +119,7 @@ func cmdExperiment(args []string) {
 	var runs []runSpec
 	for i := 0; i < *numSeeds; i++ {
 		for ci, cfg := range configs {
-			runs = append(runs, runSpec{cfg, uint64(i + 1 + ci*1000)})
+			runs = append(runs, runSpec{cfg, experimentSpecSeed(i, ci)})
 		}
 	}
 
@@ -140,8 +143,8 @@ func cmdExperiment(args []string) {
 				Generations:    *generations,
 				EliteSize:      10,
 				TournamentSize: 5,
-				Workers:        *workers / *parallel, // divide workers among parallel runs
-				BaseSeed:       spec.seed * 1000,
+				Workers:        perRunWorkers(*workers, *parallel), // divide workers among parallel runs
+				BaseSeed:       experimentBaseSeed(spec.seed),
 				SaveTopN:       20,
 				MCTSDecile:     *mctsDecile, // default on (0.10); map-elites and random ignore it
 			}
@@ -169,6 +172,71 @@ func cmdExperiment(args []string) {
 
 	// Aggregate and report
 	reportResults(results, *outputDir, configs)
+}
+
+// experimentSpecSeed is the reported seed of replicate i of the ci-th config.
+func experimentSpecSeed(i, ci int) uint64 {
+	return uint64(i + 1 + ci*1000)
+}
+
+// experimentSeedStride spaces the BaseSeeds of different runs so that every
+// seed a run derives stays inside its own band [BaseSeed, BaseSeed+stride):
+//
+//   - evaluation: BaseSeed + generation*10000 + slot (and the fixed +5000
+//     behavior / MCTS, +99999 and +9,000,000 descriptor offsets on top);
+//   - MAP-Elites challenge re-evaluations: BaseSeed + 2^40 + challenge*10000.
+//
+// 2^44 clears both with room for ~10^8 generations and ~10^9 challenges. The
+// stride used to be 1000 -- smaller than the engines' own 10000-per-generation
+// step -- so replicate s+10 at generation g reused replicate s's generation
+// g+1 evaluation seeds (s=1,g=1 and s=11,g=0 both evaluated slot 0 at seed
+// 11000), and the "independent" replicates the report's Mann-Whitney test
+// compares shared game samples.
+const experimentSeedStride = uint64(1) << 44
+
+// experimentBaseSeed maps a run's reported seed to its engine BaseSeed.
+func experimentBaseSeed(specSeed uint64) uint64 {
+	return specSeed * experimentSeedStride
+}
+
+// experimentParallelism normalizes the -parallel flag: a non-positive value
+// means one run at a time. It used to size the run semaphore directly, so
+// `-parallel 0` made an unbuffered channel and the first acquire blocked
+// forever (the command hung right after its banner).
+func experimentParallelism(parallel int) int {
+	if parallel < 1 {
+		return 1
+	}
+	return parallel
+}
+
+// perRunWorkers divides the worker budget among the parallel runs, never
+// below 1: a 0 would read as "auto" to the engines, giving EVERY run
+// runtime.NumCPU() workers when -parallel exceeds -workers.
+func perRunWorkers(workers, parallel int) int {
+	if w := workers / experimentParallelism(parallel); w >= 1 {
+		return w
+	}
+	return 1
+}
+
+// perSkeletonCoverageLine renders one config's median coverage for EVERY
+// skeleton in genome.AllSkeletons() order. The report printed a hand-coded
+// shed/trick/rummy triple from the three-skeleton era, so climbing, casino
+// and vying coverage never reached the console summary.
+func perSkeletonCoverageLine(configName string, runs []ExperimentResult) string {
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "  %-12s", configName)
+	for _, skel := range genome.AllSkeletons() {
+		var cov []float64
+		for _, r := range runs {
+			if s, ok := r.PerSkeleton[skel.String()]; ok {
+				cov = append(cov, s.Coverage)
+			}
+		}
+		fmt.Fprintf(&sb, " %s=%.3f", skel, median(cov))
+	}
+	return sb.String()
 }
 
 func runExperiment(configName string, config evolution.Config, allSeeds []*genome.Genome) ExperimentResult {
@@ -521,21 +589,7 @@ func reportResults(results []ExperimentResult, outputDir string, configs []strin
 	// Per-skeleton breakdown
 	fmt.Println("\nPer-skeleton coverage (median):")
 	for _, configName := range configs {
-		runs := grouped[configName]
-		var shedCov, trickCov, rummyCov []float64
-		for _, r := range runs {
-			if s, ok := r.PerSkeleton["shedding"]; ok {
-				shedCov = append(shedCov, s.Coverage)
-			}
-			if s, ok := r.PerSkeleton["trick_taking"]; ok {
-				trickCov = append(trickCov, s.Coverage)
-			}
-			if s, ok := r.PerSkeleton["rummy"]; ok {
-				rummyCov = append(rummyCov, s.Coverage)
-			}
-		}
-		fmt.Printf("  %-12s shed=%.3f trick=%.3f rummy=%.3f\n",
-			configName, median(shedCov), median(trickCov), median(rummyCov))
+		fmt.Println(perSkeletonCoverageLine(configName, grouped[configName]))
 	}
 
 	// Per-config wall time. "total" sums per-run wall clocks (runs from

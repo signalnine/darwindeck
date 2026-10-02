@@ -100,6 +100,13 @@ func (e *MAPElitesEngine) seedArchives() {
 
 // generation produces PopulationSize offspring and attempts archive insertion.
 func (e *MAPElitesEngine) generation(gen int) {
+	e.evaluateAndInsert(e.breed(gen), gen+1)
+}
+
+// breed builds generation gen's PopulationSize offspring from the archives
+// (sequentially: the RNG is not goroutine-safe and the draw order is what
+// makes a seeded run reproducible).
+func (e *MAPElitesEngine) breed(gen int) []*genome.Genome {
 	var offspring []*genome.Genome
 
 	for i := 0; i < e.Config.PopulationSize; i++ {
@@ -109,7 +116,7 @@ func (e *MAPElitesEngine) generation(gen int) {
 			// No occupants yet, mutate a seed
 			seed := e.Seeds[e.rng.IntN(len(e.Seeds))]
 			child := e.mutate(seed)
-			child.ID = fmt.Sprintf("gen%d_%d", gen+1, e.rng.IntN(100000))
+			child.ID = offspringID(gen+1, i)
 			child.Generation = gen + 1
 			offspring = append(offspring, child)
 			continue
@@ -132,12 +139,12 @@ func (e *MAPElitesEngine) generation(gen int) {
 			child = e.mutate(child)
 		}
 
-		child.ID = fmt.Sprintf("gen%d_%d", gen+1, e.rng.IntN(100000))
+		child.ID = offspringID(gen+1, i)
 		child.Generation = gen + 1
 		offspring = append(offspring, child)
 	}
 
-	e.evaluateAndInsert(offspring, gen+1)
+	return offspring
 }
 
 // evaluateAndInsert evaluates genomes in parallel and inserts qualifying ones into archives.
@@ -435,7 +442,7 @@ func (e *MAPElitesEngine) archiveOrder() []genome.SkeletonType {
 // stepping stones; output keeps the floor so they are never published.
 //
 // Functionally identical genomes occupying multiple cells are deduplicated
-// by outputHash, keeping the best-fitness occupant (Task 28 round 2: the
+// by outputHash, keeping the best-estimated occupant (Task 28 round 2: the
 // flagship published clone groups under distinct IDs; Wave K fix 2 widened
 // the key to ignore dead genes).
 func (e *MAPElitesEngine) AllQualified() []*Individual {
@@ -461,9 +468,10 @@ func (e *MAPElitesEngine) AllQualified() []*Individual {
 				}
 				hash := outputHash(cell.Individual.Genome)
 				if cur, ok := best[hash]; ok {
-					// Clone-group keep is by OutputRank, the commensurable
-					// leaderboard key (Wave K fix 1).
-					if cell.Individual.OutputRank() > cur.ind.OutputRank() {
+					// Clone-group keep: the better-estimated occupant, then
+					// OutputRank (the commensurable leaderboard key, Wave K
+					// fix 1) -- see betterCloneMember.
+					if betterCloneMember(cell.Individual, cur.ind) {
 						cur.ind = cell.Individual // keep first-seen order
 					}
 					continue

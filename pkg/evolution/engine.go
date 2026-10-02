@@ -285,6 +285,12 @@ func (e *Engine) EvaluatePopulation() {
 	// flows from the published (possibly MCTS-mean) fitness.
 	e.runMCTSTopDecile()
 
+	// BestFitness/BestGenome describe THIS generation from here on (mirrors
+	// NoveltyEngine.evaluatePopulation). They used to be refreshed only inside
+	// Select, i.e. after Run's progress callback, so every reported `best` was
+	// one generation stale and generation 0 always printed 0.000.
+	e.updateBestFitness()
+
 	// Apply fitness sharing: divide fitness by niche count.
 	// Niches are defined by skeleton type. This prevents a single skeleton
 	// from monopolizing the population.
@@ -456,24 +462,54 @@ func (e *Engine) applyFitnessSharing() {
 // sticky historical max: with elite re-evaluation an elite's mean drifts
 // toward its true value, and freezing the highest-ever noisy estimate would
 // reintroduce the winner's curse this scheme exists to kill. Elitism keeps
-// the best genome in the population, so the current best is the honest
-// best. Expect BestFitness to move down as well as up across generations --
+// the raw-best genome in the population (eliteIndices guarantees it a slot
+// whenever EliteSize >= 1), so the current best is the honest best. Expect BestFitness to move down as well as up across generations --
 // that is the correction working. If no valid individual exists, the
 // previous best is retained.
 func (e *Engine) updateBestFitness() {
-	var best *Individual
-	for _, ind := range e.Population {
+	if i := e.rawBestIndex(); i >= 0 {
+		e.BestFitness = e.Population[i].Fitness.TotalFitness
+		e.BestGenome = e.Population[i].Genome
+	}
+}
+
+// rawBestIndex returns the population index of the valid individual with the
+// highest RAW (running-mean) TotalFitness, or -1 if none is valid. Ties keep
+// the earliest index, so the pick is deterministic for a fixed population
+// order.
+func (e *Engine) rawBestIndex() int {
+	best := -1
+	for i, ind := range e.Population {
 		if !ind.Valid {
 			continue
 		}
-		if best == nil || ind.Fitness.TotalFitness > best.Fitness.TotalFitness {
-			best = ind
+		if best < 0 || ind.Fitness.TotalFitness > e.Population[best].Fitness.TotalFitness {
+			best = i
 		}
 	}
-	if best != nil {
-		e.BestFitness = best.Fitness.TotalFitness
-		e.BestGenome = best.Genome
+	return best
+}
+
+// eliteIndices returns the indices (into a population already sorted by
+// SharedFitness, descending) of the individuals carried forward unchanged.
+// The slots fill by shared fitness, EXCEPT that the raw-best individual is
+// always among them: SharedFitness is niche-shared (and novelty-blended in
+// the hybrid engine), so the highest raw-fitness genome can rank far outside
+// the top EliteSize when its niche is crowded, and a shared-fitness-only rule
+// then drops the best game the run has found (measured 2/6 generations on
+// the baseline engine, 4/6 on the hybrid, at population 60). When rawBest is
+// outside the band it takes the LAST elite slot; it never adds a slot, so
+// EliteSize 0 still means no elitism. rawBest < 0 (no valid individual)
+// leaves the plain shared-fitness band.
+func eliteIndices(elite, rawBest int) []int {
+	idx := make([]int, elite)
+	for i := range idx {
+		idx[i] = i
 	}
+	if elite > 0 && rawBest >= elite {
+		idx[elite-1] = rawBest
+	}
+	return idx
 }
 
 // Select performs tournament selection to create the next generation.
@@ -491,20 +527,21 @@ func (e *Engine) Select() []*Individual {
 
 	nextGen := make([]*Individual, e.Config.PopulationSize)
 
-	// Elitism: top N carry forward, including their running-mean state.
+	// Elitism: top N by shared fitness carry forward -- always including the
+	// raw-best individual (eliteIndices) -- with their running-mean state.
 	// Elites are re-evaluated with a fresh seed every generation (see
 	// EvaluatePopulation); carrying EvalCount/FitnessSum is what turns the
 	// next evaluation into a running mean instead of a fresh point estimate.
 	elite := min(e.Config.EliteSize, len(e.Population))
-	for i := 0; i < elite; i++ {
+	for i, src := range eliteIndices(elite, e.rawBestIndex()) {
 		nextGen[i] = &Individual{
-			Genome:     e.Population[i].Genome,
-			Fitness:    e.Population[i].Fitness,
+			Genome:     e.Population[src].Genome,
+			Fitness:    e.Population[src].Fitness,
 			Valid:      true,
-			EvalCount:  e.Population[i].EvalCount,
-			FitnessSum: e.Population[i].FitnessSum,
-			MctsSum:    e.Population[i].MctsSum,
-			MctsCount:  e.Population[i].MctsCount,
+			EvalCount:  e.Population[src].EvalCount,
+			FitnessSum: e.Population[src].FitnessSum,
+			MctsSum:    e.Population[src].MctsSum,
+			MctsCount:  e.Population[src].MctsCount,
 		}
 	}
 
@@ -518,6 +555,7 @@ func (e *Engine) Select() []*Individual {
 			child := CrossoverWith(parent.Genome, parent2.Genome, e.rng, e.Config.CrossSkeleton)
 			if child != nil {
 				child = e.mutate(child)
+				child.ID = offspringID(e.Generation+1, i)
 				nextGen[i] = &Individual{Genome: child}
 				continue
 			}
@@ -525,6 +563,7 @@ func (e *Engine) Select() []*Individual {
 
 		// Mutation only
 		child := e.mutate(parent.Genome)
+		child.ID = offspringID(e.Generation+1, i)
 		nextGen[i] = &Individual{Genome: child}
 	}
 
@@ -532,6 +571,19 @@ func (e *Engine) Select() []*Individual {
 	e.dedup(nextGen)
 
 	return nextGen
+}
+
+// offspringID is the genome ID for the individual born into population slot
+// `slot` of generation `gen`. (birth generation, slot) is unique within a run
+// by construction: each slot receives at most one new genome per generation
+// (a dedup replacement overwrites the slot's own offspring). The engines used
+// to keep MutateWith's "gen<G>_<rng.IntN(100000)>", which let two DIFFERENT
+// genomes born in the same generation share an ID (12 colliding pairs over 10
+// generations at population 500), and ID-keyed consumers then dropped one of
+// them. Deterministic in (generation, slot), so it is independent of worker
+// count and survives a checkpoint resume unchanged.
+func offspringID(gen, slot int) string {
+	return fmt.Sprintf("gen%d_%d", gen, slot)
 }
 
 // mutate applies MutateWith threaded with this engine's cross-skeleton flag,
@@ -566,6 +618,8 @@ func (e *Engine) dedup(pop []*Individual) {
 			parent := e.dedupParent(pop, top, seen, hash, i)
 			if parent != nil {
 				child := e.mutate(parent)
+				// pop is the NEXT generation; slot i now holds a new genome.
+				child.ID = offspringID(e.Generation+1, i)
 				pop[i].Genome = child
 				pop[i].Valid = false
 				// The genome changed: prior evaluations are meaningless --
@@ -669,6 +723,11 @@ func outputHash(g *genome.Genome) string {
 	return genomeHash(c)
 }
 
+// OutputHash exposes the output-ranking dedup key to publication code outside
+// this package (the evolve command's sortAndTrim): two genomes with equal
+// OutputHash are the same published game, whatever their IDs.
+func OutputHash(g *genome.Genome) string { return outputHash(g) }
+
 func sortedBorrowed(in []genome.BorrowedMechanic) []genome.BorrowedMechanic {
 	if len(in) == 0 {
 		return nil
@@ -700,11 +759,19 @@ func sortedSpecialCards(in []genome.SpecialCard) []genome.SpecialCard {
 	return out
 }
 
+// sortedCardPoints canonicalizes a card_points block for hashing: a sorted
+// COPY with CardScoring.Event zeroed. Event is a dead field -- no runner, hook
+// or rulebook reads it (genome.MatchCardPoints matches on rank and suit alone)
+// -- so hashing it made event-only variants distinct to population dedup and
+// to the output ranking. The genome itself (and its JSON) is untouched.
 func sortedCardPoints(in []genome.CardScoring) []genome.CardScoring {
 	if len(in) == 0 {
 		return nil
 	}
 	out := append([]genome.CardScoring(nil), in...)
+	for i := range out {
+		out[i].Event = 0
+	}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Rank != out[j].Rank {
 			return out[i].Rank < out[j].Rank
@@ -712,12 +779,24 @@ func sortedCardPoints(in []genome.CardScoring) []genome.CardScoring {
 		if out[i].Suit != out[j].Suit {
 			return out[i].Suit < out[j].Suit
 		}
-		if out[i].Event != out[j].Event {
-			return out[i].Event < out[j].Event
-		}
 		return out[i].Points < out[j].Points
 	})
 	return out
+}
+
+// betterCloneMember reports whether cand should replace cur as the published
+// member of one clone group (individuals with equal outputHash). The
+// better-ESTIMATED member wins -- more greedy-mode evaluations in its running
+// mean -- and OutputRank only breaks ties between equally-sampled members.
+// Ranking first kept whichever estimate was luckiest: in the hybrid engine a
+// frozen single-evaluation archive snapshot beat its own live twin whenever
+// the twin's longer running mean had regressed, the winner's curse
+// reintroduced at publication.
+func betterCloneMember(cand, cur *Individual) bool {
+	if cand.EvalCount != cur.EvalCount {
+		return cand.EvalCount > cur.EvalCount
+	}
+	return cand.OutputRank() > cur.OutputRank()
 }
 
 // Run executes the full evolution loop.
@@ -750,14 +829,13 @@ func (e *Engine) Run(progress func(gen int, best float64, avg float64)) {
 		e.Population = e.Select()
 	}
 
-	// Final evaluation. Select never runs on this population, so update
-	// BestFitness directly to capture any post-final-Select offspring whose
-	// raw fitness beats the prior best. Bump Generation past the loop range
-	// so elites get a fresh seed here too instead of repeating the last
+	// Final evaluation. Select never runs on this population; EvaluatePopulation
+	// itself refreshes BestFitness, capturing any post-final-Select offspring
+	// whose raw fitness beats the prior best. Bump Generation past the loop
+	// range so elites get a fresh seed here too instead of repeating the last
 	// generation's evaluation.
 	e.Generation = e.Config.Generations
 	e.EvaluatePopulation()
-	e.updateBestFitness()
 }
 
 // TopN returns the top N genomes ensuring skeleton diversity.

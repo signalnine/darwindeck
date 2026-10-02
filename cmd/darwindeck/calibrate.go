@@ -223,6 +223,7 @@ func printCalibrationTable(w io.Writer, rows []calRow) {
 func cmdCalibrate(args []string) {
 	fs := flag.NewFlagSet("calibrate", flag.ExitOnError)
 	fs.Parse(args)
+	rejectStrayArgs(fs)
 
 	classics := seeds.All()
 	degens := append([]*genome.Genome{seeds.InstantKnockRummy(), seeds.ForcedShedding()},

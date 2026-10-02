@@ -22,6 +22,7 @@ func Mutate(g *genome.Genome, rng *rand.Rand, allSeeds []*genome.Genome) *genome
 // Multiple mutations can fire independently.
 func MutateWith(g *genome.Genome, rng *rand.Rand, allSeeds []*genome.Genome, crossSkeleton bool) *genome.Genome {
 	child := cloneGenome(g)
+	clearCuratedMetadata(child)
 	child.ID = fmt.Sprintf("gen%d_%d", child.Generation+1, rng.IntN(100000))
 	child.Generation++
 
@@ -110,14 +111,17 @@ func tweakParameter(g *genome.Genome, rng *rand.Rand) {
 	case genome.Shedding:
 		if g.Shedding != nil {
 			// RoundsPerGame is mutable only when the genome carries a
-			// scoring borrow: without one the field is inert
+			// BANKING borrow: without one the field is inert
 			// (genome.SheddingMultiRound is false regardless of its value),
 			// and mutating it would burn mutation pressure on a no-op --
 			// the repo's coherent-mutation principle (a mutation that
 			// touches a mechanic must touch a LIVE mechanic). Borrow-less
-			// genomes spend the whole branch on DrawPenalty.
+			// genomes spend the whole branch on DrawPenalty. The gate is
+			// HasBankingBorrow, the SAME predicate SheddingMultiRound uses:
+			// the narrower HasScoringBorrow left out trick_scoring, freezing
+			// a live RoundsPerGame on every trick_scoring-only hybrid.
 			options := 1
-			if g.HasScoringBorrow() {
+			if g.HasBankingBorrow() {
 				options = 2
 			}
 			switch rng.IntN(options) {
@@ -308,7 +312,6 @@ func addSpecialCard(g *genome.Genome, rng *rand.Rand) {
 		return // Cap at 6 special cards
 	}
 
-	ranks := []uint8{uint8(2), uint8(7), uint8(8), uint8(10), uint8(11), uint8(12)}
 	types := []genome.SpecialCardType{
 		genome.SpecialSkip,
 		genome.SpecialReverse,
@@ -334,7 +337,10 @@ func addSpecialCard(g *genome.Genome, rng *rand.Rand) {
 		byRank = 0
 		bySuit = uint8(rng.IntN(4) + 1) // 1-4: a suit qualifier is mandatory
 	} else {
-		byRank = ranks[rng.IntN(len(ranks))]
+		// Any real rank 2-14 (the full range Tier 0 accepts). This sampled a
+		// hand-picked {2,7,8,10,J,Q}, so specials on 3-6, 9, K and A were
+		// reachable only by copying a seed that carried them.
+		byRank = uint8(rng.IntN(13) + 2)
 		bySuit = uint8(rng.IntN(5)) // 0=any suit, 1-4=specific
 	}
 
@@ -526,6 +532,7 @@ func changeSkeleton(g *genome.Genome, rng *rand.Rand, allSeeds []*genome.Genome)
 	// Pick a random seed (potentially different skeleton)
 	seed := allSeeds[rng.IntN(len(allSeeds))]
 	seedCopy := cloneGenome(seed)
+	clearCuratedMetadata(seedCopy)
 
 	// Keep the child's generation and ID
 	seedCopy.ID = g.ID
@@ -563,6 +570,20 @@ func mutateScoring(g *genome.Genome, rng *rand.Rand) {
 
 func cloneGenome(g *genome.Genome) *genome.Genome {
 	return g.Clone()
+}
+
+// clearCuratedMetadata strips the fields that describe one specific PUBLISHED
+// genome -- the curated Description tagline and the VetoStable/StableEvals
+// stability stamp -- from a genome that is about to become a new individual.
+// Clone copies them (an unmodified clone or a carried elite is the same game
+// and keeps them), so every operator that builds a descendant must clear
+// them: otherwise a `-seed-dir` seed's pitch and "5/5 stable" stamp ride
+// along onto mutants with different rules that were never curated or
+// stability-checked.
+func clearCuratedMetadata(g *genome.Genome) {
+	g.Description = ""
+	g.VetoStable = false
+	g.StableEvals = ""
 }
 
 func clampInt(v, min, max int) int {

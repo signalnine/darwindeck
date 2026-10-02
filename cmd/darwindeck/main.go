@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/darwindeck/darwindeck/pkg/evolution"
@@ -76,6 +77,34 @@ Commands:
   help        Show this message`)
 }
 
+// strayArgsError reports a positional argument left over after fs.Parse on a
+// subcommand that takes none. Go's flag parsing stops at the first non-flag
+// token and leaves EVERYTHING after it unparsed, so one stray word silently
+// dropped the rest of the command line: `evolve ... -cross-skeleton true
+// -novelty-select -output x` ran with novelty-select off and the default
+// output directory ("true" is positional -- boolean flags take no separate
+// value). nil when the command line was fully consumed.
+func strayArgsError(fs *flag.FlagSet) error {
+	if fs.NArg() == 0 {
+		return nil
+	}
+	ignored := ""
+	if rest := fs.Args()[1:]; len(rest) > 0 {
+		ignored = fmt.Sprintf("; everything after it was not parsed: %s", strings.Join(rest, " "))
+	}
+	return fmt.Errorf("%s: unexpected argument %q%s\n%s takes only flags (-name value or -name=value; a boolean flag is -name or -name=false, never -name true)",
+		fs.Name(), fs.Arg(0), ignored, fs.Name())
+}
+
+// rejectStrayArgs exits with the flag package's usage-error status when the
+// parsed command line still holds a positional argument (see strayArgsError).
+func rejectStrayArgs(fs *flag.FlagSet) {
+	if err := strayArgsError(fs); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(2)
+	}
+}
+
 func cmdEvolve(args []string) {
 	fs := flag.NewFlagSet("evolve", flag.ExitOnError)
 
@@ -107,6 +136,7 @@ func cmdEvolve(args []string) {
 		"directory to write the top genomes (genome.json per rank) at a chunk boundary, for out-of-loop novelty judging; default <output>/judge-queue")
 
 	fs.Parse(args)
+	rejectStrayArgs(fs)
 	evolution.FitnessFloor = *floor
 
 	// Warn about silently-ignored flag combinations (behavior is unchanged):
@@ -442,15 +472,11 @@ func cmdDescribe(args []string) {
 const pubJudgeWeight = 0.2
 
 func sortAndTrim(inds []*evolution.Individual, n int, verdicts map[string]float64) []*evolution.Individual {
-	// Deduplicate by genome ID first
-	seen := make(map[string]bool)
-	var unique []*evolution.Individual
+	ranked := make([]*evolution.Individual, 0, len(inds))
 	for _, ind := range inds {
-		if ind == nil || ind.Genome == nil || seen[ind.Genome.ID] {
-			continue
+		if ind != nil && ind.Genome != nil {
+			ranked = append(ranked, ind)
 		}
-		seen[ind.Genome.ID] = true
-		unique = append(unique, ind)
 	}
 
 	// Order by OutputRank (the greedy-only running mean -- the commensurable
@@ -466,12 +492,32 @@ func sortAndTrim(inds []*evolution.Individual, n int, verdicts map[string]float6
 		}
 		return s
 	}
-	sort.Slice(unique, func(i, j int) bool {
-		return pubScore(unique[i]) > pubScore(unique[j])
+	sort.SliceStable(ranked, func(i, j int) bool {
+		return pubScore(ranked[i]) > pubScore(ranked[j])
 	})
 
-	// Reserve slots per skeleton for diversity in output
-	perSkeleton := n / 3
+	// Deduplicate AFTER sorting, by the game's rules (evolution.OutputHash),
+	// so each clone group keeps its best-ranked member. This used to dedup by
+	// Genome.ID BEFORE the sort: IDs were random and could collide between two
+	// different games, and the first-seen entry then shadowed the other
+	// regardless of fitness (a 0.45 game dropped a 0.90 one). An ID is a label,
+	// not an identity.
+	seen := make(map[string]bool, len(ranked))
+	unique := ranked[:0]
+	for _, ind := range ranked {
+		hash := evolution.OutputHash(ind.Genome)
+		if seen[hash] {
+			continue
+		}
+		seen[hash] = true
+		unique = append(unique, ind)
+	}
+
+	// Reserve slots per skeleton for diversity in output. The divisor is the
+	// real skeleton count (a hardcoded 3 from the three-skeleton era let three
+	// strong skeletons reserve 6 slots each and shut the others out of a
+	// top-20; Engine.TopN carries the same rule).
+	perSkeleton := n / len(genome.AllSkeletons())
 	if perSkeleton < 2 {
 		perSkeleton = 2
 	}
