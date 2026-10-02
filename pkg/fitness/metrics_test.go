@@ -1064,6 +1064,135 @@ func TestTwoTierSkillPerfectGreedyNoNaN(t *testing.T) {
 	}
 }
 
+// TestTwoTierSkillSubRandomMCTSSeatScoresZero (2026-10 bughunt): when the
+// greedy scorer plays WORSE than random (an anti-skilled heuristic -- measured
+// on Big Two + MechKnock: random seat-0 0.435, greedy 0.235), the MCTS tier
+// must not hand out skill for merely beating that bad greedy. A seat that is
+// itself BELOW the random baseline has shown no skill at all and scores 0.
+// With the tier referenced on greedy alone, a plain RANDOM player dropped into
+// the MCTS seat (0.345) scored 0.173 on exactly these rates.
+func TestTwoTierSkillSubRandomMCTSSeatScoresZero(t *testing.T) {
+	random, greedy, subRandomSeat := mkWins(87, 200), mkWins(47, 200), mkWins(69, 200)
+	if got := computeSkillGradient(random, greedy, subRandomSeat, 4); got != 0 {
+		t.Errorf("MCTS seat at 0.345 under a 0.435 random baseline must score 0 "+
+			"(greedy 0.235 is sub-random, not a skill floor), got %.3f", got)
+	}
+}
+
+// TestTwoTierSkillSubRandomGreedyUsesRandomBaseline (2026-10 bughunt): the
+// MCTS tier's reference is max(greedyWR, baselineWR) for BOTH the uplift and
+// the headroom. With greedy below the random baseline the tier measures MCTS
+// against random -- the only skill floor the game has demonstrated -- so a
+// zero-skill MCTS seat scores 0 and a strong one is not credited with the
+// greedy scorer's deficit on top of its own edge.
+func TestTwoTierSkillSubRandomGreedyUsesRandomBaseline(t *testing.T) {
+	// random 40%, greedy 20% (sub-random), mcts 70%:
+	//   t1 = 0 (greedy below baseline)
+	//   t2 = 0.6*(0.70-0.40)/(1-0.40) = 0.6*0.5 = 0.30
+	// The greedy-referenced tier read 0.6*(0.70-0.20)/(1-0.20) = 0.375.
+	want := twoTierExpected(0.30)
+	got := computeSkillGradient(mkWins(40, 100), mkWins(20, 100), mkWins(14, 20), 2)
+	if math.Abs(got-want) > 1e-9 {
+		t.Errorf("sub-random greedy: MCTS tier must be measured against the random baseline: "+
+			"want scaled 0.30 = %.3f, got %.3f", want, got)
+	}
+
+	// Zero-skill MCTS seat (exactly the random baseline) scores 0 however far
+	// below the baseline greedy sits.
+	for _, greedyWins := range []int{0, 10, 39} {
+		if got := computeSkillGradient(mkWins(40, 100), mkWins(greedyWins, 100), mkWins(8, 20), 2); got != 0 {
+			t.Errorf("mcts == random baseline (40%%) with greedy at %d%% must score 0, got %.3f", greedyWins, got)
+		}
+	}
+
+	// Greedy at or above the baseline: the reference is greedy, i.e. the plan
+	// formula is unchanged (same hand-computed case as
+	// TestTwoTierSkillMCTSTermAddsAboveGreedy).
+	if got, want := computeSkillGradient(mkWins(50, 100), mkWins(75, 100), mkWins(18, 20), 2), twoTierExpected(0.56); math.Abs(got-want) > 1e-9 {
+		t.Errorf("greedy above baseline must keep the plan formula: want %.3f, got %.3f", want, got)
+	}
+}
+
+// TestComputeFitnessEdgeCasesFiniteAndInRange (2026-10 bughunt, found clean):
+// every metric and the weighted total stay finite and inside [0,1] on the
+// degenerate batch shapes the pipeline can actually hand the metric layer --
+// nothing played, nothing completed, a single game, a seat that always wins,
+// a hand-built batch with no per-seat win counts. Each is a division whose
+// denominator can be zero; NaN here would poison selection silently (NaN
+// compares false against everything, so a NaN genome is neither kept nor
+// culled deterministically).
+func TestComputeFitnessEdgeCasesFiniteAndInRange(t *testing.T) {
+	track := func(leaders ...int8) []int8 { return leaders }
+	// Per-game slices keep RunBatch's shape (TurnsList / AllWinners / AllTurns
+	// / AllLeaders parallel, one entry per game): completedAvgTurns indexes
+	// TurnsList by AllWinners position and relies on that invariant.
+	oneGame := sim.BatchResult{
+		GamesPlayed: 1, Completions: 1, WinCounts: []int{1, 0}, AllWinners: []int{0}, TurnsList: []int{2},
+		AllLeaders: [][]int8{track(1, 1, 1, 0, 0, 0)},
+		AllTurns:   [][]sim.TurnRecord{{{Player: 0, LegalMoves: 2}, {Player: 1, LegalMoves: 1}}},
+	}
+	allTimeouts := sim.BatchResult{
+		GamesPlayed: 2, Timeouts: 2, WinCounts: []int{0, 0}, AllWinners: []int{-1, -1}, TurnsList: []int{1, 1},
+		AllLeaders: [][]int8{track(0, 0, 0, 0, 0), track(1, 1, 1, 1, 1)},
+		AllTurns:   [][]sim.TurnRecord{{{Player: 0}}, {{Player: 1}}},
+	}
+	seat0Sweep := sim.BatchResult{Completions: 3, WinCounts: []int{3, 0}}
+	noWinCounts := sim.BatchResult{Completions: 2}
+	emptyGames := sim.BatchResult{GamesPlayed: 2, AllTurns: [][]sim.TurnRecord{nil, {}}, AllLeaders: [][]int8{nil, {}}, AllWinners: []int{-1, -1}, TurnsList: []int{0, 0}}
+
+	cases := []struct {
+		name                 string
+		random, greedy, mcts sim.BatchResult
+		players              int
+	}{
+		{"all batches empty", sim.BatchResult{}, sim.BatchResult{}, sim.BatchResult{}, 2},
+		{"zero players", sim.BatchResult{}, seat0Sweep, sim.BatchResult{}, 0},
+		{"negative players", oneGame, oneGame, oneGame, -1},
+		{"games with no records", emptyGames, emptyGames, emptyGames, 2},
+		{"all timeouts", allTimeouts, allTimeouts, allTimeouts, 2},
+		{"one completed game", oneGame, oneGame, oneGame, 2},
+		{"random seat 0 always wins (no greedy headroom)", seat0Sweep, seat0Sweep, seat0Sweep, 2},
+		{"greedy always wins (no MCTS headroom)", oneGame, seat0Sweep, seat0Sweep, 2},
+		{"greedy completions without win counts", seat0Sweep, noWinCounts, seat0Sweep, 2},
+		{"mcts completions without win counts", oneGame, oneGame, noWinCounts, 2},
+		{"random batch never completed", allTimeouts, seat0Sweep, seat0Sweep, 2},
+		{"greedy batch never completed", oneGame, allTimeouts, seat0Sweep, 2},
+	}
+	for _, c := range cases {
+		m := ComputeFitnessWithMCTS(c.random, c.greedy, c.mcts, c.players)
+		for name, v := range map[string]float64{
+			"MeaningfulDecisions": m.MeaningfulDecisions,
+			"GameArc":             m.GameArc,
+			"Interaction":         m.Interaction,
+			"SkillGradient":       m.SkillGradient,
+			"SessionLength":       m.SessionLength,
+			"TotalFitness":        m.TotalFitness,
+		} {
+			if math.IsNaN(v) || math.IsInf(v, 0) || v < 0 || v > 1 {
+				t.Errorf("%s: %s = %v, want a finite value in [0,1]", c.name, name, v)
+			}
+		}
+	}
+
+	// The veto statistics share the same inputs and the same hazard.
+	for _, b := range []sim.BatchResult{{}, emptyGames, allTimeouts, oneGame} {
+		for name, v := range map[string]float64{
+			"meanConsecutiveRun": meanConsecutiveRun(b),
+			"meanLongestRun":     meanLongestRun(b),
+			"meanMinSeatShare":   meanMinSeatShare(b, 2),
+			"meanMinSeatShare/0": meanMinSeatShare(b, 0),
+			"allPlayableShare":   allPlayableShare(b),
+			"playableShareMean":  playableShareMean(b),
+			"optionDeltaShare":   optionDeltaShare(b),
+			"completedAvgTurns":  completedAvgTurns(b),
+		} {
+			if math.IsNaN(v) || math.IsInf(v, 0) || v < 0 {
+				t.Errorf("veto statistic %s = %v on a degenerate batch, want finite and >= 0", name, v)
+			}
+		}
+	}
+}
+
 // TestComputeFitnessWrapperEquivalence: the 3-arg ComputeFitness (kept for
 // callers that have no MCTS batch, e.g. pkg/evolution/behavior.go) must be
 // exactly the 4-arg version with an empty MCTS result.

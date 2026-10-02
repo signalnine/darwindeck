@@ -383,12 +383,16 @@ func TestMeanLongestRunStatistic(t *testing.T) {
 func TestDegeneracyDeadMatchRule(t *testing.T) {
 	g := &genome.Genome{Skeleton: genome.Shedding, Players: 2}
 
+	// The veto reads PlayableCount (the runner's per-card match-or-wild
+	// count), never LegalMoves -- see
+	// TestDegeneracyDeadMatchRuleIgnoresInflatedMoveCount.
 	mk := func(allPlayableEvery int) []sim.TurnRecord {
 		records := make([]sim.TurnRecord, 60)
 		for i := range records {
-			records[i] = sim.TurnRecord{Player: i % 2, HandSize: 7, LegalMoves: 3, Meaningful: true}
+			records[i] = sim.TurnRecord{Player: i % 2, HandSize: 7, LegalMoves: 2, PlayableCount: 2, Meaningful: true}
 			if allPlayableEvery > 0 && i%allPlayableEvery == 0 {
 				records[i].LegalMoves = 7 // whole hand playable
+				records[i].PlayableCount = 7
 			}
 		}
 		return records
@@ -397,15 +401,18 @@ func TestDegeneracyDeadMatchRule(t *testing.T) {
 	if reason := CheckDegeneracy(degBatch(mk(1)), g); reason != "dead_match_rule" {
 		t.Fatalf("every-turn-all-playable must flag dead_match_rule, got %q", reason)
 	}
-	if reason := CheckDegeneracy(degBatch(mk(4)), g); reason != "" {
-		t.Fatalf("1/4 all-playable turns (real wilds in hand) must pass, got %q", reason)
+	// 1/5 of turns all-playable, the rest 2 of 7 cards: whole-hand share 0.20
+	// (< 0.70) and per-card share 0.2 + 0.8*2/7 = 0.43 (< 0.45), so neither
+	// shedding veto fires.
+	if reason := CheckDegeneracy(degBatch(mk(5)), g); reason != "" {
+		t.Fatalf("1/5 all-playable turns (real wilds in hand) must pass, got %q", reason)
 	}
 
 	// Trivial hands cannot witness a dead match rule: a 1-card playable hand
 	// is "all playable" vacuously, so HandSize < 2 records are excluded.
 	tiny := make([]sim.TurnRecord, 40)
 	for i := range tiny {
-		tiny[i] = sim.TurnRecord{Player: i % 2, HandSize: 1, LegalMoves: 1, Meaningful: true}
+		tiny[i] = sim.TurnRecord{Player: i % 2, HandSize: 1, LegalMoves: 1, PlayableCount: 1, Meaningful: true}
 	}
 	if reason := CheckDegeneracy(degBatch(tiny), g); reason != "" {
 		t.Fatalf("1-card hands must not witness dead_match_rule, got %q", reason)
@@ -419,10 +426,98 @@ func TestDegeneracyDeadMatchRule(t *testing.T) {
 	}
 }
 
+// TestDegeneracyDeadMatchRuleIgnoresInflatedMoveCount (2026-10 bughunt): the
+// veto asks "was the WHOLE HAND playable", and the legal-move COUNT stopped
+// answering that once the deep borrows landed. MechKnock appends a knock to a
+// forced draw (a 2-card hand with nothing playable has 2 legal moves) and
+// MechRunPlay appends one move per combo on top of the singles, so
+// LegalMoves >= HandSize held on turns where most of the hand did NOT match.
+// The runner's per-card PlayableCount is the truth. Measured on Crazy Eights
+// + run_play + knock at hand 3: the move-count reading said 0.392 of decision
+// turns were whole-hand-playable; the per-card truth is 0.030.
+func TestDegeneracyDeadMatchRuleIgnoresInflatedMoveCount(t *testing.T) {
+	g := &genome.Genome{Skeleton: genome.Shedding, Players: 2}
+
+	// Every turn: 3 cards in hand, ONE of them playable, but 4 legal moves
+	// (the single, combos through it, a knock). The match rule binds on two
+	// thirds of the hand -- it is alive.
+	inflated := make([]sim.TurnRecord, 60)
+	for i := range inflated {
+		inflated[i] = sim.TurnRecord{Player: i % 2, HandSize: 3, LegalMoves: 4, PlayableCount: 1, Meaningful: true}
+	}
+	if got := allPlayableShare(degBatch(inflated)); got != 0 {
+		t.Errorf("no record has its whole hand playable (PlayableCount 1 of 3): allPlayableShare = %.3f, want 0", got)
+	}
+	if reason := CheckDegeneracy(degBatch(inflated), g); reason != "" {
+		t.Fatalf("move-count inflation from knock/run_play must not flag a live match rule, got %q", reason)
+	}
+
+	// The move count is irrelevant in the other direction too: a whole hand
+	// of match-or-wild cards is a dead match rule even when fewer moves than
+	// cards were generated.
+	whole := make([]sim.TurnRecord, 60)
+	for i := range whole {
+		whole[i] = sim.TurnRecord{Player: i % 2, HandSize: 5, LegalMoves: 2, PlayableCount: 5, Meaningful: true}
+	}
+	if reason := CheckDegeneracy(degBatch(whole), g); reason != "dead_match_rule" {
+		t.Fatalf("whole-hand-playable turns must flag dead_match_rule whatever the move count, got %q", reason)
+	}
+}
+
+// TestAllPlayableShareMatchesPlayableCountUnderMoveAddingBorrows runs a real
+// shedding host carrying BOTH move-adding deep borrows and checks the
+// statistic against the records the shedding runner actually emits: the
+// inflation is real (records exist whose move count reaches the hand size
+// while the per-card count does not), none of those records is counted, and
+// the whole-hand share never exceeds the per-card share (an all-playable
+// record contributes 1 to both; every other record contributes 0 here and
+// >= 0 to the per-card mean).
+func TestAllPlayableShareMatchesPlayableCountUnderMoveAddingBorrows(t *testing.T) {
+	g := seeds.CrazyEights()
+	g.HandSize = 3
+	g.Borrowed = []genome.BorrowedMechanic{
+		{Source: genome.Climbing, Mechanic: genome.MechRunPlay},
+		{Source: genome.Rummy, Mechanic: genome.MechKnock},
+	}
+	if errs := genome.Validate(g); len(errs) > 0 {
+		t.Fatalf("fixture must be Tier-0 valid: %v", errs)
+	}
+	res := sim.RunBatch(g, GetRunner(g), &sim.RandomAI{}, 200, 100)
+
+	total, whole, inflated := 0, 0, 0
+	for _, turns := range res.AllTurns {
+		for _, tr := range turns {
+			if tr.HandSize < 2 {
+				continue
+			}
+			total++
+			if tr.PlayableCount >= tr.HandSize {
+				whole++
+			} else if tr.LegalMoves >= tr.HandSize {
+				inflated++
+			}
+		}
+	}
+	if total == 0 || inflated == 0 {
+		t.Fatalf("fixture lost its teeth: %d decision records, %d with an inflated move count -- "+
+			"pick a host where knock/run_play still pad the move list", total, inflated)
+	}
+	want := float64(whole) / float64(total)
+	got := allPlayableShare(res)
+	if got != want {
+		t.Errorf("allPlayableShare = %.3f, want the per-card truth %.3f (%d of %d records carry an inflated move count and must not count)",
+			got, want, inflated, total)
+	}
+	if perCard := playableShareMean(res); got > perCard {
+		t.Errorf("whole-hand share %.3f exceeds the per-card share %.3f: impossible for a statistic derived from the per-card count",
+			got, perCard)
+	}
+}
+
 // TestDegeneracyPlayableShare (round 4 FIX 1): the PER-CARD playable share --
 // mean over shedding choice-turns of PlayableCount/HandSize -- catches a wild
 // UNION covering most of the deck that dead_match_rule misses. dead_match_rule
-// fires only when the WHOLE hand is playable at once (LegalMoves >= HandSize),
+// fires only when the WHOLE hand is playable at once (PlayableCount >= HandSize),
 // which at hand 13 almost never holds even when 75% of the deck is wild; the
 // per-card share sees that 75% directly. Threshold 0.45: classics measure
 // ~0.30, the wild-union champion ~0.62.
@@ -431,7 +526,7 @@ func TestDegeneracyPlayableShare(t *testing.T) {
 
 	// mk builds records where each HandSize-13 turn has `playable` of 13 cards
 	// playable. The whole hand is NEVER playable at once (playable <= 9), so
-	// dead_match_rule (LegalMoves >= HandSize) stays silent -- only the
+	// dead_match_rule (PlayableCount >= HandSize) stays silent -- only the
 	// per-card share can fire.
 	mk := func(playable int) []sim.TurnRecord {
 		records := make([]sim.TurnRecord, 60)

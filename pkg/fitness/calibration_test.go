@@ -253,7 +253,7 @@ import (
 //  1. WILD-UNION SHEDDING (r3 rank01): 3 of 4 suits wild = 39/52 cards
 //     playable on any card, so the match rule is dead for 75% of the deck. It
 //     passed dead_match_rule because that veto uses the WHOLE-HAND-playable
-//     share (LegalMoves >= HandSize), which at hand 13 stays ~0.16 (r_allplay
+//     share (PlayableCount >= HandSize), which at hand 13 stays ~0.16 (r_allplay
 //     column) even though per-card 75% of the deck ignores the rule. FIX 1 is
 //     a PER-TURN PLAYABLE-SHARE veto (playable_share), computed directly by
 //     the shedding runner (PlayableShareProber -> TurnRecord.PlayableCount,
