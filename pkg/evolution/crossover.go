@@ -384,6 +384,18 @@ func giveBorrowTeeth(g *genome.Genome, bm genome.BorrowedMechanic) {
 			}
 		case genome.Rummy:
 			giveRummyAvoidanceTeeth(g)
+		case genome.Vying:
+			// Stack sufficiency counts the borrow's worst-case showdown penalty
+			// (genome.VyingWorstCaseCommitment; validateVying rejects a stack
+			// below it -- a penalty must never leave a player a fold-only
+			// "decision"). Scoring, hand-size and betting mutations all move the
+			// bound, and this teeth pass runs after every one of them, so top
+			// the stack up here to keep the operators valid-in/valid-out.
+			if g.Vying != nil {
+				if worst := g.VyingWorstCaseCommitment(); g.Vying.StartingChips < worst {
+					g.Vying.StartingChips = worst
+				}
+			}
 		}
 		forceBankingRounds(g)
 

@@ -702,11 +702,35 @@ func (g *Genome) Knockable() bool {
 // cross-skeleton MechTrickScoring borrow was enabled on shedding (the
 // shed-to-win-by-tricks hybrid): its applyTrickScoring hook banks per round
 // and needs the same rounds machinery.
+//
+// The borrow must be LIVE (hasLiveBankingBorrow): an avoidance borrow without
+// CardPoints banks nothing (applyAvoidance returns early), so on its own it
+// leaves the host single-round -- otherwise the game played RoundsPerGame
+// rounds with no score signal while the rulebook promised "fewest penalty
+// points" and pointed at an Additional Rules section LiveBorrows had pruned.
 func (g *Genome) SheddingMultiRound() bool {
 	return g.Skeleton == Shedding &&
 		g.Shedding != nil &&
 		g.Shedding.RoundsPerGame > 1 &&
-		g.HasBankingBorrow()
+		g.hasLiveBankingBorrow()
+}
+
+// hasLiveBankingBorrow is HasBankingBorrow restricted to borrows whose hooks
+// actually bank: MechMeldBonus and MechTrickScoring always do; MechAvoidance
+// only with non-empty CardPoints. It must NOT call LiveBorrows (which itself
+// consults SheddingMultiRound).
+func (g *Genome) hasLiveBankingBorrow() bool {
+	for _, b := range g.Borrowed {
+		switch b.Mechanic {
+		case MechMeldBonus, MechTrickScoring:
+			return true
+		case MechAvoidance:
+			if len(g.Scoring.CardPoints) > 0 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // MaxTurns returns the computed maximum turns based on skeleton and params.

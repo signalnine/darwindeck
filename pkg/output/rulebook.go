@@ -122,18 +122,20 @@ func writeSheddingRoundStructure(b *strings.Builder, g *genome.Genome) {
 	b.WriteString("If scores are tied, the tied player holding the fewest cards at the end of the final round wins; if that is tied too, the tied player seated earliest in the turn order (closest to the dealer's left) wins.\n\n")
 }
 
+// hasAvoidanceBorrow / hasMeldBonusBorrow read the LIVE borrows only: a dead
+// borrow (e.g. avoidance without card_points) banks nothing, so winning text
+// that mentions its penalties would describe scoring that never happens.
 func hasAvoidanceBorrow(g *genome.Genome) bool {
-	for _, bm := range g.Borrowed {
-		if bm.Mechanic == genome.MechAvoidance {
-			return true
-		}
-	}
-	return false
+	return hasLiveBorrow(g, genome.MechAvoidance)
 }
 
 func hasMeldBonusBorrow(g *genome.Genome) bool {
-	for _, bm := range g.Borrowed {
-		if bm.Mechanic == genome.MechMeldBonus {
+	return hasLiveBorrow(g, genome.MechMeldBonus)
+}
+
+func hasLiveBorrow(g *genome.Genome, m genome.MechanicType) bool {
+	for _, bm := range liveBorrows(g) {
+		if bm.Mechanic == m {
 			return true
 		}
 	}
@@ -161,13 +163,22 @@ func writeTrickTakingRules(b *strings.Builder, g *genome.Genome) {
 			b.WriteString("You may play any card from your hand.\n\n")
 		}
 
-		leadDesc := leadRestrictionDescription(g.TrickTaking.LeadRestriction)
-		if leadDesc != "" {
-			b.WriteString(fmt.Sprintf("**Lead restriction:** %s\n\n", leadDesc))
+		// Only a LIVE restriction is rendered: no_trump_until_broken restricts
+		// nothing without a trump suit (genome.LiveLeadRestriction; the Hearts
+		// seed carries that inert pair), and printing it described a rule the
+		// runner never enforces.
+		if g.LiveLeadRestriction() {
+			if leadDesc := leadRestrictionDescription(g.TrickTaking.LeadRestriction); leadDesc != "" {
+				b.WriteString(fmt.Sprintf("**Lead restriction:** %s\n\n", leadDesc))
+			}
 		}
 	}
 
-	b.WriteString("The highest card of the led suit wins the trick, unless trumped. The trick winner leads the next trick.\n\n")
+	if g.TrumpRule != genome.TrumpNone {
+		b.WriteString("The highest card of the led suit wins the trick, unless trumped: any trump beats every non-trump card, and the highest trump played wins. The trick winner leads the next trick.\n\n")
+	} else {
+		b.WriteString("The highest card of the led suit wins the trick; a card of any other suit cannot win. The trick winner leads the next trick.\n\n")
+	}
 
 	// Multi-round structure: the runner plays RoundsPerGame deals with
 	// cumulative scores (Upkeep redeals when every hand is played out; the

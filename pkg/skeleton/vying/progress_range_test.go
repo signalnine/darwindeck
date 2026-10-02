@@ -11,15 +11,18 @@ import (
 )
 
 // scoredPokerGenome is a VyingScored game: the avoidance borrow banks a penalty
-// into the chip stacks at each showdown, which is exactly what can drive a stack
-// negative.
+// into the chip stacks at each showdown. Tier 0 now sizes the stack to cover
+// that penalty (genome.VyingWorstCaseCommitment), so a VALID game can no longer
+// drive a stack negative -- but Progress must stay in range for any state it is
+// handed (hand-built states, legacy genomes), so the negative-stack pin below
+// stays.
 func scoredPokerGenome(t *testing.T) *genome.Genome {
 	t.Helper()
 	g := seeds.SimplePoker()
 	g.Borrowed = []genome.BorrowedMechanic{{Source: genome.TrickTaking, Mechanic: genome.MechAvoidance}}
 	g.Scoring.CardPoints = []genome.CardScoring{{Suit: 3, Points: 40}}
 	g.Vying.RoundsPerGame = 12
-	g.Vying.StartingChips = g.Vying.RoundsPerGame * g.Vying.MinBet * (g.Vying.MaxRaises + 1)
+	g.Vying.StartingChips = g.VyingWorstCaseCommitment()
 	if errs := genome.Validate(g); len(errs) > 0 {
 		t.Fatalf("scored poker genome invalid: %v", errs)
 	}
