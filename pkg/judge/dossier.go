@@ -6,6 +6,7 @@ import (
 
 	"github.com/darwindeck/darwindeck/pkg/fitness"
 	"github.com/darwindeck/darwindeck/pkg/genome"
+	"github.com/darwindeck/darwindeck/pkg/mechanic"
 	"github.com/darwindeck/darwindeck/pkg/output"
 	"github.com/darwindeck/darwindeck/pkg/sim"
 )
@@ -30,6 +31,13 @@ func BuildDossier(g *genome.Genome) (string, error) {
 		return "", fmt.Errorf("no runner for skeleton %s", g.Skeleton)
 	}
 	ai := fitness.GetGreedyAI(g)
+	// The borrowed-mechanic hooks, built at the single construction site the
+	// fitness pipeline and the playtest session use. Every simulation below
+	// must run them: without hooks the hook-driven borrows (meld_bonus,
+	// avoidance, trick_scoring, draw_penalty) are in the rulebook but not in
+	// the game, and the judge reads traces, winners and termination numbers
+	// of a different game than the one being judged.
+	hooks := mechanic.HooksFor(g)
 
 	var b strings.Builder
 
@@ -37,26 +45,22 @@ func BuildDossier(g *genome.Genome) (string, error) {
 	b.WriteString(neutralizeRulebook(output.GenerateRulebook(g)))
 	b.WriteString("\n---\n\n")
 
-	// 2. Two sample greedy-vs-greedy traces. A larger batch (distinct seed) is
-	// run so two COMPLETED games can be shown even for games that rarely finish
-	// under greedy self-play (e.g. gin-style rummy times out most games).
+	// 2. Two sample greedy-vs-greedy traces. Up to traceN games (distinct seed
+	// range) are sampled so two COMPLETED games can be shown even for games
+	// that rarely finish under greedy self-play (e.g. gin-style rummy times
+	// out most games). The traces are MOVE-level (trace.go): the engine's event
+	// log alone hides every card-less decision (bets, folds, passes).
 	const traceN = 400
-	traceRes := sim.RunBatch(g, runner, ai, traceN, dossierSeed+1)
+	shown, played, completed := sampleTraces(g, runner, ai, traceN, dossierSeed+1, 2, hooks...)
 
 	b.WriteString("## Sample Game Traces\n\n")
-	b.WriteString("Two complete games played by identical automated players (greedy strategy on both sides). Each line is one game event in order, so you can see who acts and when, and spot long uninterrupted single-player runs.\n\n")
+	b.WriteString("Two complete games played by identical automated players (greedy strategy on both sides). Each line is one action or game event in order -- every decision a player makes is shown, including passes and bets -- so you can see who acts and when, and spot long uninterrupted single-player runs.\n\n")
 
-	picked := pickDistinctCompleted(traceRes, 2)
-	switch len(picked) {
-	case 0:
-		b.WriteString("_No games completed in the sampled batch; the automated players run out of fast progress and hit the turn cap. This is a SPEED observation, not a design verdict -- see the Termination section below for whether the win condition is reachable by the rules._\n\n")
-	case 1:
-		b.WriteString("_Only one of the sampled games reached a winner; the rest hit the turn cap without resolving. See the Termination section below for whether the win condition is reachable by the rules._\n\n")
-	}
-	for n, idx := range picked {
+	b.WriteString(traceNote(len(shown), completed, played))
+	for n, game := range shown {
 		b.WriteString(fmt.Sprintf("### Game %d\n\n", n+1))
-		b.WriteString(renderTrace(traceRes.AllEvents[idx]))
-		b.WriteString(fmt.Sprintf("\n**Winner:** Player %d\n\n", traceRes.AllWinners[idx]))
+		b.WriteString(renderTraceLines(game.lines))
+		b.WriteString(fmt.Sprintf("\n**Winner:** Player %d\n\n", game.winner))
 	}
 
 	// 3. Termination section (THE FIX). A larger sample makes the boolean
@@ -69,7 +73,7 @@ func BuildDossier(g *genome.Genome) (string, error) {
 	// [dossierSeed+1, dossierSeed+1+traceN) range -- the termination stats
 	// were measured on byte-replays of trace games, not an independent sample.
 	const termN = 150
-	term := computeTermination(g, runner, ai, termN, dossierSeed+1<<20)
+	term := computeTermination(g, runner, ai, termN, dossierSeed+1<<20, hooks...)
 	b.WriteString(renderTermination(term))
 
 	return b.String(), nil
@@ -95,11 +99,24 @@ func renderTermination(t TerminationInfo) string {
 	}
 
 	b.WriteString("\n**Win-condition reachable (by design):**\n\n")
+	// Each skeleton-specific probe looks for ONE way the game ends (a legal
+	// going-out move, an emptied hand, a completed round). A game can end
+	// another way -- a borrowed declare-out, a points-over-rounds total -- so a
+	// probe that saw nothing is NOT evidence the game cannot end. Any sampled
+	// game that ended with a winner (AnyCompleted) proves the terminal state
+	// reachable; the "may be hard or impossible" warning is reserved for games
+	// where no probe fired AND no sampled game ended. It used to follow from
+	// the probe alone, contradicting a 100% completion line two bullets above.
+	const reachedByCompletion = "- Sampled games ended with a winner under the rules above. The terminal state IS reachable by the rules.\n"
+	const neverEnded = "- No sampled game ended with a winner within either turn cap. The terminal state may be hard or impossible to reach -- weigh this against the rules.\n"
 	switch t.Skeleton {
 	case genome.Rummy:
-		if t.ReachableKnock {
+		switch {
+		case t.ReachableKnock:
 			b.WriteString(fmt.Sprintf("- A going-out move became LEGAL in sampled games (a player's leftover-card total dropped to the threshold), first becoming legal at a median of **turn %d**. The terminal state IS reachable by the rules.\n", t.MedianTurnsToKnockLegal))
-		} else {
+		case t.AnyCompleted:
+			b.WriteString(reachedByCompletion)
+		default:
 			b.WriteString("- No sampled game reached a state where a going-out move was legal within the cap. The terminal state may be hard or impossible to reach -- weigh this against the rules.\n")
 		}
 		if t.AnyKnockOrGin {
@@ -108,19 +125,39 @@ func renderTermination(t TerminationInfo) string {
 			b.WriteString("- No sampled game actually ended by going out within the cap (the automated players were slow to do so).\n")
 		}
 	case genome.Shedding:
-		if t.MedianTurnsToEmptyHand > 0 {
+		switch {
+		case t.MedianTurnsToEmptyHand > 0:
 			b.WriteString(fmt.Sprintf("- A player emptied their hand (the win condition) in completed sampled games, at a median of **turn %d**. The terminal state IS reachable by the rules.\n", t.MedianTurnsToEmptyHand))
-		} else {
+			if t.AnyDeclaredOut {
+				b.WriteString("- Some sampled games instead ended by a player declaring out before any hand was emptied.\n")
+			}
+		case t.AnyDeclaredOut:
+			b.WriteString("- No sampled game saw a player empty their hand, because the sampled games ended earlier by a player declaring out (the early-ending rule above). The terminal state IS reachable by the rules.\n")
+		case t.AnyCompleted:
+			b.WriteString(reachedByCompletion)
+		default:
 			b.WriteString("- No sampled game saw a player empty their hand within the cap. The terminal state may be hard or impossible to reach -- weigh this against the rules.\n")
 		}
 	case genome.TrickTaking:
-		if t.RoundsComplete {
+		switch {
+		case t.RoundsComplete:
 			b.WriteString("- Rounds reached completion in sampled games (all tricks were played out and scored). The terminal state IS reachable by the rules.\n")
-		} else {
+		case t.AnyCompleted:
+			b.WriteString(reachedByCompletion)
+		default:
 			b.WriteString("- No sampled round reached completion within the cap. The terminal state may be hard or impossible to reach -- weigh this against the rules.\n")
 		}
 	default:
-		b.WriteString("- (No skeleton-specific reachable-win signal available.)\n")
+		// No skeleton-specific probe (climbing, casino, vying): the observed
+		// game endings are the evidence.
+		if t.AnyCompleted {
+			b.WriteString(reachedByCompletion)
+			if t.AnyDeclaredOut {
+				b.WriteString("- Some sampled games ended by a player declaring out (the early-ending rule above).\n")
+			}
+		} else {
+			b.WriteString(neverEnded)
+		}
 	}
 
 	yn := func(v bool) string {

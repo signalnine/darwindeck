@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/darwindeck/darwindeck/pkg/seeds"
@@ -32,34 +34,71 @@ func cmdSeeds(args []string) {
 		fmt.Fprintln(os.Stderr, "seeds export: -out <dir> is required")
 		os.Exit(1)
 	}
-	if err := os.MkdirAll(*out, 0o755); err != nil {
+	if _, err := exportSeeds(*out, positional, os.Stdout, os.Stderr); err != nil {
 		fmt.Fprintf(os.Stderr, "seeds export: %v\n", err)
 		os.Exit(1)
 	}
+}
 
+// exportSeeds is `seeds export` minus flag parsing and the process exit, so
+// its failure modes are testable. names selects seeds by id; empty = all.
+//
+// Every requested name is checked BEFORE anything is written. A name matching
+// no seed used to be ignored: `seeds export -out d "Gin Rummy" big_two` (the
+// ids are gin-rummy and big-two) printed "exported 0 seeds" and exited 0, and
+// one typo in a longer list quietly exported a partial anchor set -- a blind
+// ratings baseline missing a classic nobody noticed was missing. A seed that
+// cannot be written is likewise an error, not a line on stderr under exit 0.
+func exportSeeds(out string, names []string, stdout, stderr io.Writer) (int, error) {
+	all := seeds.All()
+	known := map[string]bool{}
+	ids := make([]string, len(all))
+	for i, g := range all {
+		known[g.ID] = true
+		ids[i] = g.ID
+	}
 	want := map[string]bool{}
-	for _, n := range positional {
+	var unknown []string
+	for _, n := range names {
+		if !known[n] {
+			unknown = append(unknown, strconv.Quote(n))
+			continue
+		}
 		want[n] = true
+	}
+	if len(unknown) > 0 {
+		return 0, fmt.Errorf("unknown seed id(s) %s; valid ids: %s", strings.Join(unknown, ", "), strings.Join(ids, ", "))
+	}
+
+	if err := os.MkdirAll(out, 0o755); err != nil {
+		return 0, err
 	}
 
 	n := 0
-	for _, g := range seeds.All() {
+	failed := 0
+	for _, g := range all {
 		if len(want) > 0 && !want[g.ID] {
 			continue
 		}
 		data, err := json.MarshalIndent(g, "", "  ")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "  %s: %v\n", g.ID, err)
+			fmt.Fprintf(stderr, "  %s: %v\n", g.ID, err)
+			failed++
 			continue
 		}
 		slug := strings.ReplaceAll(g.ID, " ", "-")
-		path := filepath.Join(*out, slug+".json")
+		path := filepath.Join(out, slug+".json")
 		if err := os.WriteFile(path, data, 0o644); err != nil {
-			fmt.Fprintf(os.Stderr, "  %s: %v\n", g.ID, err)
+			fmt.Fprintf(stderr, "  %s: %v\n", g.ID, err)
+			failed++
 			continue
 		}
-		fmt.Printf("  %s -> %s\n", g.ID, path)
+		fmt.Fprintf(stdout, "  %s -> %s\n", g.ID, path)
 		n++
 	}
-	fmt.Printf("exported %d seeds to %s\n", n, *out)
+	fmt.Fprintf(stdout, "exported %d seeds to %s\n", n, out)
+	if failed > 0 {
+		return n, fmt.Errorf("%d seed(s) could not be exported to %s", failed, out)
+	}
+	return n, nil
 }

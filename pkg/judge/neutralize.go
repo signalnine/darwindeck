@@ -58,13 +58,18 @@ func neutralizeRulebook(s string) string {
 // neutralizeDetail rewrites the rummy round-end reason strings ("knock"/"gin")
 // to neutral going-out vocabulary in trace lines, for the same reason as
 // neutralizeRulebook: these are mechanic details emitted for every rummy game,
-// but the literal tokens collide with game names.
+// but the literal tokens collide with game names. The climbing runner tags
+// every play "climb" -- the skeleton keyword neutralizeRulebook strips from the
+// rulebook intro -- and it carries no information (it is the only play type),
+// so it is dropped rather than renamed.
 func neutralizeDetail(d string) string {
 	switch d {
 	case "knock":
 		return "declared_out"
 	case "gin":
 		return "zero_deadwood"
+	case "climb":
+		return ""
 	default:
 		return d
 	}
@@ -91,29 +96,26 @@ var eventNames = map[sim.EventType]string{
 // not just the head -- lets the reader see how the game ENDS (who wins, whether
 // one player monopolizes the close), which a head-only truncation hid.
 func renderTrace(events []sim.Event) string {
+	lines := make([]string, len(events))
+	for i, e := range events {
+		lines[i] = eventLine(e)
+	}
+	return renderTraceLines(lines)
+}
+
+// renderTraceLines numbers and HEAD+TAIL-caps already-rendered trace lines
+// (see eventLine / moveLine in trace.go). It is the shared renderer behind
+// renderTrace (event-only traces) and the move-level dossier traces.
+func renderTraceLines(lines []string) string {
 	const headN, tailN = 20, 10
 	var b strings.Builder
 	b.WriteString("```\n")
-	n := len(events)
+	n := len(lines)
 	render := func(i int) {
-		e := events[i]
-		name := eventNames[e.Type]
-		if name == "" {
-			name = fmt.Sprintf("EVENT(%d)", int(e.Type))
-		}
-		cards := renderCards(e.Cards)
-		detail := neutralizeDetail(e.Detail)
-		line := fmt.Sprintf("turn %d: P%d %s", i+1, e.PlayerID, name)
-		if cards != "" {
-			line += " " + cards
-		}
-		if detail != "" {
-			line += " " + detail
-		}
-		b.WriteString(line + "\n")
+		fmt.Fprintf(&b, "turn %d: %s\n", i+1, lines[i])
 	}
 	if n <= headN+tailN {
-		for i := range events {
+		for i := range lines {
 			render(i)
 		}
 	} else {

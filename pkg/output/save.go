@@ -2,9 +2,12 @@ package output
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"runtime/debug"
 	"time"
@@ -107,6 +110,12 @@ func SaveResults(
 		return err
 	}
 
+	// The games dir must hold exactly THIS publication: drop the rank dirs a
+	// previous save into the same output dir left behind (see SweepRankDirs).
+	if err := SweepRankDirs(gamesDir); err != nil {
+		return fmt.Errorf("clearing stale rank dirs: %w", err)
+	}
+
 	// Save each top genome
 	for i, ind := range ranked {
 		name := fmt.Sprintf("rank%02d_%s", i+1, sanitize(ind.Genome.ID))
@@ -155,6 +164,45 @@ func SaveResults(
 		}
 	}
 
+	return nil
+}
+
+// rankDirName matches the per-game directories SaveResults (and the restamp
+// bundle writer) create: rankNN_<sanitized genome id>.
+var rankDirName = regexp.MustCompile(`^rank\d+_`)
+
+// SweepRankDirs removes the published game directories already in gamesDir, so
+// a save into a non-empty output dir replaces the previous publication instead
+// of mixing with it. Rank dirs are named rankNN_<genome id>, so a second save
+// never overwrote the first one's dirs: it wrote beside them (two rank01_*,
+// a summary.json counting fewer games than the directory held), and anything
+// walking games/ afterwards -- judge emit, restamp, serve -dir -- read two
+// runs as one.
+//
+// Only what the writer owns is removed: a DIRECTORY whose name matches
+// rankNN_ AND that holds a genome.json (every published game dir does; it is
+// written first). Other files and directories are left alone. A missing
+// gamesDir is not an error.
+func SweepRankDirs(gamesDir string) error {
+	entries, err := os.ReadDir(gamesDir)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	for _, e := range entries {
+		if !e.IsDir() || !rankDirName.MatchString(e.Name()) {
+			continue
+		}
+		dir := filepath.Join(gamesDir, e.Name())
+		if _, err := os.Stat(filepath.Join(dir, "genome.json")); err != nil {
+			continue
+		}
+		if err := os.RemoveAll(dir); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

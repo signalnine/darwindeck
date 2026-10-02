@@ -279,3 +279,55 @@ func TestSummaryBestFitnessIsGreedyOnly(t *testing.T) {
 		t.Errorf("mcts_best = %v, want 0.847", mctsBest)
 	}
 }
+
+// TestSaveResultsSweepsStaleRankDirs: rank dirs are named rankNN_<genome id>,
+// so a second SaveResults into the same -output dir (a rerun, or the final
+// save of a resumed run) wrote its games BESIDE the previous run's: two
+// `evolve -output X` runs with -top 4 then -top 3 left seven game dirs --
+// two rank01_*, two rank02_*, two rank03_* -- under a summary.json reporting
+// top_games_count 3. Anything walking games/ (judge emit, restamp, serve
+// -dir) then mixed two runs. The games dir must hold exactly the current
+// publication; files SaveResults does not own are left alone.
+func TestSaveResultsSweepsStaleRankDirs(t *testing.T) {
+	dir := t.TempDir()
+	mk := func(id string) *evolution.Individual {
+		ind := publishedIndividual()
+		ind.Genome.ID = id
+		return ind
+	}
+
+	first := []*evolution.Individual{mk("gen1_aaa"), mk("gen1_bbb"), mk("gen1_ccc")}
+	if err := SaveResults(dir, first, evolution.Config{BaseSeed: 1}, time.Second); err != nil {
+		t.Fatalf("first SaveResults: %v", err)
+	}
+	gamesDir := filepath.Join(dir, "games")
+	// Things in games/ that SaveResults did not write: a notes file, a dir
+	// that does not follow the rank naming, and a rank-named dir with no
+	// genome.json in it (not a published game).
+	if err := os.WriteFile(filepath.Join(gamesDir, "NOTES.md"), []byte("keep"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range []string{"playtest-logs", "rank99_scratch"} {
+		if err := os.MkdirAll(filepath.Join(gamesDir, d), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	second := []*evolution.Individual{mk("gen2_zzz")}
+	if err := SaveResults(dir, second, evolution.Config{BaseSeed: 2}, time.Second); err != nil {
+		t.Fatalf("second SaveResults: %v", err)
+	}
+
+	entries, err := os.ReadDir(gamesDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, e := range entries {
+		got = append(got, e.Name())
+	}
+	want := []string{"NOTES.md", "playtest-logs", "rank01_gen2_zzz", "rank99_scratch"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("games dir after the second save = %v, want %v", got, want)
+	}
+}

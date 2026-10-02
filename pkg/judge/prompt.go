@@ -33,8 +33,9 @@ For each dossier, return a verdict with these fields:
 
 A game is NOT degenerate merely because automated play is slow or often hits the
 turn cap. If the rules define a REACHABLE win condition -- see the Termination
-section: a going-out move becomes legal, a hand can empty, or rounds complete --
-that is a SOUND design even at low AI completion.
+section: a going-out move becomes legal, a hand can empty, rounds complete, or
+sampled games simply end with a winner -- that is a SOUND design even at low AI
+completion.
 
 Judge a game degenerate ONLY if:
 
