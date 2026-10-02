@@ -216,12 +216,21 @@ func writeRummyRules(b *strings.Builder, g *genome.Genome) {
 		b.WriteString(fmt.Sprintf("2. **Meld** (optional): %s\n", meldDesc))
 
 		b.WriteString("3. **Discard** one card to the discard pile\n\n")
+		if g.Rummy.DrawFrom != genome.DrawDiscard {
+			b.WriteString("When the deck runs out, the discard pile (except its top card) is shuffled to form a new deck.\n\n")
+		}
 
+		// KEEP IN SYNC with the rummy runner (generateMeldMoves / knockDiscard /
+		// ApplyMove MoveKnock): the knock replaces the discard, is judged on the
+		// hand kept AFTER it, throws the least-deadwood card (highest rank, then
+		// lowest suit on ties) and lays the kept hand's melds.
 		b.WriteString("### Knocking & Gin\n\n")
 		if g.Rummy.KnockThreshold == 0 {
 			b.WriteString("You can only go out with **Gin** (no deadwood at all).\n\n")
+			b.WriteString("Going out takes the place of your discard: after drawing, if throwing away one card leaves every other card in your hand in a meld, you may discard it and go out at once -- the hand you keep after that discard is what counts (if more than one card would do, the highest-ranked one is discarded). Your melds are laid down and the round ends. You also go out the moment you lay your last cards down as a meld or discard your last card.\n\n")
 		} else {
 			b.WriteString(fmt.Sprintf("You may **knock** when your deadwood is %d points or less.\n\n", g.Rummy.KnockThreshold))
+			b.WriteString(fmt.Sprintf("Knocking takes the place of your discard: after drawing (and any melding) you discard one card and knock. The deadwood that must be %d or less is that of the hand you keep after that discard, so the card you throw away never counts against you. The discard is always the card that leaves you the least deadwood (the highest-ranked such card if several tie, then clubs before diamonds before hearts before spades). Your melds are then laid down and the round ends at once. If the hand you keep has no deadwood at all, you have gone out completely, which also wins any tie.\n\n", g.Rummy.KnockThreshold))
 		}
 	}
 
@@ -229,9 +238,17 @@ func writeRummyRules(b *strings.Builder, g *genome.Genome) {
 	b.WriteString("- Face cards (J, Q, K): 10 points\n")
 	b.WriteString("- Ace: 1 point\n")
 	b.WriteString("- Number cards: face value\n\n")
+	// The runner ranks the ace HIGH for runs (rank 14) and LOW for deadwood.
+	if g.Rummy != nil && g.Rummy.MeldTypes != genome.MeldSets {
+		b.WriteString("Aces are **high** in sequences: Q-K-A is a valid sequence, A-2-3 is not. An ace still counts only 1 point as deadwood.\n\n")
+	}
 
 	b.WriteString("### Winning\n\n")
 	b.WriteString("The player with the lowest deadwood when someone knocks or goes gin wins the round.\n\n")
+	// rummy.bankDeadwood scores every hand on its best partition, laid or not;
+	// rummy.roundWinner breaks ties by the undercut rule.
+	b.WriteString("Everyone's deadwood is counted after their best possible melds, whether or not those melds were laid on the table (you cannot add cards to another player's melds).\n\n")
+	b.WriteString("If the lowest deadwood is tied, the player who ended the round by knocking loses the tie (an undercut): the tied player next in turn order after them wins. A player who went out with no deadwood at all wins any tie.\n\n")
 }
 
 func writeClimbingRules(b *strings.Builder, g *genome.Genome) {

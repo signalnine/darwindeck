@@ -120,9 +120,13 @@ func TestMCTSPicksWinningMove(t *testing.T) {
 // TestMCTSKnockBanksDeadwoodOnce: the plan's no-double-banking regression,
 // end-to-end with known numbers. After MCTS picks knock and the move is
 // applied through the real loop shape (ApplyMove, then Upkeep exactly once,
-// then CheckEnd), the final scores must be exactly [-7, -77]. A search that
+// then CheckEnd), the final scores must be exactly [-4, -77]. A search that
 // leaked an extra Upkeep onto the REAL state -- or a Clone that aliased
-// Scores -- would surface here as [-14, -154] or other corruption.
+// Scores -- would surface here as [-8, -154] or other corruption.
+//
+// The knocker banks 4, not the hand's full 7: the rummy knock is "discard,
+// then knock" (2026-10 bughunt), so the knock throws the three -- the
+// least-deadwood discard -- and is scored on the kept A-A-2.
 func TestMCTSKnockBanksDeadwoodOnce(t *testing.T) {
 	g, st := ginKnockState(t)
 	runner := &rummy.Runner{}
@@ -141,8 +145,8 @@ func TestMCTSKnockBanksDeadwoodOnce(t *testing.T) {
 	if winner != 0 {
 		t.Errorf("winner = %d, want 0", winner)
 	}
-	if want := []int{-7, -77}; !reflect.DeepEqual(st.Scores, want) {
-		t.Errorf("Scores = %v, want %v (double-banked deadwood would show as [-14 -154])", st.Scores, want)
+	if want := []int{-4, -77}; !reflect.DeepEqual(st.Scores, want) {
+		t.Errorf("Scores = %v, want %v (double-banked deadwood would show as [-8 -154])", st.Scores, want)
 	}
 }
 

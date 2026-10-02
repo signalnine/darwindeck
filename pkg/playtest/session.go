@@ -306,6 +306,12 @@ func describeMoveShort(m sim.Move) string {
 	case sim.MovePass:
 		return "Pass"
 	case sim.MoveKnock:
+		// A rummy knock is "discard X and knock": the move carries the discard
+		// (the kept hand is what gets scored), and the player must see which
+		// card goes. Shedding/climbing knocks carry no card.
+		if len(m.Cards) > 0 {
+			return fmt.Sprintf("Discard %s and knock", formatCards(m.Cards[:1]))
+		}
 		return "Knock"
 	case sim.MoveMeld:
 		return fmt.Sprintf("Meld %s", formatCards(m.Cards))
