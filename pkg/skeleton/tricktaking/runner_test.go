@@ -780,3 +780,48 @@ func TestReservedWinnerLeadsValueIsInert(t *testing.T) {
 		t.Fatal("LeadWinnerLeads diverged from LeadNone: the value gained semantics -- lift the Tier-0 reservation or keep them in sync")
 	}
 }
+
+// TestProgressNegativeScoresKeepAUniqueLeader (2026-10-02 bughunt review): a
+// meld-bonus borrow on a lowest-score-wins host SUBTRACTS, so leaders go
+// negative. Progress used to floor negatives at 0 before the 1-share
+// inversion, so every negative (leading) player AND every zero-score player
+// read 1.0 -- the leader track became a permanent tie and Game Arc collapsed
+// (Hearts x4 rounds + meld_bonus: arc 0.776 -> 0.008). Negative scores are
+// shifted, not floored, so the true leader stays unique and values stay in
+// [0,1]; non-negative scores are untouched.
+func TestProgressNegativeScoresKeepAUniqueLeader(t *testing.T) {
+	runner := &Runner{}
+	state := sim.NewGameState(4)
+	state.Scores[0], state.Scores[1], state.Scores[2], state.Scores[3] = -15, 5, 10, 0
+
+	avoid := &genome.Genome{
+		Skeleton: genome.TrickTaking, Players: 4, HandSize: 13,
+		TrickTaking: &genome.TrickTakingParams{TrickScoring: genome.ScoreAvoidance},
+	}
+	pa := runner.Progress(state, avoid)
+	for i, v := range pa {
+		if v < 0 || v > 1 || math.IsNaN(v) {
+			t.Fatalf("avoidance Progress[%d] = %v, outside [0,1]", i, v)
+		}
+	}
+	// Lowest score leads: -15 < 0 < 5 < 10.
+	if !(pa[0] > pa[3] && pa[3] > pa[1] && pa[1] > pa[2]) {
+		t.Errorf("avoidance Progress = %v, want strict order seat 0 > 3 > 1 > 2 (scores -15, 0, 5, 10)", pa)
+	}
+
+	// Highest-wins host with a negative score (an avoidance borrow on a
+	// per-trick host subtracts): the order must follow the scores too.
+	plain := &genome.Genome{
+		Skeleton: genome.TrickTaking, Players: 4, HandSize: 13,
+		TrickTaking: &genome.TrickTakingParams{TrickScoring: genome.ScorePerTrick},
+	}
+	pp := runner.Progress(state, plain)
+	for i, v := range pp {
+		if v < 0 || v > 1 || math.IsNaN(v) {
+			t.Fatalf("plain Progress[%d] = %v, outside [0,1]", i, v)
+		}
+	}
+	if !(pp[2] > pp[1] && pp[1] > pp[3] && pp[3] > pp[0]) {
+		t.Errorf("plain Progress = %v, want strict order seat 2 > 1 > 3 > 0 (scores 10, 5, 0, -15)", pp)
+	}
+}

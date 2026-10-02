@@ -333,27 +333,34 @@ func (r *Runner) Upkeep(state *sim.GameState, g *genome.Genome) {
 // Scores[p] / max(1, totalAwardedSoFar). Under ScoreAvoidance points are bad
 // (Hearts-style; findWinner picks the LOWEST score), so the share is
 // inverted to 1 - share, making the lowest scorer the leader. Negative
-// scores (borrowed mechanics may subtract) are floored at 0 before the share
-// is computed so values stay in [0,1]. Before any points are awarded all
-// shares are 0 (a tie). Must be pure and allocation-light: the batch loop
-// calls it after every applied move.
+// scores (borrowed mechanics may subtract: an avoidance borrow on a per-trick
+// host, a meld bonus on a lowest-wins host) are SHIFTED so the lowest score
+// sits at 0 before the share is computed -- values stay in [0,1] and the
+// score order is preserved. They used to be floored at 0, which made every
+// negative score indistinguishable from zero: on a lowest-wins host each
+// negative (leading) player read 1.0, the leader track became a permanent
+// tie, and Game Arc collapsed. With no negative score the shift is 0 and the
+// result is unchanged. Before any points are awarded all shares are 0 (a
+// tie). Must be pure and allocation-light: the batch loop calls it after
+// every applied move.
 func (r *Runner) Progress(state *sim.GameState, g *genome.Genome) []float64 {
 	out := make([]float64, state.NumPlayers)
+	low := 0
+	for i := 0; i < state.NumPlayers; i++ {
+		if s := state.Scores[i]; s < low {
+			low = s
+		}
+	}
 	total := 0
 	for i := 0; i < state.NumPlayers; i++ {
-		if s := state.Scores[i]; s > 0 {
-			total += s
-		}
+		total += state.Scores[i] - low
 	}
 	if total < 1 {
 		total = 1
 	}
 	avoidance := g.TrickTaking != nil && g.TrickTaking.TrickScoring == genome.ScoreAvoidance
 	for i := 0; i < state.NumPlayers; i++ {
-		s := state.Scores[i]
-		if s < 0 {
-			s = 0
-		}
+		s := state.Scores[i] - low
 		share := float64(s) / float64(total)
 		if avoidance {
 			share = 1 - share

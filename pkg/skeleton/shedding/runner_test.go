@@ -1352,7 +1352,13 @@ func TestSingleRoundBehaviorBytePinned(t *testing.T) {
 		maxTurns int
 	}{
 		{"crazy-eights", seeds.CrazyEights(), 0x380f3d410dfc17c8, []int{24, 26}, 2044, 140},
-		{"mau-mau", seeds.MauMau(), 0x6efc924ad6f62557, []int{20, 12, 18}, 1865, 150},
+		// mau-mau re-baselined 2026-10-02 (was 0x6efc924ad6f62557): its
+		// draw-two special recycles the discard pile when the deck cannot
+		// cover the penalty, and that refill used to DROP the cards still in
+		// the deck (TestRefillDeckFromDiscardKeepsRemainingDeck). Keeping them
+		// changes which cards a late-game victim draws; win counts and total
+		// turns over the 50 pinned games are unchanged.
+		{"mau-mau", seeds.MauMau(), 0x90fcc96501bc102b, []int{20, 12, 18}, 1865, 150},
 		{"borrow-single-round", singleRoundBorrowGenome(), 0x9c1142b653a2cbc1, []int{23, 27}, 2201, 140},
 	}
 	for _, tc := range cases {
@@ -1887,5 +1893,40 @@ func TestMultiRoundProgressWinnerIsMax(t *testing.T) {
 		if completed == 0 {
 			t.Fatalf("%s: no seed completed", g.ID)
 		}
+	}
+}
+
+// TestRefillDeckFromDiscardKeepsRemainingDeck (2026-10-02 bughunt review): a
+// draw_two / draw_four special recycles the discard pile when the deck cannot
+// cover the penalty. The refill overwrote the deck (append(Deck[:0], ...)), so
+// the 1..N-1 cards still in it vanished from the game (51-card states under
+// fuzz). The remaining deck cards must survive the refill.
+func TestRefillDeckFromDiscardKeepsRemainingDeck(t *testing.T) {
+	state := sim.NewGameState(2)
+	state.RNG = rand.New(rand.NewPCG(1, 2))
+	left := sim.Card{Rank: sim.Ace, Suit: sim.Spades}
+	state.Deck = []sim.Card{left}
+	state.Discard = []sim.Card{
+		{Rank: sim.Two, Suit: sim.Clubs}, {Rank: sim.Three, Suit: sim.Clubs},
+		{Rank: sim.Four, Suit: sim.Clubs}, {Rank: sim.Five, Suit: sim.Clubs},
+	}
+	top := state.Discard[len(state.Discard)-1]
+
+	refillDeckFromDiscard(state)
+
+	if len(state.Discard) != 1 || state.Discard[0] != top {
+		t.Fatalf("discard after refill = %v, want only the top card %v", state.Discard, top)
+	}
+	if len(state.Deck) != 4 {
+		t.Fatalf("deck after refill has %d cards, want 4 (1 remaining + 3 recycled): %v", len(state.Deck), state.Deck)
+	}
+	found := false
+	for _, c := range state.Deck {
+		if c == left {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("the card still in the deck (%v) vanished in the refill: %v", left, state.Deck)
 	}
 }

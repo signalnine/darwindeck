@@ -409,3 +409,63 @@ func TestRulebookStatesTieBreaks(t *testing.T) {
 		t.Errorf("partnership rulebook does not state the tied-partnership rule")
 	}
 }
+
+// TestTurnOrderTieFollowsPlayDirection (2026-10-02 bughunt review): the
+// rulebook settles a fewest-cards tie by "the tied player who sits soonest
+// after them in turn order", and under the reverse modifier turn order can
+// run the other way. The scan stepped origin+i regardless of direction, so
+// with play reversed it named the player soonest BEFORE the knocker.
+func TestTurnOrderTieFollowsPlayDirection(t *testing.T) {
+	hand := func(n int, suit sim.Suit) []sim.Card {
+		var h []sim.Card
+		for r := 2; r < 2+n; r++ {
+			h = append(h, c(r, suit))
+		}
+		return h
+	}
+	s := GameSpec{Players: 3, Deal: 7, Move: PlayMatch, Match: MatchEither, End: EmptyHand, Score: FirstOut, Mods: []Modifier{ModReverse, ModKnock}}
+	if !s.WellTyped() {
+		t.Fatalf("%s is not well-typed", s.Family())
+	}
+	for _, tc := range []struct{ dir, want int }{{1, 1}, {-1, 2}} {
+		gs := endState(s)
+		// Seat 0 knocks on 3 cards; seats 1 and 2 tie on 2, so the knocker is
+		// not among the tied and the next tied player in turn order wins.
+		gs.Hands[0], gs.Hands[1], gs.Hands[2] = hand(3, sim.Clubs), hand(2, sim.Diamonds), hand(2, sim.Hearts)
+		gs.Direction = tc.dir
+		gs.Active = 0
+		Runner{s}.Apply(gs, mv2(sim.MoveKnock, 0))
+		if w := mustWinner(t, s, gs); w != tc.want {
+			t.Errorf("direction %+d: seat 0 knocks, seats 1,2 tied on 2 cards: winner = %d, want %d (next in turn order)", tc.dir, w, tc.want)
+		}
+	}
+}
+
+// TestDrawPenaltySkippedWhenGoingOut (2026-10-02 bughunt review): playing your
+// last card wins. The face-card draw penalty used to fire even on the card
+// that emptied the hand, so going out on a Jack-or-higher drew a card and the
+// game went on (v2's hook already exempts the going-out play).
+func TestDrawPenaltySkippedWhenGoingOut(t *testing.T) {
+	s := GameSpec{Players: 2, Deal: 7, Move: PlayMatch, Match: MatchEither, End: EmptyHand, Score: FirstOut, Mods: []Modifier{ModDrawPenalty}}
+	if !s.WellTyped() {
+		t.Fatalf("%s is not well-typed", s.Family())
+	}
+	gs := endState(s)
+	if len(gs.Deck) == 0 {
+		t.Fatal("setup left no deck to draw a penalty from")
+	}
+	king := c(13, sim.Spades)
+	setTop(gs, c(5, sim.Spades))
+	gs.Hands[0] = []sim.Card{king}
+	gs.Active = 0
+	Runner{s}.Apply(gs, sim.Move{Type: sim.MovePlay, PlayerID: 0, Cards: []sim.Card{king}})
+	if n := len(gs.Hands[0]); n != 0 {
+		t.Fatalf("going out on a King left %d card(s) in hand; the penalty must not fire on the play that empties the hand", n)
+	}
+	if w, done := (Runner{s}).CheckEnd(gs); !done || w != 0 {
+		t.Errorf("after playing the last card: winner=%d done=%v, want seat 0 to have won", w, done)
+	}
+	if !strings.Contains(s.Rulebook("G00"), "last card") {
+		t.Error("the rulebook does not state the going-out exemption for the draw penalty")
+	}
+}

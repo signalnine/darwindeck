@@ -438,7 +438,9 @@ func (rr Runner) Apply(gs *sim.GameState, m sim.Move) {
 				setTop(gs, last)
 			}
 			gs.PassCount = 0
-			if rr.Spec.hasMod(ModDrawPenalty) && len(gs.Deck) > 0 { // face-card play -> draw one
+			// face-card play -> draw one. Not on the play that empties the hand:
+			// going out wins (v2's applyDrawPenalty has the same exemption).
+			if rr.Spec.hasMod(ModDrawPenalty) && len(gs.Deck) > 0 && len(gs.Hands[p]) > 0 {
 				if last := m.Cards[len(m.Cards)-1]; int(last.Rank) >= 11 {
 					drawn, rem := sim.DrawN(gs.Deck, 1)
 					gs.Hands[p] = append(gs.Hands[p], drawn...)
@@ -767,12 +769,17 @@ func (rr Runner) tieOrigin(gs *sim.GameState) int {
 // bestSeat scans the seats in turn order starting at origin and returns the one
 // that beats all others; better(a, b) reports whether seat a STRICTLY beats seat
 // b. Only a strictly better seat displaces the incumbent, so a tie stays with the
-// tied seat nearest the origin. ok (may be nil) restricts the candidates; with no
-// candidate the result is -1.
-func bestSeat(n, origin int, ok func(p int) bool, better func(a, b int) bool) int {
+// tied seat nearest the origin. dir is the play direction (+1/-1; 0 is treated
+// as +1): under ModReverse turn order can run the other way, and "soonest after
+// them in turn order" must follow it. ok (may be nil) restricts the candidates;
+// with no candidate the result is -1.
+func bestSeat(n, origin, dir int, ok func(p int) bool, better func(a, b int) bool) int {
+	if dir == 0 {
+		dir = 1
+	}
 	best := -1
 	for i := 0; i < n; i++ {
-		p := wrap(origin+i, n)
+		p := wrap(origin+dir*i, n)
 		if ok != nil && !ok(p) {
 			continue
 		}
@@ -812,7 +819,7 @@ func cardHolder(n int, in func(p int) bool, cards func(p int) []sim.Card, highes
 func (rr Runner) decide(gs *sim.GameState, ok func(p int) bool, better func(a, b int) bool,
 	cards func(p int) []sim.Card, highest bool) int {
 	n := gs.NumPlayers
-	w := bestSeat(n, rr.tieOrigin(gs), ok, better)
+	w := bestSeat(n, rr.tieOrigin(gs), gs.Direction, ok, better)
 	if w < 0 || cards == nil {
 		return w
 	}
@@ -935,7 +942,7 @@ func (rr Runner) score(gs *sim.GameState) int {
 					winTeam = 1
 				}
 			}
-			return bestSeat(n, origin, func(p int) bool { return teamOf(p) == winTeam }, higher)
+			return bestSeat(n, origin, gs.Direction, func(p int) bool { return teamOf(p) == winTeam }, higher)
 		}
 		if s.Move == Trick {
 			return rr.decide(gs, nil, higher, nil, false) // a tie goes to the winner of the last trick

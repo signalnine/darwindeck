@@ -386,15 +386,18 @@ func (r *Runner) Blocked(state *sim.GameState, g *genome.Genome) bool {
 }
 
 // refillDeckFromDiscard moves all but the top discard card into the deck and
-// shuffles using state.RNG. Called when the deck has emptied so shedding
-// games can recover instead of stalling on an unreachable discard pile.
+// shuffles using state.RNG. Called when the deck has emptied (or, for a
+// draw_two / draw_four special, when it cannot cover the penalty) so shedding
+// games can recover instead of stalling on an unreachable discard pile. Any
+// cards still in the deck are KEPT: the special-effect caller refills with
+// 1..N-1 cards left, and overwriting the deck dropped them from the game.
 func refillDeckFromDiscard(state *sim.GameState) {
 	if len(state.Discard) <= 1 {
 		return
 	}
 	top := state.Discard[len(state.Discard)-1]
 	recycled := state.Discard[:len(state.Discard)-1]
-	state.Deck = append(state.Deck[:0], recycled...)
+	state.Deck = append(state.Deck, recycled...)
 	state.Discard = []sim.Card{top}
 	if state.RNG != nil {
 		sim.ShuffleDeck(state.Deck, state.RNG)

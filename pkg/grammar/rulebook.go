@@ -176,7 +176,7 @@ func (s GameSpec) modifierRules() []string {
 			// (Jack or HIGHER, so Aces too -- v2's applyDrawPenalty semantics),
 			// and on a multi-card combo it checks only the LAST card set down.
 			// The dossier must describe the game the engine actually plays.
-			out = append(out, "Whenever you play a high card -- Jack, Queen, King, or Ace (on a multi-card play, only the last card counts) -- you must immediately draw one extra card from the deck as a penalty.")
+			out = append(out, "Whenever you play a high card -- Jack, Queen, King, or Ace (on a multi-card play, only the last card counts) -- you must immediately draw one extra card from the deck as a penalty. Playing your last card is exempt: going out wins, with no penalty draw.")
 		case ModKnock:
 			if s.Move == Rummy {
 				// ginKnockThreshold: the knock move is offered at deadwood <= 2.
