@@ -69,8 +69,9 @@ const (
 	// stays 5.9x above.
 	degRummyChurnMax = 0.05
 	// degDeadMatchRuleShare (round 3): maximum share of shedding decision
-	// records (HandSize >= 2) in which the WHOLE hand was legal to play
-	// (LegalMoves >= HandSize). The dynamic twin of the Tier-0 catch-all
+	// records (HandSize >= 2) in which the WHOLE hand matched or was wild
+	// (PlayableCount >= HandSize; see allPlayableShare for why this is not
+	// the legal-move count). The dynamic twin of the Tier-0 catch-all
 	// rule: a wild UNION covering the deck (e.g. four suit wilds -- the r2
 	// flagship's rank03/rank04 encodings, semantically identical to the
 	// statically rejected {ByRank:0,BySuit:0}) deletes match_rule and
@@ -101,7 +102,7 @@ const (
 	// by the runner (PlayableShareProber) WITHOUT the alreadyInMoves dedup that
 	// collapses equivalent wild plays in LegalMoves. This is the per-card twin
 	// of dead_match_rule, which only fires when the WHOLE hand is playable at
-	// once (LegalMoves >= HandSize): a wild UNION covering most of the deck
+	// once (PlayableCount >= HandSize): a wild UNION covering most of the deck
 	// (r3 rank01: 3 of 4 suits wild = 39/52 cards) leaves the per-card share
 	// near 0.62 while the whole-hand share stays ~0.03-0.19 at hand 13, so the
 	// match rule is dead for 75% of the deck yet dead_match_rule never fires.
@@ -366,10 +367,21 @@ func meanMinSeatShare(result sim.BatchResult, numPlayers int) float64 {
 
 // allPlayableShare returns the fraction of decision records (HandSize >= 2;
 // a 1-card playable hand is "all playable" vacuously) in which the acting
-// player's whole hand was legal to play (LegalMoves >= HandSize). Shedding
-// move generation emits one MovePlay per playable card and a draw/pass only
-// when nothing is playable, so LegalMoves >= HandSize iff every card matched
-// or was wild. Records with no qualifying hands return 0 (vacuously alive).
+// player's whole hand matched the rule or was wild (PlayableCount >=
+// HandSize). Records with no qualifying hands return 0 (vacuously alive).
+//
+// It reads the runner's per-card PlayableCount, NOT the legal-move count.
+// LegalMoves >= HandSize was the original test and held only while shedding
+// move generation emitted exactly one MovePlay per playable card and a lone
+// draw/pass otherwise. The deep borrows broke that equivalence (2026-10
+// bughunt): MechKnock appends a knock to a forced draw and MechRunPlay
+// appends one move per combo, so the move count reached the hand size on
+// turns where most of the hand did not match (Crazy Eights + run_play + knock
+// at hand 3 read 0.392 against a per-card truth of 0.030). PlayableCount is
+// populated by every runner this veto applies to -- the shedding runner and
+// the grammar adapter's PlayMatch specs (sim.PlayableShareProber); a
+// shedding-skeleton record from a runner without the prober carries 0 and
+// can never witness a dead match rule.
 func allPlayableShare(result sim.BatchResult) float64 {
 	total, all := 0, 0
 	for _, turns := range result.AllTurns {
@@ -378,7 +390,7 @@ func allPlayableShare(result sim.BatchResult) float64 {
 				continue
 			}
 			total++
-			if tr.LegalMoves >= tr.HandSize {
+			if tr.PlayableCount >= tr.HandSize {
 				all++
 			}
 		}

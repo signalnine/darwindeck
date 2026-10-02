@@ -106,12 +106,15 @@ type TurnRecord struct {
 	// no-follow trick hands scored 0.86-0.92 with near-zero choice impact).
 	Meaningful bool
 	// HandSize is the acting player's hand size at the decision point,
-	// capped at 255 (Task 28 round 3). Together with LegalMoves it exposes
+	// capped at 255 (Task 28 round 3). Together with PlayableCount it exposes
 	// rule LIVENESS to the degeneracy detectors: a shedding record with
-	// LegalMoves >= HandSize means every card in hand was playable -- when
+	// PlayableCount >= HandSize means every card in hand was playable -- when
 	// that holds on nearly every turn, the genome's match/draw rules are
 	// dynamically dead (the wild-union encodings of the r2 flagship's
 	// shedding champions; see dead_match_rule in pkg/fitness/degeneracy.go).
+	// Do NOT compare it against LegalMoves for that purpose: MechKnock and
+	// MechRunPlay add moves that are not single-card plays, so the move count
+	// reaches the hand size on turns where most of the hand does not match.
 	HandSize uint8
 	// PlayableCount is the number of the acting player's hand cards that
 	// legally satisfy the shedding match rule OR are wild, capped at 255
@@ -123,7 +126,8 @@ type TurnRecord struct {
 	// playable_share veto means over choice-turns -- the per-card twin of
 	// dead_match_rule, which catches a wild UNION covering most of the deck
 	// (r3 rank01: 3 of 4 suits wild) that the whole-hand-playable share misses
-	// at large hand sizes.
+	// at large hand sizes. dead_match_rule itself reads PlayableCount >=
+	// HandSize (the whole hand playable).
 	PlayableCount uint8
 }
 
