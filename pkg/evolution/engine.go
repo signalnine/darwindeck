@@ -285,6 +285,12 @@ func (e *Engine) EvaluatePopulation() {
 	// flows from the published (possibly MCTS-mean) fitness.
 	e.runMCTSTopDecile()
 
+	// BestFitness/BestGenome describe THIS generation from here on (mirrors
+	// NoveltyEngine.evaluatePopulation). They used to be refreshed only inside
+	// Select, i.e. after Run's progress callback, so every reported `best` was
+	// one generation stale and generation 0 always printed 0.000.
+	e.updateBestFitness()
+
 	// Apply fitness sharing: divide fitness by niche count.
 	// Niches are defined by skeleton type. This prevents a single skeleton
 	// from monopolizing the population.
@@ -781,14 +787,13 @@ func (e *Engine) Run(progress func(gen int, best float64, avg float64)) {
 		e.Population = e.Select()
 	}
 
-	// Final evaluation. Select never runs on this population, so update
-	// BestFitness directly to capture any post-final-Select offspring whose
-	// raw fitness beats the prior best. Bump Generation past the loop range
-	// so elites get a fresh seed here too instead of repeating the last
+	// Final evaluation. Select never runs on this population; EvaluatePopulation
+	// itself refreshes BestFitness, capturing any post-final-Select offspring
+	// whose raw fitness beats the prior best. Bump Generation past the loop
+	// range so elites get a fresh seed here too instead of repeating the last
 	// generation's evaluation.
 	e.Generation = e.Config.Generations
 	e.EvaluatePopulation()
-	e.updateBestFitness()
 }
 
 // TopN returns the top N genomes ensuring skeleton diversity.
