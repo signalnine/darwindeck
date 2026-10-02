@@ -66,3 +66,28 @@ func TestEmitGrammarWritesBlindSet(t *testing.T) {
 		t.Errorf("manifest has %d entries, want %d", len(manifest), len(specs))
 	}
 }
+
+// TestEmitGrammarManifestHandSize: the manifest must report the hand a player is
+// actually dealt. It used to copy SpecGenome's HandSize, which is floored at 8 to
+// keep the engine's turn cap sane -- so a 7-card shedding game and a 0-card
+// banking game both read "hand size 8".
+func TestEmitGrammarManifestHandSize(t *testing.T) {
+	dir := t.TempDir()
+	specs := grammar.Canonical()
+	if _, err := EmitGrammar(specs, dir); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(filepath.Join(dir, "manifest.json"))
+	var manifest []ManifestEntry
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		t.Fatal(err)
+	}
+	for i, m := range manifest {
+		if m.HandSize != specs[i].Deal {
+			t.Errorf("%s (%s): manifest hand size = %d, want the real deal %d", m.ID, specs[i].Family(), m.HandSize, specs[i].Deal)
+		}
+		if m.Players != specs[i].Players {
+			t.Errorf("%s: manifest players = %d, want %d", m.ID, m.Players, specs[i].Players)
+		}
+	}
+}

@@ -2,6 +2,7 @@ package grammar
 
 import (
 	"math/rand/v2"
+	"strconv"
 
 	"github.com/darwindeck/darwindeck/pkg/genome"
 	"github.com/darwindeck/darwindeck/pkg/sim"
@@ -37,24 +38,53 @@ func (a Adapter) GenerateMoves(s *sim.GameState, _ *genome.Genome) []sim.Move {
 // ApplyMove applies the move and emits the event taxonomy the metrics read:
 // EventCardPlayed / EventCardDrawn / EventSpecialTriggered(knock), plus a single
 // EventRoundEnd when the move ends the game (so end-of-game scoring is legible).
+//
+// The stream is also the judge dossier's game trace, so EVERY move leaves a line
+// and the line says what was chosen: a pass/stick is an event (a silent pass made
+// the trace read as players acting out of turn), a bid carries its amount, a
+// nominated eight carries the suit it named, and each betting action is named.
+// These details are metric-inert by construction: the fitness layer reads events
+// only through sim.IsAttackEvent, whose whitelist is trick wins plus the
+// draw_two/draw_four/skip/reverse specials -- none of the details added here.
 func (a Adapter) ApplyMove(s *sim.GameState, m sim.Move, _ *genome.Genome) []sim.Event {
 	p := s.Active
 	var ev []sim.Event
 	switch m.Type {
 	case sim.MovePlay:
-		ev = append(ev, sim.Event{Type: sim.EventCardPlayed, PlayerID: p, Cards: m.Cards})
+		e := sim.Event{Type: sim.EventCardPlayed, PlayerID: p, Cards: m.Cards}
+		switch {
+		case a.Spec.Move == Capture:
+			e.Detail = "trail" // left face-up on the table (v2 casino's detail)
+		case a.Spec.Move == Accumulate:
+			e.Detail = "take_face_up"
+		case a.Spec.Move == PlayMatch && a.Spec.hasMod(ModNominate) && int(m.Cards[len(m.Cards)-1].Rank) == wildRank:
+			e.Detail = "names_suit=" + sim.Suit(m.Amount).String()
+		}
+		ev = append(ev, e)
 	case sim.MoveDraw:
 		ev = append(ev, sim.Event{Type: sim.EventCardDrawn, PlayerID: p})
 	case sim.MoveDiscard: // rummy: the chosen discard is the meaningful action
-		ev = append(ev, sim.Event{Type: sim.EventCardPlayed, PlayerID: p, Cards: m.Cards})
+		ev = append(ev, sim.Event{Type: sim.EventCardPlayed, PlayerID: p, Cards: m.Cards, Detail: "discard"})
 	case sim.MoveCapture: // casino: a chosen capture from the shared table
-		ev = append(ev, sim.Event{Type: sim.EventCardPlayed, PlayerID: p, Cards: m.Cards})
-	case sim.MoveCheck, sim.MoveCall, sim.MoveRaise, sim.MoveFold: // vying betting
-		ev = append(ev, sim.Event{Type: sim.EventSpecialTriggered, PlayerID: p, Detail: "bet"})
+		ev = append(ev, sim.Event{Type: sim.EventCardPlayed, PlayerID: p, Cards: m.Cards, Detail: "capture"})
+	case sim.MoveCheck: // vying betting: name the action, not a generic "bet"
+		ev = append(ev, sim.Event{Type: sim.EventSpecialTriggered, PlayerID: p, Detail: "check"})
+	case sim.MoveCall:
+		ev = append(ev, sim.Event{Type: sim.EventSpecialTriggered, PlayerID: p, Detail: "call"})
+	case sim.MoveRaise:
+		ev = append(ev, sim.Event{Type: sim.EventSpecialTriggered, PlayerID: p, Detail: "raise"})
+	case sim.MoveFold:
+		ev = append(ev, sim.Event{Type: sim.EventSpecialTriggered, PlayerID: p, Detail: "fold"})
 	case sim.MoveKnock:
 		ev = append(ev, sim.Event{Type: sim.EventSpecialTriggered, PlayerID: p, Detail: "knock"})
 	case sim.MoveBid:
-		ev = append(ev, sim.Event{Type: sim.EventSpecialTriggered, PlayerID: p, Detail: "bid"})
+		ev = append(ev, sim.Event{Type: sim.EventSpecialTriggered, PlayerID: p, Detail: "bid=" + strconv.Itoa(m.Amount)})
+	case sim.MovePass:
+		detail := "pass"
+		if a.Spec.Move == Accumulate {
+			detail = "stick" // banking: lock in the total
+		}
+		ev = append(ev, sim.Event{Type: sim.EventSpecialTriggered, PlayerID: p, Detail: detail})
 	}
 	// Turn-order / draw attacks are the interaction signal (IsAttackEvent counts
 	// "draw_two" always, and "skip"/"reverse" for >2 players).

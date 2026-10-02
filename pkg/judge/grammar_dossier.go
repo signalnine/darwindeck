@@ -84,8 +84,11 @@ func EmitGrammar(specs []grammar.GameSpec, outDir string) (EmitResult, error) {
 			return EmitResult{}, err
 		}
 		g := grammar.SpecGenome(spec)
+		// HandSize is the spec's real deal, NOT g.HandSize: SpecGenome floors
+		// that at 8 so the engine's MaxTurns cap never collapses, which made a
+		// 7-card (or 0-card banking) game read "hand size 8".
 		manifest = append(manifest, ManifestEntry{
-			ID: id, Dossier: name, Skeleton: g.Skeleton.String(), Players: g.Players, HandSize: g.HandSize,
+			ID: id, Dossier: name, Skeleton: g.Skeleton.String(), Players: spec.Players, HandSize: spec.Deal,
 		})
 		res.AnswerKey[id] = AnswerRec{Source: "grammar", TrueName: spec.Composition(), Skeleton: g.Skeleton.String()}
 	}
