@@ -348,12 +348,62 @@ func writeVyingRules(b *strings.Builder, g *genome.Genome) {
 
 func writeSpecialCards(b *strings.Builder, g *genome.Genome) {
 	b.WriteString("## Special Cards\n\n")
+	// Identical rules collapse to one effect in the runner (applySpecialEffects
+	// applies each effect category at most once), and mutation appends rules
+	// without deduplicating -- print each distinct rule once.
+	seen := make(map[genome.SpecialCard]bool, len(g.SpecialCards))
 	for _, sc := range g.SpecialCards {
+		if seen[sc] {
+			continue
+		}
+		seen[sc] = true
 		card := specialCardName(sc)
-		effect := specialCardEffect(sc)
+		effect := specialCardEffect(sc, g.Players)
 		b.WriteString(fmt.Sprintf("- **%s:** %s\n", card, effect))
 	}
 	b.WriteString("\n")
+
+	// Overlap rules, stated only when observable in this genome. They mirror
+	// applySpecialEffects exactly: every effect listed for a card fires at
+	// once, a reverse is applied before the next player is determined, the
+	// affected player misses a single turn however many effects hit them, and
+	// two draw effects on one card resolve to the LARGER draw.
+	multi, drawBoth := specialOverlaps(g.SpecialCards)
+	if multi {
+		b.WriteString("A card listed under more than one effect triggers all of them at once: a reverse takes effect first (so \"next player\" means next in the new direction), and the affected player misses only one turn.\n\n")
+	}
+	if drawBoth {
+		b.WriteString("Where a card matches both a draw-2 and a draw-4 rule, the **larger** applies -- the next player draws 4. The two draws are not added together.\n\n")
+	}
+}
+
+// specialOverlaps reports whether any single card triggers two different
+// effect types (multi), and whether any card matches both a draw_two and a
+// draw_four rule (drawBoth).
+func specialOverlaps(rules []genome.SpecialCard) (multi, drawBoth bool) {
+	for rank := uint8(2); rank <= 14; rank++ {
+		for suit := uint8(0); suit <= 3; suit++ {
+			var types [5]bool
+			for _, sc := range rules {
+				if int(sc.Type) < len(types) && sc.MatchesCard(rank, suit) {
+					types[sc.Type] = true
+				}
+			}
+			n := 0
+			for _, on := range types {
+				if on {
+					n++
+				}
+			}
+			if n > 1 {
+				multi = true
+			}
+			if types[genome.SpecialDrawTwo] && types[genome.SpecialDrawFour] {
+				drawBoth = true
+			}
+		}
+	}
+	return multi, drawBoth
 }
 
 func writeBorrowedRules(b *strings.Builder, borrows []genome.BorrowedMechanic) {
@@ -507,18 +557,31 @@ func specialCardName(sc genome.SpecialCard) string {
 	}
 }
 
-func specialCardEffect(sc genome.SpecialCard) string {
+// specialCardEffect states exactly what applySpecialEffects (shedding runner)
+// does for one rule. KEEP IN SYNC with that function:
+//   - a draw effect ALSO costs the victim their turn (skipVictim);
+//   - with two players a skip or a reverse hands the turn straight back to the
+//     player who played it (reverse-in-2-player collapses to a skip);
+//   - a wild is only "always playable": the runner has no suit nomination, so
+//     the next player matches the wild card itself.
+func specialCardEffect(sc genome.SpecialCard, players int) string {
 	switch sc.Type {
 	case genome.SpecialSkip:
+		if players == 2 {
+			return "Skip the next player's turn (with 2 players, you play again)"
+		}
 		return "Skip the next player's turn"
 	case genome.SpecialReverse:
+		if players == 2 {
+			return "Reverse play direction (with 2 players this skips your opponent, so you play again)"
+		}
 		return "Reverse play direction"
 	case genome.SpecialDrawTwo:
-		return "Next player draws 2 cards"
+		return "Next player draws 2 cards and loses their turn"
 	case genome.SpecialDrawFour:
-		return "Next player draws 4 cards"
+		return "Next player draws 4 cards and loses their turn"
 	case genome.SpecialWild:
-		return "Can be played on any card"
+		return "Can be played on any card (no suit is named: the next player must match the wild card itself)"
 	default:
 		return "Special effect"
 	}

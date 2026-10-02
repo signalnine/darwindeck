@@ -663,7 +663,8 @@ func removeCard(hand []sim.Card, card sim.Card) []sim.Card {
 // freely appends specials and never deduplicates by (Type, ByRank, BySuit).
 // To keep the simulation outcome aligned with what the rulebook describes,
 // each effect category is collected and applied at most once: duplicate
-// rules of the same type collapse into a single effect, and combinations
+// rules of the same type collapse into a single effect, a draw_two and a
+// draw_four on the same card resolve to the larger draw (4), and combinations
 // like Skip + DrawTwo skip the victim exactly once rather than rotating
 // two seats past them (cards-czo). This subsumes the partial fix from
 // dd-rzo which still allowed advances to accumulate per matching rule.
@@ -688,12 +689,18 @@ func applySpecialEffects(state *sim.GameState, card sim.Card, g *genome.Genome) 
 			skip = true
 		case genome.SpecialReverse:
 			reverse = true
+		// Overlapping draw rules resolve to the LARGER draw, never a sum and
+		// never "whichever rule comes first in the slice": the old first-match
+		// rule made a pure permutation of SpecialCards (which mutation and
+		// crossover do freely) change the game -- [draw_two, draw_four] drew 2,
+		// [draw_four, draw_two] drew 4 -- while the rulebook printed both lines.
+		// The rulebook states this take-larger rule (writeSpecialCards).
 		case genome.SpecialDrawTwo:
-			if drawCount == 0 {
+			if drawCount < 2 {
 				drawCount = 2
 			}
 		case genome.SpecialDrawFour:
-			if drawCount == 0 {
+			if drawCount < 4 {
 				drawCount = 4
 			}
 		case genome.SpecialWild:
