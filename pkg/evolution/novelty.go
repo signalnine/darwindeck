@@ -320,19 +320,26 @@ func (e *NoveltyEngine) runMCTSTopDecile() {
 // reintroduce the winner's curse. If no valid individual exists, the
 // previous best is retained.
 func (e *NoveltyEngine) updateBestFitness() {
-	var best *NoveltyIndividual
-	for _, ind := range e.Population {
+	if i := e.rawBestIndex(); i >= 0 {
+		e.BestFitness = e.Population[i].Fitness.TotalFitness
+		e.BestGenome = e.Population[i].Genome
+	}
+}
+
+// rawBestIndex returns the population index of the valid individual with the
+// highest RAW (running-mean) TotalFitness, or -1 if none is valid (ties keep
+// the earliest index). Mirrors Engine.rawBestIndex.
+func (e *NoveltyEngine) rawBestIndex() int {
+	best := -1
+	for i, ind := range e.Population {
 		if !ind.Valid {
 			continue
 		}
-		if best == nil || ind.Fitness.TotalFitness > best.Fitness.TotalFitness {
-			best = ind
+		if best < 0 || ind.Fitness.TotalFitness > e.Population[best].Fitness.TotalFitness {
+			best = i
 		}
 	}
-	if best != nil {
-		e.BestFitness = best.Fitness.TotalFitness
-		e.BestGenome = best.Genome
-	}
+	return best
 }
 
 // computeNovelty calculates novelty score for each individual based on
@@ -669,23 +676,26 @@ func (e *NoveltyEngine) selectNext() []*NoveltyIndividual {
 
 	nextGen := make([]*NoveltyIndividual, e.Config.PopulationSize)
 
-	// Elitism: top N carry forward, including their running-mean state.
-	// Elites are re-evaluated with a fresh seed every generation (see
-	// evaluatePopulation); carrying EvalCount/FitnessSum is what turns the
-	// next evaluation into a running mean instead of a fresh point estimate.
+	// Elitism: top N by shared (novelty-blended) fitness carry forward --
+	// always including the raw-best individual (eliteIndices; without it the
+	// best game was dropped whenever novelty/niche sharing ranked it outside
+	// the band) -- with their running-mean state. Elites are re-evaluated with
+	// a fresh seed every generation (see evaluatePopulation); carrying
+	// EvalCount/FitnessSum is what turns the next evaluation into a running
+	// mean instead of a fresh point estimate.
 	elite := min(e.Config.EliteSize, len(e.Population))
-	for i := 0; i < elite; i++ {
+	for i, src := range eliteIndices(elite, e.rawBestIndex()) {
 		nextGen[i] = &NoveltyIndividual{
 			Individual: Individual{
-				Genome:     e.Population[i].Genome,
-				Fitness:    e.Population[i].Fitness,
+				Genome:     e.Population[src].Genome,
+				Fitness:    e.Population[src].Fitness,
 				Valid:      true,
-				EvalCount:  e.Population[i].EvalCount,
-				FitnessSum: e.Population[i].FitnessSum,
-				MctsSum:    e.Population[i].MctsSum,
-				MctsCount:  e.Population[i].MctsCount,
+				EvalCount:  e.Population[src].EvalCount,
+				FitnessSum: e.Population[src].FitnessSum,
+				MctsSum:    e.Population[src].MctsSum,
+				MctsCount:  e.Population[src].MctsCount,
 			},
-			Behavior: e.Population[i].Behavior,
+			Behavior: e.Population[src].Behavior,
 		}
 	}
 

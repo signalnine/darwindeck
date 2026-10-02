@@ -456,24 +456,54 @@ func (e *Engine) applyFitnessSharing() {
 // sticky historical max: with elite re-evaluation an elite's mean drifts
 // toward its true value, and freezing the highest-ever noisy estimate would
 // reintroduce the winner's curse this scheme exists to kill. Elitism keeps
-// the best genome in the population, so the current best is the honest
-// best. Expect BestFitness to move down as well as up across generations --
+// the raw-best genome in the population (eliteIndices guarantees it a slot
+// whenever EliteSize >= 1), so the current best is the honest best. Expect BestFitness to move down as well as up across generations --
 // that is the correction working. If no valid individual exists, the
 // previous best is retained.
 func (e *Engine) updateBestFitness() {
-	var best *Individual
-	for _, ind := range e.Population {
+	if i := e.rawBestIndex(); i >= 0 {
+		e.BestFitness = e.Population[i].Fitness.TotalFitness
+		e.BestGenome = e.Population[i].Genome
+	}
+}
+
+// rawBestIndex returns the population index of the valid individual with the
+// highest RAW (running-mean) TotalFitness, or -1 if none is valid. Ties keep
+// the earliest index, so the pick is deterministic for a fixed population
+// order.
+func (e *Engine) rawBestIndex() int {
+	best := -1
+	for i, ind := range e.Population {
 		if !ind.Valid {
 			continue
 		}
-		if best == nil || ind.Fitness.TotalFitness > best.Fitness.TotalFitness {
-			best = ind
+		if best < 0 || ind.Fitness.TotalFitness > e.Population[best].Fitness.TotalFitness {
+			best = i
 		}
 	}
-	if best != nil {
-		e.BestFitness = best.Fitness.TotalFitness
-		e.BestGenome = best.Genome
+	return best
+}
+
+// eliteIndices returns the indices (into a population already sorted by
+// SharedFitness, descending) of the individuals carried forward unchanged.
+// The slots fill by shared fitness, EXCEPT that the raw-best individual is
+// always among them: SharedFitness is niche-shared (and novelty-blended in
+// the hybrid engine), so the highest raw-fitness genome can rank far outside
+// the top EliteSize when its niche is crowded, and a shared-fitness-only rule
+// then drops the best game the run has found (measured 2/6 generations on
+// the baseline engine, 4/6 on the hybrid, at population 60). When rawBest is
+// outside the band it takes the LAST elite slot; it never adds a slot, so
+// EliteSize 0 still means no elitism. rawBest < 0 (no valid individual)
+// leaves the plain shared-fitness band.
+func eliteIndices(elite, rawBest int) []int {
+	idx := make([]int, elite)
+	for i := range idx {
+		idx[i] = i
 	}
+	if elite > 0 && rawBest >= elite {
+		idx[elite-1] = rawBest
+	}
+	return idx
 }
 
 // Select performs tournament selection to create the next generation.
@@ -491,20 +521,21 @@ func (e *Engine) Select() []*Individual {
 
 	nextGen := make([]*Individual, e.Config.PopulationSize)
 
-	// Elitism: top N carry forward, including their running-mean state.
+	// Elitism: top N by shared fitness carry forward -- always including the
+	// raw-best individual (eliteIndices) -- with their running-mean state.
 	// Elites are re-evaluated with a fresh seed every generation (see
 	// EvaluatePopulation); carrying EvalCount/FitnessSum is what turns the
 	// next evaluation into a running mean instead of a fresh point estimate.
 	elite := min(e.Config.EliteSize, len(e.Population))
-	for i := 0; i < elite; i++ {
+	for i, src := range eliteIndices(elite, e.rawBestIndex()) {
 		nextGen[i] = &Individual{
-			Genome:     e.Population[i].Genome,
-			Fitness:    e.Population[i].Fitness,
+			Genome:     e.Population[src].Genome,
+			Fitness:    e.Population[src].Fitness,
 			Valid:      true,
-			EvalCount:  e.Population[i].EvalCount,
-			FitnessSum: e.Population[i].FitnessSum,
-			MctsSum:    e.Population[i].MctsSum,
-			MctsCount:  e.Population[i].MctsCount,
+			EvalCount:  e.Population[src].EvalCount,
+			FitnessSum: e.Population[src].FitnessSum,
+			MctsSum:    e.Population[src].MctsSum,
+			MctsCount:  e.Population[src].MctsCount,
 		}
 	}
 
