@@ -4,17 +4,22 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"math/rand/v2"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/darwindeck/darwindeck/pkg/fitness"
 	"github.com/darwindeck/darwindeck/pkg/genome"
+	"github.com/darwindeck/darwindeck/pkg/playtest"
 	"github.com/darwindeck/darwindeck/pkg/seeds"
+	"github.com/darwindeck/darwindeck/pkg/sim"
 )
 
 // testServer registers the first few classic seeds and returns a live test
@@ -68,6 +73,45 @@ func doJSON(t *testing.T, h http.Handler, method, path string, hdr map[string]st
 		}
 	}
 	return rec.Code
+}
+
+// finishGame plays the session to a terminal state over the handler by always
+// submitting the first legal move (legal by construction; the max-turns cap in
+// advance() guarantees termination). v is updated to the final view.
+func finishGame(t *testing.T, h http.Handler, hdr map[string]string, v *View) {
+	t.Helper()
+	for i := 0; i < 100000 && v.Status == StatusHumanTurn; i++ {
+		if code := doJSON(t, h, "POST", "/api/move", hdr, map[string]interface{}{"index": 0, "version": v.MoveVersion}, v); code != http.StatusOK {
+			t.Fatalf("move: %d", code)
+		}
+	}
+	if v.Status == StatusHumanTurn {
+		t.Fatal("game did not finish")
+	}
+}
+
+// readRecords parses the ratings jsonl (a missing file is zero records).
+func readRecords(t *testing.T, path string) []playtest.Record {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		t.Fatalf("read results: %v", err)
+	}
+	var recs []playtest.Record
+	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+		if line == "" {
+			continue
+		}
+		var rec playtest.Record
+		if err := json.Unmarshal([]byte(line), &rec); err != nil {
+			t.Fatalf("bad results line %q: %v", line, err)
+		}
+		recs = append(recs, rec)
+	}
+	return recs
 }
 
 func postJSON(t *testing.T, url string, body map[string]interface{}, out interface{}) int {
@@ -302,6 +346,7 @@ func TestRateOncePerSession(t *testing.T) {
 		t.Fatalf("new: %d", code)
 	}
 	hdr := map[string]string{"X-Session-Token": v.Session}
+	finishGame(t, h, hdr, &v) // only a finished game is rateable
 	if code := doJSON(t, h, "POST", "/api/rate", hdr, map[string]interface{}{"rating": 4, "comment": "fun"}, nil); code != http.StatusOK {
 		t.Fatalf("first rate: want 200, got %d", code)
 	}
@@ -408,5 +453,346 @@ func TestClientSeedIgnored(t *testing.T) {
 	}
 	if ws.Seed == 42 {
 		t.Error("client-supplied seed was honored; seeds must be server-random")
+	}
+}
+
+// A game can only be rated once it has ended. A mid-game rating used to be
+// logged with winner:"none" (indistinguishable from a turn-limit game) and
+// spent the session's one rating; now it is refused with 409, logs nothing,
+// and leaves the rating slot free for the real end-of-game rating.
+func TestRateRefusedBeforeGameEnds(t *testing.T) {
+	srv := serverWith(t, firstShedding(t))
+	h := srv.Handler()
+
+	var v View
+	if code := doJSON(t, h, "POST", "/api/new", nil, map[string]interface{}{"difficulty": "random"}, &v); code != http.StatusOK {
+		t.Fatalf("new: %d", code)
+	}
+	if v.Status != StatusHumanTurn {
+		t.Fatalf("expected a game in progress, got %q", v.Status)
+	}
+	hdr := map[string]string{"X-Session-Token": v.Session}
+
+	if code := doJSON(t, h, "POST", "/api/rate", hdr, map[string]interface{}{"rating": 1}, nil); code != http.StatusConflict {
+		t.Fatalf("mid-game rate: want 409, got %d", code)
+	}
+	if recs := readRecords(t, srv.ResultsPath); len(recs) != 0 {
+		t.Fatalf("mid-game rate logged %d record(s), want 0: %+v", len(recs), recs)
+	}
+
+	// The refusal must not have consumed the one-rating slot.
+	finishGame(t, h, hdr, &v)
+	if code := doJSON(t, h, "POST", "/api/rate", hdr, map[string]interface{}{"rating": 4}, nil); code != http.StatusOK {
+		t.Fatalf("end-of-game rate after a refused mid-game rate: want 200, got %d", code)
+	}
+	recs := readRecords(t, srv.ResultsPath)
+	if len(recs) != 1 {
+		t.Fatalf("results file has %d records, want 1", len(recs))
+	}
+	if recs[0].Rating == nil || *recs[0].Rating != 4 {
+		t.Errorf("logged rating = %v, want 4", recs[0].Rating)
+	}
+	if recs[0].Turns != v.Turn || recs[0].Turns == 0 {
+		t.Errorf("logged turns = %d, want the finished game's %d (non-zero)", recs[0].Turns, v.Turn)
+	}
+}
+
+// A stuck game is also over (nothing left to play), so it stays rateable and
+// the record says so.
+func TestRateAllowedWhenStuck(t *testing.T) {
+	srv := serverWith(t, firstShedding(t))
+	h := srv.Handler()
+
+	var v View
+	if code := doJSON(t, h, "POST", "/api/new", nil, map[string]interface{}{"difficulty": "random"}, &v); code != http.StatusOK {
+		t.Fatalf("new: %d", code)
+	}
+	srv.mu.RLock()
+	ws := srv.store[v.Session]
+	srv.mu.RUnlock()
+	ws.mu.Lock()
+	ws.status = StatusStuck
+	ws.legalMoves = nil
+	ws.mu.Unlock()
+
+	hdr := map[string]string{"X-Session-Token": v.Session}
+	if code := doJSON(t, h, "POST", "/api/rate", hdr, map[string]interface{}{"rating": 2}, nil); code != http.StatusOK {
+		t.Fatalf("rate a stuck game: want 200, got %d", code)
+	}
+	recs := readRecords(t, srv.ResultsPath)
+	if len(recs) != 1 {
+		t.Fatalf("results file has %d records, want 1", len(recs))
+	}
+	if !recs[0].Stuck || recs[0].Winner != "stuck" {
+		t.Errorf("stuck record = %+v, want stuck:true winner:\"stuck\"", recs[0])
+	}
+}
+
+// gatedAI wraps a real AI and, once armed, parks inside SelectMove until
+// released -- a stand-in for a slow MCTS decision. The session lock is held for
+// the whole call (submitMove -> advance -> SelectMove), which is exactly the
+// window the reaper must not wait on while holding the server-wide lock.
+type gatedAI struct {
+	inner   sim.AIPlayer
+	armed   atomic.Bool
+	once    sync.Once
+	entered chan struct{} // closed when the first armed call parks
+	release chan struct{} // close to let the parked call (and all later ones) through
+}
+
+func (a *gatedAI) SelectMove(moves []sim.Move, st *sim.GameState, rng *rand.Rand) sim.Move {
+	if a.armed.Load() {
+		a.once.Do(func() { close(a.entered) })
+		<-a.release
+	}
+	return a.inner.SelectMove(moves, st, rng)
+}
+
+// The reaper used to take the server-wide lock and then wait on each session's
+// own lock, so ONE session busy computing an AI move froze every other
+// session's requests (their lookup needs the server lock) for as long as that
+// move took. A busy session must cost the others nothing -- and the sweep must
+// still evict what is idle and keep what is live.
+func TestReaperDoesNotStallOtherSessions(t *testing.T) {
+	g := firstShedding(t)
+	srv := serverWith(t, g)
+	h := srv.Handler()
+	t0 := time.Now()
+	srv.now = func() time.Time { return t0 }
+
+	// idle: created at t0 and never touched again.
+	var idle View
+	if code := doJSON(t, h, "POST", "/api/new", nil, map[string]interface{}{"difficulty": "random"}, &idle); code != http.StatusOK {
+		t.Fatalf("new idle: %d", code)
+	}
+
+	// Everything else happens 35 minutes later: past idle's 30m TTL. The clock
+	// is not reassigned again, so the goroutines below read it race-free.
+	later := t0.Add(35 * time.Minute)
+	srv.now = func() time.Time { return later }
+
+	var other View
+	if code := doJSON(t, h, "POST", "/api/new", nil, map[string]interface{}{"difficulty": "random"}, &other); code != http.StatusOK {
+		t.Fatalf("new other: %d", code)
+	}
+	otherHdr := map[string]string{"X-Session-Token": other.Session}
+
+	// busy: a live session whose next AI decision parks while holding its lock.
+	ai := &gatedAI{inner: &sim.RandomAI{}, entered: make(chan struct{}), release: make(chan struct{})}
+	busy := NewWebSession("busy", g, fitness.GetRunner(g), ai, 99, "random", "seed.json")
+	busy.touch(later)
+	srv.mu.Lock()
+	srv.store[busy.ID] = busy
+	srv.mu.Unlock()
+	busyHdr := map[string]string{"X-Session-Token": busy.ID}
+	var bv View
+	if code := doJSON(t, h, "GET", "/api/state", busyHdr, nil, &bv); code != http.StatusOK {
+		t.Fatalf("state busy: %d", code)
+	}
+	if bv.Status != StatusHumanTurn {
+		t.Fatalf("busy session: expected a human turn, got %q", bv.Status)
+	}
+
+	ai.armed.Store(true)
+	release := sync.OnceFunc(func() { close(ai.release) })
+	defer release() // never leave a goroutine parked, whatever fails below
+
+	// Play the human seat until the AI is consulted; that request then sits in
+	// SelectMove holding busy's lock.
+	moveDone := make(chan struct{})
+	go func() {
+		defer close(moveDone)
+		v := bv
+		for v.Status == StatusHumanTurn {
+			if code := doJSON(t, h, "POST", "/api/move", busyHdr, map[string]interface{}{"index": 0, "version": v.MoveVersion}, &v); code != http.StatusOK {
+				t.Errorf("busy move: %d", code)
+				return
+			}
+			select {
+			case <-ai.entered:
+				return // that was the gated move, now released
+			default:
+			}
+		}
+	}()
+	select {
+	case <-ai.entered:
+	case <-moveDone:
+		t.Fatal("busy game ended without ever consulting the AI")
+	case <-time.After(10 * time.Second):
+		t.Fatal("the AI was never consulted")
+	}
+
+	evictDone := make(chan struct{})
+	go func() {
+		defer close(evictDone)
+		srv.evictIdle()
+	}()
+
+	// While the sweep runs against a locked session, an unrelated session must
+	// keep answering. Probe for a short window so the reaper has certainly
+	// reached the busy session; the stall limit is generous so a loaded machine
+	// cannot fail a correct server.
+	const stallLimit = 5 * time.Second
+	var stalled chan int
+	for until := time.Now().Add(100 * time.Millisecond); stalled == nil && time.Now().Before(until); time.Sleep(time.Millisecond) {
+		done := make(chan int, 1)
+		go func() { done <- doJSON(t, h, "GET", "/api/state", otherHdr, nil, nil) }()
+		select {
+		case code := <-done:
+			if code != http.StatusOK {
+				t.Fatalf("state other: %d", code)
+			}
+		case <-time.After(stallLimit):
+			t.Errorf("/api/state on an unrelated session stalled > %v behind the reaper waiting on a busy session's lock", stallLimit)
+			stalled = done
+		}
+	}
+
+	release()
+	for name, ch := range map[string]chan struct{}{"busy move": moveDone, "evictIdle": evictDone} {
+		select {
+		case <-ch:
+		case <-time.After(10 * time.Second):
+			t.Fatalf("%s never finished after the AI was released", name)
+		}
+	}
+	if stalled != nil {
+		<-stalled // let the stalled probe drain before the test returns
+	}
+
+	// The sweep still did its job around the busy session.
+	if code := doJSON(t, h, "GET", "/api/state", map[string]string{"X-Session-Token": idle.Session}, nil, nil); code != http.StatusNotFound {
+		t.Errorf("idle 35m: want 404 (evicted), got %d", code)
+	}
+	if code := doJSON(t, h, "GET", "/api/state", otherHdr, nil, nil); code != http.StatusOK {
+		t.Errorf("recently created session: want 200 (kept), got %d", code)
+	}
+	if code := doJSON(t, h, "GET", "/api/state", busyHdr, nil, nil); code != http.StatusOK {
+		t.Errorf("busy session: want 200 (kept), got %d", code)
+	}
+}
+
+// finishedSession starts a game on a fresh single-seed server and plays it to
+// the end, returning everything a rating test needs.
+func finishedSession(t *testing.T) (*Server, http.Handler, map[string]string) {
+	t.Helper()
+	srv := serverWith(t, firstShedding(t))
+	h := srv.Handler()
+	var v View
+	if code := doJSON(t, h, "POST", "/api/new", nil, map[string]interface{}{"difficulty": "random"}, &v); code != http.StatusOK {
+		t.Fatalf("new: %d", code)
+	}
+	hdr := map[string]string{"X-Session-Token": v.Session}
+	finishGame(t, h, hdr, &v)
+	return srv, h, hdr
+}
+
+// A rating outside 1-5 that is not the explicit skip (0) is a client error. It
+// used to be saved as rating:null with a 200 -- silently turning "9" into a
+// skip and spending the session's one rating. Now: 400, nothing logged, and
+// the slot is still free for a valid rating.
+func TestRateOutOfRangeRejected(t *testing.T) {
+	srv, h, hdr := finishedSession(t)
+
+	for _, bad := range []interface{}{9, -3, 6, -1, 3.5} {
+		if code := doJSON(t, h, "POST", "/api/rate", hdr, map[string]interface{}{"rating": bad}, nil); code != http.StatusBadRequest {
+			t.Errorf("rating %v: want 400, got %d", bad, code)
+		}
+	}
+	if recs := readRecords(t, srv.ResultsPath); len(recs) != 0 {
+		t.Fatalf("rejected ratings logged %d record(s), want 0: %+v", len(recs), recs)
+	}
+
+	// None of the rejections consumed the one-rating slot.
+	if code := doJSON(t, h, "POST", "/api/rate", hdr, map[string]interface{}{"rating": 5}, nil); code != http.StatusOK {
+		t.Fatalf("valid rating after rejected ones: want 200, got %d", code)
+	}
+	recs := readRecords(t, srv.ResultsPath)
+	if len(recs) != 1 || recs[0].Rating == nil || *recs[0].Rating != 5 {
+		t.Fatalf("records = %+v, want exactly one with rating 5", recs)
+	}
+}
+
+// Skip stays a first-class answer: rating 0 (what the page sends when no star
+// is picked) and an omitted rating field both record rating:null.
+func TestRateSkipRecordsNullRating(t *testing.T) {
+	for name, body := range map[string]map[string]interface{}{
+		"explicit zero": {"rating": 0, "comment": "skipped"},
+		"omitted field": {"comment": "skipped"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			srv, h, hdr := finishedSession(t)
+			if code := doJSON(t, h, "POST", "/api/rate", hdr, body, nil); code != http.StatusOK {
+				t.Fatalf("skip: want 200, got %d", code)
+			}
+			recs := readRecords(t, srv.ResultsPath)
+			if len(recs) != 1 {
+				t.Fatalf("results file has %d records, want 1", len(recs))
+			}
+			if recs[0].Rating != nil {
+				t.Errorf("skip logged rating %d, want null", *recs[0].Rating)
+			}
+			if recs[0].Comment != "skipped" {
+				t.Errorf("skip dropped the comment: %+v", recs[0])
+			}
+		})
+	}
+}
+
+// The ends of the 1-5 scale are valid ratings and are logged as given.
+func TestRateBoundsAccepted(t *testing.T) {
+	for _, rating := range []int{1, 5} {
+		srv, h, hdr := finishedSession(t)
+		if code := doJSON(t, h, "POST", "/api/rate", hdr, map[string]interface{}{"rating": rating}, nil); code != http.StatusOK {
+			t.Fatalf("rating %d: want 200, got %d", rating, code)
+		}
+		recs := readRecords(t, srv.ResultsPath)
+		if len(recs) != 1 || recs[0].Rating == nil || *recs[0].Rating != rating {
+			t.Errorf("rating %d: records = %+v, want exactly one with that rating", rating, recs)
+		}
+	}
+}
+
+// indexPage fetches the embedded UI through the real handler.
+func indexPage(t *testing.T) string {
+	t.Helper()
+	srv := serverWith(t, firstShedding(t))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /: %d", rec.Code)
+	}
+	return rec.Body.String()
+}
+
+// The table's "to call" tag must render the human's owed amount (yourToCall),
+// not the full current bet: with the bet already matched the page said "to
+// call 10" above a Check button.
+func TestIndexToCallUsesOwedAmount(t *testing.T) {
+	page := indexPage(t)
+	if want := `if (v.yourToCall) tag("to call", v.yourToCall);`; !strings.Contains(page, want) {
+		t.Errorf("index.html is missing %q", want)
+	}
+	if bad := `tag("to call", tb.currentBet)`; strings.Contains(page, bad) {
+		t.Errorf("index.html still labels the full current bet as the amount to call: %q", bad)
+	}
+}
+
+// The rating panel is the only place the page calls /api/rate from, and it is
+// revealed only for a terminal status. A 409 while the page does not believe
+// the game is over is the not-finished refusal, which must not be reported as
+// "already recorded" (that would also disable the submit button for good).
+func TestIndexRatingOnlyOfferedAtGameEnd(t *testing.T) {
+	page := indexPage(t)
+	for _, want := range []string{
+		`id="overPanel" hidden`, // the rating panel starts hidden
+		`gameOver = v.status === "game_over" || v.status === "stuck";`,
+		`$("overPanel").hidden = !gameOver;`,
+		`if (e.status === 409 && !gameOver)`, // not-finished handled apart from already-rated
+	} {
+		if !strings.Contains(page, want) {
+			t.Errorf("index.html is missing %q", want)
+		}
 	}
 }

@@ -160,21 +160,25 @@ func (s *Server) StopJanitor() {
 
 // evictIdle deletes every session idle past its TTL: ratedTTL once a finished
 // game has been rated (the session's whole point is spent), idleTTL otherwise.
-// Lock order is s.mu then ws.mu, the same direction every handler uses.
+//
+// It never takes a session lock. ws.mu is held for a whole AI decision, so a
+// sweep that waited on it while holding s.mu stalled every other session's
+// lookup behind one slow move. Both inputs are atomics instead; "rated"
+// alone means spent, because handleRate only rates a finished game and a
+// finished game never resumes. And since lookup touches under s.mu's read
+// lock, the idle check and the delete here are atomic with respect to
+// touches: a session that became active before the sweep is seen as active,
+// never deleted out from under its request.
 func (s *Server) evictIdle() {
 	now := s.now()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for id, ws := range s.store {
-		ws.mu.Lock()
-		last := ws.lastActive
-		spent := ws.rated && ws.status != StatusHumanTurn
-		ws.mu.Unlock()
 		ttl := s.idleTTL
-		if spent {
+		if ws.rated.Load() {
 			ttl = s.ratedTTL
 		}
-		if now.Sub(last) > ttl {
+		if now.Sub(ws.idleSince()) > ttl {
 			delete(s.store, id)
 		}
 	}
@@ -301,7 +305,7 @@ func (s *Server) handleNew(w http.ResponseWriter, r *http.Request) {
 	// the s.mu insert is the only happens-before edge a reader needs.
 	ws := NewWebSession(id, game.Genome, runner, ai, seed, difficulty, game.Path)
 	ws.rules = output.GenerateRulebook(game.Genome)
-	ws.lastActive = s.now() // pre-publish: no other goroutine can hold ws.mu yet
+	ws.touch(s.now()) // before publishing: the janitor must never see an untouched session
 
 	s.mu.Lock()
 	s.reserved--
@@ -380,22 +384,40 @@ func (s *Server) handleRate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 0 is the explicit skip (logged as rating:null); anything else must be on
+	// the 1-5 scale. An out-of-range value used to fall through to the skip
+	// path -- a 200 that recorded null and spent the session's one rating.
+	// Rejected here, before the rated flag is touched, so the slot stays free.
 	var rating *int
-	if req.Rating >= 1 && req.Rating <= 5 {
+	switch {
+	case req.Rating == 0:
+	case req.Rating >= 1 && req.Rating <= 5:
 		v := req.Rating
 		rating = &v
+	default:
+		http.Error(w, "rating must be 1-5 (or 0 to skip)", http.StatusBadRequest)
+		return
 	}
 
 	// One rating per session: the flag flips under ws.mu before the write, so a
 	// concurrent duplicate loses here (409) instead of double-appending to the
 	// jsonl (unbounded growth / rating-dataset poisoning from replayed calls).
 	ws.mu.Lock()
-	if ws.rated {
+	// Only a finished game is rateable. A mid-game rating would be logged as
+	// winner:"none" (indistinguishable from a real turn-limit game) and would
+	// spend the session's one rating before the player has seen the game end.
+	// Checked before the rated flag flips, so a refusal leaves the slot unused.
+	if ws.status != StatusGameOver && ws.status != StatusStuck {
+		ws.mu.Unlock()
+		http.Error(w, "game not finished", http.StatusConflict)
+		return
+	}
+	if ws.rated.Load() {
 		ws.mu.Unlock()
 		http.Error(w, "session already rated", http.StatusConflict)
 		return
 	}
-	ws.rated = true
+	ws.rated.Store(true)
 	rec := playtest.Record{
 		Timestamp:  time.Now().Format(time.RFC3339),
 		GenomeID:   ws.Genome.ID,
@@ -413,7 +435,7 @@ func (s *Server) handleRate(w http.ResponseWriter, r *http.Request) {
 	if err := playtest.AppendRecord(s.ResultsPath, rec); err != nil {
 		// Nothing was appended; let the client retry rather than losing the rating.
 		ws.mu.Lock()
-		ws.rated = false
+		ws.rated.Store(false)
 		ws.mu.Unlock()
 		http.Error(w, "failed to record rating", http.StatusInternalServerError)
 		return
@@ -443,14 +465,20 @@ func (s *Server) lookup(w http.ResponseWriter, id string) *WebSession {
 		http.Error(w, "missing session", http.StatusBadRequest)
 		return nil
 	}
+	// Every authenticated request resets the idle-eviction clock. The touch
+	// happens under the read lock so it cannot interleave with evictIdle's
+	// check-then-delete (which holds the write lock): a session is either
+	// evicted before this request finds it, or seen as active by the sweep.
 	s.mu.RLock()
 	ws := s.store[id]
+	if ws != nil {
+		ws.touch(s.now())
+	}
 	s.mu.RUnlock()
 	if ws == nil {
 		http.Error(w, "unknown session", http.StatusNotFound)
 		return nil
 	}
-	ws.touch(s.now()) // every authenticated request resets the idle-eviction clock
 	return ws
 }
 

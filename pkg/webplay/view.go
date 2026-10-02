@@ -57,6 +57,7 @@ type View struct {
 	YourHand     []string   `json:"yourHand"`
 	YourScore    int        `json:"yourScore"`
 	YourCaptured int        `json:"yourCaptured,omitempty"` // casino: your captured-pile size
+	YourToCall   int        `json:"yourToCall,omitempty"`   // vying: chips YOU still owe to call (0 unless it is your decision)
 	Opponents    []OppView  `json:"opponents"`
 	Table        TableView  `json:"table"`
 	LegalMoves   []MoveView `json:"legalMoves"`
@@ -114,6 +115,12 @@ func (ws *WebSession) view(includeRules bool) View {
 	}
 
 	if ws.status == StatusHumanTurn {
+		// What the HUMAN still owes, not table.currentBet (the full bet): as the
+		// big blind with the bet matched the page showed "to call 10" over a
+		// Check button. Only meaningful while the human has a decision -- a
+		// finished game's leftover bet is not a debt. Reveals nothing hidden:
+		// the public current bet minus the human's own committed chips.
+		v.YourToCall = owedBy(st, HumanSeat)
 		for i, mv := range ws.legalMoves {
 			v.LegalMoves = append(v.LegalMoves, MoveView{
 				Index: i,
@@ -221,7 +228,11 @@ func moveLabel(mv sim.Move, st *sim.GameState, g *genome.Genome) string {
 
 // amountOwed is the chips the active vying seat must add to call.
 func amountOwed(st *sim.GameState) int {
-	seat := st.Active
+	return owedBy(st, st.Active)
+}
+
+// owedBy is the chips a given seat must add to match the current bet.
+func owedBy(st *sim.GameState, seat int) int {
 	if seat < 0 || seat >= len(st.Committed) {
 		return st.CurrentBet
 	}
