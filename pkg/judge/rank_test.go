@@ -2,6 +2,11 @@ package judge
 
 import (
 	"math"
+	"os"
+	"path/filepath"
+	"reflect"
+	"regexp"
+	"strings"
 	"testing"
 )
 
@@ -18,6 +23,11 @@ func TestVerdictConfidenceAcceptsStringOrNumber(t *testing.T) {
 		{`{"id":"G01","confidence":"medium"}`, 0.6},
 		{`{"id":"G01","confidence":"low"}`, 0.3},
 		{`{"id":"G01","confidence":"HIGH"}`, 0.9},
+		// A number in quotes is still a number: it used to fall through the
+		// label table to 0, so a unanimous high-confidence game lost every
+		// confidence tie-break without a word.
+		{`{"id":"G01","confidence":"0.9"}`, 0.9},
+		{`{"id":"G01","confidence":" 0.75 "}`, 0.75},
 		{`{"id":"G01"}`, 0.0},
 		{`{"id":"G01","confidence":"bogus"}`, 0.0},
 	}
@@ -237,6 +247,202 @@ func TestRenderReportContainsRanks(t *testing.T) {
 	}
 	if !contains(report, "G01") {
 		t.Error("report missing G01 row")
+	}
+}
+
+// TestAggregateDedupesDuplicateReps: a judge batch that is retried or merged
+// twice repeats a (id, rep) verdict. Counting it twice turned a 1-1 split
+// (which breaks to the WORSE band) into a 2-1 majority for the duplicated
+// side: publishable x2 (the same rep) + degenerate ranked the game
+// publishable at #1. A repetition is one vote; the first occurrence wins.
+func TestAggregateDedupesDuplicateReps(t *testing.T) {
+	verdicts := []Verdict{
+		{ID: "G02", Rep: 1, Quality: "publishable", Novelty: "novel", Playable: true, Confidence: 0.5, Reason: "first"},
+		{ID: "G02", Rep: 1, Quality: "publishable", Novelty: "novel", Playable: true, Confidence: 0.5, Reason: "dup"},
+		{ID: "G02", Rep: 2, Quality: "degenerate", Novelty: "variant_of_known", Playable: false, Confidence: 0.5, Reason: "x"},
+	}
+	a := Aggregate(verdicts)[0]
+	if a.Votes != 2 {
+		t.Errorf("votes = %d, want 2 (rep 1 appears twice but is one vote)", a.Votes)
+	}
+	if a.Quality != "degenerate" {
+		t.Errorf("quality = %q, want degenerate (a real 1-1 split breaks to the worse band)", a.Quality)
+	}
+	if a.Novelty != "variant_of_known" {
+		t.Errorf("novelty = %q, want variant_of_known (1-1 split)", a.Novelty)
+	}
+
+	// Verdicts with no rep (0) carry no repetition identity and must never be
+	// collapsed into one another.
+	repless := []Verdict{
+		{ID: "G05", Quality: "publishable", Novelty: "novel"},
+		{ID: "G05", Quality: "publishable", Novelty: "novel"},
+		{ID: "G05", Quality: "borderline", Novelty: "novel"},
+	}
+	if a := Aggregate(repless)[0]; a.Votes != 3 || a.Quality != "publishable" {
+		t.Errorf("rep-less verdicts: votes=%d quality=%q, want 3 / publishable", a.Votes, a.Quality)
+	}
+}
+
+// TestVerdictWarningsFlagDuplicatesAndVoteCounts: a duplicated repetition and
+// a dossier judged fewer (or more) than 3 times were both aggregated without a
+// word, under a report headed "majority of 3 verdicts per game".
+func TestVerdictWarningsFlagDuplicatesAndVoteCounts(t *testing.T) {
+	verdicts := []Verdict{
+		{ID: "G01", Rep: 1}, {ID: "G01", Rep: 2}, {ID: "G01", Rep: 3},
+		{ID: "G02", Rep: 1}, {ID: "G02", Rep: 1}, {ID: "G02", Rep: 2},
+		{ID: "G03", Rep: 1},
+	}
+	warnings := VerdictWarnings(verdicts)
+	joined := strings.Join(warnings, "\n")
+
+	if !regexp.MustCompile(`G02.*rep 1.*2 times`).MatchString(joined) {
+		t.Errorf("no duplicate warning for G02 rep 1:\n%s", joined)
+	}
+	if !regexp.MustCompile(`G02.*2 verdicts.*expected 3`).MatchString(joined) {
+		t.Errorf("no vote-count warning for G02 (2 distinct reps):\n%s", joined)
+	}
+	if !regexp.MustCompile(`G03.*1 verdict.*expected 3`).MatchString(joined) {
+		t.Errorf("no vote-count warning for G03 (1 verdict):\n%s", joined)
+	}
+	for _, w := range warnings {
+		if strings.Contains(w, "G01") {
+			t.Errorf("a clean 3-verdict dossier produced a warning: %s", w)
+		}
+	}
+}
+
+// reportRows returns the data rows of a rendered report table.
+func reportRows(t *testing.T, report string) (header string, rows []string) {
+	t.Helper()
+	lines := splitLines(report)
+	for i, line := range lines {
+		if strings.HasPrefix(line, "| Rank |") {
+			header = line
+			for _, row := range lines[i+2:] {
+				if row == "" {
+					break
+				}
+				rows = append(rows, row)
+			}
+			return header, rows
+		}
+	}
+	t.Fatalf("report has no table:\n%s", report)
+	return "", nil
+}
+
+// TestRenderReportShowsVotes: the vote count was aggregated but never shown,
+// so a row backed by one verdict looked exactly like a 3-judge majority.
+func TestRenderReportShowsVotes(t *testing.T) {
+	verdicts := []Verdict{
+		{ID: "G01", Rep: 1, Quality: "publishable", Novelty: "novel", Playable: true},
+		{ID: "G01", Rep: 2, Quality: "publishable", Novelty: "novel", Playable: true},
+		{ID: "G01", Rep: 3, Quality: "publishable", Novelty: "novel", Playable: true},
+		{ID: "G03", Rep: 1, Quality: "borderline", Novelty: "novel", Playable: true},
+	}
+	header, rows := reportRows(t, RenderReport(Rank(Aggregate(verdicts))))
+	if !strings.Contains(header, "| Votes |") {
+		t.Fatalf("report header has no Votes column: %s", header)
+	}
+	col := -1
+	for i, cell := range strings.Split(header, "|") {
+		if strings.TrimSpace(cell) == "Votes" {
+			col = i
+		}
+	}
+	want := map[string]string{"G01": "3", "G03": "1"}
+	for _, row := range rows {
+		cells := strings.Split(row, "|")
+		id := strings.TrimSpace(cells[2])
+		if got := strings.TrimSpace(cells[col]); got != want[id] {
+			t.Errorf("%s votes cell = %q, want %q (row: %s)", id, got, want[id], row)
+		}
+	}
+}
+
+// TestRenderReportSanitizesCells: only "|" was escaped, so a newline in a
+// judge's reason (or rediscovery name) split the row and broke the table.
+func TestRenderReportSanitizesCells(t *testing.T) {
+	verdicts := []Verdict{
+		{ID: "G01", Rep: 1, Quality: "borderline", Novelty: "variant_of_known", Playable: true,
+			RediscoveryName: "Crazy\nEights | like", Reason: "line1\nline2 | piped\r\nline3"},
+		{ID: "G02", Rep: 1, Quality: "borderline", Novelty: "novel", Playable: true, Reason: "plain"},
+	}
+	header, rows := reportRows(t, RenderReport(Rank(Aggregate(verdicts))))
+	if len(rows) != 2 {
+		t.Fatalf("table has %d rows for 2 games (a cell broke a row):\n%s", len(rows), strings.Join(rows, "\n"))
+	}
+	for _, row := range rows {
+		if strings.Count(row, "|") != strings.Count(header, "|") {
+			t.Errorf("row has %d cell separators, header has %d: %s", strings.Count(row, "|"), strings.Count(header, "|"), row)
+		}
+	}
+	if !strings.Contains(rows[0]+rows[1], "line1 line2 / piped line3") {
+		t.Errorf("reason text was not preserved on one line: %v", rows)
+	}
+}
+
+// TestRankIsIndependentOfIDOrder: dossier ids are a pseudo-random permutation
+// of the input, and verdicts arrive in whatever order the judges finish.
+// Aggregation and ranking are keyed on the id alone, so neither the id's
+// numeric position nor the verdict order may change the result.
+func TestRankIsIndependentOfIDOrder(t *testing.T) {
+	mk := func(id, quality, novelty string) []Verdict {
+		var out []Verdict
+		for rep := 1; rep <= 3; rep++ {
+			out = append(out, Verdict{ID: id, Rep: rep, Quality: quality, Novelty: novelty, Playable: true, Confidence: 0.6})
+		}
+		return out
+	}
+	a, b, c := mk("G07", "publishable", "novel"), mk("G02", "borderline", "variant_of_known"), mk("G11", "publishable", "variant_of_known")
+
+	var forward, shuffled []Verdict
+	forward = append(append(append(forward, a...), b...), c...)
+	for i := 0; i < 3; i++ { // interleaved, reversed
+		shuffled = append(shuffled, c[2-i], b[2-i], a[2-i])
+	}
+	want := []string{"G07", "G11", "G02"}
+	for name, vs := range map[string][]Verdict{"forward": forward, "shuffled": shuffled} {
+		ranked := Rank(Aggregate(vs))
+		var got []string
+		for _, r := range ranked {
+			got = append(got, r.ID)
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("%s verdict order ranks %v, want %v", name, got, want)
+		}
+	}
+}
+
+// TestLoadVerdictsWarnsOnUnrecognizedConfidence: an unrecognized confidence
+// was silently counted as 0. It still counts as 0 (one malformed field must
+// not reject a batch) but the load must say so.
+func TestLoadVerdictsWarnsOnUnrecognizedConfidence(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "verdicts.json")
+	data := `[
+{"id":"G01","rep":1,"quality":"publishable","novelty":"novel","confidence":"0.9"},
+{"id":"G01","rep":2,"quality":"publishable","novelty":"novel","confidence":"very sure"},
+{"id":"G01","rep":3,"quality":"publishable","novelty":"novel","confidence":"high"}
+]`
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	vs, warnings, err := LoadVerdictsWithWarnings(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(vs) != 3 || vs[0].Confidence != 0.9 || vs[1].Confidence != 0 || vs[2].Confidence != 0.9 {
+		t.Fatalf("confidences = %v, want 0.9 / 0 / 0.9", vs)
+	}
+	var conf []string
+	for _, w := range warnings {
+		if strings.Contains(w, "confidence") {
+			conf = append(conf, w)
+		}
+	}
+	if len(conf) != 1 || !strings.Contains(conf[0], "G01 rep 2") || !strings.Contains(conf[0], "very sure") {
+		t.Errorf("want exactly one confidence warning naming G01 rep 2 and the bad value, got %v", conf)
 	}
 }
 
