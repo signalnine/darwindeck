@@ -314,20 +314,23 @@ func WriteAnswerKey(path string, key map[string]AnswerRec) error {
 }
 
 // DefaultAnswerKeyPath is where the private answer key goes when the caller
-// names no path: answer-key.json in the PARENT of the dossier dir. The parent
-// is taken lexically when that already lies outside the dossier dir (so
+// names no path: <dossier-dir-name>.answer-key.json in the PARENT of the
+// dossier dir. The key is named after its dossier dir so sibling sets (the
+// chunked in-loop flow emits run/dossiers/gen020, gen040, ... side by side)
+// never share one -- a shared <out>/../answer-key.json was first silently
+// replaced by, then (under the overwrite guard) refused for, every chunk after
+// the first. The parent is taken lexically when the dir has a real name (so
 // relative paths stay relative), and from the absolute path otherwise -- the
 // lexical parent of "." is ".", which dropped the key INSIDE the blind set for
 // `judge emit <in> --out .`.
 func DefaultAnswerKeyPath(outDir string) string {
-	key := filepath.Join(filepath.Dir(filepath.Clean(outDir)), "answer-key.json")
-	if !pathInside(key, outDir) {
-		return key
+	clean := filepath.Clean(outDir)
+	if base := filepath.Base(clean); base == "." || base == ".." || base == string(filepath.Separator) {
+		if abs, err := filepath.Abs(outDir); err == nil {
+			clean = abs
+		}
 	}
-	if abs, err := filepath.Abs(outDir); err == nil {
-		return filepath.Join(filepath.Dir(abs), "answer-key.json")
-	}
-	return key
+	return filepath.Join(filepath.Dir(clean), filepath.Base(clean)+".answer-key.json")
 }
 
 // CheckAnswerKeyPath vets an answer-key path BEFORE anything is emitted. It

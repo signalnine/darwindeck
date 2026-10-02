@@ -62,8 +62,8 @@ func TestCheckAnswerKeyPathRejectsInsideOut(t *testing.T) {
 // Dir(Clean(out))/answer-key.json. For `--out .` that is ./answer-key.json --
 // inside the dossier dir.
 func TestDefaultAnswerKeyPathIsOutsideOut(t *testing.T) {
-	if got, want := DefaultAnswerKeyPath(filepath.Join("run", "dossiers")), filepath.Join("run", "answer-key.json"); got != want {
-		t.Errorf("default key for run/dossiers = %s, want %s (the documented <out>/../answer-key.json)", got, want)
+	if got, want := DefaultAnswerKeyPath(filepath.Join("run", "dossiers")), filepath.Join("run", "dossiers.answer-key.json"); got != want {
+		t.Errorf("default key for run/dossiers = %s, want %s", got, want)
 	}
 
 	// "." is resolved against the working directory; nothing is written, so
@@ -72,10 +72,31 @@ func TestDefaultAnswerKeyPathIsOutsideOut(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := filepath.Join(filepath.Dir(cwd), "answer-key.json")
+	want := filepath.Join(filepath.Dir(cwd), filepath.Base(cwd)+".answer-key.json")
 	for _, out := range []string{".", "./", cwd} {
-		if got := DefaultAnswerKeyPath(out); got != want {
+		got := DefaultAnswerKeyPath(out)
+		if got != want {
 			t.Errorf("default key for --out %q = %s, want %s (outside the dossier dir)", out, got, want)
 		}
+		if pathInside(got, out) {
+			t.Errorf("default key for --out %q = %s lies inside the dossier dir", out, got)
+		}
+	}
+}
+
+// TestDefaultAnswerKeyPathIsPerDossierDir: the documented in-loop flow emits
+// each chunk into its own sibling dir (run/dossiers/gen020, gen040, ...). A
+// shared default <out>/../answer-key.json made the second chunk collide with
+// the first one's key (silently replacing it before the overwrite guard,
+// refused after it). The default key is named after its dossier dir, so
+// sibling sets never share one.
+func TestDefaultAnswerKeyPathIsPerDossierDir(t *testing.T) {
+	a := DefaultAnswerKeyPath(filepath.Join("run", "dossiers", "gen020"))
+	b := DefaultAnswerKeyPath(filepath.Join("run", "dossiers", "gen040"))
+	if a == b {
+		t.Fatalf("sibling dossier dirs share the default answer key %s", a)
+	}
+	if want := filepath.Join("run", "dossiers", "gen020.answer-key.json"); a != want {
+		t.Errorf("default key for gen020 = %s, want %s", a, want)
 	}
 }

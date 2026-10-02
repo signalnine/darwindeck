@@ -37,7 +37,7 @@ func cmdJudgeBackfill(args []string) {
 	tablePath := fs2.String("table", "", "existing verdict table (composition -> score JSON) (required)")
 	dir := fs2.String("dir", "", "directory to scan recursively for genome.json (required)")
 	out := fs2.String("out", "", "dossier output directory for the missing compositions (required)")
-	answerKey := fs2.String("answer-key", "", "private answer-key.json path, outside -out (default: <out>/../answer-key.json)")
+	answerKey := fs2.String("answer-key", "", "private answer-key.json path, outside -out (default: <out>/../<out-name>.answer-key.json)")
 	force := fs2.Bool("force", false, "overwrite an existing answer key (it maps the ids of an earlier dossier set)")
 	fs2.Parse(args)
 

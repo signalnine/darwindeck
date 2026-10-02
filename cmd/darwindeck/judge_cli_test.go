@@ -154,8 +154,8 @@ func TestBackfillAnswerKeyFlag(t *testing.T) {
 	if err := runJudgeBackfill(table, run, out, key, false, &stdout, &stderr); err != nil {
 		t.Fatalf("backfill: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(root, "answer-key.json")); err == nil {
-		t.Error("-answer-key was given but the default <out>/../answer-key.json was written too")
+	if _, err := os.Stat(judge.DefaultAnswerKeyPath(out)); err == nil {
+		t.Error("-answer-key was given but the default answer key was written too")
 	}
 	if !strings.Contains(stderr.String(), bad) {
 		t.Errorf("the unparsable genome was skipped silently; stderr: %s", stderr.String())
@@ -201,7 +201,7 @@ func TestJudgeEmitRefusesExistingKeyBeforeEmitting(t *testing.T) {
 	putGenome(t, in, "rank01", seeds.CrazyEights())
 	putGenome(t, in, "rank02", seeds.GinRummy())
 	out := filepath.Join(root, "dossiers", "gen020")
-	key := filepath.Join(root, "dossiers", "answer-key.json") // the default location
+	key := filepath.Join(root, "dossiers", "gen020.answer-key.json") // the default location
 	var stdout bytes.Buffer
 
 	if err := runJudgeEmit(in, out, "", false, &stdout); err != nil {
@@ -226,13 +226,18 @@ func TestJudgeEmitRefusesExistingKeyBeforeEmitting(t *testing.T) {
 		t.Error("the refused emit changed the existing answer key")
 	}
 
-	// A different dossier set that would share the default key is refused too.
+	// A different dossier set in a sibling dir gets its OWN default key (the
+	// documented chunked loop emits gen020, gen040, ... side by side), so it
+	// neither collides with nor replaces the first set's key.
 	sibling := filepath.Join(root, "dossiers", "gen040")
-	if err := runJudgeEmit(in, sibling, "", false, &stdout); err == nil {
-		t.Error("an emit into a sibling dir silently replaced the other set's answer key")
+	if err := runJudgeEmit(in, sibling, "", false, &stdout); err != nil {
+		t.Fatalf("an emit into a sibling dir was refused: %v", err)
 	}
-	if _, err := os.Stat(sibling); err == nil {
-		t.Error("the refused emit created its dossier dir")
+	if len(readAnswerKey(t, filepath.Join(root, "dossiers", "gen040.answer-key.json"))) != 2 {
+		t.Error("the sibling set's default key is incomplete")
+	}
+	if now, _ := os.ReadFile(key); !bytes.Equal(now, first) {
+		t.Error("the sibling emit changed the first set's answer key")
 	}
 
 	// -force (or a distinct -answer-key) is the way through.
@@ -242,8 +247,8 @@ func TestJudgeEmitRefusesExistingKeyBeforeEmitting(t *testing.T) {
 	if _, err := os.Stat(marker); err == nil {
 		t.Error("the forced emit did not sweep the stale dossier")
 	}
-	own := filepath.Join(root, "dossiers", "gen040-key.json")
-	if err := runJudgeEmit(in, sibling, own, false, &stdout); err != nil {
+	own := filepath.Join(root, "dossiers", "gen060-key.json")
+	if err := runJudgeEmit(in, filepath.Join(root, "dossiers", "gen060"), own, false, &stdout); err != nil {
 		t.Fatalf("emit with its own -answer-key: %v", err)
 	}
 	if len(readAnswerKey(t, own)) != 2 {

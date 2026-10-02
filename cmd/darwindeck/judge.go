@@ -79,11 +79,11 @@ Subcommands:
   emit <input> --out <dir> [--answer-key <path>] [--force]
       Build BLIND dossiers (one per genome.json found recursively under
       <input>) into <dir>, plus manifest.json and prompt.md. Writes a PRIVATE
-      answer-key.json OUTSIDE <dir> (default: <dir>/../answer-key.json).
+      answer-key.json OUTSIDE <dir> (default: <dir>/../<dir-name>.answer-key.json).
       Dossier ids (G01..) are assigned in a pseudo-random order, not in
       input/rank order: the answer key (path, composition per id) is the only
       id -> genome mapping. An existing answer key is never overwritten
-      without --force; give each dossier set its own --answer-key.
+      without --force (re-emitting into the same <dir> needs it).
 
   rank <dossier-dir> <verdicts.json> [--out <report.md>]
       Ingest verdicts, aggregate majority-of-3 per id, re-rank by judged
@@ -94,14 +94,14 @@ Subcommands:
       Emit blind dossiers for every composition present under <genome-dir>
       that is NOT yet in <verdicts.json>, so the composition-keyed table can be
       completed and the in-loop judge becomes a zero-cost lookup. The answer
-      key (default: <dossier-dir>/../answer-key.json) maps each id to its
+      key (default: <dossier-dir>/../<dir-name>.answer-key.json) maps each id to its
       composition; same overwrite rule as emit.`)
 }
 
 func cmdJudgeEmit(args []string) {
 	fs := flag.NewFlagSet("judge emit", flag.ExitOnError)
 	out := fs.String("out", "", "output dossier directory (required)")
-	answerKey := fs.String("answer-key", "", "private answer-key.json path, outside <out> (default: <out>/../answer-key.json)")
+	answerKey := fs.String("answer-key", "", "private answer-key.json path, outside <out> (default: <out>/../<out-name>.answer-key.json)")
 	force := fs.Bool("force", false, "overwrite an existing answer key (it maps the ids of an earlier dossier set)")
 	// Parse with the leading positional(s) hoisted out, so flags may appear
 	// either before OR after the <input> argument (Go's flag package otherwise
