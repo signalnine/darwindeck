@@ -8,7 +8,7 @@ judges (3 reps each) certifying the result.
 > simulated their sample traces and termination stats WITHOUT the hook-based
 > borrows (`meld_bonus`, `avoidance`), while the rulebook text described them.
 > For rank07-10, 331-334 of 400 dossier games have a different winner once the
-> hooks are applied. The rulebooks were correct and the `run_play`-only games
+> hooks are applied. The rulebook text did describe the borrows, and the `run_play`-only games
 > (rank19, rank20) and the plain-trick control are unaffected, but the four
 > "novel" verdicts below should be re-judged on dossiers regenerated with the
 > fixed `judge emit` before being cited. The re-judge has not been run.
