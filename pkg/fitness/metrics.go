@@ -249,12 +249,23 @@ func computeInteraction(result sim.BatchResult) float64 {
 // Two-tier skill constants (audit Task 20, the v2 design's formula):
 //
 //	raw = 0.4*max(0, greedyWR - randomBaselineWR)/(1-randomBaselineWR)
-//	    + 0.6*max(0, mctsWR  - greedyWR)         /(1-greedyWR)
+//	    + 0.6*max(0, mctsWR  - ref)              /(1-ref)
+//	ref = max(greedyWR, randomBaselineWR)
 //
 // The 0.4/0.6 split is plan-fixed: skill a 1-ply greedy can detect saturates
 // at 0.4 of the raw scale; the top 0.6 is reachable only by ISMCTS outplaying
 // greedy. skillScale is the metric's raw-to-[0,1] divisor -- the ONE constant
 // Task 20 may adjust (weights stay at 0.25/0.25/0.20/0.20/0.10).
+//
+// ref AMENDS the plan formula (2026-10 bughunt), which referenced the MCTS
+// tier on greedyWR alone. That is identical whenever greedy is at or above
+// the random baseline -- every calibration classic -- but when the greedy
+// scorer is ANTI-skilled (below random: Big Two + MechKnock measured random
+// 0.435, greedy 0.235) the plan form paid the MCTS seat for the scorer's
+// deficit: a plain random player in the MCTS seat (0.345, itself sub-random)
+// scored 0.173, and a real ISMCTS seat was credited with the 0.20 gap on top
+// of its own edge. Flooring the reference at the random baseline restores
+// the contract below: a seat that does not beat random has shown no skill.
 //
 // skillScale = 0.5, justified by the measured classic spread over
 // CalibrationSeeds (post-Task-20 block in calibration_test.go): the
@@ -281,7 +292,9 @@ const (
 
 // computeSkillGradient measures whether better play leads to better results,
 // on two tiers: greedy AI over the empirical random baseline, and ISMCTS
-// over the empirical greedy baseline (audit Task 20). All win rates are
+// over the empirical greedy baseline -- floored at the random baseline, so
+// an anti-skilled greedy scorer never becomes the bar (audit Task 20, amended
+// by the 2026-10 bughunt; see the constants block above). All win rates are
 // seat-0 rates; every baseline is an empirical seat-0 baseline from an
 // INDEPENDENT random batch (dd-qt7) -- the batches are NOT same-seed paired
 // (the pipeline seeds them at distinct offsets: random +100, greedy +1000,
@@ -329,12 +342,16 @@ func computeSkillGradient(randomResult, greedyResult, mctsResult sim.BatchResult
 	}
 
 	// Tier 2: ISMCTS over the empirical greedy seat-0 baseline, same shape.
-	// Skipped when no MCTS batch ran (greedy-only mode) or when greedy
+	// The reference is floored at the random baseline -- for BOTH the uplift
+	// and the headroom -- so a greedy scorer that plays worse than random
+	// cannot lower the bar: an MCTS seat that does not beat random scores 0.
+	// Skipped when no MCTS batch ran (greedy-only mode) or when the reference
 	// already wins every game (no headroom left to detect, never NaN).
 	if mctsResult.Completions > 0 && len(mctsResult.WinCounts) > 0 {
 		mctsWR := float64(mctsResult.WinCounts[0]) / float64(mctsResult.Completions)
-		if maxDiff := 1.0 - greedyWR; maxDiff > 0 {
-			raw += skillMCTSWeight * math.Max(0, mctsWR-greedyWR) / maxDiff
+		ref := math.Max(greedyWR, baselineWR)
+		if maxDiff := 1.0 - ref; maxDiff > 0 {
+			raw += skillMCTSWeight * math.Max(0, mctsWR-ref) / maxDiff
 		}
 	}
 

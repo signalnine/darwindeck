@@ -1064,6 +1064,55 @@ func TestTwoTierSkillPerfectGreedyNoNaN(t *testing.T) {
 	}
 }
 
+// TestTwoTierSkillSubRandomMCTSSeatScoresZero (2026-10 bughunt): when the
+// greedy scorer plays WORSE than random (an anti-skilled heuristic -- measured
+// on Big Two + MechKnock: random seat-0 0.435, greedy 0.235), the MCTS tier
+// must not hand out skill for merely beating that bad greedy. A seat that is
+// itself BELOW the random baseline has shown no skill at all and scores 0.
+// With the tier referenced on greedy alone, a plain RANDOM player dropped into
+// the MCTS seat (0.345) scored 0.173 on exactly these rates.
+func TestTwoTierSkillSubRandomMCTSSeatScoresZero(t *testing.T) {
+	random, greedy, subRandomSeat := mkWins(87, 200), mkWins(47, 200), mkWins(69, 200)
+	if got := computeSkillGradient(random, greedy, subRandomSeat, 4); got != 0 {
+		t.Errorf("MCTS seat at 0.345 under a 0.435 random baseline must score 0 "+
+			"(greedy 0.235 is sub-random, not a skill floor), got %.3f", got)
+	}
+}
+
+// TestTwoTierSkillSubRandomGreedyUsesRandomBaseline (2026-10 bughunt): the
+// MCTS tier's reference is max(greedyWR, baselineWR) for BOTH the uplift and
+// the headroom. With greedy below the random baseline the tier measures MCTS
+// against random -- the only skill floor the game has demonstrated -- so a
+// zero-skill MCTS seat scores 0 and a strong one is not credited with the
+// greedy scorer's deficit on top of its own edge.
+func TestTwoTierSkillSubRandomGreedyUsesRandomBaseline(t *testing.T) {
+	// random 40%, greedy 20% (sub-random), mcts 70%:
+	//   t1 = 0 (greedy below baseline)
+	//   t2 = 0.6*(0.70-0.40)/(1-0.40) = 0.6*0.5 = 0.30
+	// The greedy-referenced tier read 0.6*(0.70-0.20)/(1-0.20) = 0.375.
+	want := twoTierExpected(0.30)
+	got := computeSkillGradient(mkWins(40, 100), mkWins(20, 100), mkWins(14, 20), 2)
+	if math.Abs(got-want) > 1e-9 {
+		t.Errorf("sub-random greedy: MCTS tier must be measured against the random baseline: "+
+			"want scaled 0.30 = %.3f, got %.3f", want, got)
+	}
+
+	// Zero-skill MCTS seat (exactly the random baseline) scores 0 however far
+	// below the baseline greedy sits.
+	for _, greedyWins := range []int{0, 10, 39} {
+		if got := computeSkillGradient(mkWins(40, 100), mkWins(greedyWins, 100), mkWins(8, 20), 2); got != 0 {
+			t.Errorf("mcts == random baseline (40%%) with greedy at %d%% must score 0, got %.3f", greedyWins, got)
+		}
+	}
+
+	// Greedy at or above the baseline: the reference is greedy, i.e. the plan
+	// formula is unchanged (same hand-computed case as
+	// TestTwoTierSkillMCTSTermAddsAboveGreedy).
+	if got, want := computeSkillGradient(mkWins(50, 100), mkWins(75, 100), mkWins(18, 20), 2), twoTierExpected(0.56); math.Abs(got-want) > 1e-9 {
+		t.Errorf("greedy above baseline must keep the plan formula: want %.3f, got %.3f", want, got)
+	}
+}
+
 // TestComputeFitnessWrapperEquivalence: the 3-arg ComputeFitness (kept for
 // callers that have no MCTS batch, e.g. pkg/evolution/behavior.go) must be
 // exactly the 4-arg version with an empty MCTS result.
