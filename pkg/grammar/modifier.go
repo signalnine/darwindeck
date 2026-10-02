@@ -124,7 +124,8 @@ const (
 )
 
 // CompatibleWith is the modifier's type rule against the base spec. It reads only
-// the structural fields (Move/Match/End/Score), never WellTyped, so it cannot
+// the structural fields (Move/Match/End/Score) plus, for the two seat-dependent
+// modifiers (teams, reverse), the player count -- never WellTyped, so it cannot
 // recurse. This is the whole point of the grammar: the v2 whitelist that had to
 // be hand-maintained per (skeleton, mechanic) pair is here a small total function.
 func (m Modifier) CompatibleWith(s GameSpec) bool {
@@ -184,8 +185,11 @@ func (m Modifier) CompatibleWith(s GameSpec) bool {
 		return s.Move == PlayMatch && s.End == EmptyHand
 	case ModReverse:
 		// Flip the turn direction (Uno reverse) -- a shedding-race interaction. Pure
-		// turn-order, no effect on the move set or termination.
-		return s.Move == PlayMatch && s.End == EmptyHand
+		// turn-order, no effect on the move set or termination. It needs 3+
+		// seats: with two, "the other direction" is the same direction, so the
+		// modifier is INERT (same-seed games are byte-identical with and without
+		// it) -- exactly the no-op composition the type exists to exclude.
+		return s.Move == PlayMatch && s.End == EmptyHand && s.Players > 2
 	case ModSumCapture:
 		// Pip-sum (building) capture -- Scopa/Casino. Capture is still play-or-trail
 		// (trail is the always-legal fallback) and the deck drains toward deck_out,
@@ -397,6 +401,27 @@ func meldBonus(pile []sim.Card) int {
 // a real reason to hold wilds. Greedy approximates the optimal partition but is
 // monotone and rewards meld-building, the decision the game is about.
 func deadwood(hand []sim.Card, wildRank int) int {
+	n, _ := deadwoodStats(hand, wildRank)
+	return n
+}
+
+// strayPip is the point value of one unmelded card for the rummy tie-break:
+// aces 1, face cards 10, number cards their rank.
+func strayPip(r sim.Rank) int {
+	switch v := int(r); {
+	case v == 14:
+		return 1
+	case v >= 11:
+		return 10
+	default:
+		return v
+	}
+}
+
+// deadwoodStats returns deadwood's count together with the total strayPip value
+// of those same unmelded cards. The count decides a rummy game; the points break
+// a tie on the count (see Runner.score).
+func deadwoodStats(hand []sim.Card, wildRank int) (count, points int) {
 	var wilds int
 	cards := make([]sim.Card, 0, len(hand))
 	for _, c := range hand {
@@ -454,7 +479,10 @@ func deadwood(hand []sim.Card, wildRank int) int {
 			break
 		}
 	}
-	return len(leftover)
+	for _, c := range leftover {
+		points += strayPip(c.Rank)
+	}
+	return len(leftover), points
 }
 
 // findNearMeld returns the indices of two cards a single wild can turn into a meld:

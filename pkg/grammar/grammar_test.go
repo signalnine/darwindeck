@@ -104,6 +104,8 @@ func TestModifiersPreservePlayability(t *testing.T) {
 // TestModifierTyping pins the compatibility rules (the lifted v2 whitelist).
 func TestModifierTyping(t *testing.T) {
 	shedding := GameSpec{Move: PlayMatch, Match: MatchEither, End: EmptyHand, Score: FirstOut}
+	shedding2 := GameSpec{Players: 2, Move: PlayMatch, Match: MatchEither, End: EmptyHand, Score: FirstOut}
+	shedding3 := GameSpec{Players: 3, Move: PlayMatch, Match: MatchEither, End: EmptyHand, Score: FirstOut}
 	climbing := GameSpec{Move: BeatOrPass, End: EmptyHand, Score: FirstOut}
 	banking := GameSpec{Move: Accumulate, End: Bust, Score: ClosestTarget}
 	casinoCap := GameSpec{Move: Capture, End: DeckOut, Score: MostCaptured}
@@ -147,7 +149,8 @@ func TestModifierTyping(t *testing.T) {
 		{ModForceDraw, casinoCap, false},
 		{ModNominate, shedding, true}, // Crazy Eights: 8 names the suit
 		{ModNominate, trick, false},
-		{ModReverse, shedding, true}, // Uno reverse
+		{ModReverse, shedding3, true},  // Uno reverse
+		{ModReverse, shedding2, false}, // inert with two seats: the turn order has no "other way"
 		{ModReverse, trick, false},
 		{ModSumCapture, casinoCap, true}, // Scopa building capture
 		{ModSumCapture, shedding, false},
@@ -156,6 +159,51 @@ func TestModifierTyping(t *testing.T) {
 		if got := c.m.CompatibleWith(c.spec); got != c.want {
 			t.Errorf("%s.CompatibleWith(%s) = %v, want %v", c.m, c.spec.Family(), got, c.want)
 		}
+	}
+}
+
+// TestReverseNeedsThreePlayers: with two seats "the other direction" is the same
+// direction, so reverse changed NOTHING -- 200/200 same-seed games were
+// byte-identical with and without it -- yet it counted as a modifier, and
+// EnumerateModified handed the judge the 2-player (inert) representative for all
+// 29 +reverse families, whose verdict then covered the 3-4 player games where
+// reverse does act. It is now ill-typed at 2 players, so every +reverse
+// representative is a game in which reverse does something.
+func TestReverseNeedsThreePlayers(t *testing.T) {
+	spec := func(players int, mods ...Modifier) GameSpec {
+		return GameSpec{Players: players, Deal: 7, Shared: 1, Move: PlayMatch, Match: MatchEither, End: EmptyHand, Score: FirstOut, Mods: mods}
+	}
+	if spec(2, ModReverse).WellTyped() {
+		t.Error("2-player +reverse is well-typed, but reverse is inert with two seats")
+	}
+	for _, players := range []int{3, 4} {
+		if !spec(players, ModReverse).WellTyped() {
+			t.Errorf("%d-player +reverse should be well-typed", players)
+		}
+		// ...and there it must actually change the game.
+		differ := 0
+		for seed := uint64(1); seed <= 100; seed++ {
+			with, w1 := playRandomGame(spec(players, ModReverse), seed, nil)
+			without, w2 := playRandomGame(spec(players), seed, nil)
+			if w1 != w2 || with.Turn != without.Turn {
+				differ++
+			}
+		}
+		if differ == 0 {
+			t.Errorf("%d players: reverse changed none of 100 same-seed games (inert)", players)
+		}
+	}
+	reps := 0
+	for _, s := range EnumerateModified() {
+		if s.hasMod(ModReverse) {
+			reps++
+			if s.Players <= 2 {
+				t.Errorf("EnumerateModified representative for %s has %d players (reverse is inert there)", s.Family(), s.Players)
+			}
+		}
+	}
+	if reps != 29 {
+		t.Errorf("EnumerateModified yields %d +reverse families, want 29 (reverse alone, with 1 of 7, with 2 of 7 other shedding modifiers; the count must not change)", reps)
 	}
 }
 

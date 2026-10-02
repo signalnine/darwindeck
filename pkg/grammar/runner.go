@@ -284,7 +284,13 @@ func (rr Runner) LegalMoves(gs *sim.GameState) []sim.Move {
 		if len(gs.Deck) > 0 {
 			moves = append(moves, mv(sim.MoveDraw, p)) // take a blind card
 		}
-		moves = append(moves, mv(sim.MovePass, p)) // STICK: always legal, the fallback
+		// STICK is the fallback, but only once you have taken a card: sticking on
+		// an empty pile let two players tie 0-0 with nothing to compare (one
+		// random 2-player game in nine), which only seat order could settle.
+		// With nothing left to take, stick is unconditional -- never empty.
+		if len(gs.Tableau[p]) > 0 || len(moves) == 0 {
+			moves = append(moves, mv(sim.MovePass, p))
+		}
 		return moves
 
 	case Capture:
@@ -478,12 +484,16 @@ func (rr Runner) Apply(gs *sim.GameState, m sim.Move) {
 			for _, c := range m.Cards { // one card, or a same-rank set under ModRunPlay
 				gs.Hands[p] = removeCard(gs.Hands[p], c)
 			}
+			// The beaten combination goes to the discard pile -- overwriting it
+			// silently dropped cards from the game (52 -> 51 from turn 2 on).
+			gs.Discard = append(gs.Discard, gs.TrickCards...)
 			gs.TrickCards = append([]sim.Card(nil), m.Cards...) // new combination to beat
 			gs.TrickLeader = p
 			gs.PassCount = 0
 		case sim.MovePass:
 			gs.PassCount++
 			if gs.PassCount >= gs.NumPlayers-1 { // all others passed: table clears
+				gs.Discard = append(gs.Discard, gs.TrickCards...) // cleared cards are discarded, not lost
 				gs.TrickCards = nil
 				gs.PassCount = 0
 			}
@@ -498,6 +508,7 @@ func (rr Runner) Apply(gs *sim.GameState, m sim.Move) {
 				gs.Discard = gs.Discard[:len(gs.Discard)-1]
 			}
 			gs.Scores[p] += cardValue(c.Rank)
+			gs.Tableau[p] = append(gs.Tableau[p], c) // the taken card is KEPT in the taker's pile, not dropped
 			rr.refillMarket(gs)
 			if gs.Scores[p] > s.Target {
 				gs.Folded[p] = true // bust
@@ -507,6 +518,7 @@ func (rr Runner) Apply(gs *sim.GameState, m sim.Move) {
 			gs.Deck = rem
 			if len(drawn) > 0 {
 				gs.Scores[p] += cardValue(drawn[0].Rank)
+				gs.Tableau[p] = append(gs.Tableau[p], drawn[0])
 				if gs.Scores[p] > s.Target {
 					gs.Folded[p] = true
 				}
@@ -647,7 +659,7 @@ func (rr Runner) CheckEnd(gs *sim.GameState) (winner int, done bool) {
 		if rr.Spec.Move == Rummy { // Gin go-out: fewest DEADWOOD wins
 			return rr.score(gs), true
 		}
-		return fewestCards(gs), true // shedding/climbing: fewest cards
+		return rr.fewestCards(gs), true // shedding/climbing: fewest cards
 	}
 	s := rr.Spec
 	// Runner-level liveness: a PlayMatch game can stall when the deck is empty and
@@ -656,7 +668,7 @@ func (rr Runner) CheckEnd(gs *sim.GameState) (winner int, done bool) {
 	// in the harness -- so the grammar is playable-by-construction in the real
 	// engine (sim.RunBatch), which has no stalemate net of its own.
 	if s.Move == PlayMatch && gs.PassCount >= gs.NumPlayers {
-		return fewestCards(gs), true
+		return rr.fewestCards(gs), true
 	}
 	switch s.End {
 	case EmptyHand:
@@ -668,8 +680,12 @@ func (rr Runner) CheckEnd(gs *sim.GameState) (winner int, done bool) {
 	case DeckOut:
 		if s.Move == Rummy {
 			// Rummy hands stay a constant size, so deck_out means the DECK is
-			// exhausted -- which the one-draw-per-turn dynamic guarantees.
-			if len(gs.Deck) == 0 {
+			// exhausted -- which the one-draw-per-turn dynamic guarantees. It
+			// fires only at a TURN BOUNDARY: the player who drew the last card
+			// still discards first (the discard phase always has a legal move,
+			// so this costs exactly one more move and cannot stall). Ending on
+			// the draw scored one fixed seat on Deal+1 cards every game.
+			if len(gs.Deck) == 0 && gs.Phase != sim.PhaseDiscard {
 				return rr.score(gs), true
 			}
 			return -1, false
@@ -703,120 +719,237 @@ func (rr Runner) CheckEnd(gs *sim.GameState) (winner int, done bool) {
 	return -1, false
 }
 
+// Tie-breaking (2026-10 bughunt). Every tie used to resolve by absolute seat
+// index (lowest seat; in banking, highest), which under random play was a
+// standing advantage for one fixed seat. The ladder is now, per score rule:
+//
+//  1. a rules-meaningful secondary criterion (rummy: fewer stray-card points;
+//     banking: fewer cards taken) -- folded into the rule's better() ordering;
+//  2. where the tied players hold cards the rule is about, the CARD rule: the
+//     tied player holding the single highest (or, where cards in hand are bad,
+//     lowest) card wins. Cards are unique and dealt at random, so this is decided
+//     by the deal, never by where anyone sits;
+//  3. otherwise turn order counted from tieOrigin -- the player whose action
+//     ended the game -- which is a different seat from game to game.
+//
+// A "last player to act" anchor alone is NOT enough for the games whose final
+// mover is structurally a fixed seat (rummy's last discard; banking, where equal
+// card counts mean equal action counts so the last seat always acted last; and
+// capture, where the last seat plays the last card) -- hence step 2 for those.
+// rulebook.go states each rule; keep the two in sync.
+
+// tieOrigin is the seat a turn-order tie is counted FROM. A tie goes to that
+// player if they are among the tied, else to the tied player soonest after them.
+//
+//	trick:    the winner of the last trick        (Apply sets TrickLeader)
+//	shedding: the knocker, else the last to pass  (the all-pass deadlock end)
+//	rummy:    the knocker, else the last discarder
+//	climbing: the knocker                         (Apply leaves Active on them)
+//	others:   the seat left active by the final move
+func (rr Runner) tieOrigin(gs *sim.GameState) int {
+	n := gs.NumPlayers
+	switch rr.Spec.Move {
+	case Trick:
+		return wrap(gs.TrickLeader, n)
+	case Rummy, PlayMatch:
+		if gs.Phase == sim.PhaseEnd { // knocked: Apply returned before advancing the turn
+			return wrap(gs.Active, n)
+		}
+		dir := gs.Direction
+		if dir == 0 {
+			dir = 1
+		}
+		return wrap(gs.Active-dir, n) // the player whose move passed the turn on
+	}
+	return wrap(gs.Active, n)
+}
+
+// bestSeat scans the seats in turn order starting at origin and returns the one
+// that beats all others; better(a, b) reports whether seat a STRICTLY beats seat
+// b. Only a strictly better seat displaces the incumbent, so a tie stays with the
+// tied seat nearest the origin. ok (may be nil) restricts the candidates; with no
+// candidate the result is -1.
+func bestSeat(n, origin int, ok func(p int) bool, better func(a, b int) bool) int {
+	best := -1
+	for i := 0; i < n; i++ {
+		p := wrap(origin+i, n)
+		if ok != nil && !ok(p) {
+			continue
+		}
+		if best < 0 || better(p, best) {
+			best = p
+		}
+	}
+	return best
+}
+
+// cardOrder ranks a card for the card rule: by rank (ace high), then by suit
+// (clubs < diamonds < hearts < spades). No two cards share an order.
+func cardOrder(c sim.Card) int { return int(c.Rank)*4 + int(c.Suit) }
+
+// cardHolder returns, among the seats where in(p) holds, the one holding the
+// single highest (highest=true) or lowest card under cardOrder; -1 when none of
+// those seats holds a card at all.
+func cardHolder(n int, in func(p int) bool, cards func(p int) []sim.Card, highest bool) int {
+	holder, bestOrd := -1, 0
+	for p := 0; p < n; p++ {
+		if !in(p) {
+			continue
+		}
+		for _, c := range cards(p) {
+			o := cardOrder(c)
+			if holder < 0 || (highest && o > bestOrd) || (!highest && o < bestOrd) {
+				holder, bestOrd = p, o
+			}
+		}
+	}
+	return holder
+}
+
+// decide names the winner: the best candidate under better; if several tie, the
+// card rule over cards (nil = this rule has no card step), else turn order from
+// tieOrigin. See the tie-breaking note above.
+func (rr Runner) decide(gs *sim.GameState, ok func(p int) bool, better func(a, b int) bool,
+	cards func(p int) []sim.Card, highest bool) int {
+	n := gs.NumPlayers
+	w := bestSeat(n, rr.tieOrigin(gs), ok, better)
+	if w < 0 || cards == nil {
+		return w
+	}
+	tied := func(p int) bool { return (ok == nil || ok(p)) && !better(w, p) && !better(p, w) }
+	if h := cardHolder(n, tied, cards, highest); h >= 0 {
+		return h
+	}
+	return w
+}
+
+// effScore is seat p's EFFECTIVE count under the pile-collecting score rules
+// (most_captured / high_score): the raw tally with every scoring modifier
+// applied. It is the single definition of "who is ahead" for those games -- the
+// winner (score) and the leader track (Adapter.Progress) both read it, so the
+// metrics' leader cannot disagree with the rule that decides the game.
+func (rr Runner) effScore(gs *sim.GameState, p int) int {
+	v := gs.Scores[p]
+	// ModBid (trick contracts): the base signal is how well the bid was
+	// MADE, not the raw trick count. Each trick banks NumPlayers cards.
+	// The co-typed scoring modifiers below COMPOSE on top of the contract
+	// (Pinochle precedent: bidding and melds coexist), never replace it.
+	if rr.Spec.hasMod(ModBid) && rr.Spec.Move == Trick {
+		v = 0 // no contract yet (still in the bid round): nothing banked
+		if p < len(gs.Bids) && gs.Bids[p] >= 0 {
+			v = contractScore(gs.Scores[p]/gs.NumPlayers, gs.Bids[p])
+		}
+	}
+	if rr.Spec.hasMod(ModMeldBonus) {
+		v += meldBonus(gs.Tableau[p]) // set/run bonuses
+	}
+	if rr.Spec.hasMod(ModAvoidance) {
+		v -= avoidancePenalty(gs.Tableau[p]) // points-are-bad (Hearts)
+	}
+	return v
+}
+
+// score names the winner under the spec's score rule; ties go through decide.
 func (rr Runner) score(gs *sim.GameState) int {
 	s := rr.Spec
-	best, bestVal := -1, 0
+	n := gs.NumPlayers
+	hand := func(p int) []sim.Card { return gs.Hands[p] }
+	pile := func(p int) []sim.Card { return gs.Tableau[p] }
 	switch s.Score {
 	case FirstOut:
-		for p := 0; p < gs.NumPlayers; p++ {
+		for p := 0; p < n; p++ {
 			if len(gs.Hands[p]) == 0 {
 				return p
 			}
 		}
 	case FewestCards:
-		best, bestVal = 0, len(gs.Hands[0])
-		for p := 1; p < gs.NumPlayers; p++ {
-			if len(gs.Hands[p]) < bestVal {
-				best, bestVal = p, len(gs.Hands[p])
-			}
-		}
-		return best
+		return rr.fewestCards(gs)
 	case BestHand:
-		winner, bestStr := -1, int64(-1)
-		for q := 0; q < gs.NumPlayers; q++ {
-			if gs.Folded[q] {
-				continue
-			}
-			if h := vying.HandStrength(gs.Hands[q]); winner < 0 || h > bestStr {
-				winner, bestStr = q, h
+		// Equal strength means equal ranks, so the card rule decides on suit.
+		str := make([]int64, n)
+		live := func(p int) bool { return !gs.Folded[p] }
+		for p := 0; p < n; p++ {
+			if live(p) {
+				str[p] = vying.HandStrength(gs.Hands[p])
 			}
 		}
-		if winner < 0 {
-			winner = 0 // all folded (degenerate); deterministic fallback
+		w := rr.decide(gs, live, func(a, b int) bool { return str[a] > str[b] }, hand, true)
+		if w < 0 {
+			w = 0 // all folded (degenerate); deterministic fallback
 		}
-		return winner
+		return w
 	case FewestDeadwood:
+		// Fewest stray cards; a tie on the COUNT (about half of all random games)
+		// goes to the lower stray-card point total, then to the holder of the
+		// lowest card (low cards are the good ones here).
 		wr := -1
 		if rr.Spec.hasMod(ModWild) {
 			wr = wildRank
 		}
-		best, bestVal = 0, deadwood(gs.Hands[0], wr)
-		for p := 1; p < gs.NumPlayers; p++ {
-			if d := deadwood(gs.Hands[p], wr); d < bestVal {
-				best, bestVal = p, d
-			}
+		cnt, pts := make([]int, n), make([]int, n)
+		for p := 0; p < n; p++ {
+			cnt[p], pts[p] = deadwoodStats(gs.Hands[p], wr)
 		}
-		return best
+		return rr.decide(gs, nil, func(a, b int) bool {
+			if cnt[a] != cnt[b] {
+				return cnt[a] < cnt[b]
+			}
+			return pts[a] < pts[b]
+		}, hand, false)
 	case ClosestTarget:
-		best, bestVal = -1, -1
-		for p := 0; p < gs.NumPlayers; p++ {
-			if gs.Scores[p] <= s.Target && gs.Scores[p] >= bestVal {
-				best, bestVal = p, gs.Scores[p]
+		// Highest total not over the target; a tied total goes to the player who
+		// reached it with FEWER cards, then to the holder of the highest card
+		// taken (the piles are in Tableau).
+		alive := func(p int) bool { return gs.Scores[p] <= s.Target }
+		w := rr.decide(gs, alive, func(a, b int) bool {
+			if gs.Scores[a] != gs.Scores[b] {
+				return gs.Scores[a] > gs.Scores[b]
 			}
-		}
-		if best < 0 { // everyone busted: least-over wins (the GenericRunner contract needs a winner >= 0)
-			best, bestVal = 0, gs.Scores[0]
-			for p := 1; p < gs.NumPlayers; p++ {
-				if gs.Scores[p] < bestVal {
-					best, bestVal = p, gs.Scores[p]
+			return len(gs.Tableau[a]) < len(gs.Tableau[b])
+		}, pile, true)
+		if w < 0 { // everyone busted: least-over wins (the GenericRunner contract needs a winner >= 0)
+			w = rr.decide(gs, nil, func(a, b int) bool {
+				if gs.Scores[a] != gs.Scores[b] {
+					return gs.Scores[a] < gs.Scores[b]
 				}
-			}
+				return len(gs.Tableau[a]) < len(gs.Tableau[b])
+			}, pile, true)
 		}
-		return best
+		return w
 	case MostCaptured, HighScore:
-		eff := func(p int) int { // scoring modifiers adjust the count from the won pile
-			v := gs.Scores[p]
-			// ModBid (trick contracts): the base signal is how well the bid was
-			// MADE, not the raw trick count. Each trick banks NumPlayers cards.
-			// The co-typed scoring modifiers below COMPOSE on top of the contract
-			// (Pinochle precedent: bidding and melds coexist), never replace it.
-			if rr.Spec.hasMod(ModBid) && rr.Spec.Move == Trick {
-				v = contractScore(gs.Scores[p]/gs.NumPlayers, gs.Bids[p])
-			}
-			if rr.Spec.hasMod(ModMeldBonus) {
-				v += meldBonus(gs.Tableau[p]) // set/run bonuses
-			}
-			if rr.Spec.hasMod(ModAvoidance) {
-				v -= avoidancePenalty(gs.Tableau[p]) // points-are-bad (Hearts)
-			}
-			return v
+		eff := make([]int, n) // scoring modifiers adjust the count from the won pile
+		for p := 0; p < n; p++ {
+			eff[p] = rr.effScore(gs, p)
 		}
+		higher := func(a, b int) bool { return eff[a] > eff[b] }
 		if rr.Spec.hasMod(ModTeams) { // 2v2: the best TEAM wins, reported as its top seat
+			origin := rr.tieOrigin(gs)
 			var team [2]int
-			for p := 0; p < gs.NumPlayers; p++ {
-				team[teamOf(p)] += eff(p)
+			for p := 0; p < n; p++ {
+				team[teamOf(p)] += eff[p]
 			}
-			winTeam := 0
-			if team[1] > team[0] {
-				winTeam = 1
-			}
-			best, bestVal = -1, 0
-			for p := 0; p < gs.NumPlayers; p++ {
-				if teamOf(p) == winTeam && (best < 0 || eff(p) > bestVal) {
-					best, bestVal = p, eff(p)
+			winTeam := teamOf(origin) // a tied result goes to the partnership that took the last trick
+			if team[0] != team[1] {
+				winTeam = 0
+				if team[1] > team[0] {
+					winTeam = 1
 				}
 			}
-			return best
+			return bestSeat(n, origin, func(p int) bool { return teamOf(p) == winTeam }, higher)
 		}
-		best, bestVal = 0, eff(0)
-		for p := 1; p < gs.NumPlayers; p++ {
-			if e := eff(p); e > bestVal {
-				best, bestVal = p, e
-			}
+		if s.Move == Trick {
+			return rr.decide(gs, nil, higher, nil, false) // a tie goes to the winner of the last trick
 		}
-		return best
+		return rr.decide(gs, nil, higher, pile, true) // capture: the holder of the highest captured card
 	}
-	return best
+	return -1
 }
 
-// fewestCards returns the seat holding the fewest cards (ties to lowest seat) --
-// the ModKnock win condition.
-func fewestCards(gs *sim.GameState) int {
-	best, bestN := 0, len(gs.Hands[0])
-	for p := 1; p < gs.NumPlayers; p++ {
-		if len(gs.Hands[p]) < bestN {
-			best, bestN = p, len(gs.Hands[p])
-		}
-	}
-	return best
+// fewestCards returns the seat holding the fewest cards -- the ModKnock win
+// condition and the shedding deadlock end. A tie is counted from tieOrigin (the
+// knocker / the last player to pass), not from seat 0.
+func (rr Runner) fewestCards(gs *sim.GameState) int {
+	return rr.decide(gs, nil, func(a, b int) bool {
+		return len(gs.Hands[a]) < len(gs.Hands[b])
+	}, nil, false)
 }

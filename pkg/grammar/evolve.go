@@ -109,8 +109,18 @@ func Crossover(a, b GameSpec, rng *rand.Rand) GameSpec {
 	}
 	if rng.IntN(2) == 0 {
 		child.Players = b.Players
+		// The seat-dependent modifiers (teams, reverse) were typed against a's
+		// player count; re-check against the inherited one and drop ONLY the
+		// modifier that no longer fits -- not the whole set.
+		kept := child.Mods[:0]
+		for _, m := range child.Mods {
+			if m.CompatibleWith(child) {
+				kept = append(kept, m)
+			}
+		}
+		child.Mods = kept
 	}
-	if !child.WellTyped() {
+	if !child.WellTyped() { // defensive: the filter above keeps the child typed
 		child.Mods = nil
 	}
 	return child

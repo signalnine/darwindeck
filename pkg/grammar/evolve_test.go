@@ -75,3 +75,55 @@ func TestOperatorsReachModifierFamilies(t *testing.T) {
 		t.Error("RandomSpec never produced a modified spec -- search can't reach novelty")
 	}
 }
+
+// TestCrossoverKeepsCompatibleMods: Crossover picks the modifiers and THEN may
+// take the other parent's player count. A players-dependent modifier (teams needs
+// 4 seats, reverse needs 3+) can become ill-typed at that point; the child must
+// lose only THAT modifier, not its whole modifier set. Each inheritable modifier
+// is kept with probability 1/2, so a players-independent one must still show up
+// in about half the children that switched player count (wiping the set left it
+// in a quarter: only when the dependent modifier happened not to be picked).
+func TestCrossoverKeepsCompatibleMods(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		a, b    GameSpec
+		keep    Modifier // players-independent: must survive the switch
+		dropped Modifier // ill-typed at b's player count
+	}{
+		{
+			"teams at 3 players",
+			GameSpec{Players: 4, Deal: 13, Move: Trick, End: DeckOut, Score: MostCaptured, Mods: []Modifier{ModTrump, ModTeams}},
+			GameSpec{Players: 3, Deal: 13, Move: Trick, End: DeckOut, Score: MostCaptured},
+			ModTrump, ModTeams,
+		},
+		{
+			"reverse at 2 players",
+			GameSpec{Players: 3, Deal: 7, Shared: 1, Move: PlayMatch, Match: MatchEither, End: EmptyHand, Score: FirstOut, Mods: []Modifier{ModSkip, ModReverse}},
+			GameSpec{Players: 2, Deal: 7, Shared: 1, Move: PlayMatch, Match: MatchEither, End: EmptyHand, Score: FirstOut},
+			ModSkip, ModReverse,
+		},
+	} {
+		rng := testRNG(5)
+		switched, kept := 0, 0
+		for i := 0; i < 4000; i++ {
+			child := Crossover(tc.a, tc.b, rng)
+			if !child.WellTyped() {
+				t.Fatalf("%s: Crossover produced a non-well-typed child %s", tc.name, child)
+			}
+			if child.Players != tc.b.Players {
+				continue
+			}
+			switched++
+			if child.hasMod(tc.dropped) {
+				t.Fatalf("%s: child %s kept a modifier that is ill-typed at %d players", tc.name, child, child.Players)
+			}
+			if child.hasMod(tc.keep) {
+				kept++
+			}
+		}
+		if share := float64(kept) / float64(switched); share < 0.42 {
+			t.Errorf("%s: only %.0f%% of %d player-switched children kept %s (want ~50%%: the incompatible modifier must not take the rest of the set with it)",
+				tc.name, 100*share, switched, tc.keep)
+		}
+	}
+}

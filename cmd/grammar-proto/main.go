@@ -32,7 +32,13 @@ func main() {
 	canon := grammar.CanonicalFamilies()
 	famAll := grammar.Families(all)
 	famTyped := grammar.Families(typed)
-	fmt.Printf("\n== Family space (4 move-generators x ends x scorings x params) ==\n")
+	// Counted, not typed in: the header said "4 move-generators" long after the
+	// grammar had 7.
+	moveGens := map[grammar.MoveGen]bool{}
+	for _, s := range all {
+		moveGens[s.Move] = true
+	}
+	fmt.Printf("\n== Family space (%d move-generators x ends x scorings x params) ==\n", len(moveGens))
 	fmt.Printf("  untyped cross-product : %3d specs / %2d families\n", len(all), len(famAll))
 	fmt.Printf("  WELL-TYPED grammar    : %3d specs / %2d families  (%d canonical, %d novel)\n",
 		len(typed), len(famTyped), countCanon(famTyped, canon), len(famTyped)-countCanon(famTyped, canon))

@@ -8,7 +8,7 @@
 // Pure fitness selection CONVERGES (it loses the diversity the grammar exists to
 // produce), so selection is novelty-aware: selScore = fitness + wNov*novelty +
 // wJudge*verdict[composition], exactly v2's shape. novelty is behavioral distance
-// (in 5-metric space) from the 4 canonical seeds; verdict[composition] is the
+// (in 5-metric space) from the canonical seeds; verdict[composition] is the
 // judge-in-loop hook, keyed on GameSpec.Composition (empty map => neutral, the
 // cache-miss-returns-0 contract). This is the search that serves DISCOVERY:
 // playable-by-construction games behaviorally distant from the known skeletons.

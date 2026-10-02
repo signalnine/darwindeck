@@ -22,7 +22,10 @@ func BuildGrammarDossier(spec grammar.GameSpec, id string) (string, error) {
 	ai := fitness.GetGreedyAI(g)
 
 	var b strings.Builder
-	b.WriteString(spec.Rulebook(id))
+	// Same neutralizer as every v2 dossier (BuildDossier): the grammar rulebook is
+	// written name-blind at the source (grammar.TestRulebookIsNameBlind), and this
+	// keeps the blind surface on ONE scrubber should either side drift.
+	b.WriteString(neutralizeRulebook(spec.Rulebook(id)))
 	b.WriteString("\n---\n\n")
 
 	const traceN = 400
@@ -84,8 +87,11 @@ func EmitGrammar(specs []grammar.GameSpec, outDir string) (EmitResult, error) {
 			return EmitResult{}, err
 		}
 		g := grammar.SpecGenome(spec)
+		// HandSize is the spec's real deal, NOT g.HandSize: SpecGenome floors
+		// that at 8 so the engine's MaxTurns cap never collapses, which made a
+		// 7-card (or 0-card banking) game read "hand size 8".
 		manifest = append(manifest, ManifestEntry{
-			ID: id, Dossier: name, Skeleton: g.Skeleton.String(), Players: g.Players, HandSize: g.HandSize,
+			ID: id, Dossier: name, Skeleton: g.Skeleton.String(), Players: spec.Players, HandSize: spec.Deal,
 		})
 		res.AnswerKey[id] = AnswerRec{Source: "grammar", TrueName: spec.Composition(), Skeleton: g.Skeleton.String()}
 	}
