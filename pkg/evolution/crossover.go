@@ -45,6 +45,7 @@ func CrossoverWith(a, b *genome.Genome, rng *rand.Rand, crossSkeleton bool) *gen
 // the caller's choice (the engine picks parent order at random via tournament).
 func hybridCrossover(a, b *genome.Genome, rng *rand.Rand) *genome.Genome {
 	child := cloneGenome(a)
+	clearCuratedMetadata(child)
 	child.ID = ""
 	child.Generation = max(a.Generation, b.Generation)
 
@@ -580,6 +581,7 @@ func Crossover(a, b *genome.Genome, rng *rand.Rand) *genome.Genome {
 	}
 
 	child := cloneGenome(a)
+	clearCuratedMetadata(child)
 	child.ID = ""
 	// Mutate (called by the caller after crossover) is responsible for the
 	// final Generation++. Set the base to the higher parent generation so
