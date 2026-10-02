@@ -72,8 +72,10 @@ type TerminationInfo struct {
 // evidence. It uses ONLY the public GenericRunner interface (Setup, Upkeep,
 // CheckEnd, GenerateMoves, ApplyMove) and never mutates the genome or the
 // frozen metric stack -- the loop is a read-only observer. baseSeed makes the
-// measurement reproducible.
-func computeTermination(g *genome.Genome, runner sim.GenericRunner, ai sim.AIPlayer, n int, baseSeed uint64) TerminationInfo {
+// measurement reproducible. hooks are the genome's borrowed-mechanic hooks
+// (mechanic.HooksFor): they MUST be passed for a borrow-carrying genome, or
+// the measurement describes the game with its hook-driven borrows removed.
+func computeTermination(g *genome.Genome, runner sim.GenericRunner, ai sim.AIPlayer, n int, baseSeed uint64, hooks ...sim.HookFunc) TerminationInfo {
 	info := TerminationInfo{
 		Skeleton:           g.Skeleton,
 		GamesSampled:       n,
@@ -114,7 +116,7 @@ func computeTermination(g *genome.Genome, runner sim.GenericRunner, ai sim.AIPla
 	for i := 0; i < n; i++ {
 		// Standard-cap probe: completion% measured here.
 		rngStd := rand.New(rand.NewPCG(baseSeed+uint64(i), 0))
-		obs := observeGame(g, runner, ai, rngStd, info.CapStd)
+		obs := observeGame(g, runner, ai, rngStd, info.CapStd, hooks...)
 		if obs.completed {
 			stdCompletions++
 		}
@@ -123,7 +125,7 @@ func computeTermination(g *genome.Genome, runner sim.GenericRunner, ai sim.AIPla
 		// Extended-cap probe (distinct stream): completion% measured here too,
 		// and its reachable-win observations are pooled into the signal.
 		rngExt := rand.New(rand.NewPCG(baseSeed+uint64(i), 1))
-		obsExt := observeGame(g, runner, ai, rngExt, info.CapExt)
+		obsExt := observeGame(g, runner, ai, rngExt, info.CapExt, hooks...)
 		if obsExt.completed {
 			extCompletions++
 		}
@@ -160,10 +162,16 @@ type gameObservation struct {
 
 // observeGame plays one instrumented game to the given cap. It mirrors the
 // production single-game loop's control flow (Upkeep -> CheckEnd -> turn-cap ->
-// GenerateMoves -> ApplyMove) but records the skeleton-specific reachable-win
-// signals. It is a pure read-only observer: it never touches the genome or any
-// frozen package state.
-func observeGame(g *genome.Genome, runner sim.GenericRunner, ai sim.AIPlayer, rng *rand.Rand, maxTurns int) gameObservation {
+// GenerateMoves -> ApplyMove -> hooks) but records the skeleton-specific
+// reachable-win signals. It is a pure read-only observer: it never touches the
+// genome or any frozen package state.
+//
+// The borrowed-mechanic hooks run after every move exactly as sim.RunBatch
+// runs them. They were once omitted here, so a draw_penalty / meld_bonus /
+// avoidance / trick_scoring genome had its termination evidence measured on
+// the borrowless game -- a different game from the one the rulebook above the
+// Termination section describes and from the one fitness evaluated.
+func observeGame(g *genome.Genome, runner sim.GenericRunner, ai sim.AIPlayer, rng *rand.Rand, maxTurns int, hooks ...sim.HookFunc) gameObservation {
 	var obs gameObservation
 	state := runner.Setup(g, rng)
 
@@ -228,6 +236,12 @@ func observeGame(g *genome.Genome, runner sim.GenericRunner, ai sim.AIPlayer, rn
 				if g.Skeleton == genome.TrickTaking {
 					obs.roundCompleted = true
 				}
+			}
+		}
+
+		for _, e := range events {
+			for _, hook := range hooks {
+				hook(state, g, e)
 			}
 		}
 	}

@@ -6,6 +6,7 @@ import (
 
 	"github.com/darwindeck/darwindeck/pkg/fitness"
 	"github.com/darwindeck/darwindeck/pkg/genome"
+	"github.com/darwindeck/darwindeck/pkg/mechanic"
 	"github.com/darwindeck/darwindeck/pkg/output"
 	"github.com/darwindeck/darwindeck/pkg/sim"
 )
@@ -30,6 +31,13 @@ func BuildDossier(g *genome.Genome) (string, error) {
 		return "", fmt.Errorf("no runner for skeleton %s", g.Skeleton)
 	}
 	ai := fitness.GetGreedyAI(g)
+	// The borrowed-mechanic hooks, built at the single construction site the
+	// fitness pipeline and the playtest session use. Every simulation below
+	// must run them: without hooks the hook-driven borrows (meld_bonus,
+	// avoidance, trick_scoring, draw_penalty) are in the rulebook but not in
+	// the game, and the judge reads traces, winners and termination numbers
+	// of a different game than the one being judged.
+	hooks := mechanic.HooksFor(g)
 
 	var b strings.Builder
 
@@ -41,7 +49,7 @@ func BuildDossier(g *genome.Genome) (string, error) {
 	// run so two COMPLETED games can be shown even for games that rarely finish
 	// under greedy self-play (e.g. gin-style rummy times out most games).
 	const traceN = 400
-	traceRes := sim.RunBatch(g, runner, ai, traceN, dossierSeed+1)
+	traceRes := sim.RunBatch(g, runner, ai, traceN, dossierSeed+1, hooks...)
 
 	b.WriteString("## Sample Game Traces\n\n")
 	b.WriteString("Two complete games played by identical automated players (greedy strategy on both sides). Each line is one game event in order, so you can see who acts and when, and spot long uninterrupted single-player runs.\n\n")
@@ -69,7 +77,7 @@ func BuildDossier(g *genome.Genome) (string, error) {
 	// [dossierSeed+1, dossierSeed+1+traceN) range -- the termination stats
 	// were measured on byte-replays of trace games, not an independent sample.
 	const termN = 150
-	term := computeTermination(g, runner, ai, termN, dossierSeed+1<<20)
+	term := computeTermination(g, runner, ai, termN, dossierSeed+1<<20, hooks...)
 	b.WriteString(renderTermination(term))
 
 	return b.String(), nil
