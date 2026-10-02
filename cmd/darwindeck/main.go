@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/darwindeck/darwindeck/pkg/evolution"
@@ -76,6 +77,34 @@ Commands:
   help        Show this message`)
 }
 
+// strayArgsError reports a positional argument left over after fs.Parse on a
+// subcommand that takes none. Go's flag parsing stops at the first non-flag
+// token and leaves EVERYTHING after it unparsed, so one stray word silently
+// dropped the rest of the command line: `evolve ... -cross-skeleton true
+// -novelty-select -output x` ran with novelty-select off and the default
+// output directory ("true" is positional -- boolean flags take no separate
+// value). nil when the command line was fully consumed.
+func strayArgsError(fs *flag.FlagSet) error {
+	if fs.NArg() == 0 {
+		return nil
+	}
+	ignored := ""
+	if rest := fs.Args()[1:]; len(rest) > 0 {
+		ignored = fmt.Sprintf("; everything after it was not parsed: %s", strings.Join(rest, " "))
+	}
+	return fmt.Errorf("%s: unexpected argument %q%s\n%s takes only flags (-name value or -name=value; a boolean flag is -name or -name=false, never -name true)",
+		fs.Name(), fs.Arg(0), ignored, fs.Name())
+}
+
+// rejectStrayArgs exits with the flag package's usage-error status when the
+// parsed command line still holds a positional argument (see strayArgsError).
+func rejectStrayArgs(fs *flag.FlagSet) {
+	if err := strayArgsError(fs); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(2)
+	}
+}
+
 func cmdEvolve(args []string) {
 	fs := flag.NewFlagSet("evolve", flag.ExitOnError)
 
@@ -107,6 +136,7 @@ func cmdEvolve(args []string) {
 		"directory to write the top genomes (genome.json per rank) at a chunk boundary, for out-of-loop novelty judging; default <output>/judge-queue")
 
 	fs.Parse(args)
+	rejectStrayArgs(fs)
 	evolution.FitnessFloor = *floor
 
 	// Warn about silently-ignored flag combinations (behavior is unchanged):

@@ -82,6 +82,7 @@ func cmdExperiment(args []string) {
 	mctsDecile := fs.Float64("mcts-decile", 0.10,
 		"fraction of each generation (ranked by greedy-only running mean) re-evaluated with MCTS; 0 disables; applies to baseline/novelty (map-elites and random ignore it)")
 	fs.Parse(args)
+	rejectStrayArgs(fs)
 
 	configs := splitCSV(*configsFlag)
 	if err := validateConfigs(configs); err != nil {
