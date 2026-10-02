@@ -26,10 +26,11 @@ func (r *Runner) Setup(g *genome.Genome, rng *rand.Rand) *sim.GameState {
 
 	state := sim.NewGameState(g.Players)
 
-	// Determine trump from the full pre-deal deck so TrumpCut still picks a
-	// real suit when HandSize*Players == 52 empties the post-deal remainder
-	// (cards-6u5). Other TrumpRule values don't read the deck, so the early
-	// call is harmless for them.
+	// Determine trump BEFORE the deal. TrumpCut is an independent draw from
+	// the game RNG (see determineTrump) -- it always yields a real suit, even
+	// when HandSize*Players == 52 leaves no stock (cards-6u5), and it is not
+	// tied to any dealt card. Other TrumpRule values read neither the deck
+	// nor the RNG.
 	state.TrumpSuit = determineTrump(g, deck, rng)
 
 	// Deal hands
@@ -66,8 +67,18 @@ func determineTrump(g *genome.Genome, deck []sim.Card, rng *rand.Rand) int {
 	case genome.TrumpFixed:
 		return int(g.Scoring.TrumpSuit) - 1 // 1-indexed to 0-indexed
 	case genome.TrumpCut:
+		// The cut is an INDEPENDENT draw (a card cut and shuffled back before
+		// the deal), not a card that is then dealt. It used to read deck[0],
+		// which the deal hands to seat 0 as its first card -- so seat 0, who
+		// also leads the first trick, held a guaranteed trump in every deal
+		// (random 4-player Whist: seat 0 won 32% even after the tie rule was
+		// made seat-neutral). Any other fixed deck position merely moves that
+		// gift to another seat whenever all 52 cards are dealt.
+		if rng != nil {
+			return rng.IntN(4)
+		}
 		if len(deck) > 0 {
-			return int(deck[0].Suit)
+			return int(deck[len(deck)-1].Suit)
 		}
 		return -1
 	case genome.TrumpLed:
@@ -416,30 +427,35 @@ func redealRound(state *sim.GameState, g *genome.Genome) {
 	state.Active = state.TrickLeader
 }
 
+// findWinner picks the winner of a finished game: the lowest score under
+// Hearts-style avoidance scoring, the highest otherwise.
+//
+// TIES are resolved from the final trick, not by seat: the tied player who won
+// the last trick wins, otherwise the tied player next in turn order after the
+// last trick's winner (state.TrickLeader, which ApplyMove sets on every trick
+// resolution and nothing overwrites after the final round). The old rule gave
+// every tie to the lowest seat, and a fifth to a quarter of random 4-player
+// games end tied at the top -- seat 0 won ~39% of Whist. The rulebook states
+// this rule (writeTrickTakingRules).
 func findWinner(state *sim.GameState, g *genome.Genome) int {
-	if g.TrickTaking != nil && g.TrickTaking.TrickScoring == genome.ScoreAvoidance {
-		// Lowest score wins (Hearts-style)
-		minScore := state.Scores[0]
-		winner := 0
-		for i := 1; i < state.NumPlayers; i++ {
-			if state.Scores[i] < minScore {
-				minScore = state.Scores[i]
-				winner = i
-			}
-		}
-		return winner
-	}
-
-	// Highest score wins
-	maxScore := state.Scores[0]
-	winner := 0
+	lowest := g.TrickTaking != nil && g.TrickTaking.TrickScoring == genome.ScoreAvoidance
+	best := state.Scores[0]
 	for i := 1; i < state.NumPlayers; i++ {
-		if state.Scores[i] > maxScore {
-			maxScore = state.Scores[i]
-			winner = i
+		if (lowest && state.Scores[i] < best) || (!lowest && state.Scores[i] > best) {
+			best = state.Scores[i]
 		}
 	}
-	return winner
+	anchor := state.TrickLeader
+	if anchor < 0 || anchor >= state.NumPlayers {
+		anchor = 0
+	}
+	for step := 0; step < state.NumPlayers; step++ {
+		p := (anchor + step) % state.NumPlayers
+		if state.Scores[p] == best {
+			return p
+		}
+	}
+	return anchor // unreachable: some player holds the best score
 }
 
 func removeCard(hand []sim.Card, card sim.Card) []sim.Card {

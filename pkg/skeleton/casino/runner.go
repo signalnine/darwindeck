@@ -193,31 +193,42 @@ func (r *Runner) ApplyMove(state *sim.GameState, move sim.Move, g *genome.Genome
 func (r *Runner) CheckEnd(state *sim.GameState, g *genome.Genome) int {
 	// Over once all hands are empty and the stock can't deal another full round.
 	// Upkeep has already swept the table to the last capturer by this point, so
-	// the captured piles are final. Most captured cards wins; ties to lowest seat.
-	if allHandsEmpty(state) && !canRedeal(state, g) {
-		if g.CasinoScored() {
-			// Scopa-style: captured-card COUNT plus the meld bonus / minus the
-			// avoidance penalty the hook banked into state.Scores on the
-			// end-of-game EventRoundEnd. The bonus can flip a close capture race,
-			// so the borrow decides the winner (dd-lnh). Ties to lowest seat.
-			winner := 0
-			best := len(state.Tableau[0]) + state.Scores[0]
-			for i := 1; i < state.NumPlayers; i++ {
-				if s := len(state.Tableau[i]) + state.Scores[i]; s > best {
-					best, winner = s, i
-				}
-			}
-			return winner
-		}
-		winner := 0
-		for i := 1; i < state.NumPlayers; i++ {
-			if len(state.Tableau[i]) > len(state.Tableau[winner]) {
-				winner = i
-			}
-		}
-		return winner
+	// the captured piles are final. Most captured cards wins (the scored variant
+	// adds the banked meld bonus / avoidance penalty -- Scopa-style: the bonus
+	// can flip a close capture race, so the borrow decides the winner, dd-lnh).
+	if !allHandsEmpty(state) || canRedeal(state, g) {
+		return -1
 	}
-	return -1
+	scored := g.CasinoScored()
+	total := func(i int) int {
+		if scored {
+			return len(state.Tableau[i]) + state.Scores[i]
+		}
+		return len(state.Tableau[i])
+	}
+	best := total(0)
+	for i := 1; i < state.NumPlayers; i++ {
+		if s := total(i); s > best {
+			best = s
+		}
+	}
+	// TIES go AGAINST the last capturer (state.TrickLeader), who already took
+	// the final sweep of the table: the tied player next in turn order after
+	// them wins, and the last capturer wins only as the sole leader. The old
+	// rule handed every tie to the lowest seat. With no capture at all
+	// (TrickLeader == -1, everyone at zero) the walk starts before seat 0, so
+	// the lowest seat wins as before.
+	last := state.TrickLeader
+	if last < 0 || last >= state.NumPlayers {
+		last = state.NumPlayers - 1
+	}
+	for step := 1; step <= state.NumPlayers; step++ {
+		p := (last + step) % state.NumPlayers
+		if total(p) == best {
+			return p
+		}
+	}
+	return last // unreachable: some player holds the best total
 }
 
 // Progress is each player's share of all captured cards in [0,1]. argmax is the

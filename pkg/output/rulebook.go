@@ -197,6 +197,8 @@ func writeTrickTakingRules(b *strings.Builder, g *genome.Genome) {
 	if g.TrickTaking != nil {
 		b.WriteString(scoringDescription(g.TrickTaking.TrickScoring))
 	}
+	// tricktaking.findWinner: ties resolve from the final trick's winner.
+	b.WriteString("If scores are tied, the tied player who won the final trick wins; otherwise the tied player next in turn order after the final trick's winner.\n\n")
 }
 
 func writeRummyRules(b *strings.Builder, g *genome.Genome) {
@@ -328,8 +330,11 @@ func writeCasinoRules(b *strings.Builder, g *genome.Genome) {
 	b.WriteString("### Winning\n\n")
 	if g.CasinoScored() {
 		b.WriteString("Your score is the number of cards you captured plus the bonuses in the Additional Rules below (penalty cards count against you). The highest score wins.\n\n")
+		// casino CheckEnd: ties go against the last capturer.
+		b.WriteString("If the totals are tied, the tie goes against the player who made the last capture (they already took the final sweep): the tied player next in turn order after them wins.\n\n")
 	} else {
 		b.WriteString("Whoever has captured the **most cards** wins.\n\n")
+		b.WriteString("If the count is tied, the tie goes against the player who made the last capture (they already took the final sweep): the tied player next in turn order after them wins.\n\n")
 	}
 }
 
@@ -353,7 +358,23 @@ func writeVyingRules(b *strings.Builder, g *genome.Genome) {
 	b.WriteString("When nothing is owed you may **check** (stay in for free) instead of calling.\n\n")
 
 	b.WriteString("### Showdown\n\n")
-	b.WriteString("Once the betting is settled, the players still in reveal their hands and the best poker hand — pair, two pair, three of a kind, straight, flush, full house, four of a kind, straight flush — takes the pot. If everyone but one player has folded, that player takes the pot uncontested.\n\n")
+	// KEEP IN SYNC with vying.HandStrength / eval5 / resolveShowdown: a straight,
+	// flush or full house needs five cards, so shorter hands can only make the
+	// rank-count categories; longer hands play their best five; equal hands
+	// split, odd chips to the tied winner who acts first in the deal.
+	categories := "pair, two pair, three of a kind, straight, flush, full house, four of a kind, straight flush"
+	note := ""
+	switch {
+	case g.HandSize <= 3:
+		categories = "pair, three of a kind"
+		note = fmt.Sprintf(" With %d-card hands there are no straights or flushes -- those need five cards.", g.HandSize)
+	case g.HandSize == 4:
+		categories = "pair, two pair, three of a kind, four of a kind"
+		note = " With 4-card hands there are no straights or flushes -- those need five cards."
+	case g.HandSize > 5:
+		note = fmt.Sprintf(" Each player's best five of their %d cards count.", g.HandSize)
+	}
+	b.WriteString(fmt.Sprintf("Once the betting is settled, the players still in reveal their hands and the best poker hand — %s — takes the pot (listed weakest to strongest; hands of the same kind, or with none of these, are compared card by card from the highest down, aces high).%s Exactly equal hands split the pot evenly; an odd chip goes to the tied winner who acts first in that deal. If everyone but one player has folded, that player takes the pot uncontested.\n\n", categories, note))
 
 	b.WriteString("### Winning\n\n")
 	if g.VyingScored() {
@@ -365,6 +386,8 @@ func writeVyingRules(b *strings.Builder, g *genome.Genome) {
 	} else {
 		b.WriteString(fmt.Sprintf("Chips carry over across %d deals. The player with the most chips at the end wins.\n\n", rounds))
 	}
+	// vying CheckEnd: final-stack ties resolve from the last pot's winner.
+	b.WriteString("If chips are tied, the tied player who won the most recent pot wins; otherwise the tied player next in seat order after that pot's winner.\n\n")
 }
 
 func writeSpecialCards(b *strings.Builder, g *genome.Genome) {
@@ -501,9 +524,11 @@ func trumpDescription(g *genome.Genome) string {
 		}
 		return "Fixed trump suit"
 	case genome.TrumpCut:
-		return "Cut a card from the deck to determine trump suit"
+		// tricktaking.determineTrump: an independent draw per deal, not a
+		// card that is then dealt to a player.
+		return "Before each deal a card is cut to fix the trump suit for that deal; it goes back into the deck before the cards are dealt, so it favors no seat"
 	case genome.TrumpLed:
-		return "The first suit led becomes trump"
+		return "The first suit led in each deal becomes trump for that deal"
 	default:
 		return "No trump"
 	}
