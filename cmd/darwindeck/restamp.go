@@ -13,6 +13,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -44,22 +45,60 @@ func cmdRestamp(args []string) {
 	if len(args) < 1 {
 		fmt.Fprintln(os.Stderr, "usage: darwindeck restamp <run-dir> [<out-dir>]")
 		fmt.Fprintln(os.Stderr, "  re-evaluates <run-dir>/games/*/genome.json for veto-stability")
-		fmt.Fprintln(os.Stderr, "  and writes a results bundle to <out-dir> (default results/<run-basename>)")
+		fmt.Fprintln(os.Stderr, "  and writes a results bundle to <out-dir> (default results/<run-basename>);")
+		fmt.Fprintln(os.Stderr, "  <out-dir> must not be <run-dir> itself")
 		os.Exit(1)
 	}
 	runDir := args[0]
 	outDir := ""
 	if len(args) >= 2 {
 		outDir = args[1]
-	} else {
-		outDir = filepath.Join("results", filepath.Base(runDir))
 	}
+	if err := runRestamp(runDir, restampOutDir(runDir, outDir), os.Stdout, os.Stderr); err != nil {
+		fmt.Fprintf(os.Stderr, "restamp: %v\n", err)
+		os.Exit(1)
+	}
+}
 
+// restampOutDir resolves the bundle directory: the explicit <out-dir>, or the
+// documented default results/<run-basename>.
+func restampOutDir(runDir, outDir string) string {
+	if outDir != "" {
+		return outDir
+	}
+	return filepath.Join("results", filepath.Base(runDir))
+}
+
+// checkRestampDirs refuses a restamp whose bundle directory IS the run
+// directory. The default out dir is results/<run-basename>, so `restamp
+// results/<run>` -- restamping an already-published bundle -- resolved to
+// out == run and overwrote its own input in place: every genome.json lost its
+// original fitness, and the source meta.json / summary.json were replaced.
+func checkRestampDirs(runDir, outDir string) error {
+	absRun, err := filepath.Abs(runDir)
+	if err != nil {
+		return err
+	}
+	absOut, err := filepath.Abs(outDir)
+	if err != nil {
+		return err
+	}
+	if absRun == absOut {
+		return fmt.Errorf("out dir %s is the run dir itself: restamp would overwrite its own input (pass a different <out-dir>; the default is results/<run-basename>)", outDir)
+	}
+	return nil
+}
+
+// runRestamp is `restamp` minus argument handling and the process exit, so its
+// failure modes are testable.
+func runRestamp(runDir, outDir string, stdout, stderr io.Writer) error {
+	if err := checkRestampDirs(runDir, outDir); err != nil {
+		return err
+	}
 	gamesDir := filepath.Join(runDir, "games")
 	entries, err := os.ReadDir(gamesDir)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "reading %s: %v\n", gamesDir, err)
-		os.Exit(1)
+		return fmt.Errorf("reading %s: %w", gamesDir, err)
 	}
 
 	var games []restampGame
@@ -71,11 +110,12 @@ func cmdRestamp(args []string) {
 		path := filepath.Join(gamesDir, e.Name(), "genome.json")
 		data, err := os.ReadFile(path)
 		if err != nil {
+			fmt.Fprintf(stderr, "skip %s: %v\n", path, err)
 			continue
 		}
 		var g genome.Genome
 		if err := json.Unmarshal(data, &g); err != nil {
-			fmt.Fprintf(os.Stderr, "skip %s: %v\n", path, err)
+			fmt.Fprintf(stderr, "skip %s: %v\n", path, err)
 			continue
 		}
 		// Strip any stale published stamps from the saved genome -- this
@@ -100,13 +140,19 @@ func cmdRestamp(args []string) {
 	}
 	elapsed := time.Since(start)
 
+	// No genomes is a failure, not an empty bundle: it used to write
+	// summary.json / meta.json / STABILITY.md for zero games and exit 0, which
+	// reads as "restamped, nothing unstable" for a mistyped or unpopulated run.
+	if len(games) == 0 {
+		return fmt.Errorf("no readable genome.json under %s/*/: nothing to restamp", gamesDir)
+	}
+
 	// Re-rank: stable first (by fresh greedy mean desc), then unstable (by
 	// fresh greedy mean desc) -- the production demotion semantics.
 	rankRestampGames(games)
 
 	if err := writeRestampBundle(outDir, runDir, games, elapsed); err != nil {
-		fmt.Fprintf(os.Stderr, "writing bundle: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("writing bundle: %w", err)
 	}
 
 	stable := 0
@@ -115,9 +161,10 @@ func cmdRestamp(args []string) {
 			stable++
 		}
 	}
-	fmt.Printf("restamped %d genomes from %s in %s (%d veto-stable, %d demoted)\n",
+	fmt.Fprintf(stdout, "restamped %d genomes from %s in %s (%d veto-stable, %d demoted)\n",
 		len(games), runDir, elapsed.Round(time.Millisecond), stable, len(games)-stable)
-	fmt.Printf("wrote %s (summary.json, meta.json, %d games, STABILITY.md)\n", outDir, len(games))
+	fmt.Fprintf(stdout, "wrote %s (summary.json, meta.json, %d games, STABILITY.md)\n", outDir, len(games))
+	return nil
 }
 
 // rankRestampGames orders games for publication: every veto-stable game
@@ -188,10 +235,24 @@ func writeRestampBundle(outDir, runDir string, games []restampGame, elapsed time
 		return err
 	}
 
+	// The bundle's games dir must hold exactly this restamp: drop the rank
+	// dirs of a previous bundle written to the same out dir (as SaveResults
+	// does), or the two mix under one summary.json.
+	if err := output.SweepRankDirs(gamesOut); err != nil {
+		return err
+	}
+
 	// Per-game artifacts, published exactly as SaveResults does.
 	for i, rg := range games {
 		g := rg.genome.Clone()
 		g.Fitness = rg.greedyMean
+		// SharedFitness is the SOURCE run's niche-sharing/novelty blend,
+		// relative to a population that no longer exists. Restamp re-derives
+		// fitness and stability and has no population to recompute sharing
+		// against, so the stale value is dropped rather than published beside a
+		// fitness it has nothing to do with (it used to survive even when the
+		// restamped fitness itself was 0 and omitted).
+		g.SharedFitness = 0
 		g.VetoStable = rg.stability.Stable
 		g.StableEvals = rg.stability.Label()
 
