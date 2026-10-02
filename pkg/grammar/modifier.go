@@ -124,7 +124,8 @@ const (
 )
 
 // CompatibleWith is the modifier's type rule against the base spec. It reads only
-// the structural fields (Move/Match/End/Score), never WellTyped, so it cannot
+// the structural fields (Move/Match/End/Score) plus, for the two seat-dependent
+// modifiers (teams, reverse), the player count -- never WellTyped, so it cannot
 // recurse. This is the whole point of the grammar: the v2 whitelist that had to
 // be hand-maintained per (skeleton, mechanic) pair is here a small total function.
 func (m Modifier) CompatibleWith(s GameSpec) bool {
@@ -184,8 +185,11 @@ func (m Modifier) CompatibleWith(s GameSpec) bool {
 		return s.Move == PlayMatch && s.End == EmptyHand
 	case ModReverse:
 		// Flip the turn direction (Uno reverse) -- a shedding-race interaction. Pure
-		// turn-order, no effect on the move set or termination.
-		return s.Move == PlayMatch && s.End == EmptyHand
+		// turn-order, no effect on the move set or termination. It needs 3+
+		// seats: with two, "the other direction" is the same direction, so the
+		// modifier is INERT (same-seed games are byte-identical with and without
+		// it) -- exactly the no-op composition the type exists to exclude.
+		return s.Move == PlayMatch && s.End == EmptyHand && s.Players > 2
 	case ModSumCapture:
 		// Pip-sum (building) capture -- Scopa/Casino. Capture is still play-or-trail
 		// (trail is the always-legal fallback) and the deck drains toward deck_out,
