@@ -18,6 +18,7 @@ import (
 	"math/rand/v2"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/darwindeck/darwindeck/pkg/genome"
@@ -61,8 +62,14 @@ type WebSession struct {
 	moveVersion int        // bumped every time legalMoves is regenerated; the client must echo it
 	log         []string   // append-only narration; the view sends the tail
 	rules       string     // rendered rulebook markdown; set by the server at creation
-	rated       bool       // set by the first /api/rate; later calls get 409 (one rating per game)
-	lastActive  time.Time  // last state/move/rate touch; the janitor evicts idle sessions
+
+	// The two fields the janitor reads are atomics, NOT guarded by mu: mu is
+	// held for a whole AI decision (seconds under MCTS), and a reaper that
+	// waited on it while holding the server-wide lock froze every other
+	// session. rated is still only WRITTEN under mu (handleRate's
+	// check-and-set); the atomic just lets the reaper read it lock-free.
+	rated      atomic.Bool               // set by the first /api/rate; later calls get 409 (one rating per game)
+	lastActive atomic.Pointer[time.Time] // last state/move/rate touch; the janitor evicts idle sessions
 }
 
 // errStaleMove distinguishes a moveVersion mismatch (client raced its own move,
@@ -204,10 +211,17 @@ func (ws *WebSession) applyMove(mv sim.Move) []sim.Event {
 
 // touch records client activity; the server calls it on every session lookup
 // (state/move/rate) so the janitor's idle clock resets while a game is played.
+// Lock-free: it must not queue behind a session busy computing an AI move.
 func (ws *WebSession) touch(t time.Time) {
-	ws.mu.Lock()
-	ws.lastActive = t
-	ws.mu.Unlock()
+	ws.lastActive.Store(&t)
+}
+
+// idleSince is the last touch (zero time if never touched). Lock-free.
+func (ws *WebSession) idleSince() time.Time {
+	if t := ws.lastActive.Load(); t != nil {
+		return *t
+	}
+	return time.Time{}
 }
 
 func (ws *WebSession) logf(format string, args ...interface{}) {

@@ -4,18 +4,22 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"math/rand/v2"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/darwindeck/darwindeck/pkg/fitness"
 	"github.com/darwindeck/darwindeck/pkg/genome"
 	"github.com/darwindeck/darwindeck/pkg/playtest"
 	"github.com/darwindeck/darwindeck/pkg/seeds"
+	"github.com/darwindeck/darwindeck/pkg/sim"
 )
 
 // testServer registers the first few classic seeds and returns a live test
@@ -521,6 +525,151 @@ func TestRateAllowedWhenStuck(t *testing.T) {
 	}
 	if !recs[0].Stuck || recs[0].Winner != "stuck" {
 		t.Errorf("stuck record = %+v, want stuck:true winner:\"stuck\"", recs[0])
+	}
+}
+
+// gatedAI wraps a real AI and, once armed, parks inside SelectMove until
+// released -- a stand-in for a slow MCTS decision. The session lock is held for
+// the whole call (submitMove -> advance -> SelectMove), which is exactly the
+// window the reaper must not wait on while holding the server-wide lock.
+type gatedAI struct {
+	inner   sim.AIPlayer
+	armed   atomic.Bool
+	once    sync.Once
+	entered chan struct{} // closed when the first armed call parks
+	release chan struct{} // close to let the parked call (and all later ones) through
+}
+
+func (a *gatedAI) SelectMove(moves []sim.Move, st *sim.GameState, rng *rand.Rand) sim.Move {
+	if a.armed.Load() {
+		a.once.Do(func() { close(a.entered) })
+		<-a.release
+	}
+	return a.inner.SelectMove(moves, st, rng)
+}
+
+// The reaper used to take the server-wide lock and then wait on each session's
+// own lock, so ONE session busy computing an AI move froze every other
+// session's requests (their lookup needs the server lock) for as long as that
+// move took. A busy session must cost the others nothing -- and the sweep must
+// still evict what is idle and keep what is live.
+func TestReaperDoesNotStallOtherSessions(t *testing.T) {
+	g := firstShedding(t)
+	srv := serverWith(t, g)
+	h := srv.Handler()
+	t0 := time.Now()
+	srv.now = func() time.Time { return t0 }
+
+	// idle: created at t0 and never touched again.
+	var idle View
+	if code := doJSON(t, h, "POST", "/api/new", nil, map[string]interface{}{"difficulty": "random"}, &idle); code != http.StatusOK {
+		t.Fatalf("new idle: %d", code)
+	}
+
+	// Everything else happens 35 minutes later: past idle's 30m TTL. The clock
+	// is not reassigned again, so the goroutines below read it race-free.
+	later := t0.Add(35 * time.Minute)
+	srv.now = func() time.Time { return later }
+
+	var other View
+	if code := doJSON(t, h, "POST", "/api/new", nil, map[string]interface{}{"difficulty": "random"}, &other); code != http.StatusOK {
+		t.Fatalf("new other: %d", code)
+	}
+	otherHdr := map[string]string{"X-Session-Token": other.Session}
+
+	// busy: a live session whose next AI decision parks while holding its lock.
+	ai := &gatedAI{inner: &sim.RandomAI{}, entered: make(chan struct{}), release: make(chan struct{})}
+	busy := NewWebSession("busy", g, fitness.GetRunner(g), ai, 99, "random", "seed.json")
+	busy.touch(later)
+	srv.mu.Lock()
+	srv.store[busy.ID] = busy
+	srv.mu.Unlock()
+	busyHdr := map[string]string{"X-Session-Token": busy.ID}
+	var bv View
+	if code := doJSON(t, h, "GET", "/api/state", busyHdr, nil, &bv); code != http.StatusOK {
+		t.Fatalf("state busy: %d", code)
+	}
+	if bv.Status != StatusHumanTurn {
+		t.Fatalf("busy session: expected a human turn, got %q", bv.Status)
+	}
+
+	ai.armed.Store(true)
+	release := sync.OnceFunc(func() { close(ai.release) })
+	defer release() // never leave a goroutine parked, whatever fails below
+
+	// Play the human seat until the AI is consulted; that request then sits in
+	// SelectMove holding busy's lock.
+	moveDone := make(chan struct{})
+	go func() {
+		defer close(moveDone)
+		v := bv
+		for v.Status == StatusHumanTurn {
+			if code := doJSON(t, h, "POST", "/api/move", busyHdr, map[string]interface{}{"index": 0, "version": v.MoveVersion}, &v); code != http.StatusOK {
+				t.Errorf("busy move: %d", code)
+				return
+			}
+			select {
+			case <-ai.entered:
+				return // that was the gated move, now released
+			default:
+			}
+		}
+	}()
+	select {
+	case <-ai.entered:
+	case <-moveDone:
+		t.Fatal("busy game ended without ever consulting the AI")
+	case <-time.After(10 * time.Second):
+		t.Fatal("the AI was never consulted")
+	}
+
+	evictDone := make(chan struct{})
+	go func() {
+		defer close(evictDone)
+		srv.evictIdle()
+	}()
+
+	// While the sweep runs against a locked session, an unrelated session must
+	// keep answering. Probe for a short window so the reaper has certainly
+	// reached the busy session; the stall limit is generous so a loaded machine
+	// cannot fail a correct server.
+	const stallLimit = 5 * time.Second
+	var stalled chan int
+	for until := time.Now().Add(100 * time.Millisecond); stalled == nil && time.Now().Before(until); time.Sleep(time.Millisecond) {
+		done := make(chan int, 1)
+		go func() { done <- doJSON(t, h, "GET", "/api/state", otherHdr, nil, nil) }()
+		select {
+		case code := <-done:
+			if code != http.StatusOK {
+				t.Fatalf("state other: %d", code)
+			}
+		case <-time.After(stallLimit):
+			t.Errorf("/api/state on an unrelated session stalled > %v behind the reaper waiting on a busy session's lock", stallLimit)
+			stalled = done
+		}
+	}
+
+	release()
+	for name, ch := range map[string]chan struct{}{"busy move": moveDone, "evictIdle": evictDone} {
+		select {
+		case <-ch:
+		case <-time.After(10 * time.Second):
+			t.Fatalf("%s never finished after the AI was released", name)
+		}
+	}
+	if stalled != nil {
+		<-stalled // let the stalled probe drain before the test returns
+	}
+
+	// The sweep still did its job around the busy session.
+	if code := doJSON(t, h, "GET", "/api/state", map[string]string{"X-Session-Token": idle.Session}, nil, nil); code != http.StatusNotFound {
+		t.Errorf("idle 35m: want 404 (evicted), got %d", code)
+	}
+	if code := doJSON(t, h, "GET", "/api/state", otherHdr, nil, nil); code != http.StatusOK {
+		t.Errorf("recently created session: want 200 (kept), got %d", code)
+	}
+	if code := doJSON(t, h, "GET", "/api/state", busyHdr, nil, nil); code != http.StatusOK {
+		t.Errorf("busy session: want 200 (kept), got %d", code)
 	}
 }
 
