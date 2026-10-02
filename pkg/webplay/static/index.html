@@ -291,7 +291,7 @@ function render(v) {
   tag(tb.tableCards ? "table" : "discard", tb.discardCount); // casino: the pile IS the table
   if (tb.trumpSuit) tag("trump", tb.trumpSuit);
   if (tb.pot) tag("pot", tb.pot);
-  if (tb.currentBet) tag("to call", tb.currentBet);
+  if (v.yourToCall) tag("to call", v.yourToCall); // what YOU owe, not the full current bet
 
   const tc = $("tableCards"); tc.innerHTML = "";
   if (tb.topCard) { const w = wrap("top", cardEl(tb.topCard, false)); tc.appendChild(w); }

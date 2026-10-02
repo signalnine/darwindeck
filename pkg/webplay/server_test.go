@@ -766,6 +766,19 @@ func indexPage(t *testing.T) string {
 	return rec.Body.String()
 }
 
+// The table's "to call" tag must render the human's owed amount (yourToCall),
+// not the full current bet: with the bet already matched the page said "to
+// call 10" above a Check button.
+func TestIndexToCallUsesOwedAmount(t *testing.T) {
+	page := indexPage(t)
+	if want := `if (v.yourToCall) tag("to call", v.yourToCall);`; !strings.Contains(page, want) {
+		t.Errorf("index.html is missing %q", want)
+	}
+	if bad := `tag("to call", tb.currentBet)`; strings.Contains(page, bad) {
+		t.Errorf("index.html still labels the full current bet as the amount to call: %q", bad)
+	}
+}
+
 // The rating panel is the only place the page calls /api/rate from, and it is
 // revealed only for a terminal status. A 409 while the page does not believe
 // the game is over is the not-finished refusal, which must not be reported as
