@@ -149,7 +149,9 @@ func countNonFolded(state *sim.GameState) int {
 
 // resolveShowdown awards the pot. With one contender it goes uncontested;
 // otherwise the best poker hand wins, splitting on an exact tie (remainder to
-// the lowest seat for determinism).
+// the tied winner who acts first in the deal). It also records the pot winner
+// in state.TrickLeader -- otherwise unused by vying -- for CheckEnd's
+// final-stack tie rule.
 func (r *Runner) resolveShowdown(state *sim.GameState) {
 	var contenders []int
 	for i := 0; i < state.NumPlayers; i++ {
@@ -164,6 +166,7 @@ func (r *Runner) resolveShowdown(state *sim.GameState) {
 	if len(contenders) == 1 {
 		state.Scores[contenders[0]] += state.Pot
 		state.Pot = 0
+		state.TrickLeader = contenders[0] // last pot winner (CheckEnd's tie anchor)
 		return
 	}
 	best := int64(-1)
@@ -177,15 +180,31 @@ func (r *Runner) resolveShowdown(state *sim.GameState) {
 			winners = append(winners, i)
 		}
 	}
-	share := state.Pot / len(winners)
-	rem := state.Pot - share*len(winners)
-	for idx, w := range winners {
-		state.Scores[w] += share
-		if idx == 0 {
-			state.Scores[w] += rem // lowest-seat winner takes the odd chip
+	// Split pot: equal shares, and any odd chips go to the tied winner who acts
+	// FIRST in this deal (the seat after the rotating blind) -- the table rule.
+	// The blind seat is Round % NumPlayers (Upkeep resolves before advancing
+	// Round), so no fixed seat collects the remainders; they used to go to the
+	// lowest tied seat.
+	firstToAct := (state.Round%state.NumPlayers + 1) % state.NumPlayers
+	oddTo := winners[0]
+	for _, w := range winners {
+		if seatDistance(firstToAct, w, state.NumPlayers) < seatDistance(firstToAct, oddTo, state.NumPlayers) {
+			oddTo = w
 		}
 	}
+	share := state.Pot / len(winners)
+	rem := state.Pot - share*len(winners)
+	for _, w := range winners {
+		state.Scores[w] += share
+	}
+	state.Scores[oddTo] += rem
 	state.Pot = 0
+	state.TrickLeader = oddTo // last pot winner (CheckEnd's tie anchor)
+}
+
+// seatDistance is how many seats after `from` the seat `to` sits (0 = same).
+func seatDistance(from, to, n int) int {
+	return ((to-from)%n + n) % n
 }
 
 // GenerateMoves returns the active player's legal betting actions. PURE. Never
@@ -291,18 +310,33 @@ func nextNonFolded(state *sim.GameState, from int) int {
 }
 
 // CheckEnd returns the chip leader once all deals are played, else -1. PURE.
-// Ties break to the lowest seat.
+// Ties go to the last pot winner, then onward in seat order (see below).
 func (r *Runner) CheckEnd(state *sim.GameState, g *genome.Genome) int {
 	if state.Round < state.MaxRound {
 		return -1
 	}
-	winner := 0
+	best := state.Scores[0]
 	for i := 1; i < state.NumPlayers; i++ {
-		if state.Scores[i] > state.Scores[winner] {
-			winner = i
+		if state.Scores[i] > best {
+			best = state.Scores[i]
 		}
 	}
-	return winner
+	// TIES on the final stacks go to the tied player who won the most recent
+	// pot (state.TrickLeader, recorded by resolveShowdown), otherwise to the
+	// tied player next in seat order after that pot's winner. The old rule gave
+	// every tie to the lowest seat (~3% of random SimplePoker games end tied at
+	// the top). The rulebook states this rule (writeVyingRules).
+	anchor := state.TrickLeader
+	if anchor < 0 || anchor >= state.NumPlayers {
+		anchor = 0
+	}
+	for step := 0; step < state.NumPlayers; step++ {
+		p := (anchor + step) % state.NumPlayers
+		if state.Scores[p] == best {
+			return p
+		}
+	}
+	return anchor // unreachable: some player holds the best stack
 }
 
 // Progress ranks players by chip stack, min-max normalized into [0,1]; argmax

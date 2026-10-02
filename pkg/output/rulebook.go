@@ -40,7 +40,7 @@ func GenerateRulebook(g *genome.Genome) string {
 	}
 
 	if borrows := liveBorrows(g); len(borrows) > 0 {
-		writeBorrowedRules(&b, borrows)
+		writeBorrowedRules(&b, g, borrows)
 	}
 
 	// Only render the point table when a rule actually consumes it: a table
@@ -86,7 +86,13 @@ func writeSheddingRules(b *strings.Builder, g *genome.Genome) {
 	if g.Shedding != nil {
 		matchDesc := matchRuleDescription(g.Shedding.MatchRule)
 		b.WriteString(fmt.Sprintf("Play a card from your hand that **%s** the top card of the discard pile.\n\n", matchDesc))
-		b.WriteString(fmt.Sprintf("If you cannot play, **draw %d card(s)** from the deck.\n\n", g.Shedding.DrawPenalty))
+		// KEEP IN SYNC with the shedding runner: a play is forced when one
+		// exists (the draw is only generated with no legal play), a draw ends
+		// the turn (ApplyMove advances the player), Upkeep recycles the discard
+		// pile under its top card when the deck is empty, and with nothing to
+		// draw the player passes.
+		b.WriteString(fmt.Sprintf("If you can play, you must. If you cannot play, **draw %d card(s)** from the deck and your turn ends (you may not play a card you just drew); if fewer cards are left you draw what there is, and if there are none you pass.\n\n", g.Shedding.DrawPenalty))
+		b.WriteString("When the deck runs out, the discard pile (except its top card) is shuffled to form a new deck.\n\n")
 	}
 
 	if g.SheddingMultiRound() {
@@ -94,8 +100,11 @@ func writeSheddingRules(b *strings.Builder, g *genome.Genome) {
 		return
 	}
 
+	// The blocked case: shedding.Runner.Blocked. The runner never names a
+	// winner there (every seat passes until the turn cap, a no-winner result);
+	// the playtest session declares the draw the moment it arises.
 	b.WriteString("### Winning\n\n")
-	b.WriteString("The first player to play all their cards wins. If no player can play and the deck runs out, the game ends in a draw.\n\n")
+	b.WriteString("The first player to play all their cards wins. If the deck is exhausted, there are no discards left to reshuffle, and no player can play, the game is blocked and ends in a draw.\n\n")
 }
 
 // writeSheddingRoundStructure renders the multi-round win rules (Task 22):
@@ -106,7 +115,11 @@ func writeSheddingRoundStructure(b *strings.Builder, g *genome.Genome) {
 	rounds := g.Shedding.RoundsPerGame
 
 	b.WriteString("### Rounds\n\n")
-	b.WriteString(fmt.Sprintf("The game is played over **%d rounds**. Playing your last card ends the round: everyone's hand is scored (see Additional Rules), the scores are banked, and all cards are gathered, shuffled, and redealt for the next round.\n\n", rounds))
+	ends := "Playing your last card ends the round"
+	if g.Knockable() {
+		ends = "Playing your last card -- or a knock (see Additional Rules) -- ends the round"
+	}
+	b.WriteString(fmt.Sprintf("The game is played over **%d rounds**. %s: everyone's hand is scored (see Additional Rules), the scores are banked, and all cards are gathered, shuffled, and redealt for the next round.\n\n", rounds, ends))
 
 	b.WriteString("### Winning\n\n")
 	if hasAvoidanceBorrow(g) && !hasMeldBonusBorrow(g) {
@@ -120,20 +133,25 @@ func writeSheddingRoundStructure(b *strings.Builder, g *genome.Genome) {
 	// banked score, then fewest cards in hand, then seat order (the runner's
 	// strict comparison keeps the earliest-seated tied player).
 	b.WriteString("If scores are tied, the tied player holding the fewest cards at the end of the final round wins; if that is tied too, the tied player seated earliest in the turn order (closest to the dealer's left) wins.\n\n")
+	// shedding.Runner.Blocked: a blocked round can never finish, so the whole
+	// game ends without a result.
+	b.WriteString("If a round becomes blocked -- the deck is exhausted, there are no discards left to reshuffle, and no player can play -- the game ends there with no winner.\n\n")
 }
 
+// hasAvoidanceBorrow / hasMeldBonusBorrow read the LIVE borrows only: a dead
+// borrow (e.g. avoidance without card_points) banks nothing, so winning text
+// that mentions its penalties would describe scoring that never happens.
 func hasAvoidanceBorrow(g *genome.Genome) bool {
-	for _, bm := range g.Borrowed {
-		if bm.Mechanic == genome.MechAvoidance {
-			return true
-		}
-	}
-	return false
+	return hasLiveBorrow(g, genome.MechAvoidance)
 }
 
 func hasMeldBonusBorrow(g *genome.Genome) bool {
-	for _, bm := range g.Borrowed {
-		if bm.Mechanic == genome.MechMeldBonus {
+	return hasLiveBorrow(g, genome.MechMeldBonus)
+}
+
+func hasLiveBorrow(g *genome.Genome, m genome.MechanicType) bool {
+	for _, bm := range liveBorrows(g) {
+		if bm.Mechanic == m {
 			return true
 		}
 	}
@@ -161,13 +179,22 @@ func writeTrickTakingRules(b *strings.Builder, g *genome.Genome) {
 			b.WriteString("You may play any card from your hand.\n\n")
 		}
 
-		leadDesc := leadRestrictionDescription(g.TrickTaking.LeadRestriction)
-		if leadDesc != "" {
-			b.WriteString(fmt.Sprintf("**Lead restriction:** %s\n\n", leadDesc))
+		// Only a LIVE restriction is rendered: no_trump_until_broken restricts
+		// nothing without a trump suit (genome.LiveLeadRestriction; the Hearts
+		// seed carries that inert pair), and printing it described a rule the
+		// runner never enforces.
+		if g.LiveLeadRestriction() {
+			if leadDesc := leadRestrictionDescription(g.TrickTaking.LeadRestriction); leadDesc != "" {
+				b.WriteString(fmt.Sprintf("**Lead restriction:** %s\n\n", leadDesc))
+			}
 		}
 	}
 
-	b.WriteString("The highest card of the led suit wins the trick, unless trumped. The trick winner leads the next trick.\n\n")
+	if g.TrumpRule != genome.TrumpNone {
+		b.WriteString("The highest card of the led suit wins the trick, unless trumped: any trump beats every non-trump card, and the highest trump played wins. The trick winner leads the next trick.\n\n")
+	} else {
+		b.WriteString("The highest card of the led suit wins the trick; a card of any other suit cannot win. The trick winner leads the next trick.\n\n")
+	}
 
 	// Multi-round structure: the runner plays RoundsPerGame deals with
 	// cumulative scores (Upkeep redeals when every hand is played out; the
@@ -182,6 +209,8 @@ func writeTrickTakingRules(b *strings.Builder, g *genome.Genome) {
 	if g.TrickTaking != nil {
 		b.WriteString(scoringDescription(g.TrickTaking.TrickScoring))
 	}
+	// tricktaking.findWinner: ties resolve from the final trick's winner.
+	b.WriteString("If scores are tied, the tied player who won the final trick wins; otherwise the tied player next in turn order after the final trick's winner.\n\n")
 }
 
 func writeRummyRules(b *strings.Builder, g *genome.Genome) {
@@ -201,12 +230,21 @@ func writeRummyRules(b *strings.Builder, g *genome.Genome) {
 		b.WriteString(fmt.Sprintf("2. **Meld** (optional): %s\n", meldDesc))
 
 		b.WriteString("3. **Discard** one card to the discard pile\n\n")
+		if g.Rummy.DrawFrom != genome.DrawDiscard {
+			b.WriteString("When the deck runs out, the discard pile (except its top card) is shuffled to form a new deck.\n\n")
+		}
 
+		// KEEP IN SYNC with the rummy runner (generateMeldMoves / knockDiscard /
+		// ApplyMove MoveKnock): the knock replaces the discard, is judged on the
+		// hand kept AFTER it, throws the least-deadwood card (highest rank, then
+		// lowest suit on ties) and lays the kept hand's melds.
 		b.WriteString("### Knocking & Gin\n\n")
 		if g.Rummy.KnockThreshold == 0 {
 			b.WriteString("You can only go out with **Gin** (no deadwood at all).\n\n")
+			b.WriteString("Going out takes the place of your discard: after drawing, if throwing away one card leaves every other card in your hand in a meld, you may discard it and go out at once -- the hand you keep after that discard is what counts (if more than one card would do, the highest-ranked one is discarded). Your melds are laid down and the round ends. You also go out the moment you lay your last cards down as a meld or discard your last card.\n\n")
 		} else {
 			b.WriteString(fmt.Sprintf("You may **knock** when your deadwood is %d points or less.\n\n", g.Rummy.KnockThreshold))
+			b.WriteString(fmt.Sprintf("Knocking takes the place of your discard: after drawing (and any melding) you discard one card and knock. The deadwood that must be %d or less is that of the hand you keep after that discard, so the card you throw away never counts against you. The discard is always the card that leaves you the least deadwood (the highest-ranked such card if several tie, then clubs before diamonds before hearts before spades). Your melds are then laid down and the round ends at once. If the hand you keep has no deadwood at all, you have gone out completely, which also wins any tie.\n\n", g.Rummy.KnockThreshold))
 		}
 	}
 
@@ -214,9 +252,17 @@ func writeRummyRules(b *strings.Builder, g *genome.Genome) {
 	b.WriteString("- Face cards (J, Q, K): 10 points\n")
 	b.WriteString("- Ace: 1 point\n")
 	b.WriteString("- Number cards: face value\n\n")
+	// The runner ranks the ace HIGH for runs (rank 14) and LOW for deadwood.
+	if g.Rummy != nil && g.Rummy.MeldTypes != genome.MeldSets {
+		b.WriteString("Aces are **high** in sequences: Q-K-A is a valid sequence, A-2-3 is not. An ace still counts only 1 point as deadwood.\n\n")
+	}
 
 	b.WriteString("### Winning\n\n")
 	b.WriteString("The player with the lowest deadwood when someone knocks or goes gin wins the round.\n\n")
+	// rummy.bankDeadwood scores every hand on its best partition, laid or not;
+	// rummy.roundWinner breaks ties by the undercut rule.
+	b.WriteString("Everyone's deadwood is counted after their best possible melds, whether or not those melds were laid on the table (you cannot add cards to another player's melds).\n\n")
+	b.WriteString("If the lowest deadwood is tied, the player who ended the round by knocking loses the tie (an undercut): the tied player next in turn order after them wins. A player who went out with no deadwood at all wins any tie.\n\n")
 }
 
 func writeClimbingRules(b *strings.Builder, g *genome.Genome) {
@@ -296,8 +342,11 @@ func writeCasinoRules(b *strings.Builder, g *genome.Genome) {
 	b.WriteString("### Winning\n\n")
 	if g.CasinoScored() {
 		b.WriteString("Your score is the number of cards you captured plus the bonuses in the Additional Rules below (penalty cards count against you). The highest score wins.\n\n")
+		// casino CheckEnd: ties go against the last capturer.
+		b.WriteString("If the totals are tied, the tie goes against the player who made the last capture (they already took the final sweep): the tied player next in turn order after them wins.\n\n")
 	} else {
 		b.WriteString("Whoever has captured the **most cards** wins.\n\n")
+		b.WriteString("If the count is tied, the tie goes against the player who made the last capture (they already took the final sweep): the tied player next in turn order after them wins.\n\n")
 	}
 }
 
@@ -321,7 +370,23 @@ func writeVyingRules(b *strings.Builder, g *genome.Genome) {
 	b.WriteString("When nothing is owed you may **check** (stay in for free) instead of calling.\n\n")
 
 	b.WriteString("### Showdown\n\n")
-	b.WriteString("Once the betting is settled, the players still in reveal their hands and the best poker hand — pair, two pair, three of a kind, straight, flush, full house, four of a kind, straight flush — takes the pot. If everyone but one player has folded, that player takes the pot uncontested.\n\n")
+	// KEEP IN SYNC with vying.HandStrength / eval5 / resolveShowdown: a straight,
+	// flush or full house needs five cards, so shorter hands can only make the
+	// rank-count categories; longer hands play their best five; equal hands
+	// split, odd chips to the tied winner who acts first in the deal.
+	categories := "pair, two pair, three of a kind, straight, flush, full house, four of a kind, straight flush"
+	note := ""
+	switch {
+	case g.HandSize <= 3:
+		categories = "pair, three of a kind"
+		note = fmt.Sprintf(" With %d-card hands there are no straights or flushes -- those need five cards.", g.HandSize)
+	case g.HandSize == 4:
+		categories = "pair, two pair, three of a kind, four of a kind"
+		note = " With 4-card hands there are no straights or flushes -- those need five cards."
+	case g.HandSize > 5:
+		note = fmt.Sprintf(" Each player's best five of their %d cards count.", g.HandSize)
+	}
+	b.WriteString(fmt.Sprintf("Once the betting is settled, the players still in reveal their hands and the best poker hand — %s — takes the pot (listed weakest to strongest; hands of the same kind, or with none of these, are compared card by card from the highest down, aces high).%s Exactly equal hands split the pot evenly; an odd chip goes to the tied winner who acts first in that deal. If everyone but one player has folded, that player takes the pot uncontested.\n\n", categories, note))
 
 	b.WriteString("### Winning\n\n")
 	if g.VyingScored() {
@@ -333,22 +398,74 @@ func writeVyingRules(b *strings.Builder, g *genome.Genome) {
 	} else {
 		b.WriteString(fmt.Sprintf("Chips carry over across %d deals. The player with the most chips at the end wins.\n\n", rounds))
 	}
+	// vying CheckEnd: final-stack ties resolve from the last pot's winner.
+	b.WriteString("If chips are tied, the tied player who won the most recent pot wins; otherwise the tied player next in seat order after that pot's winner.\n\n")
 }
 
 func writeSpecialCards(b *strings.Builder, g *genome.Genome) {
 	b.WriteString("## Special Cards\n\n")
+	// Identical rules collapse to one effect in the runner (applySpecialEffects
+	// applies each effect category at most once), and mutation appends rules
+	// without deduplicating -- print each distinct rule once.
+	seen := make(map[genome.SpecialCard]bool, len(g.SpecialCards))
 	for _, sc := range g.SpecialCards {
+		if seen[sc] {
+			continue
+		}
+		seen[sc] = true
 		card := specialCardName(sc)
-		effect := specialCardEffect(sc)
+		effect := specialCardEffect(sc, g.Players)
 		b.WriteString(fmt.Sprintf("- **%s:** %s\n", card, effect))
 	}
 	b.WriteString("\n")
+
+	// Overlap rules, stated only when observable in this genome. They mirror
+	// applySpecialEffects exactly: every effect listed for a card fires at
+	// once, a reverse is applied before the next player is determined, the
+	// affected player misses a single turn however many effects hit them, and
+	// two draw effects on one card resolve to the LARGER draw.
+	multi, drawBoth := specialOverlaps(g.SpecialCards)
+	if multi {
+		b.WriteString("A card listed under more than one effect triggers all of them at once: a reverse takes effect first (so \"next player\" means next in the new direction), and the affected player misses only one turn.\n\n")
+	}
+	if drawBoth {
+		b.WriteString("Where a card matches both a draw-2 and a draw-4 rule, the **larger** applies -- the next player draws 4. The two draws are not added together.\n\n")
+	}
 }
 
-func writeBorrowedRules(b *strings.Builder, borrows []genome.BorrowedMechanic) {
+// specialOverlaps reports whether any single card triggers two different
+// effect types (multi), and whether any card matches both a draw_two and a
+// draw_four rule (drawBoth).
+func specialOverlaps(rules []genome.SpecialCard) (multi, drawBoth bool) {
+	for rank := uint8(2); rank <= 14; rank++ {
+		for suit := uint8(0); suit <= 3; suit++ {
+			var types [5]bool
+			for _, sc := range rules {
+				if int(sc.Type) < len(types) && sc.MatchesCard(rank, suit) {
+					types[sc.Type] = true
+				}
+			}
+			n := 0
+			for _, on := range types {
+				if on {
+					n++
+				}
+			}
+			if n > 1 {
+				multi = true
+			}
+			if types[genome.SpecialDrawTwo] && types[genome.SpecialDrawFour] {
+				drawBoth = true
+			}
+		}
+	}
+	return multi, drawBoth
+}
+
+func writeBorrowedRules(b *strings.Builder, g *genome.Genome, borrows []genome.BorrowedMechanic) {
 	b.WriteString("## Additional Rules\n\n")
 	for _, bm := range borrows {
-		b.WriteString(fmt.Sprintf("- %s\n", borrowedDescription(bm)))
+		b.WriteString(fmt.Sprintf("- %s\n", borrowedDescription(g, bm)))
 	}
 	b.WriteString("\n")
 }
@@ -419,9 +536,11 @@ func trumpDescription(g *genome.Genome) string {
 		}
 		return "Fixed trump suit"
 	case genome.TrumpCut:
-		return "Cut a card from the deck to determine trump suit"
+		// tricktaking.determineTrump: an independent draw per deal, not a
+		// card that is then dealt to a player.
+		return "Before each deal a card is cut to fix the trump suit for that deal; it goes back into the deck before the cards are dealt, so it favors no seat"
 	case genome.TrumpLed:
-		return "The first suit led becomes trump"
+		return "The first suit led in each deal becomes trump for that deal"
 	default:
 		return "No trump"
 	}
@@ -496,18 +615,31 @@ func specialCardName(sc genome.SpecialCard) string {
 	}
 }
 
-func specialCardEffect(sc genome.SpecialCard) string {
+// specialCardEffect states exactly what applySpecialEffects (shedding runner)
+// does for one rule. KEEP IN SYNC with that function:
+//   - a draw effect ALSO costs the victim their turn (skipVictim);
+//   - with two players a skip or a reverse hands the turn straight back to the
+//     player who played it (reverse-in-2-player collapses to a skip);
+//   - a wild is only "always playable": the runner has no suit nomination, so
+//     the next player matches the wild card itself.
+func specialCardEffect(sc genome.SpecialCard, players int) string {
 	switch sc.Type {
 	case genome.SpecialSkip:
+		if players == 2 {
+			return "Skip the next player's turn (with 2 players, you play again)"
+		}
 		return "Skip the next player's turn"
 	case genome.SpecialReverse:
+		if players == 2 {
+			return "Reverse play direction (with 2 players this skips your opponent, so you play again)"
+		}
 		return "Reverse play direction"
 	case genome.SpecialDrawTwo:
-		return "Next player draws 2 cards"
+		return "Next player draws 2 cards and loses their turn"
 	case genome.SpecialDrawFour:
-		return "Next player draws 4 cards"
+		return "Next player draws 4 cards and loses their turn"
 	case genome.SpecialWild:
-		return "Can be played on any card"
+		return "Can be played on any card (no suit is named: the next player must match the wild card itself)"
 	default:
 		return "Special effect"
 	}
@@ -533,21 +665,63 @@ func specialCardEffect(sc genome.SpecialCard) string {
 // runner-implemented deep borrows MechRunPlay / MechFollowSuit / MechKnock --
 // see genome.ValidBorrows) can appear on a valid genome; the reserved cases
 // (MechTrump, MechPlayMultiple) are kept harmless for defensiveness.
-func borrowedDescription(bm genome.BorrowedMechanic) string {
+//
+// The HOST genome is a parameter because the same borrow resolves differently
+// per host (a knock ends the round on a multi-round shedding host but the game
+// elsewhere; captures are "shed cards" on shedding; a meld bonus is subtracted
+// where the lowest score wins) and the text must describe what THIS game does.
+func borrowedDescription(g *genome.Genome, bm genome.BorrowedMechanic) string {
 	switch bm.Mechanic {
 	case genome.MechTrickScoring:
 		// applyTrickScoring: at EventRoundEnd, the player with the most
 		// captured cards (tableau captures + laid-down melds) gains a bonus
 		// equal to that count; ties split it evenly.
-		return "**Capture bonus:** at the end of each round, whoever has captured the most cards (from won tricks and laid-down melds) scores bonus points equal to the number of cards they captured; players tied for the most split the bonus evenly"
+		//
+		// What "captured" means is host-specific, and the text must name what
+		// THIS game has: a shedding host has no tricks and no melds -- the
+		// runner tallies each player's SHED cards for the hook
+		// (SheddingTrickScored); a rummy host has only laid-down melds.
+		switch g.Skeleton {
+		case genome.Shedding:
+			return "**Capture bonus:** at the end of each round, whoever has shed the most cards that round (every card they played to the discard pile) scores bonus points equal to the number of cards they shed; players tied for the most split the bonus evenly (rounded down)"
+		case genome.Rummy:
+			return "**Capture bonus:** at the end of the round, whoever has laid down the most cards in melds scores bonus points equal to the number of cards they laid down; players tied for the most split the bonus evenly (rounded down)"
+		}
+		return "**Capture bonus:** at the end of each round, whoever has captured the most cards (from won tricks and laid-down melds) scores bonus points equal to the number of cards they captured; players tied for the most split the bonus evenly (rounded down)"
 	case genome.MechMeldBonus:
 		// applyMeldBonus + runBonus: scored at EventRoundEnd over hand +
 		// captured cards. Sets: 3+ same rank = 5/card, pair = 2/card. Runs:
 		// 3+ consecutive same-suit = 3/card, 2-card run = 1/card.
-		return "**Meld bonus:** at the end of each round, score points for card combinations across your hand and the cards you have captured — a set of 3 or more of the same rank scores 5 points per card (a plain pair scores 2 per card), and a run of 3 or more consecutive cards in one suit scores 3 points per card (a 2-card run scores 1 per card)"
+		//
+		// Which cards count is host-specific (the hook reads hand + tableau, but
+		// a shedding tableau is skipped, a trick/casino hand is empty at round
+		// end, and a vying fold is mucked). On a lowest-score-wins host
+		// (genome.LowestScoreWins) the hook SUBTRACTS the meld points -- say so,
+		// or "bonus" next to "Lowest score wins" reads as a penalty.
+		where := "across your hand and the cards you have captured"
+		switch g.Skeleton {
+		case genome.Shedding:
+			where = "among the cards still in your hand"
+		case genome.TrickTaking, genome.Casino:
+			where = "among the cards you have captured"
+		case genome.Vying:
+			where = "in the hand you show (a folded hand scores nothing)"
+		}
+		text := fmt.Sprintf("**Meld bonus:** at the end of each round, score points for card combinations %s — a set of 3 or more of the same rank scores 5 points per card (a plain pair scores 2 per card), and a run of 3 or more consecutive cards in one suit scores 3 points per card (a 2-card run scores 1 per card)", where)
+		if g.LowestScoreWins() {
+			text += ". The lowest score wins this game, so these meld points are subtracted from your score -- melds help you"
+		}
+		return text
 	case genome.MechDrawPenalty:
 		// applyDrawPenalty: after playing a Jack-or-higher, draw 1 extra card.
-		return "**Draw penalty:** whenever you play a face card (Jack or higher), you must immediately draw 1 extra card from the deck"
+		// One draw per play however many face cards it contains; no draw when
+		// the deck is empty, and none when the play goes out (empties the hand
+		// or ends the round). On a rummy host the only "play" is the discard.
+		verb := "play a face card (Jack or higher), alone or in a combination"
+		if g.Skeleton == genome.Rummy {
+			verb = "discard a face card (Jack or higher)"
+		}
+		return fmt.Sprintf("**Draw penalty:** whenever you %s, you must immediately draw 1 extra card from the deck (nothing is drawn if the deck is empty). Going out is exempt: a play that empties your hand or ends the round draws nothing", verb)
 	case genome.MechAvoidance:
 		// applyAvoidance: at round end, subtract the Card Point Values of
 		// penalty cards left in hand + captures (liveness guarantees CardPoints).
@@ -557,11 +731,19 @@ func borrowedDescription(bm genome.BorrowedMechanic) string {
 		// runs of 2+ cards (all your cards of that rank / the full consecutive
 		// stretch) -- sub-groups are not offered, so the text must not imply
 		// you may hold part of a group back.
-		return "**Combination plays:** instead of one card, you may discard all your cards of one rank together (2 or more, a set), or a full stretch of 2 or more consecutive cards in one suit (a run), in a single turn — as long as one of those cards legally matches the discard top. The whole group goes at once, so it pays to build up runs and dump them in one burst"
+		return "**Combination plays:** instead of one card, you may discard all your cards of one rank together (2 or more, a set), or a full stretch of 2 or more consecutive cards in one suit (a run), in a single turn — as long as one of those cards legally matches the discard top. The whole group goes at once, so it pays to build up runs and dump them in one burst. The group's last card becomes the new top of the discard pile -- the highest card of a run, or for a set the card of that rank you took into your hand most recently -- and only that card's special effect (if any) applies"
 	case genome.MechKnock:
-		// shedding/runner.go Knockable: once your hand is down to a few cards
-		// you may knock to end the game immediately; fewest cards then wins.
-		return "**Knock:** once your hand is down to a few cards, instead of playing you may knock to end the game at once. When you knock, whoever holds the fewest cards wins — so knock when you are ahead, but knocking while someone else is shorter hands them the win"
+		// Runner: the knock is offered at genome.KnockHandThreshold cards or
+		// fewer (shedding + climbing GenerateMoves).
+		if g.SheddingMultiRound() {
+			// Banked-score rounds: a knock ends the ROUND (shedding ApplyMove
+			// emits EventRoundEnd, Upkeep redeals); nobody "wins" on card count.
+			return fmt.Sprintf("**Knock:** once your hand is down to %d cards or fewer, instead of playing you may knock to end the round at once. Every hand is then scored exactly as if a player had gone out, and the next round is dealt (knocking in the last round ends the game) -- so knock when the hands as they stand score well for you", genome.KnockHandThreshold)
+		}
+		// Single game: fewest cards wins under the undercut tie rule
+		// (genome.KnockWinner) -- the knocker only when STRICTLY fewest, every
+		// tie to the tied player nearest after the knocker in turn order.
+		return fmt.Sprintf("**Knock:** once your hand is down to %d cards or fewer, instead of playing you may knock to end the game at once. When you knock, the player holding the fewest cards wins, and ties go against you: you win only if you hold strictly fewer cards than every other player. If anyone else holds as few cards as you (or fewer), the fewest-cards player among them wins; if several of them are tied, it is the one who would play soonest after you", genome.KnockHandThreshold)
 	case genome.MechTrump:
 		return "One suit is designated as trump and beats other suits"
 	case genome.MechPlayMultiple:

@@ -197,6 +197,12 @@ func moveLabel(mv sim.Move, st *sim.GameState, g *genome.Genome) string {
 	case sim.MovePass:
 		return "Pass"
 	case sim.MoveKnock:
+		// A rummy knock is "discard X and knock" (the move carries the discard;
+		// the kept hand is what gets scored). Shedding/climbing knocks carry
+		// no card.
+		if len(mv.Cards) > 0 {
+			return "Discard " + cardList(mv.Cards[:1]) + " and knock"
+		}
 		return "Knock"
 	case sim.MoveMeld:
 		return "Meld " + cardList(mv.Cards)

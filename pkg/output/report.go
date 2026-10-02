@@ -121,7 +121,9 @@ func quickTake(g *genome.Genome) string {
 	if g.Skeleton == genome.Shedding && len(g.SpecialCards) > 0 {
 		modifiers = append(modifiers, fmt.Sprintf("%d special card effects", len(g.SpecialCards)))
 	}
-	if g.TrumpRule != genome.TrumpNone {
+	// Only the trick-taking runner reads TrumpRule; on any other skeleton the
+	// bit is inert (and Tier 0 rejects it), so never advertise it there.
+	if g.Skeleton == genome.TrickTaking && g.TrumpRule != genome.TrumpNone {
 		modifiers = append(modifiers, "trump cards")
 	}
 

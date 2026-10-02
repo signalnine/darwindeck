@@ -87,6 +87,11 @@ func (r *Runner) Setup(g *genome.Genome, rng *rand.Rand) *sim.GameState {
 // Mutates state, so it must be called exactly once at the top of each game-loop
 // iteration (the GenericRunner contract). GenerateMoves/CheckEnd stay pure.
 func (r *Runner) Upkeep(state *sim.GameState, g *genome.Genome) {
+	if state.Phase == sim.PhaseEnd {
+		// A knock ended the game and repurposed TrickLeader to record the
+		// knocker (see ApplyMove): there is no table left to resolve.
+		return
+	}
 	if len(state.TrickCards) == 0 {
 		return // table already clear; nothing to resolve
 	}
@@ -140,12 +145,14 @@ func (r *Runner) GenerateMoves(state *sim.GameState, g *genome.Genome) []sim.Mov
 
 	// MechKnock (DEEP cross-skeleton borrow: rummy's knock -> climbing). Once
 	// the hand is small you may KNOCK to end the game immediately instead of
-	// racing to empty; the fewest-cards player then wins (CheckEnd). Climbing is
-	// an empty-hand race like shedding, so "fewest cards" is a meaningful lead. It
-	// is ADDITIVE (appended after the plays/pass above, never replacing them), so
-	// the move set is never emptied and a knock can only END the game sooner --
-	// playability and termination hold. A wrong knock hands the win away, the
-	// risk that makes the declare a real decision. Acts in the runner, not a hook.
+	// racing to empty; the fewest-cards player then wins under the undercut tie
+	// rule (CheckEnd / genome.KnockWinner). Climbing is an empty-hand race like
+	// shedding, so "fewest cards" is a meaningful lead. It is ADDITIVE (appended
+	// after the plays/pass above, never replacing them), so the move set is never
+	// emptied and a knock can only END the game sooner -- playability and
+	// termination hold. A wrong knock (you are not strictly fewest) hands the win
+	// away, the risk that makes the declare a real decision. Acts in the runner,
+	// not a hook.
 	if g.Knockable() && len(hand) >= 1 && len(hand) <= knockThreshold {
 		moves = append(moves, sim.Move{Type: sim.MoveKnock, PlayerID: state.Active})
 	}
@@ -153,10 +160,10 @@ func (r *Runner) GenerateMoves(state *sim.GameState, g *genome.Genome) []sim.Mov
 	return moves
 }
 
-// knockThreshold is the hand size at or below which a MechKnock host may knock.
-// Small enough that a knock sharpens the endgame (most cards already shed)
-// rather than ending the game on turn one. Mirrors the shedding runner.
-const knockThreshold = 3
+// knockThreshold is the hand size at or below which a MechKnock host may knock
+// (genome.KnockHandThreshold -- shared with the shedding runner and the
+// rulebook, which states the number).
+const knockThreshold = genome.KnockHandThreshold
 
 // ApplyMove applies a play or pass and advances to the next player. The
 // table-clear transition is deferred to Upkeep (next iteration).
@@ -191,8 +198,11 @@ func (r *Runner) ApplyMove(state *sim.GameState, move sim.Move, g *genome.Genome
 		// Phase=PhaseEnd; CheckEnd reads that and awards the win to the
 		// fewest-cards player. Emit an interactive event (it ends everyone's
 		// game). Setup leaves Phase=PhasePlay and nothing else touches it, so
-		// PhaseEnd uniquely means "knocked".
+		// PhaseEnd uniquely means "knocked". TrickLeader is repurposed to record
+		// WHO knocked (the table it normally tracks is finished with) so CheckEnd
+		// can apply the undercut tie rule; Upkeep stands down once Phase=PhaseEnd.
 		state.Phase = sim.PhaseEnd
+		state.TrickLeader = state.Active
 		events = append(events, sim.Event{
 			Type:     sim.EventSpecialTriggered,
 			PlayerID: state.Active,
@@ -240,18 +250,18 @@ func (r *Runner) Progress(state *sim.GameState, g *genome.Genome) []float64 {
 // detection.
 func (r *Runner) CheckEnd(state *sim.GameState, g *genome.Genome) int {
 	// MechKnock: a knock set Phase=PhaseEnd. The game ends immediately and the
-	// fewest-cards-in-hand player wins (ties break to the lowest seat). Checked
-	// before the first-to-empty path so a knock decides the winner. A knock when
-	// you are not actually fewest hands the win to someone else -- the risk
-	// behind the declare.
+	// fewest-cards-in-hand player wins under the UNDERCUT tie rule
+	// (genome.KnockWinner): the knocker wins only when strictly fewest; a tied
+	// knocker loses to the tied player nearest after them in turn order.
+	// Checked before the first-to-empty path so a knock decides the winner. A
+	// knock when you are not strictly fewest hands the win to someone else --
+	// the risk behind the declare.
 	if state.Phase == sim.PhaseEnd {
-		winner := 0
-		for i := 1; i < state.NumPlayers; i++ {
-			if len(state.Hands[i]) < len(state.Hands[winner]) {
-				winner = i
-			}
+		sizes := make([]int, state.NumPlayers)
+		for i := range sizes {
+			sizes[i] = len(state.Hands[i])
 		}
-		return winner
+		return genome.KnockWinner(sizes, state.TrickLeader, state.Direction)
 	}
 
 	for i, hand := range state.Hands {

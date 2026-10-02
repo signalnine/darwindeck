@@ -79,7 +79,7 @@ func (r *Runner) Setup(g *genome.Genome, rng *rand.Rand) *sim.GameState {
 // finished state; mid-game, Upkeep is NOT idempotent (the redeal shuffles
 // with state.RNG) -- game loops must call it exactly once per iteration.
 func (r *Runner) Upkeep(state *sim.GameState, g *genome.Genome) {
-	if g.SheddingMultiRound() && state.Round < state.MaxRound && anyHandEmpty(state) {
+	if g.SheddingMultiRound() && state.Round < state.MaxRound && roundOver(state) {
 		state.Round++
 		if state.Round < state.MaxRound {
 			redealRound(state, g)
@@ -88,6 +88,15 @@ func (r *Runner) Upkeep(state *sim.GameState, g *genome.Genome) {
 	if len(state.Deck) == 0 && len(state.Discard) > 1 {
 		refillDeckFromDiscard(state)
 	}
+}
+
+// roundOver reports whether the current round of a multi-round game has ended:
+// a player emptied their hand, or (MechKnock) a player knocked -- ApplyMove
+// marks a round-ending knock with Phase=PhaseEnd, which redealRound clears.
+// After the FINAL round nothing clears it, so the marker (or the empty hand)
+// stays in place for CheckEnd.
+func roundOver(state *sim.GameState) bool {
+	return anyHandEmpty(state) || state.Phase == sim.PhaseEnd
 }
 
 func anyHandEmpty(state *sim.GameState) bool {
@@ -146,6 +155,9 @@ func redealRound(state *sim.GameState, g *genome.Genome) {
 
 	state.Direction = 1
 	state.Active = state.Round % state.NumPlayers
+	// A round-ending knock left Phase=PhaseEnd as the round-over marker; the
+	// fresh round is back in play.
+	state.Phase = sim.PhasePlay
 }
 
 func (r *Runner) GenerateMoves(state *sim.GameState, g *genome.Genome) []sim.Move {
@@ -264,12 +276,14 @@ func (r *Runner) GenerateMoves(state *sim.GameState, g *genome.Genome) []sim.Mov
 
 	// MechKnock (DEEP cross-skeleton borrow: rummy's knock -> shedding). Once
 	// the hand is small enough you may KNOCK to end the game immediately
-	// instead of racing to empty; the fewest-cards player then wins (CheckEnd).
+	// instead of racing to empty; the fewest-cards player then wins under the
+	// undercut tie rule (CheckEnd / genome.KnockWinner). In a multi-round
+	// banked-score game the knock ends the ROUND instead (see ApplyMove).
 	// It is ADDITIVE -- appended after the plays/draw above, never replacing
 	// them -- so the move set is never emptied and a knock only ENDS the game
-	// sooner, preserving the playability floor and termination. A wrong knock
-	// (you are not actually fewest) hands the win away, the risk that makes the
-	// declare a real decision. Acts in the runner, not a hook.
+	// (or round) sooner, preserving the playability floor and termination. A
+	// wrong knock (you are not strictly fewest) hands the win away, the risk
+	// that makes the declare a real decision. Acts in the runner, not a hook.
 	if g.Knockable() && len(hand) >= 1 && len(hand) <= knockThreshold {
 		moves = append(moves, sim.Move{Type: sim.MoveKnock, PlayerID: state.Active})
 	}
@@ -277,11 +291,10 @@ func (r *Runner) GenerateMoves(state *sim.GameState, g *genome.Genome) []sim.Mov
 	return moves
 }
 
-// knockThreshold is the hand size at or below which a MechKnock host may knock.
-// Small enough that a knock comes near the end of the race (most cards already
-// shed), so it sharpens the endgame rather than letting either side end the
-// game on turn one.
-const knockThreshold = 3
+// knockThreshold is the hand size at or below which a MechKnock host may knock
+// (genome.KnockHandThreshold -- shared with the climbing runner and the
+// rulebook, which states the number).
+const knockThreshold = genome.KnockHandThreshold
 
 // PlayableCount reports how many of the active player's hand cards legally
 // satisfy the match rule against the discard top OR are wild (Task 28 round 4
@@ -305,17 +318,71 @@ func (r *Runner) PlayableCount(state *sim.GameState, g *genome.Genome) int {
 	if g.Shedding != nil {
 		rule = g.Shedding.MatchRule
 	}
+	// MechFollowSuit: a player holding the discard top's suit may only play
+	// that suit or a wild (GenerateMoves' FollowConstrained filter), so an
+	// off-suit rank match is NOT playable for them. Mirror the filter here or
+	// the count overstates what the player can actually play.
+	mustFollow := false
+	if g.FollowConstrained() && state.TopCard != nil {
+		for _, c := range hand {
+			if c.Suit == state.TopCard.Suit {
+				mustFollow = true
+				break
+			}
+		}
+	}
 	count := 0
 	for _, card := range hand {
+		wild := isWild(card, g.SpecialCards)
+		if mustFollow && card.Suit != state.TopCard.Suit && !wild {
+			continue
+		}
 		if state.TopCard != nil && matchesTop(card, *state.TopCard, rule) {
 			count++
 			continue
 		}
-		if isWild(card, g.SpecialCards) {
+		if wild {
 			count++
 		}
 	}
 	return count
+}
+
+// Blocked reports whether the game is in the permanent all-pass deadlock: the
+// deck is exhausted, the discard pile holds nothing to recycle (Upkeep refills
+// the deck from it otherwise), nobody has gone out, and EVERY player's only
+// legal move is a pass. Passing changes nothing, so the position can never
+// unblock -- this is the "nobody can play and the deck has run out: the game is
+// a draw" of the rulebook.
+//
+// The runner deliberately does NOT end the game here (CheckEnd keeps returning
+// -1 and the batch runner records the max-turns timeout that IS the engine's
+// "no winner"): CheckEnd can only name a winner, and awarding a blocked game to
+// anyone would let genomes that deadlock by construction pass as completed
+// games, masking them from the Tier-1 / greedy_timeout detectors. Blocked lets
+// an interactive caller (the playtest session) declare the draw at once
+// instead of making a human pass until the turn cap.
+//
+// Call it after Upkeep. Pure apart from a save/restore of state.Active while
+// each seat's moves are probed.
+func (r *Runner) Blocked(state *sim.GameState, g *genome.Genome) bool {
+	if len(state.Deck) > 0 || len(state.Discard) > 1 || anyHandEmpty(state) {
+		return false
+	}
+	if state.Phase == sim.PhaseEnd {
+		return false // a knock already ended the game or the round
+	}
+	saved := state.Active
+	defer func() { state.Active = saved }()
+	for p := 0; p < state.NumPlayers; p++ {
+		state.Active = p
+		for _, m := range r.GenerateMoves(state, g) {
+			if m.Type != sim.MovePass {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // refillDeckFromDiscard moves all but the top discard card into the deck and
@@ -409,17 +476,32 @@ func (r *Runner) ApplyMove(state *sim.GameState, move sim.Move, g *genome.Genome
 		})
 
 	case sim.MoveKnock:
-		// MechKnock: the active player declares. Flag the game over by setting
-		// Phase=PhaseEnd; CheckEnd reads that and awards the win to the
-		// fewest-cards player. Emit an interactive event (it ends everyone's
-		// game) WITHOUT an EventRoundEnd, so the banking scoring hooks do NOT
-		// fire -- the knock winner is decided by hand size, not banked Scores.
+		// MechKnock: the active player declares. Phase=PhaseEnd is the marker
+		// both modes read; TrickLeader (otherwise unused by shedding) records
+		// WHO knocked so CheckEnd can apply the undercut tie rule.
 		state.Phase = sim.PhaseEnd
+		state.TrickLeader = state.Active
 		events = append(events, sim.Event{
 			Type:     sim.EventSpecialTriggered,
 			PlayerID: state.Active,
 			Detail:   "knock",
 		})
+		if g.SheddingMultiRound() {
+			// Banked-score rounds: the knock ends the ROUND, not the game.
+			// Emit EventRoundEnd so the banking hooks score every hand exactly
+			// as when a player goes out; Upkeep then advances Round and
+			// redeals (roundOver reads the PhaseEnd marker). The game's winner
+			// stays "highest banked total after RoundsPerGame rounds" -- a
+			// knock used to end the WHOLE game on fewest cards here, silently
+			// overriding the rulebook's win condition.
+			events = append(events, sim.Event{
+				Type:     sim.EventRoundEnd,
+				PlayerID: state.Active,
+				Detail:   "knock",
+			})
+		}
+		// Single-round: no EventRoundEnd, so no banking hook fires -- the knock
+		// winner is decided by hand size (CheckEnd), not banked Scores.
 
 	case sim.MovePass:
 		// Nothing happens
@@ -485,22 +567,6 @@ func (r *Runner) Progress(state *sim.GameState, g *genome.Genome) []float64 {
 }
 
 func (r *Runner) CheckEnd(state *sim.GameState, g *genome.Genome) int {
-	// MechKnock: a knock set Phase=PhaseEnd. The game ends immediately and the
-	// fewest-cards-in-hand player wins (ties break to the lowest seat). Checked
-	// before the multi-round / first-to-empty paths so a knock ends the WHOLE
-	// game regardless of round bookkeeping or banked scores. A knock when you
-	// are not actually fewest hands the win to someone else -- the risk behind
-	// the declare.
-	if state.Phase == sim.PhaseEnd {
-		winner := 0
-		for i := 1; i < state.NumPlayers; i++ {
-			if len(state.Hands[i]) < len(state.Hands[winner]) {
-				winner = i
-			}
-		}
-		return winner
-	}
-
 	if g.SheddingMultiRound() {
 		// Round transitions live in Upkeep. The game is over once Upkeep has
 		// advanced Round past the final round (no redeal happens then, so the
@@ -512,7 +578,9 @@ func (r *Runner) CheckEnd(state *sim.GameState, g *genome.Genome) int {
 		// the hooks banked nothing all game (possible for MeldBonus when
 		// residual hands never hold a meld), the game degrades to "winner of
 		// the final round" (empty hand) instead of a structural seat-0 win.
-		if state.Round >= state.MaxRound && anyHandEmpty(state) {
+		// A final round ended by a KNOCK leaves no empty hand; the PhaseEnd
+		// marker (roundOver) stands in for it.
+		if state.Round >= state.MaxRound && roundOver(state) {
 			winner := 0
 			for i := 1; i < state.NumPlayers; i++ {
 				if state.Scores[i] > state.Scores[winner] ||
@@ -527,6 +595,21 @@ func (r *Runner) CheckEnd(state *sim.GameState, g *genome.Genome) int {
 		// Upkeep has advanced Round): keep playing. At max turns the batch
 		// runner classifies the game as a timeout, same as single-round.
 		return -1
+	}
+
+	// MechKnock (single-round): a knock set Phase=PhaseEnd. The game ends
+	// immediately and the fewest-cards-in-hand player wins under the UNDERCUT
+	// tie rule (genome.KnockWinner): the knocker wins only when strictly
+	// fewest; a tied knocker loses to the tied player nearest after them in
+	// turn order. A knock when you are not strictly fewest hands the win to
+	// someone else -- the risk behind the declare. (Multi-round hosts never
+	// reach here: there a knock ends the round, handled above.)
+	if state.Phase == sim.PhaseEnd {
+		sizes := make([]int, state.NumPlayers)
+		for i := range sizes {
+			sizes[i] = len(state.Hands[i])
+		}
+		return genome.KnockWinner(sizes, state.TrickLeader, state.Direction)
 	}
 
 	// First player to empty hand wins
@@ -663,7 +746,8 @@ func removeCard(hand []sim.Card, card sim.Card) []sim.Card {
 // freely appends specials and never deduplicates by (Type, ByRank, BySuit).
 // To keep the simulation outcome aligned with what the rulebook describes,
 // each effect category is collected and applied at most once: duplicate
-// rules of the same type collapse into a single effect, and combinations
+// rules of the same type collapse into a single effect, a draw_two and a
+// draw_four on the same card resolve to the larger draw (4), and combinations
 // like Skip + DrawTwo skip the victim exactly once rather than rotating
 // two seats past them (cards-czo). This subsumes the partial fix from
 // dd-rzo which still allowed advances to accumulate per matching rule.
@@ -688,12 +772,18 @@ func applySpecialEffects(state *sim.GameState, card sim.Card, g *genome.Genome) 
 			skip = true
 		case genome.SpecialReverse:
 			reverse = true
+		// Overlapping draw rules resolve to the LARGER draw, never a sum and
+		// never "whichever rule comes first in the slice": the old first-match
+		// rule made a pure permutation of SpecialCards (which mutation and
+		// crossover do freely) change the game -- [draw_two, draw_four] drew 2,
+		// [draw_four, draw_two] drew 4 -- while the rulebook printed both lines.
+		// The rulebook states this take-larger rule (writeSpecialCards).
 		case genome.SpecialDrawTwo:
-			if drawCount == 0 {
+			if drawCount < 2 {
 				drawCount = 2
 			}
 		case genome.SpecialDrawFour:
-			if drawCount == 0 {
+			if drawCount < 4 {
 				drawCount = 4
 			}
 		case genome.SpecialWild:

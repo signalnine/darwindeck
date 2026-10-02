@@ -1015,12 +1015,17 @@ func TestChoiceMattersDiscard(t *testing.T) {
 	g := rummyGenome(genome.RummyParams{MeldTypes: genome.MeldSets, MinMeldSize: 3, DrawFrom: genome.DrawEither, KnockThreshold: 10})
 
 	// Mixed hand: discarding the king (10 deadwood) vs the five (5) vs a
-	// melded card (breaks the set) all land on different deadwood.
+	// melded card (breaks the set) all land on different deadwood. The queen
+	// keeps the hand OUT of knock range under the discard-then-knock rule
+	// (best discard leaves 10+5 = 15 > 10); without it the king discard
+	// reaches 5 and the turn is end-at-will (voided, see
+	// TestChoiceMattersVoidsKnockableDiscard).
 	mixed := []sim.Card{
 		{Suit: sim.Hearts, Rank: sim.Seven},
 		{Suit: sim.Spades, Rank: sim.Seven},
 		{Suit: sim.Clubs, Rank: sim.Seven},
 		{Suit: sim.Hearts, Rank: sim.King},
+		{Suit: sim.Diamonds, Rank: sim.Queen},
 		{Suit: sim.Clubs, Rank: sim.Five},
 	}
 	state := proberState(mixed, nil, sim.PhaseDiscard)
@@ -1083,10 +1088,14 @@ func TestChoiceMattersEndAtWillVoiding(t *testing.T) {
 		t.Error("draw while knockable (end-at-will) must not be meaningful")
 	}
 
-	// Same hand under a tight threshold (not knockable): the same discard
-	// choices are live again.
+	// A tight threshold with one more deadwood card (not knockable: the best
+	// discard still leaves 8 > 5): the discard choices are live again. The
+	// extra eight matters under the discard-then-knock rule -- the five-card
+	// hand above reaches 0 deadwood by discarding its nine, so it is knockable
+	// at ANY threshold.
 	tight := rummyGenome(genome.RummyParams{MeldTypes: genome.MeldSets, MinMeldSize: 2, DrawFrom: genome.DrawEither, KnockThreshold: 5})
-	state = proberState(knockable, nil, sim.PhaseDiscard)
+	notKnockable := append(append([]sim.Card(nil), knockable...), sim.Card{Suit: sim.Diamonds, Rank: sim.Eight})
+	state = proberState(notKnockable, nil, sim.PhaseDiscard)
 	moves = r.GenerateMoves(state, tight)
 	if !r.ChoiceMatters(state, tight, moves) {
 		t.Error("discard below the knock condition must stay meaningful")

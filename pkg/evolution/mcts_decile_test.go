@@ -19,25 +19,30 @@ var reducedMCTS = fitness.MCTSEvalConfig{Iterations: 50, Determinizations: 5}
 // running mean) and publish its fitness as the MCTS running mean, while
 // below-decile individuals keep their greedy-only published fitness.
 //
-// Whist at seed 44 is the gap genome: ISMCTS outplays the greedy scorer there
-// (measured: skill 0.065 greedy-only vs 0.206 two-tier at these knobs), so
+// Whist at seed 55 is the gap genome: ISMCTS outplays the greedy scorer there
+// (measured: skill 0.141 greedy-only vs 0.425 two-tier at these knobs), so
 // EvaluateWithMCTS produces a visibly different TotalFitness than the
 // greedy-only Evaluate at the same seed. (ROUND 3: the previous gap genome,
 // InstantKnockRummy at seed 44, is now killed by the greedy_timeout veto
 // before the MCTS tier -- see TestMCTSTierRewardsDegenKnockTiming -- so a
 // VALID classic carries this plumbing test instead.) BaseSeed is chosen so
-// the decile pass's derived seed for population index 0 lands exactly on 44
+// the decile pass's derived seed for population index 0 lands exactly on 55
 // (uint64 wrap-around is well-defined).
+//
+// Seed 55, not the earlier 44: the 2026-10 bughunt made Whist seat-neutral
+// (independent trump cut, last-trick tie rule), which reshuffled the per-seed
+// samples -- at these reduced knobs seed 44 no longer shows a gap (0.148 both
+// ways) while 55 / 66 / 77 / 88 do.
 func TestTopDecileMCTSPublishesGapGenome(t *testing.T) {
 	// Runtime subtraction so the uint64 wrap is legal (a constant expression
 	// would be rejected at compile time).
-	var targetSeed, offset uint64 = 44, mctsSeedOffset
+	var targetSeed, offset uint64 = 55, mctsSeedOffset
 	cfg := Config{
 		PopulationSize: 3,
 		EliteSize:      1,
 		TournamentSize: 1,
 		Workers:        1,
-		BaseSeed:       targetSeed - offset, // gen 0, idx 0 => seed 44
+		BaseSeed:       targetSeed - offset, // gen 0, idx 0 => seed 55
 		MCTSDecile:     0.1,                 // ceil(0.1*3) = 1: top individual only
 		MCTSEval:       reducedMCTS,
 	}
@@ -54,13 +59,13 @@ func TestTopDecileMCTSPublishesGapGenome(t *testing.T) {
 
 	e.runMCTSTopDecile()
 
-	full := fitness.EvaluateWithMCTS(seeds.Whist(), 44, reducedMCTS)
+	full := fitness.EvaluateWithMCTS(seeds.Whist(), targetSeed, reducedMCTS)
 	if !full.Valid {
-		t.Fatal("reference EvaluateWithMCTS(whist, 44) must pass tiers 0-2")
+		t.Fatal("reference EvaluateWithMCTS(whist, 55) must pass tiers 0-2")
 	}
-	base := fitness.Evaluate(seeds.Whist(), 44)
+	base := fitness.Evaluate(seeds.Whist(), targetSeed)
 	if !base.Valid {
-		t.Fatal("reference Evaluate(whist, 44) must pass tiers 0-2")
+		t.Fatal("reference Evaluate(whist, 55) must pass tiers 0-2")
 	}
 	// Precondition for "includes the MCTS term": the two-tier eval differs
 	// from the greedy-only eval at the same seed via the skill gradient.

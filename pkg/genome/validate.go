@@ -72,6 +72,16 @@ func Validate(g *Genome) []string {
 	if g.TrumpRule != TrumpNone && g.Skeleton == Rummy {
 		errs = append(errs, "trump rule not applicable to rummy skeleton")
 	}
+	// Shedding matches the discard top by suit/rank; the shedding runner never
+	// reads TrumpRule, so a trump rule there is an inert bit that describe and
+	// the report's Quick Take still advertised ("A shedding game with trump
+	// cards"). Reject it like every other non-trick skeleton. No operator can
+	// produce it from valid parents: mutation only touches TrumpRule on a
+	// trick-taking genome, same-skeleton crossover copies a parent's value, and
+	// changeSkeleton swaps in a whole (valid) seed.
+	if g.TrumpRule != TrumpNone && g.Skeleton == Shedding {
+		errs = append(errs, "trump rule not applicable to shedding skeleton")
+	}
 	// Climbing has no trump concept (combinations beat by rank within the same
 	// type, never by suit); a trump rule on a climbing host is an inert bit that
 	// the rulebook would still render, so reject it at Tier 0 (mirrors the rummy
@@ -281,12 +291,16 @@ func validateVying(g *Genome) []string {
 	}
 	// Worst-case per-deal commitment is MinBet*(MaxRaises+1) (the big blind plus
 	// MaxRaises raises of MinBet); over RoundsPerGame deals a player who funds
-	// every deal's max and wins nothing must stay solvent.
+	// every deal's max and wins nothing must stay solvent. A live avoidance
+	// borrow adds its worst-case showdown penalty to every deal (see
+	// VyingWorstCaseCommitment): without that term a Tier-0-valid game could
+	// drive a stack below the bet, leaving a player a fold-only "decision" (or
+	// negative chips) the rulebook never mentions.
 	if p.MinBet > 0 && p.MaxRaises >= 1 && p.RoundsPerGame >= 1 {
-		worst := p.RoundsPerGame * p.MinBet * (p.MaxRaises + 1)
+		worst := g.VyingWorstCaseCommitment()
 		if p.StartingChips < worst {
 			errs = append(errs, fmt.Sprintf(
-				"vying starting_chips(%d) < worst-case total commitment %d (rounds_per_game*min_bet*(max_raises+1)); raise chips or lower betting params to prevent all-ins/side pots",
+				"vying starting_chips(%d) < worst-case total commitment %d (rounds_per_game*(min_bet*(max_raises+1) + worst avoidance penalty per showdown)); raise chips or lower betting params/penalties to prevent all-ins/side pots",
 				p.StartingChips, worst))
 		}
 	}
@@ -530,6 +544,16 @@ func validateScoring(g *Genome) []string {
 		}
 		if cp.Suit > 4 {
 			errs = append(errs, fmt.Sprintf("card_points %d: suit %d out of range (0 = any, else 1-4)", i, cp.Suit))
+		}
+		// CardScoring.Event is RESERVED (the LeadWinnerLeads / MechTrump
+		// precedent): no runner or hook consults it -- trick-taking scores a
+		// card when its trick is won, the avoidance hook scores at round end,
+		// whatever the field says -- so a non-zero value is an inert bit that
+		// only mints hash-distinct clones. Mutation and crossover never set it
+		// (mutateScoring builds rules without an Event) and every published
+		// genome carries 0, so rejecting it costs nothing.
+		if cp.Event != ScoreOnTrickWin {
+			errs = append(errs, fmt.Sprintf("card_points %d: event %d is reserved (must be 0): no runner consults the scoring event, points are applied by the host's own scoring rule", i, cp.Event))
 		}
 		// NOTE (deliberately NOT a Tier-0 rule): a rank=0 + suit=0 rule matches
 		// every card. That looks like the catch-all SPECIAL rejected above, but

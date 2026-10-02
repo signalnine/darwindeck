@@ -422,7 +422,7 @@ func TestBorrowedRulesDescribeConcreteMechanics(t *testing.T) {
 		// rulebook silently (the gap a review caught: partial magnitudes only).
 		{genome.MechMeldBonus, []string{"Meld bonus", "5 points per card", "2 per card", "3 points per card", "1 per card", "run of 3 or more"}},
 		{genome.MechAvoidance, []string{"Penalty cards", "lose points equal to", "Card Point Values"}},
-		{genome.MechTrickScoring, []string{"Capture bonus", "captured the most cards", "equal to the number of cards", "split the bonus evenly"}},
+		{genome.MechTrickScoring, []string{"Capture bonus", "laid down the most cards in melds", "equal to the number of cards", "split the bonus evenly"}},
 		{genome.MechDrawPenalty, []string{"Draw penalty", "face card (Jack or higher)", "draw 1 extra card"}},
 		// Anchors match the maximal-group semantics (findComboPlays offers ALL
 		// cards of a rank / the full consecutive stretch, never a sub-group).
@@ -435,7 +435,9 @@ func TestBorrowedRulesDescribeConcreteMechanics(t *testing.T) {
 		"Certain cards carry penalty points — avoid collecting them",
 	}
 	for _, c := range cases {
-		desc := borrowedDescription(genome.BorrowedMechanic{Mechanic: c.mech})
+		// A rummy host: the generic wording (host-specific variants are pinned
+		// by the rulebook_*_test.go files alongside this one).
+		desc := borrowedDescription(&genome.Genome{Skeleton: genome.Rummy}, genome.BorrowedMechanic{Mechanic: c.mech})
 		for _, a := range c.anchors {
 			if !strings.Contains(desc, a) {
 				t.Errorf("mechanic %v: description missing concrete anchor %q\n  got: %s", c.mech, a, desc)

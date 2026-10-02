@@ -681,6 +681,16 @@ func (g *Genome) FollowConstrained() bool {
 // meaningful lead. The MoveKnock is additive (every other move remains) and can
 // only END the game sooner, so playability and termination are preserved. Acts
 // directly in the runner (GenerateMoves/ApplyMove/CheckEnd), not a hook.
+//
+// RESOLUTION (single source of truth for both hosts' CheckEnd, the greedy
+// scorers and the rulebook): the fewest-cards player wins, with the UNDERCUT
+// tie rule -- the knocker wins only when STRICTLY fewest; a knocker who is
+// merely tied loses to the tied player nearest after them in turn order, and
+// ties among non-knockers resolve to the nearest after the knocker too. No
+// fixed seat is favored (the old "ties to the lowest seat" rule gave seat 0 a
+// structural edge). On a MULTI-ROUND shedding host (SheddingMultiRound) a
+// knock ends the ROUND, not the game: hands are banked by the scoring borrows
+// exactly as when a player goes out, and the next round is dealt.
 func (g *Genome) Knockable() bool {
 	if g.Skeleton != Shedding && g.Skeleton != Climbing {
 		return false
@@ -693,6 +703,53 @@ func (g *Genome) Knockable() bool {
 	return false
 }
 
+// KnockHandThreshold is the hand size at or below which a MechKnock host
+// (shedding or climbing) may knock. Small enough that a knock comes near the
+// end of the race (most cards already shed), so it sharpens the endgame rather
+// than letting either side end the game on turn one. Exported so both runners
+// and the rulebook state the same number.
+const KnockHandThreshold = 3
+
+// KnockWinner resolves a knock on an empty-hand-race host: the fewest-cards
+// player wins under the UNDERCUT tie rule (see Knockable). handSizes[i] is
+// player i's hand size, knocker the seat that knocked, direction the current
+// play direction (+1/-1; 0 is treated as +1). An out-of-range knocker (a
+// hand-built state that never recorded one) falls back to the lowest tied
+// seat.
+func KnockWinner(handSizes []int, knocker, direction int) int {
+	n := len(handSizes)
+	if n == 0 {
+		return -1
+	}
+	fewest := handSizes[0]
+	for _, h := range handSizes[1:] {
+		if h < fewest {
+			fewest = h
+		}
+	}
+	if knocker < 0 || knocker >= n {
+		for i, h := range handSizes {
+			if h == fewest {
+				return i
+			}
+		}
+	}
+	if direction == 0 {
+		direction = 1
+	}
+	// Walk the other seats in turn order starting just after the knocker: the
+	// first one holding the fewest cards wins (an undercut when the knocker is
+	// tied, the plain fewest-cards win when the knocker is behind).
+	for step := 1; step < n; step++ {
+		p := ((knocker+step*direction)%n + n) % n
+		if handSizes[p] == fewest {
+			return p
+		}
+	}
+	// Nobody else holds as few: the knocker is strictly fewest.
+	return knocker
+}
+
 // SheddingMultiRound reports whether g plays shedding as a series of
 // banked-score rounds (audit remediation Task 22): the shedding skeleton with
 // RoundsPerGame > 1 AND a banking borrow present. Without a banking borrow
@@ -702,11 +759,35 @@ func (g *Genome) Knockable() bool {
 // cross-skeleton MechTrickScoring borrow was enabled on shedding (the
 // shed-to-win-by-tricks hybrid): its applyTrickScoring hook banks per round
 // and needs the same rounds machinery.
+//
+// The borrow must be LIVE (hasLiveBankingBorrow): an avoidance borrow without
+// CardPoints banks nothing (applyAvoidance returns early), so on its own it
+// leaves the host single-round -- otherwise the game played RoundsPerGame
+// rounds with no score signal while the rulebook promised "fewest penalty
+// points" and pointed at an Additional Rules section LiveBorrows had pruned.
 func (g *Genome) SheddingMultiRound() bool {
 	return g.Skeleton == Shedding &&
 		g.Shedding != nil &&
 		g.Shedding.RoundsPerGame > 1 &&
-		g.HasBankingBorrow()
+		g.hasLiveBankingBorrow()
+}
+
+// hasLiveBankingBorrow is HasBankingBorrow restricted to borrows whose hooks
+// actually bank: MechMeldBonus and MechTrickScoring always do; MechAvoidance
+// only with non-empty CardPoints. It must NOT call LiveBorrows (which itself
+// consults SheddingMultiRound).
+func (g *Genome) hasLiveBankingBorrow() bool {
+	for _, b := range g.Borrowed {
+		switch b.Mechanic {
+		case MechMeldBonus, MechTrickScoring:
+			return true
+		case MechAvoidance:
+			if len(g.Scoring.CardPoints) > 0 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // MaxTurns returns the computed maximum turns based on skeleton and params.

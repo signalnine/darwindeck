@@ -86,6 +86,22 @@ func TestEvaluateWithMCTSGinSkillAtLeastGreedyOnly(t *testing.T) {
 // Tier 2 batches directly through computeSkillGradient: a future veto or
 // threshold change that resurrects the genome must not silently un-pin the
 // hazard.
+//
+// 2026-10 BUGHUNT UPDATE -- THE HAZARD IS GONE, and this test now pins its
+// absence. The "knock into an undercut" strategy was an artifact of a rummy
+// rule bug: the knock was judged on the full post-draw hand and the knocker
+// KEPT the extra card as deadwood, so in this 3-card fixture a knocker scored 4
+// cards against the opponent's 3 and knocking was usually self-harming (greedy
+// always knocks; MCTS learned to wait). The runner now implements the real
+// rule -- discard, then knock, scored on the hand you keep -- so knocking as
+// soon as it is legal is simply correct, greedy and MCTS agree, and the MCTS
+// term has nothing to "discover" here (measured gap 0.000 on seed 44, was
+// >= 0.2). The fixture also ends even faster (avg ~1 turn), so every seed --
+// 44 included -- now dies at Tier 1 ("game ends too quickly") instead of
+// reaching the greedy_timeout veto. Per the note above ("if the gap closed,
+// the hazard is gone"), the POST-TASK-20 narrative in calibration_test.go
+// describes history, not current behavior; MCTS-for-top-decile stays the
+// production default on its other merits.
 func TestMCTSTierRewardsDegenKnockTiming(t *testing.T) {
 	g := seeds.InstantKnockRummy()
 
@@ -97,8 +113,11 @@ func TestMCTSTierRewardsDegenKnockTiming(t *testing.T) {
 		t.Fatalf("instant-knock seed 44 must be vetoed in both modes (round 3 greedy_timeout): base=%v full=%v",
 			base.Valid, full.Valid)
 	}
-	if base.DegenerateReason != "greedy_timeout" || full.DegenerateReason != "greedy_timeout" {
-		t.Errorf("expected greedy_timeout veto in both modes, got %q / %q",
+	// Since the discard-then-knock rule the kill is Tier 1 (the game ends in
+	// about one turn), reached before the MCTS tier in both modes.
+	if base.Tier1.Passed || full.Tier1.Passed {
+		t.Errorf("expected a Tier-1 kill in both modes, got tier1 passed=%v/%v (reasons %q / %q, vetoes %q / %q)",
+			base.Tier1.Passed, full.Tier1.Passed, base.Tier1.Reason, full.Tier1.Reason,
 			base.DegenerateReason, full.DegenerateReason)
 	}
 
@@ -115,8 +134,12 @@ func TestMCTSTierRewardsDegenKnockTiming(t *testing.T) {
 	gap := twoTier - greedyOnly
 	t.Logf("instant-knock seed 44: greedy-only skill %.3f, two-tier skill %.3f (gap %.3f)",
 		greedyOnly, twoTier, gap)
-	if gap < 0.2 {
-		t.Errorf("expected the MCTS term to fire hard on instant-knock (gap >= 0.2), got %.3f", gap)
+	// The artifact is gone: MCTS has no knock-timing edge over greedy to find.
+	// If this starts failing, a knock-timing asymmetry is back in the rummy
+	// runner (the knocker being scored on a different hand than the one the
+	// rule says they keep) -- look there before touching this bound.
+	if gap >= 0.2 {
+		t.Errorf("the MCTS term fires hard on instant-knock again (gap %.3f >= 0.2): the self-harming-knock artifact is back", gap)
 	}
 }
 

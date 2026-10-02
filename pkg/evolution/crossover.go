@@ -385,6 +385,18 @@ func giveBorrowTeeth(g *genome.Genome, bm genome.BorrowedMechanic) {
 			}
 		case genome.Rummy:
 			giveRummyAvoidanceTeeth(g)
+		case genome.Vying:
+			// Stack sufficiency counts the borrow's worst-case showdown penalty
+			// (genome.VyingWorstCaseCommitment; validateVying rejects a stack
+			// below it -- a penalty must never leave a player a fold-only
+			// "decision"). Scoring, hand-size and betting mutations all move the
+			// bound, and this teeth pass runs after every one of them, so top
+			// the stack up here to keep the operators valid-in/valid-out.
+			if g.Vying != nil {
+				if worst := g.VyingWorstCaseCommitment(); g.Vying.StartingChips < worst {
+					g.Vying.StartingChips = worst
+				}
+			}
 		}
 		forceBankingRounds(g)
 
@@ -478,21 +490,31 @@ func ensureClimbingDrawPile(g *genome.Genome) {
 // rummyAvoidancePenaltyPoints is the per-card penalty the avoidance teeth wiring
 // stamps on a rummy host's penalty suit. Rummy resolves on banked deadwood
 // (face cards worth 10), so a 1-point penalty suit is swamped by deadwood and
-// never decides the winner. 15 puts the avoidance penalty ABOVE single-card
+// never decides the winner. The penalty must sit well ABOVE single-card
 // deadwood, so holding even one penalty card meaningfully shifts the banked
 // total and the avoidance scoring flips the winner in a non-trivial fraction of
 // games.
-const rummyAvoidancePenaltyPoints = 15
+//
+// Re-tuned 15 -> 30 with the discard-then-knock rule (2026-10 bughunt: the
+// rummy knock is now judged on the hand KEPT after the knock discard). The
+// knocker no longer carries an eleventh card, so knocks arrive earlier and win
+// by wider deadwood margins; at 15 the penalty flipped the winner in 3/60
+// games (TestCrossBorrowsHaveTeeth needs >= 10%), at 30 with the threshold
+// below it flips 10/60.
+const rummyAvoidancePenaltyPoints = 30
 
 // rummyAvoidanceKnockThreshold is the knock threshold the avoidance teeth wiring
 // installs on a rummy host. Gin Rummy knocks at ~10 deadwood, ending fast before
 // penalty cards accumulate. Raising it loosens knocking so the round runs a bit
 // longer and the avoidance penalty has cards to bite -- but NOT so high it
 // becomes instant-knock (>= ~half the worst-case deadwood collapses the game to
-// a 1-turn degenerate race, which would FAIL the degeneracy vetoes). 25 is the
-// calibrated middle: ~40-turn games, 100% completion, the descriptor moves off
-// Gin Rummy, and the penalty decides the winner.
-const rummyAvoidanceKnockThreshold = 25
+// a 1-turn degenerate race, which would FAIL the degeneracy vetoes). 20 is the
+// calibrated middle under the discard-then-knock rule (the threshold now
+// applies to the hand kept AFTER the knock discard, so the old 25 -- tuned on
+// the eleven-card post-draw hand -- became several points looser in effect):
+// 100% completion, the descriptor moves off Gin Rummy, and the penalty decides
+// the winner.
+const rummyAvoidanceKnockThreshold = 20
 
 // rummyDrawKnockThreshold is the knock threshold the draw-penalty teeth wiring
 // installs on a rummy host. applyDrawPenalty GROWS a hand (extra draw on

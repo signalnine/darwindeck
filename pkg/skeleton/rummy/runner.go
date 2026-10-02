@@ -12,6 +12,14 @@ import (
 
 // Runner implements the rummy game skeleton.
 // Draw, form melds (sets/runs), discard. Knock or go gin to end round.
+//
+// THE KNOCK (2026-10 bughunt): knocking is "discard, then knock" -- the real
+// rule. After drawing, a player may knock iff SOME discard leaves the kept hand
+// with deadwood <= KnockThreshold; the MoveKnock carries that discard in
+// Cards[0] (knockDiscard: the least-deadwood discard), ApplyMove throws it on
+// the pile, lays the kept hand's melds and ends the round. The knock used to be
+// judged on the full post-draw hand and the knocker kept the extra card as
+// deadwood. Ties on the final scores follow the undercut rule (roundWinner).
 type Runner struct{}
 
 func (r *Runner) Setup(g *genome.Genome, rng *rand.Rand) *sim.GameState {
@@ -113,11 +121,13 @@ func (r *Runner) generateMeldMoves(state *sim.GameState, params *genome.RummyPar
 		})
 	}
 
-	// Knock option (if deadwood is low enough)
-	deadwood := calcDeadwood(hand, params)
-	if deadwood <= params.KnockThreshold {
+	// Knock option: "discard X and knock", legal iff the best discard leaves
+	// the kept hand at or under the threshold (see the Runner doc). The move
+	// carries its discard so the choice is explicit to AIs, MCTS keys and UIs.
+	if discard, _, ok := knockDiscard(hand, params); ok {
 		moves = append(moves, sim.Move{
 			Type:     sim.MoveKnock,
+			Cards:    []sim.Card{discard},
 			PlayerID: state.Active,
 		})
 	}
@@ -205,10 +215,34 @@ func (r *Runner) ApplyMove(state *sim.GameState, move sim.Move, g *genome.Genome
 		// Otherwise stay in meld phase (can lay multiple melds)
 
 	case sim.MoveKnock:
-		// Knock: lay down the optimal disjoint partition of melds (the same
+		// Knock: discard first (the move's Cards[0]; a bare knock from an older
+		// caller falls back to the same least-deadwood discard), then lay down
+		// the optimal disjoint partition of the KEPT hand's melds (the same
 		// partition calcDeadwood scores against), then score the round.
 		params := g.Rummy
+		ginOut := false
 		if params != nil {
+			var discard sim.Card
+			haveDiscard := false
+			if len(move.Cards) > 0 {
+				discard, haveDiscard = move.Cards[0], true
+			} else if len(state.Hands[state.Active]) > 0 {
+				discard, _, _ = knockDiscard(state.Hands[state.Active], params)
+				haveDiscard = true
+			}
+			if haveDiscard {
+				before := len(state.Hands[state.Active])
+				state.Hands[state.Active] = removeCard(state.Hands[state.Active], discard)
+				if len(state.Hands[state.Active]) < before {
+					state.Discard = append(state.Discard, discard)
+					events = append(events, sim.Event{
+						Type:     sim.EventCardPlayed,
+						PlayerID: state.Active,
+						Cards:    []sim.Card{discard},
+						Detail:   "discard",
+					})
+				}
+			}
 			hand := state.Hands[state.Active]
 			groups := bestMeldGroups(hand, params)
 			for _, group := range groups {
@@ -220,12 +254,19 @@ func (r *Runner) ApplyMove(state *sim.GameState, move sim.Move, g *genome.Genome
 				state.Melds = append(state.Melds, meldCopy)
 				state.MeldOwner = append(state.MeldOwner, state.Active)
 			}
+			// Every kept card melded: that is gin, not a mere knock (and gin
+			// cannot be undercut -- roundWinner reads the empty hand).
+			ginOut = len(state.Hands[state.Active]) == 0
 		}
 		state.Phase = sim.PhaseEnd
+		detail := "knock"
+		if ginOut {
+			detail = "gin"
+		}
 		events = append(events, sim.Event{
 			Type:     sim.EventRoundEnd,
 			PlayerID: state.Active,
-			Detail:   "knock",
+			Detail:   detail,
 		})
 
 	case sim.MoveDiscard:
@@ -329,8 +370,9 @@ func (r *Runner) Progress(state *sim.GameState, g *genome.Genome) []float64 {
 func (r *Runner) CheckEnd(state *sim.GameState, g *genome.Genome) int {
 	if state.Phase == sim.PhaseEnd {
 		// Upkeep has already banked deadwood into Scores; picking the winner
-		// is a pure read. Highest score (least deadwood) wins.
-		return bestScore(state)
+		// is a pure read. Highest score (least deadwood) wins, ties by the
+		// undercut rule (roundWinner).
+		return roundWinner(state)
 	}
 
 	// At max turns, return -1 so the batch runner classifies the game as a
@@ -355,16 +397,39 @@ func bankDeadwood(state *sim.GameState, g *genome.Genome) {
 	}
 }
 
-// bestScore returns the player with the highest score (lowest index on
-// ties). Pure: reads state.Scores only.
-func bestScore(state *sim.GameState) int {
-	best := 0
+// roundWinner returns the player with the highest score once the round has
+// ended. Pure: reads state only.
+//
+// TIES follow the rule a rummy table plays, not seat order (the old rule
+// handed every tie to the lowest seat). state.Active is the player who ended
+// the round -- neither the knock nor the gin branch of ApplyMove advances it:
+//   - GIN (the ender's hand is empty: every card melded or discarded) wins any
+//     tie it is part of -- gin cannot be undercut;
+//   - a KNOCK that is merely tied LOSES (the undercut): the tied player nearest
+//     after the knocker in turn order wins;
+//   - a tie among players other than the ender resolves the same way, to the
+//     tied player nearest after the ender.
+func roundWinner(state *sim.GameState) int {
+	best := state.Scores[0]
 	for i := 1; i < state.NumPlayers; i++ {
-		if state.Scores[i] > state.Scores[best] {
-			best = i
+		if state.Scores[i] > best {
+			best = state.Scores[i]
 		}
 	}
-	return best
+	ender := state.Active
+	if ender < 0 || ender >= state.NumPlayers {
+		ender = 0
+	}
+	if state.Scores[ender] == best && len(state.Hands[ender]) == 0 {
+		return ender // gin
+	}
+	for step := 1; step < state.NumPlayers; step++ {
+		p := (ender + step) % state.NumPlayers
+		if state.Scores[p] == best {
+			return p
+		}
+	}
+	return ender // strictly best: nobody else matches
 }
 
 // scoreRound banks deadwood and returns the winner. Kept for callers that
@@ -378,7 +443,7 @@ func scoreRound(state *sim.GameState, g *genome.Genome) int {
 		return 0
 	}
 	bankDeadwood(state, g)
-	return bestScore(state)
+	return roundWinner(state)
 }
 
 // findMelds returns every valid sub-meld in a hand (sub-sets and sub-runs of
@@ -476,6 +541,71 @@ func findRuns(hand []sim.Card, minSize int) [][]sim.Card {
 		}
 	}
 	return runs
+}
+
+// knockDiscard returns the discard a knock makes from hand -- the card whose
+// removal leaves the KEPT hand with the least deadwood -- that deadwood, and
+// whether it meets the knock threshold (i.e. whether a knock is legal now).
+//
+// Ties among equally good discards break to the highest RANK, then the lowest
+// suit: a rule that is independent of hand order (so identical hands knock
+// identically however they were drawn) and that the rulebook can state.
+//
+// Cost: one best-partition evaluation for the full hand, plus one per card
+// that sits in some meld candidate AND could still beat the incumbent. A card
+// in no candidate removes exactly its own value (deadwood(hand) - value), and
+// removing any card can lower deadwood by at most its value, which gives both
+// the no-DP exact answer for unmeldable cards and the prune for the rest. The
+// common "nowhere near the threshold" hand exits before the per-card loop.
+func knockDiscard(hand []sim.Card, params *genome.RummyParams) (sim.Card, int, bool) {
+	n := len(hand)
+	if n == 0 {
+		return sim.Card{}, 0, false
+	}
+	total, maxValue := 0, 0
+	for _, c := range hand {
+		v := cardValue(c)
+		total += v
+		if v > maxValue {
+			maxValue = v
+		}
+	}
+	candidates := enumerateMeldCandidates(hand, params)
+	base := total
+	var cover uint32
+	if len(candidates) > 0 {
+		base = total - bestPartitionValue(candidates)
+		for _, c := range candidates {
+			cover |= c.mask
+		}
+	}
+	// No discard can do better than shedding the most valuable card outright.
+	if base-maxValue > params.KnockThreshold {
+		return sim.Card{}, base - maxValue, false
+	}
+
+	bestIdx, bestDW := -1, 0
+	scratch := make([]sim.Card, 0, n)
+	for i, c := range hand {
+		lower := base - cardValue(c) // deadwood after discarding c is >= lower
+		dw := lower
+		if i < 32 && cover&(1<<uint(i)) != 0 {
+			if bestIdx >= 0 && lower > bestDW {
+				continue // cannot beat or tie the incumbent
+			}
+			scratch = append(append(scratch[:0], hand[:i]...), hand[i+1:]...)
+			dw = calcDeadwood(scratch, params)
+		}
+		better := bestIdx < 0 || dw < bestDW
+		if !better && dw == bestDW {
+			b := hand[bestIdx]
+			better = c.Rank > b.Rank || (c.Rank == b.Rank && c.Suit < b.Suit)
+		}
+		if better {
+			bestIdx, bestDW = i, dw
+		}
+	}
+	return hand[bestIdx], bestDW, bestDW <= params.KnockThreshold
 }
 
 // calcDeadwood calculates the total deadwood points in a hand.
@@ -967,9 +1097,9 @@ func cardValue(c sim.Card) int {
 	}
 }
 
-// Ace is high for runs but low for deadwood — handle in rank ordering
-// For simplicity, Ace is only high (14) in our rank system.
-// Runs with Ace-low (A-2-3) would need special handling.
+// Ace is HIGH for runs (rank 14: Q-K-A is a run, A-2-3 is not) but LOW for
+// deadwood (1 point). The rulebook states both halves (writeRummyRules); a
+// rules change here must change that text too.
 
 func removeCard(hand []sim.Card, card sim.Card) []sim.Card {
 	for i, c := range hand {
@@ -1100,8 +1230,10 @@ func (r *Runner) ChoiceMatters(state *sim.GameState, g *genome.Genome, moves []s
 		//   - meld vs pass: calcDeadwood's best partition already credits
 		//     melds held in hand, and bankDeadwood scores hands by the same
 		//     partition, so laying changes nothing.
-		//   - knock vs pass: knocking ends the round but changes NO hand's
-		//     deadwood -- the winner is lowest-deadwood either way. Knock
+		//   - knock vs pass: knocking ends the round on the same best
+		//     partition the pass-then-discard line would reach (the knock
+		//     discard is the least-deadwood discard) -- the winner is
+		//     lowest-deadwood either way. Knock
 		//     TIMING quality is the SKILL metric's domain, where the ISMCTS
 		//     tier measurably rewards it (TestMCTSTierRewardsDegenKnockTiming);
 		//     crediting it to density let knock-race archetypes (loose
@@ -1113,8 +1245,11 @@ func (r *Runner) ChoiceMatters(state *sim.GameState, g *genome.Genome, moves []s
 	case sim.PhaseDiscard:
 		base := calcDeadwood(hand, params)
 		// END-AT-WILL VOIDING (see the type doc): a knockable hand's discard
-		// micro-choice is subordinate to the knock decision itself.
-		if base <= params.KnockThreshold {
+		// micro-choice is subordinate to the knock decision itself. "Knockable"
+		// is the move generator's own test (knockDiscard): a knock was on offer
+		// this turn iff SOME discard reaches the threshold -- not iff the full
+		// post-draw hand already sits under it.
+		if _, _, knockable := knockDiscard(hand, params); knockable {
 			return false
 		}
 		// Deterministic sample spread, mirroring the sim package's
