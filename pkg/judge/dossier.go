@@ -45,26 +45,22 @@ func BuildDossier(g *genome.Genome) (string, error) {
 	b.WriteString(neutralizeRulebook(output.GenerateRulebook(g)))
 	b.WriteString("\n---\n\n")
 
-	// 2. Two sample greedy-vs-greedy traces. A larger batch (distinct seed) is
-	// run so two COMPLETED games can be shown even for games that rarely finish
-	// under greedy self-play (e.g. gin-style rummy times out most games).
+	// 2. Two sample greedy-vs-greedy traces. Up to traceN games (distinct seed
+	// range) are sampled so two COMPLETED games can be shown even for games
+	// that rarely finish under greedy self-play (e.g. gin-style rummy times
+	// out most games). The traces are MOVE-level (trace.go): the engine's event
+	// log alone hides every card-less decision (bets, folds, passes).
 	const traceN = 400
-	traceRes := sim.RunBatch(g, runner, ai, traceN, dossierSeed+1, hooks...)
+	shown, played, completed := sampleTraces(g, runner, ai, traceN, dossierSeed+1, 2, hooks...)
 
 	b.WriteString("## Sample Game Traces\n\n")
-	b.WriteString("Two complete games played by identical automated players (greedy strategy on both sides). Each line is one game event in order, so you can see who acts and when, and spot long uninterrupted single-player runs.\n\n")
+	b.WriteString("Two complete games played by identical automated players (greedy strategy on both sides). Each line is one action or game event in order -- every decision a player makes is shown, including passes and bets -- so you can see who acts and when, and spot long uninterrupted single-player runs.\n\n")
 
-	picked := pickDistinctCompleted(traceRes, 2)
-	switch len(picked) {
-	case 0:
-		b.WriteString("_No games completed in the sampled batch; the automated players run out of fast progress and hit the turn cap. This is a SPEED observation, not a design verdict -- see the Termination section below for whether the win condition is reachable by the rules._\n\n")
-	case 1:
-		b.WriteString("_Only one of the sampled games reached a winner; the rest hit the turn cap without resolving. See the Termination section below for whether the win condition is reachable by the rules._\n\n")
-	}
-	for n, idx := range picked {
+	b.WriteString(traceNote(len(shown), completed, played))
+	for n, game := range shown {
 		b.WriteString(fmt.Sprintf("### Game %d\n\n", n+1))
-		b.WriteString(renderTrace(traceRes.AllEvents[idx]))
-		b.WriteString(fmt.Sprintf("\n**Winner:** Player %d\n\n", traceRes.AllWinners[idx]))
+		b.WriteString(renderTraceLines(game.lines))
+		b.WriteString(fmt.Sprintf("\n**Winner:** Player %d\n\n", game.winner))
 	}
 
 	// 3. Termination section (THE FIX). A larger sample makes the boolean
