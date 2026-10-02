@@ -4,6 +4,7 @@
 package sim_test
 
 import (
+	"fmt"
 	"math/rand/v2"
 	"reflect"
 	"testing"
@@ -164,6 +165,8 @@ func fullyPopulatedState() *sim.GameState {
 		RaiseCount: 1,
 		ToAct:      1,
 
+		Bids: []int{3, -1},
+
 		Events: []sim.Event{{Type: sim.EventCardPlayed, PlayerID: 1, Detail: "discard"}},
 		RNG:    rand.New(rand.NewPCG(7, 0)),
 	}
@@ -287,6 +290,116 @@ func TestCloneIsDeep(t *testing.T) {
 		st.Pot != snapshot.Pot || st.CurrentBet != snapshot.CurrentBet ||
 		st.RaiseCount != snapshot.RaiseCount || st.ToAct != snapshot.ToAct {
 		t.Error("scalar fields of original mutated through clone")
+	}
+}
+
+// aliasedFields reports every reference-carrying GameState field (slice,
+// nested slice, pointer) of cp that shares backing memory with the same field
+// of orig. It walks the struct by reflection, so a field added to GameState
+// is covered without touching this file. It also returns the fields it could
+// NOT judge -- an unpopulated slice/pointer in orig, a slice whose elements
+// themselves carry references while the copy is non-empty (a per-element
+// shallow copy would alias one level down), or a kind it does not understand
+// (map, chan, func, interface, struct, array) -- so a blind spot is a test
+// failure, never a silent pass.
+func aliasedFields(orig, cp *sim.GameState) (aliased, unjudged []string) {
+	a, b := reflect.ValueOf(orig).Elem(), reflect.ValueOf(cp).Elem()
+	for i := 0; i < a.NumField(); i++ {
+		name := a.Type().Field(i).Name
+		fa, fb := a.Field(i), b.Field(i)
+		switch fa.Kind() {
+		case reflect.Slice:
+			if fa.Len() == 0 {
+				unjudged = append(unjudged, name+" (fixture leaves it empty)")
+				continue
+			}
+			if fb.Len() > 0 && fa.Pointer() == fb.Pointer() {
+				aliased = append(aliased, name)
+			}
+			switch elem := fa.Type().Elem(); elem.Kind() {
+			case reflect.Slice:
+				populated := false
+				for j := 0; j < fa.Len(); j++ {
+					inner := fa.Index(j)
+					if inner.Len() == 0 {
+						continue
+					}
+					populated = true
+					if j < fb.Len() && fb.Index(j).Len() > 0 && inner.Pointer() == fb.Index(j).Pointer() {
+						aliased = append(aliased, fmt.Sprintf("%s[%d]", name, j))
+					}
+				}
+				if !populated {
+					unjudged = append(unjudged, name+" (fixture leaves every row empty)")
+				}
+			default:
+				if carriesReferences(elem) && fb.Len() > 0 {
+					unjudged = append(unjudged, name+" (elements carry references; extend aliasedFields)")
+				}
+			}
+		case reflect.Pointer:
+			if fa.IsNil() {
+				unjudged = append(unjudged, name+" (fixture leaves it nil)")
+				continue
+			}
+			if !fb.IsNil() && fa.Pointer() == fb.Pointer() {
+				aliased = append(aliased, name)
+			}
+		case reflect.Map, reflect.Chan, reflect.Func, reflect.Interface, reflect.Struct, reflect.Array, reflect.UnsafePointer:
+			unjudged = append(unjudged, fmt.Sprintf("%s (kind %s; extend aliasedFields)", name, fa.Kind()))
+		}
+	}
+	return aliased, unjudged
+}
+
+// carriesReferences reports whether a value of type t can share memory with a
+// plain copy of itself.
+func carriesReferences(t reflect.Type) bool {
+	switch t.Kind() {
+	case reflect.Slice, reflect.Pointer, reflect.Map, reflect.Chan, reflect.Func, reflect.Interface, reflect.UnsafePointer:
+		return true
+	case reflect.Array:
+		return carriesReferences(t.Elem())
+	case reflect.Struct:
+		for i := 0; i < t.NumField(); i++ {
+			if carriesReferences(t.Field(i).Type) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// TestCloneSharesNoBackingMemory (2026-10 bughunt, found clean): no slice,
+// nested slice, or pointer field of a clone shares backing memory with the
+// original. TestCloneIsDeep checks the same property by mutating a
+// hand-maintained list of fields; this walks GameState by reflection, so a
+// newly added reference field is checked the day it lands (the field-count
+// tripwire below only tells you to go look). MCTS runs tens of thousands of
+// rollouts on clones of the live game state, so a single aliased field
+// corrupts real games silently.
+func TestCloneSharesNoBackingMemory(t *testing.T) {
+	st := fullyPopulatedState()
+
+	aliased, unjudged := aliasedFields(st, st.Clone())
+	if len(unjudged) > 0 {
+		t.Errorf("clone aliasing could not be judged for: %v", unjudged)
+	}
+	if len(aliased) > 0 {
+		t.Errorf("Clone shares backing memory with the original in: %v", aliased)
+	}
+
+	// Teeth: a plain struct copy aliases EVERY reference field, and the walk
+	// must see all of them -- otherwise the clean result above proves nothing.
+	shallow := *st
+	got, _ := aliasedFields(st, &shallow)
+	want := []string{
+		"Deck", "Hands", "Hands[0]", "Hands[1]", "Discard", "Tableau", "Tableau[0]", "Scores",
+		"TopCard", "TrickCards", "TrickPlayers", "Melds", "Melds[0]", "MeldOwner",
+		"Committed", "Folded", "Bids", "Events", "RNG",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("shallow copy: detector reported\n  %v\nwant every reference field\n  %v", got, want)
 	}
 }
 

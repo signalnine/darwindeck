@@ -18,9 +18,12 @@ import (
 	"github.com/darwindeck/darwindeck/pkg/mechanic"
 	"github.com/darwindeck/darwindeck/pkg/seeds"
 	"github.com/darwindeck/darwindeck/pkg/sim"
+	"github.com/darwindeck/darwindeck/pkg/skeleton/casino"
+	"github.com/darwindeck/darwindeck/pkg/skeleton/climbing"
 	"github.com/darwindeck/darwindeck/pkg/skeleton/rummy"
 	"github.com/darwindeck/darwindeck/pkg/skeleton/shedding"
 	"github.com/darwindeck/darwindeck/pkg/skeleton/tricktaking"
+	"github.com/darwindeck/darwindeck/pkg/skeleton/vying"
 )
 
 // goldenCase pairs a genome with its skeleton runner and the AI under test.
@@ -75,6 +78,59 @@ func TestRunBatchMatchesSerialGolden(t *testing.T) {
 	// otherwise the golden suite silently stops covering hooked batches.
 	if len(mechanic.HooksFor(seeds.CatchAllSkipShedding())) == 0 {
 		t.Fatal("premise broken: catch-all-skip seed no longer carries hook-building borrows")
+	}
+}
+
+// TestRunBatchIdenticalAcrossWorkerCounts (2026-10 bughunt, found clean):
+// the batch result must not depend on HOW MANY workers played it. The golden
+// test above compares RunBatch to the serial reference at whatever
+// GOMAXPROCS the host happens to have -- on a 1-CPU runner both sides are
+// serial and it proves nothing -- and its cases predate the climbing, casino
+// and vying skeletons. This one forces the worker count (1 = the serial
+// branch, 3 = fewer workers than games, 8 = the BatchGameParallelism cap)
+// over all six skeletons plus a shared-MCTSAI batch, the configuration
+// fitness.runMCTSBatch uses.
+func TestRunBatchIdenticalAcrossWorkerCounts(t *testing.T) {
+	random := &sim.RandomAI{}
+	cases := goldenCases()
+	bigTwo, cas, poker, whist := seeds.BigTwo(), seeds.Casino(), seeds.SimplePoker(), seeds.Whist()
+	whistRunner := &tricktaking.Runner{}
+	cases = append(cases,
+		goldenCase{"climbing/big-two/random", bigTwo, &climbing.Runner{}, random},
+		goldenCase{"climbing/big-two/greedy", bigTwo, &climbing.Runner{}, &sim.GreedyAI{Scorer: &sim.ClimbingScorer{}}},
+		goldenCase{"casino/casino/random", cas, &casino.Runner{}, random},
+		goldenCase{"casino/casino/greedy", cas, &casino.Runner{}, &sim.GreedyAI{Scorer: &sim.CasinoScorer{}}},
+		goldenCase{"vying/simple-poker/random", poker, &vying.Runner{}, random},
+		goldenCase{"vying/simple-poker/greedy", poker, &vying.Runner{}, &sim.GreedyAI{Scorer: &vying.VyingScorer{}}},
+		goldenCase{"tricktaking/whist/shared-mcts-seat0", whist, whistRunner, &sim.PerPlayerAI{
+			Players: []sim.AIPlayer{
+				&sim.MCTSAI{Runner: whistRunner, Genome: whist, Iterations: 8, Determinizations: 2, RolloutCap: 20},
+			},
+			Fallback: random,
+		}},
+	)
+
+	prev := runtime.GOMAXPROCS(0)
+	defer runtime.GOMAXPROCS(prev)
+
+	const n, seed = 20, 42
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			hooks := mechanic.HooksFor(tc.g)
+			runtime.GOMAXPROCS(1)
+			ref := sim.RunBatch(tc.g, tc.runner, tc.ai, n, seed, hooks...)
+			if ref.GamesPlayed != n || len(ref.AllTurns) != n {
+				t.Fatalf("reference batch malformed: %s", summarize(ref))
+			}
+			for _, procs := range []int{3, 8} {
+				runtime.GOMAXPROCS(procs)
+				got := sim.RunBatch(tc.g, tc.runner, tc.ai, n, seed, hooks...)
+				if !reflect.DeepEqual(got, ref) {
+					t.Fatalf("GOMAXPROCS=%d differs from GOMAXPROCS=1\n  %d: %s\n  1: %s",
+						procs, procs, summarize(got), summarize(ref))
+				}
+			}
+		})
 	}
 }
 

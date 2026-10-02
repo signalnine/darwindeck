@@ -1113,6 +1113,86 @@ func TestTwoTierSkillSubRandomGreedyUsesRandomBaseline(t *testing.T) {
 	}
 }
 
+// TestComputeFitnessEdgeCasesFiniteAndInRange (2026-10 bughunt, found clean):
+// every metric and the weighted total stay finite and inside [0,1] on the
+// degenerate batch shapes the pipeline can actually hand the metric layer --
+// nothing played, nothing completed, a single game, a seat that always wins,
+// a hand-built batch with no per-seat win counts. Each is a division whose
+// denominator can be zero; NaN here would poison selection silently (NaN
+// compares false against everything, so a NaN genome is neither kept nor
+// culled deterministically).
+func TestComputeFitnessEdgeCasesFiniteAndInRange(t *testing.T) {
+	track := func(leaders ...int8) []int8 { return leaders }
+	// Per-game slices keep RunBatch's shape (TurnsList / AllWinners / AllTurns
+	// / AllLeaders parallel, one entry per game): completedAvgTurns indexes
+	// TurnsList by AllWinners position and relies on that invariant.
+	oneGame := sim.BatchResult{
+		GamesPlayed: 1, Completions: 1, WinCounts: []int{1, 0}, AllWinners: []int{0}, TurnsList: []int{2},
+		AllLeaders: [][]int8{track(1, 1, 1, 0, 0, 0)},
+		AllTurns:   [][]sim.TurnRecord{{{Player: 0, LegalMoves: 2}, {Player: 1, LegalMoves: 1}}},
+	}
+	allTimeouts := sim.BatchResult{
+		GamesPlayed: 2, Timeouts: 2, WinCounts: []int{0, 0}, AllWinners: []int{-1, -1}, TurnsList: []int{1, 1},
+		AllLeaders: [][]int8{track(0, 0, 0, 0, 0), track(1, 1, 1, 1, 1)},
+		AllTurns:   [][]sim.TurnRecord{{{Player: 0}}, {{Player: 1}}},
+	}
+	seat0Sweep := sim.BatchResult{Completions: 3, WinCounts: []int{3, 0}}
+	noWinCounts := sim.BatchResult{Completions: 2}
+	emptyGames := sim.BatchResult{GamesPlayed: 2, AllTurns: [][]sim.TurnRecord{nil, {}}, AllLeaders: [][]int8{nil, {}}, AllWinners: []int{-1, -1}, TurnsList: []int{0, 0}}
+
+	cases := []struct {
+		name                 string
+		random, greedy, mcts sim.BatchResult
+		players              int
+	}{
+		{"all batches empty", sim.BatchResult{}, sim.BatchResult{}, sim.BatchResult{}, 2},
+		{"zero players", sim.BatchResult{}, seat0Sweep, sim.BatchResult{}, 0},
+		{"negative players", oneGame, oneGame, oneGame, -1},
+		{"games with no records", emptyGames, emptyGames, emptyGames, 2},
+		{"all timeouts", allTimeouts, allTimeouts, allTimeouts, 2},
+		{"one completed game", oneGame, oneGame, oneGame, 2},
+		{"random seat 0 always wins (no greedy headroom)", seat0Sweep, seat0Sweep, seat0Sweep, 2},
+		{"greedy always wins (no MCTS headroom)", oneGame, seat0Sweep, seat0Sweep, 2},
+		{"greedy completions without win counts", seat0Sweep, noWinCounts, seat0Sweep, 2},
+		{"mcts completions without win counts", oneGame, oneGame, noWinCounts, 2},
+		{"random batch never completed", allTimeouts, seat0Sweep, seat0Sweep, 2},
+		{"greedy batch never completed", oneGame, allTimeouts, seat0Sweep, 2},
+	}
+	for _, c := range cases {
+		m := ComputeFitnessWithMCTS(c.random, c.greedy, c.mcts, c.players)
+		for name, v := range map[string]float64{
+			"MeaningfulDecisions": m.MeaningfulDecisions,
+			"GameArc":             m.GameArc,
+			"Interaction":         m.Interaction,
+			"SkillGradient":       m.SkillGradient,
+			"SessionLength":       m.SessionLength,
+			"TotalFitness":        m.TotalFitness,
+		} {
+			if math.IsNaN(v) || math.IsInf(v, 0) || v < 0 || v > 1 {
+				t.Errorf("%s: %s = %v, want a finite value in [0,1]", c.name, name, v)
+			}
+		}
+	}
+
+	// The veto statistics share the same inputs and the same hazard.
+	for _, b := range []sim.BatchResult{{}, emptyGames, allTimeouts, oneGame} {
+		for name, v := range map[string]float64{
+			"meanConsecutiveRun": meanConsecutiveRun(b),
+			"meanLongestRun":     meanLongestRun(b),
+			"meanMinSeatShare":   meanMinSeatShare(b, 2),
+			"meanMinSeatShare/0": meanMinSeatShare(b, 0),
+			"allPlayableShare":   allPlayableShare(b),
+			"playableShareMean":  playableShareMean(b),
+			"optionDeltaShare":   optionDeltaShare(b),
+			"completedAvgTurns":  completedAvgTurns(b),
+		} {
+			if math.IsNaN(v) || math.IsInf(v, 0) || v < 0 {
+				t.Errorf("veto statistic %s = %v on a degenerate batch, want finite and >= 0", name, v)
+			}
+		}
+	}
+}
+
 // TestComputeFitnessWrapperEquivalence: the 3-arg ComputeFitness (kept for
 // callers that have no MCTS batch, e.g. pkg/evolution/behavior.go) must be
 // exactly the 4-arg version with an empty MCTS result.

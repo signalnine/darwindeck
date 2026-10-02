@@ -1,6 +1,8 @@
 package fitness
 
 import (
+	"reflect"
+	"runtime"
 	"testing"
 
 	"github.com/darwindeck/darwindeck/pkg/genome"
@@ -126,6 +128,34 @@ func TestEvaluateWithMCTSRespectsEarlyTiers(t *testing.T) {
 	if res.Valid || len(res.Tier0Errors) == 0 {
 		t.Errorf("tier-0-invalid genome must be rejected in MCTS mode: valid=%v tier0=%v",
 			res.Valid, res.Tier0Errors)
+	}
+}
+
+// TestEvaluateDeterministicAcrossWorkerCounts (2026-10 bughunt, found clean):
+// a genome's whole EvaluationResult -- tier verdicts, veto statistics and all
+// five metrics, including the MCTS tier whose single MCTSAI instance is
+// shared by every worker -- is identical whether its batches were played by
+// one worker or eight. Evolution runs on machines from a laptop to a 256-way
+// EPYC; a fitness value that moved with the core count would make runs
+// irreproducible across hosts. Covers all 11 classics, i.e. all six
+// skeletons. Reduced search knobs keep it cheap; the property is structural.
+func TestEvaluateDeterministicAcrossWorkerCounts(t *testing.T) {
+	prev := runtime.GOMAXPROCS(0)
+	defer runtime.GOMAXPROCS(prev)
+
+	cfg := MCTSEvalConfig{Iterations: 10, Determinizations: 2}
+	for _, g := range seeds.All() {
+		runtime.GOMAXPROCS(1)
+		serial := EvaluateWithMCTS(g, 42, cfg)
+		runtime.GOMAXPROCS(8)
+		parallel := EvaluateWithMCTS(g, 42, cfg)
+		if !serial.Tier1.Passed {
+			t.Errorf("%s: must reach Tier 2 for this test to cover the metric batches (tier1: %q)", g.ID, serial.Tier1.Reason)
+		}
+		if !reflect.DeepEqual(serial, parallel) {
+			t.Errorf("%s: evaluation depends on the worker count\n  GOMAXPROCS=1: %+v\n  GOMAXPROCS=8: %+v",
+				g.ID, serial, parallel)
+		}
 	}
 }
 
